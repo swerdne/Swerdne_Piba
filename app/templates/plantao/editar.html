@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ turno.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #plantao-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="plantao-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <a href="{{ url_for('plantao.detalhe', turno_id=turno.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Editar Turno de Rodizio</span>
+        </a>
+    </header>
+
+    <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">
+        <h1 class="text-xl font-semibold {{ tema.text_primary }} mb-1">{{ turno.nome }}</h1>
+        <p class="text-sm {{ tema.text_secondary }} mb-6">
+            Mudar a data de inicio ou a recorrencia recalcula as ocorrencias futuras dai pra
+            frente com a nova numeracao (as ja ocorridas e as com falta remanejada continuam
+            intocadas, como historico).
+        </p>
+
+        <form method="POST" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
+            {{ form.hidden_tag() }}
+
+            <div>
+                {{ form.nome.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.nome(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {% for erro in form.nome.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                {{ form.departamento.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.departamento(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {% for erro in form.departamento.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                {{ form.nome_funcao.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.nome_funcao(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {% for erro in form.nome_funcao.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    {{ form.data_inicio.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                    {{ form.data_inicio(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    {% for erro in form.data_inicio.errors %}
+                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                    {% endfor %}
+                </div>
+                <div>
+                    {{ form.horario.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                    {{ form.horario(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    {% for erro in form.horario.errors %}
+                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                {{ form.recorrencia.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.recorrencia(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {% for erro in form.recorrencia.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-lg transition") }}
+        </form>
+    </main>
+</div>
+{% endblock %}

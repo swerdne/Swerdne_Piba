@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ comunidade.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <a href="{{ url_for('comunidade.index') }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                    <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+                </a>
+                {% if comunidade.imagem %}
+                    <img src="{{ comunidade.imagem }}" alt="" class="w-8 h-8 rounded-full object-cover shrink-0">
+                {% endif %}
+                <span class="font-semibold {{ tema.text_primary }} truncate">{{ comunidade.nome }}</span>
+            </div>
+            <a href="{{ url_for('comunidade.editar', comunidade_id=comunidade.id) }}"
+               class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0" aria-label="Editar comunidade">
+                <i class="fa-solid fa-pen"></i>
+            </a>
+        </div>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+
+        {% if comunidade.descricao %}
+        <p class="text-sm {{ tema.text_secondary }}">{{ comunidade.descricao }}</p>
+        {% endif %}
+
+        <div class="grid grid-cols-2 gap-3">
+            <a href="{{ url_for('comunidade.membros', comunidade_id=comunidade.id) }}"
+               class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 {{ tema.card_bg_hover }} transition">
+                <i class="fa-solid fa-address-book {{ tema.text_secondary }}"></i>
+                <span class="text-sm {{ tema.text_primary }}">Membros <span class="{{ tema.text_secondary }}">({{ total_membros }})</span></span>
+            </a>
+            <a href="{{ url_for('comunidade.escalados', comunidade_id=comunidade.id) }}"
+               class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 {{ tema.card_bg_hover }} transition">
+                <i class="fa-solid fa-calendar-check {{ tema.text_secondary }}"></i>
+                <span class="text-sm {{ tema.text_primary }}">Ver escalados</span>
+            </a>
+        </div>
+
+        <div class="flex items-center justify-between">
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Ministerios</h2>
+            <a href="{{ url_for('ministerio.nova', comunidade_id=comunidade.id) }}"
+               class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
+                <i class="fa-solid fa-plus mr-1"></i>Novo Ministerio
+            </a>
+        </div>
+
+        {% if not ministerios %}
+        <div class="text-center py-16">
+            <i class="fa-solid fa-sitemap text-4xl {{ tema.text_secondary }}"></i>
+            <p class="mt-4 {{ tema.text_secondary }}">Nenhum ministerio criado ainda nesta comunidade.</p>
+        </div>
+        {% endif %}
+
+        <div class="space-y-3">
+            {% for ministerio in ministerios %}
+            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}"
+               class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+                {% if ministerio.imagem %}
+                    <img src="{{ ministerio.imagem }}" alt="" class="w-8 h-8 rounded-full object-cover shrink-0">
+                {% else %}
+                    <div class="w-8 h-8 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
+                        <i class="fa-solid fa-sitemap text-xs"></i>
+                    </div>
+                {% endif %}
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ ministerio.nome }}</p>
+                    {% if ministerio.descricao %}
+                    <p class="text-xs {{ tema.text_secondary }} truncate">{{ ministerio.descricao }}</p>
+                    {% endif %}
+                </div>
+                <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
+            </a>
+            {% endfor %}
+        </div>
+
+    </main>
+</div>
+{% endblock %}

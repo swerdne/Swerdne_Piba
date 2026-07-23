@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Escalados - {{ comunidade.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) if eh_dono else url_for('comunidade.index') }}"
+           class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Escalados - {{ comunidade.nome }}</span>
+        </a>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+
+        <form method="GET" class="grid grid-cols-2 sm:grid-cols-4 gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
+            <div>
+                <label class="block text-xs {{ tema.text_secondary }} mb-1">De</label>
+                <input type="date" name="data_de" value="{{ filtros.data_de }}"
+                       class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+            </div>
+            <div>
+                <label class="block text-xs {{ tema.text_secondary }} mb-1">Ate</label>
+                <input type="date" name="data_ate" value="{{ filtros.data_ate }}"
+                       class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+            </div>
+            <div>
+                <label class="block text-xs {{ tema.text_secondary }} mb-1">Departamento</label>
+                <select name="departamento" class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                    <option value="">Todos</option>
+                    {% for dep in departamentos %}
+                    <option value="{{ dep }}" {{ 'selected' if filtros.departamento == dep else '' }}>{{ dep }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs {{ tema.text_secondary }} mb-1">Funcao</label>
+                <input type="text" name="funcao" value="{{ filtros.funcao }}" placeholder="Ex: Baixo"
+                       class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+            </div>
+            <button type="submit" class="col-span-2 sm:col-span-4 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2 rounded-lg transition">
+                Filtrar
+            </button>
+        </form>
+
+        {% if not funcoes %}
+        <div class="text-center py-16">
+            <i class="fa-solid fa-calendar-xmark text-4xl {{ tema.text_secondary }}"></i>
+            <p class="mt-4 {{ tema.text_secondary }}">Ninguem escalado com esses filtros.</p>
+        </div>
+        {% endif %}
+
+        <div class="space-y-3">
+            {% set data_atual = namespace(valor=None) %}
+            {% for funcao in funcoes %}
+                {% set escala = funcao.escala %}
+                {% if escala.data != data_atual.valor %}
+                    {% set data_atual.valor = escala.data %}
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide pt-2">
+                        {{ escala.data.strftime('%d/%m/%Y') if escala.data else 'Sem data definida' }}
+                    </h2>
+                {% endif %}
+                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <span class="w-2.5 h-2.5 rounded-full {{ escala.cor }} shrink-0"></span>
+                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                        {{ funcao.membro.iniciais }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm {{ tema.text_primary }} truncate">{{ funcao.membro.nome }} <span class="{{ tema.text_secondary }}">&middot; {{ funcao.nome }}</span></p>
+                        <p class="text-xs {{ tema.text_secondary }}">
+                            {{ escala.nome }} ({{ escala.departamento }})
+                            {% if escala.horario %} &middot; {{ escala.horario.strftime('%H:%M') }}{% endif %}
+                        </p>
+                    </div>
+                    <span class="flex items-center gap-1.5 text-xs {{ tema.text_secondary }} shrink-0">
+                        <span class="w-2 h-2 rounded-full {{ status_cores.get(funcao.status, 'bg-gray-500') }}"></span>
+                        {{ status_labels.get(funcao.status, 'Nao notificado') }}
+                    </span>
+                </div>
+            {% endfor %}
+        </div>
+
+    </main>
+</div>
+{% endblock %}

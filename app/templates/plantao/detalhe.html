@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{{ turno.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #plantao-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="plantao-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <a href="{{ url_for('ministerio.detalhe', ministerio_id=turno.ministerio_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                    <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+                </a>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full {{ turno.cor }} shrink-0"></span>
+                        <span class="font-semibold {{ tema.text_primary }} truncate">{{ turno.nome }}</span>
+                    </div>
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        {{ turno.departamento }}
+                        &middot; {{ {"diaria": "Diaria", "semanal": "Semanal", "mensal": "Mensal"}.get(turno.recorrencia, turno.recorrencia) }}
+                        &middot; inicio em {{ turno.data_inicio.strftime('%d/%m/%Y') }}
+                        {% if turno.horario %} &middot; {{ turno.horario.strftime('%H:%M') }}{% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ url_for('plantao.editar', turno_id=turno.id) }}"
+                   title="Editar turno de rodizio" aria-label="Editar turno de rodizio"
+                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                    <i class="fa-solid fa-pen"></i>
+                </a>
+                <form method="POST" action="{{ url_for('plantao.excluir_turno', turno_id=turno.id) }}"
+                      onsubmit="return confirm('Tem certeza que deseja apagar o turno de rodizio \'{{ turno.nome }}\'? As ocorrencias ja passadas ou com falta remanejada continuam no historico; as futuras ainda nao ocorridas sao removidas. Essa acao nao pode ser desfeita.');">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" title="Excluir turno de rodizio" aria-label="Excluir turno de rodizio"
+                            class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-3xl mx-auto space-y-8">
+
+        <p class="text-xs {{ tema.text_secondary }}">
+            <i class="fa-solid fa-circle-info mr-1"></i>
+            As ocorrencias geradas por este rodizio aparecem como Escalas de verdade no
+            calendario e na lista de escalas do ministerio, com a cor de
+            <strong>{{ turno.departamento }}</strong> -- inclusive recebendo a notificacao
+            automatica 24h/16h antes do evento.
+        </p>
+
+        <!-- Fila de rodizio -->
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
+                Fila de rodizio ({{ turno.fila_ordenada|length }})
+            </h2>
+
+            {% if not turno.fila_ordenada %}
+            <div class="text-center py-10 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl mb-3">
+                <i class="fa-solid fa-users text-3xl {{ tema.text_secondary }}"></i>
+                <p class="mt-3 {{ tema.text_secondary }}">Ninguem na fila ainda -- adicione pessoas do diretorio abaixo.</p>
+            </div>
+            {% else %}
+            <div class="space-y-2 mb-3">
+                {% for item in turno.fila %}
+                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <span class="w-6 h-6 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-[11px] font-semibold {{ tema.secondary_text }} shrink-0">
+                        {{ loop.index }}
+                    </span>
+                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                        {{ item.membro.iniciais }}
+                    </div>
+                    <p class="text-sm {{ tema.text_primary }} flex-1 min-w-0 truncate">{{ item.membro.nome }}</p>
+                    <form method="POST" action="{{ url_for('plantao.remover_membro_fila', turno_id=turno.id, membro_turno_id=item.id) }}"
+                          onsubmit="return confirm('Remover {{ item.membro.nome }} da fila deste rodizio? As proximas ocorrencias ainda nao ocorridas se reajustam automaticamente.');">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" aria-label="Remover" class="text-red-500 hover:text-red-400 transition shrink-0">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if diretorio_vazio %}
+            <p class="text-xs {{ tema.text_secondary }}">
+                O diretorio da comunidade ainda nao tem ninguem cadastrado.
+                <a href="{{ url_for('comunidade.membros', comunidade_id=turno.ministerio.comunidade_id) }}"
+                   class="{{ tema.accent_text }} hover:underline">Cadastrar membros</a>
+            </p>
+            {% elif form_adicionar.membro_id.choices %}
+            <form method="POST" action="{{ url_for('plantao.adicionar_membro_fila', turno_id=turno.id) }}"
+                  class="flex items-center gap-2">
+                {{ form_adicionar.hidden_tag() }}
+                {{ form_adicionar.membro_id(class_="flex-1 " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-3 py-2 rounded-lg transition shrink-0">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </form>
+            {% else %}
+            <p class="text-xs {{ tema.text_secondary }}">
+                Todo mundo do diretorio ja esta nessa fila.
+                <a href="{{ url_for('comunidade.membros', comunidade_id=turno.ministerio.comunidade_id) }}"
+                   class="{{ tema.accent_text }} hover:underline">Cadastrar mais gente</a>
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- Proximas ocorrencias -->
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
+                Proximas ocorrencias geradas
+            </h2>
+
+            {% if not turno.fila_ordenada %}
+            <p class="text-sm {{ tema.text_secondary }}">Adicione pessoas na fila pra as ocorrencias serem geradas.</p>
+            {% elif not proximas_ocorrencias %}
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma ocorrencia futura gerada ainda.</p>
+            {% else %}
+            <div class="rounded-xl border {{ tema.card_border }} overflow-hidden divide-y {{ tema.card_border }}">
+                {% for escala in proximas_ocorrencias %}
+                {% set funcao = escala.funcoes[0] if escala.funcoes else None %}
+                <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                   class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} px-4 py-2.5 transition">
+                    <span class="text-sm {{ tema.text_primary }} w-24 shrink-0">{{ escala.data.strftime('%d/%m (%a)') }}</span>
+                    <div class="w-7 h-7 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-[11px] font-semibold {{ tema.secondary_text }} shrink-0">
+                        {{ funcao.membro.iniciais if funcao and funcao.membro else '?' }}
+                    </div>
+                    <span class="text-sm {{ tema.text_primary }} flex-1 min-w-0 truncate">
+                        {{ funcao.membro.nome if funcao and funcao.membro else "ninguem na fila" }}
+                    </span>
+                    {% if escala.plantao_fixado %}
+                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Remanejada por ausencia ou editada manualmente">
+                        <i class="fa-solid fa-thumbtack"></i> fixada
+                    </span>
+                    {% endif %}
+                    <i class="fa-solid fa-chevron-right {{ tema.text_secondary }} shrink-0"></i>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+    </main>
+</div>
+{% endblock %}

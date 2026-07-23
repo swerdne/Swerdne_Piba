@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Comunidades{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <div class="flex items-center justify-between gap-4">
+            <a href="{{ url_for('main.dashboard') }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+                <span class="font-semibold {{ tema.text_primary }} truncate">Comunidades</span>
+            </a>
+            <a href="{{ url_for('comunidade.nova') }}"
+               class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
+                <i class="fa-solid fa-plus mr-1"></i>Nova comunidade
+            </a>
+        </div>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+
+        {% if not comunidades_dono and not comunidades_participa %}
+        <div class="text-center py-16">
+            <i class="fa-solid fa-people-group text-4xl {{ tema.text_secondary }}"></i>
+            <p class="mt-4 {{ tema.text_secondary }}">Voce ainda nao tem nenhuma comunidade.</p>
+            <a href="{{ url_for('comunidade.nova') }}"
+               class="inline-block mt-4 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                <i class="fa-solid fa-plus mr-1"></i>Criar a primeira comunidade
+            </a>
+        </div>
+        {% endif %}
+
+        {% if comunidades_dono %}
+        <div class="space-y-3">
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Minhas comunidades</h2>
+            {% for comunidade in comunidades_dono %}
+            <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) }}"
+               class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+                {% if comunidade.imagem %}
+                    <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
+                {% else %}
+                    <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
+                        <i class="fa-solid fa-people-group text-sm"></i>
+                    </div>
+                {% endif %}
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
+                    {% if comunidade.descricao %}
+                    <p class="text-xs {{ tema.text_secondary }} truncate">{{ comunidade.descricao }}</p>
+                    {% endif %}
+                </div>
+                <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if comunidades_participa %}
+        <div class="space-y-3">
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Comunidades que participo</h2>
+            {% for comunidade in comunidades_participa %}
+            <a href="{{ url_for('comunidade.escalados', comunidade_id=comunidade.id) }}"
+               class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+                {% if comunidade.imagem %}
+                    <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
+                {% else %}
+                    <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
+                        <i class="fa-solid fa-people-group text-sm"></i>
+                    </div>
+                {% endif %}
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
+                    <p class="text-xs {{ tema.text_secondary }}">Ver escalados</p>
+                </div>
+                <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+    </main>
+</div>
+{% endblock %}

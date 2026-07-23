@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Garante que o Tailwind escaneie os templates Jinja em busca de classes.
+   (Deteccao automatica ja cobriria isso, mas ser explicito evita surpresas.) */
+@source "../../templates";
+
+/* As classes dos temas do dashboard sao montadas via variavel Jinja
+   ({{ tema.accent_bg }} etc.), entao nao aparecem literalmente nos .html.
+   Aqui elas existem como strings literais em Python, e o scanner do
+   Tailwind le qualquer arquivo de texto, independente da linguagem. */
+@source "../../main/themes.py";

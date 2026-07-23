@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% block title %}{{ escala.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #escala-rapida { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="escala-rapida" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <!-- Cabecalho superior -->
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <a href="{{ url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                    <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+                </a>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full {{ escala.cor }} shrink-0"></span>
+                        <span class="font-semibold {{ tema.text_primary }} truncate">{{ escala.nome }}</span>
+                    </div>
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        {{ escala.departamento }}
+                        {% if escala.data %}
+                            &middot; {{ escala.data.strftime('%d/%m/%Y') }}
+                            {% if escala.horario %} &middot; {{ escala.horario.strftime('%H:%M') }}{% endif %}
+                        {% else %}
+                            &middot; sem data definida
+                        {% endif %}
+                    </p>
+                    {% if escala.plantao_turno_id %}
+                    <a href="{{ url_for('plantao.detalhe', turno_id=escala.plantao_turno_id) }}"
+                       class="inline-flex items-center gap-1 text-[11px] {{ tema.accent_text }} hover:underline mt-0.5">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        Gerada por rodizio{% if escala.plantao_fixado %} &middot; fixada{% endif %}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ url_for('escala.editar', escala_id=escala.id) }}"
+                   title="Editar escala" aria-label="Editar escala"
+                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                    <i class="fa-solid fa-pen"></i>
+                </a>
+                <form method="POST" action="{{ url_for('escala.excluir_escala', escala_id=escala.id) }}"
+                      data-confirm-excluir='Tem certeza que deseja apagar a escala "{{ escala.nome }}"? Essa acao nao pode ser desfeita.'>
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" title="Excluir escala" aria-label="Excluir escala"
+                            class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 space-y-4 pb-16">
+
+        <!-- Legenda de status -->
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs {{ tema.text_secondary }}">
+            {% for chave, rotulo in status_labels.items() %}
+            <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full {{ status_cores[chave] }}"></span>
+                {{ rotulo }}
+            </span>
+            {% endfor %}
+        </div>
+
+        <!-- Acoes -->
+        <div class="flex flex-col sm:flex-row gap-3">
+            <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1">
+                {{ acao_form.hidden_tag() }}
+                <button type="submit"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-3 rounded-xl transition">
+                    <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe
+                </button>
+            </form>
+            {% if escala.plantao_turno_id and escala.funcoes and escala.funcoes[0].membro_id %}
+            <form method="POST" action="{{ url_for('plantao.registrar_ausencia_na_escala', escala_id=escala.id) }}" class="flex-1"
+                  onsubmit="return confirm('Marcar falta de {{ escala.funcoes[0].membro.nome }} nesta ocorrencia? Quem seria o proximo da fila cobre este periodo, e {{ escala.funcoes[0].membro.nome }} passa a cobrir o periodo seguinte.');">
+                {{ acao_form.hidden_tag() }}
+                <button type="submit"
+                        class="w-full {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-xl transition">
+                    <i class="fa-solid fa-person-walking-arrow-right mr-2"></i>Registrar ausencia
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% if escala.data %}
+        <p class="text-xs {{ tema.text_secondary }} -mt-2">
+            <i class="fa-solid fa-clock mr-1"></i>
+            Alem do botao acima, a equipe escalada e notificada automaticamente 24h e 16h antes do evento.
+        </p>
+        {% endif %}
+
+        <!-- Grid da escala -->
+        <div class="rounded-xl border {{ tema.card_border }} overflow-hidden">
+            <div class="grid grid-cols-[110px_1fr] sm:grid-cols-[180px_1fr]">
+
+                {% for funcao in escala.funcoes %}
+                {% if funcao.eh_subcabecalho %}
+                <div class="col-span-2 bg-gray-800/80 px-3 sm:px-4 py-2 border-t border-gray-700 {{ 'border-t-0' if loop.first else '' }} flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold text-gray-300 uppercase tracking-wide truncate" data-funcao-nome="{{ funcao.id }}">
+                        {{ funcao.nome }}
+                    </span>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button type="button" data-editar-funcao="{{ funcao.id }}"
+                                title="Renomear categoria" class="text-gray-400 hover:text-white transition">
+                            <i class="fa-solid fa-pen text-[10px]"></i>
+                        </button>
+                        <form method="POST" action="{{ url_for('escala.excluir_funcao', funcao_id=funcao.id) }}"
+                              data-confirm-excluir='Remover a categoria "{{ funcao.nome }}"?'>
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" title="Excluir categoria" class="text-gray-400 hover:text-red-400 transition">
+                                <i class="fa-solid fa-trash text-[10px]"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <form method="POST" action="{{ url_for('escala.editar_funcao', funcao_id=funcao.id) }}"
+                          data-editar-funcao-form="{{ funcao.id }}" class="hidden flex-1 flex items-center gap-1">
+                        {{ formularios_editar_funcao[funcao.id].hidden_tag() }}
+                        {{ formularios_editar_funcao[funcao.id].nome(
+                            class_="w-full bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-white"
+                        ) }}
+                        <button type="submit" title="Salvar" class="text-gray-300 hover:text-white shrink-0">
+                            <i class="fa-solid fa-check text-xs"></i>
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="bg-green-800 text-white text-xs sm:text-sm font-medium px-2 sm:px-4 py-3 border-t border-green-900 {{ 'border-t-0' if loop.first else '' }}">
+                    <div class="flex items-center justify-between gap-1" data-funcao-nome="{{ funcao.id }}">
+                        <span class="truncate">{{ funcao.nome }}</span>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" data-editar-funcao="{{ funcao.id }}"
+                                    title="Renomear funcao" class="text-green-200 hover:text-white transition">
+                                <i class="fa-solid fa-pen text-[10px]"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('escala.excluir_funcao', funcao_id=funcao.id) }}"
+                                  data-confirm-excluir='Remover a funcao "{{ funcao.nome }}"? Isso tambem remove quem estiver escalado nela.'>
+                                {{ acao_form.hidden_tag() }}
+                                <button type="submit" title="Excluir funcao" class="text-green-200 hover:text-red-300 transition">
+                                    <i class="fa-solid fa-trash text-[10px]"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ url_for('escala.editar_funcao', funcao_id=funcao.id) }}"
+                          data-editar-funcao-form="{{ funcao.id }}" class="hidden mt-1.5 flex items-center gap-1">
+                        {{ formularios_editar_funcao[funcao.id].hidden_tag() }}
+                        {{ formularios_editar_funcao[funcao.id].nome(
+                            class_="w-full bg-green-900 border border-green-700 rounded px-1.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-white"
+                        ) }}
+                        <button type="submit" title="Salvar" class="text-green-200 hover:text-white shrink-0">
+                            <i class="fa-solid fa-check text-xs"></i>
+                        </button>
+                    </form>
+                </div>
+                <div class="{{ tema.page_bg }} px-3 sm:px-4 py-2.5 border-t {{ tema.card_border }} {{ 'border-t-0' if loop.first else '' }} flex items-center">
+                    {% if funcao.membro_id %}
+                        {% set pessoa = funcao.membro %}
+                        <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full">
+                            <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                                {{ pessoa.iniciais }}
+                            </div>
+                            <span class="text-sm {{ tema.text_primary }} truncate max-w-[9rem] sm:max-w-none">{{ pessoa.nome }}</span>
+
+                            <form method="POST" action="{{ url_for('escala.atualizar_status', funcao_id=funcao.id) }}" class="shrink-0">
+                                {{ formularios_status[funcao.id].hidden_tag() }}
+                                {{ formularios_status[funcao.id].status(
+                                    class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring,
+                                    onchange="this.form.submit()"
+                                ) }}
+                            </form>
+
+                            {% if escala.funcoes|length > 1 %}
+                            <form method="POST" action="{{ url_for('escala.mover_membro', funcao_id=funcao.id) }}" class="flex items-center gap-1 shrink-0">
+                                {{ formularios_mover[funcao.id].hidden_tag() }}
+                                {{ formularios_mover[funcao.id].destino_funcao_id(
+                                    class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                                ) }}
+                                <button type="submit" title="Mover/trocar" class="{{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                                    <i class="fa-solid fa-arrows-turn-right"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+
+                            <form method="POST" action="{{ url_for('escala.remover_membro', funcao_id=funcao.id) }}" class="ml-auto shrink-0">
+                                {{ acao_form.hidden_tag() }}
+                                <button type="submit" aria-label="Remover" class="text-red-500 hover:text-red-400 transition">
+                                    <i class="fa-solid fa-circle-xmark"></i>
+                                </button>
+                            </form>
+                        </div>
+                    {% elif diretorio_vazio %}
+                        <p class="text-xs {{ tema.text_secondary }} w-full">
+                            Diretorio da comunidade vazio.
+                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
+                               class="{{ tema.accent_text }} hover:underline">Cadastrar membros</a>
+                        </p>
+                    {% else %}
+                        {% set form = formularios_membro[funcao.id] %}
+                        <form method="POST" action="{{ url_for('escala.adicionar_membro', funcao_id=funcao.id) }}"
+                              class="flex flex-wrap items-center gap-2 w-full">
+                            {{ form.hidden_tag() }}
+                            {{ form.membro_id(class_="flex-1 min-w-0 " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                            <button type="submit"
+                                    class="ml-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-3 py-2 rounded-lg transition shrink-0">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </form>
+                        {% for erro in form.membro_id.errors %}
+                            <p class="text-xs text-red-400 mt-1 w-full">{{ erro }}</p>
+                        {% endfor %}
+                        <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
+                           class="text-xs {{ tema.text_secondary }} {{ tema.text_hover }} underline w-full">+ Adicionar novo membro ao diretorio</a>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                {% if not escala.plantao_turno_id %}
+                <div class="col-span-2 {{ tema.card_bg }} border-t {{ tema.card_border }} px-3 sm:px-4 py-3">
+                    <form method="POST" action="{{ url_for('escala.adicionar_funcao', escala_id=escala.id) }}"
+                          class="flex items-center gap-2">
+                        {{ formulario_nova_funcao.hidden_tag() }}
+                        {{ formulario_nova_funcao.nome(
+                            class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
+                            placeholder="Nome da nova funcao"
+                        ) }}
+                        <button type="submit"
+                                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                            <i class="fa-solid fa-plus mr-1"></i>Adicionar funcao
+                        </button>
+                    </form>
+                    {% for erro in formulario_nova_funcao.nome.errors %}
+                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                    {% endfor %}
+                </div>
+
+                <div class="col-span-2 {{ tema.card_bg }} border-t {{ tema.card_border }} px-3 sm:px-4 py-3">
+                    <form method="POST" action="{{ url_for('escala.adicionar_subcabecalho', escala_id=escala.id) }}"
+                          class="flex items-center gap-2">
+                        {{ formulario_novo_subcabecalho.hidden_tag() }}
+                        {{ formulario_novo_subcabecalho.nome(
+                            id="subcabecalho_nome",
+                            class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 focus:ring-gray-500",
+                            placeholder="Ex: Orquestra, Louvor..."
+                        ) }}
+                        <button type="submit"
+                                class="{{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                            <i class="fa-solid fa-layer-group mr-1"></i>Nova categoria
+                        </button>
+                    </form>
+                    {% for erro in formulario_novo_subcabecalho.nome.errors %}
+                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Botao flutuante de chat -->
+    <button type="button" aria-label="Abrir chat"
+            class="fixed bottom-6 right-6 w-14 h-14 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-20">
+        <i class="fa-solid fa-comment-dots text-xl"></i>
+    </button>
+</div>
+
+<script>
+    document.querySelectorAll('[data-editar-funcao]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-editar-funcao');
+            var form = document.querySelector('[data-editar-funcao-form="' + id + '"]');
+            var nomeWrap = document.querySelector('[data-funcao-nome="' + id + '"]');
+            if (form) form.classList.toggle('hidden');
+            if (nomeWrap) nomeWrap.classList.toggle('hidden');
+            if (form && !form.classList.contains('hidden')) {
+                var input = form.querySelector('input[type="text"]');
+                if (input) input.focus();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-confirm-excluir]').forEach(function (form) {
+        form.addEventListener('submit', function (evento) {
+            if (!window.confirm(form.getAttribute('data-confirm-excluir'))) {
+                evento.preventDefault();
+            }
+        });
+    });
+</script>
+{% endblock %}

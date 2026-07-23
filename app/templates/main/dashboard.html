@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="min-h-screen {{ tema.page_bg }}">
+
+    <!-- Navbar -->
+    <header class="{{ tema.header_bg }} border-b {{ tema.header_border }}">
+        <div class="flex items-center justify-between px-4 sm:px-6 py-4">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg {{ tema.accent_bg }} flex items-center justify-center text-white font-bold text-sm">
+                    MP
+                </div>
+                <span class="text-base font-semibold {{ tema.text_primary }}">Meu Projeto</span>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <a href="{{ url_for('comunidade.index') }}"
+                   class="hidden sm:inline-flex items-center gap-2 text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9 20H4v-2a4 4 0 014-4h1m5-6a3 3 0 11-6 0 3 3 0 016 0zm6 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                    </svg>
+                    Comunidades
+                </a>
+
+                <div class="w-px h-6 bg-current opacity-10 hidden sm:block"></div>
+
+                <div class="relative">
+                    <button type="button" id="sino-notificacoes" aria-label="Notificacoes"
+                            class="p-2 rounded-lg {{ tema.text_secondary }} hover:bg-black/5 transition relative">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
+                        </svg>
+                        {% if notificacoes_nao_lidas %}
+                        <span class="absolute top-0.5 right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">
+                            {{ notificacoes_nao_lidas if notificacoes_nao_lidas < 10 else '9+' }}
+                        </span>
+                        {% endif %}
+                    </button>
+
+                    <div id="painel-notificacoes"
+                         class="hidden absolute right-0 mt-2 w-80 max-w-[90vw] {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl shadow-xl z-30 overflow-hidden">
+                        <div class="flex items-center justify-between px-4 py-3 border-b {{ tema.card_border }}">
+                            <span class="text-sm font-semibold {{ tema.text_primary }}">Notificacoes</span>
+                            {% if notificacoes_nao_lidas %}
+                            <form method="POST" action="{{ url_for('main.marcar_notificacoes_lidas') }}">
+                                <button type="submit" class="text-xs {{ tema.accent_text }} hover:underline">
+                                    Marcar todas como lidas
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <div class="max-h-80 overflow-y-auto divide-y {{ tema.card_border }}">
+                            {% for n in notificacoes %}
+                            <div class="px-4 py-3 {{ '' if n.lida else tema.accent_soft_bg }}">
+                                <p class="text-sm font-medium {{ tema.text_primary }}">{{ n.titulo }}</p>
+                                <p class="text-xs {{ tema.text_secondary }} mt-0.5">{{ n.mensagem }}</p>
+                            </div>
+                            {% else %}
+                            <p class="px-4 py-6 text-sm {{ tema.text_secondary }} text-center">Nenhuma notificacao ainda.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-px h-6 bg-current opacity-10 hidden sm:block"></div>
+
+                {% if foto_perfil %}
+                    <img src="{{ foto_perfil }}" alt="Foto de {{ primeiro_nome }}"
+                         class="w-8 h-8 rounded-full object-cover border {{ tema.card_border }}">
+                {% else %}
+                    <div class="w-8 h-8 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-sm font-semibold {{ tema.accent_text }}">
+                        {{ primeiro_nome[0]|upper }}
+                    </div>
+                {% endif %}
+
+                <a href="{{ url_for('auth.logout') }}"
+                   class="text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                    Sair
+                </a>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <nav class="flex items-center gap-6 px-4 sm:px-6 overflow-x-auto"
+             data-accent-text="{{ tema.accent_text }}" data-accent-border="{{ tema.accent_border }}">
+            <button type="button" data-tab-btn="geral"
+                    class="tab-btn py-3 text-sm font-medium border-b-2 {{ tema.accent_text }} {{ tema.accent_border }} whitespace-nowrap">
+                Visao Geral
+            </button>
+            <button type="button" data-tab-btn="atividade"
+                    class="tab-btn py-3 text-sm font-medium border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
+                Atividade
+            </button>
+            <button type="button" data-tab-btn="config"
+                    class="tab-btn py-3 text-sm font-medium border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
+                Configuracoes
+            </button>
+        </nav>
+    </header>
+
+    <!-- Conteudo -->
+    <main class="px-4 sm:px-6 py-10">
+        <div class="max-w-3xl mx-auto space-y-6">
+
+            <div data-tab-panel="geral">
+                <h1 class="text-2xl font-semibold {{ tema.text_primary }}">Ola, {{ primeiro_nome }}</h1>
+                <p class="{{ tema.text_secondary }} mt-1">Bem-vindo de volta ao seu painel.</p>
+
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Dados da conta</h2>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                        {% if foto_perfil %}
+                            <img src="{{ foto_perfil }}" alt="Foto de perfil"
+                                 class="w-16 h-16 rounded-full object-cover border {{ tema.card_border }}">
+                        {% else %}
+                            <div class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-semibold {{ tema.accent_text }}">
+                                {{ primeiro_nome[0]|upper }}
+                            </div>
+                        {% endif %}
+                        <div>
+                            <p class="text-base font-medium {{ tema.text_primary }}">{{ nome_completo }}</p>
+                            <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
+                            <span class="inline-block mt-1 text-xs px-2 py-0.5 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
+                                {{ "Conta Google" if eh_conta_google else "Conta tradicional" }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3 mt-6">
+                        <button type="button" data-tab-jump="config"
+                                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+                            Editar perfil
+                        </button>
+                        <button type="button" data-tab-jump="config"
+                                class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition">
+                            Ver configuracoes
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <h2 class="text-sm font-semibold {{ tema.text_primary }}">Comunidades</h2>
+                            <p class="text-sm {{ tema.text_secondary }} mt-1">
+                                Crie comunidades, gerencie membros e monte escalas para cada uma.
+                            </p>
+                        </div>
+                        <a href="{{ url_for('comunidade.index') }}"
+                           class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition text-center shrink-0">
+                            Abrir Comunidades
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div data-tab-panel="atividade" class="hidden">
+                <h1 class="text-2xl font-semibold {{ tema.text_primary }}">Atividade</h1>
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6 text-sm {{ tema.text_secondary }}">
+                    Nenhuma atividade recente.
+                </div>
+            </div>
+
+            <div data-tab-panel="config" class="hidden">
+                <h1 class="text-2xl font-semibold {{ tema.text_primary }}">Configuracoes</h1>
+
+                <!-- Foto de perfil -->
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Foto de perfil</h2>
+                    <form method="POST" action="{{ url_for('main.salvar_foto_perfil') }}" enctype="multipart/form-data"
+                          class="flex flex-col sm:flex-row sm:items-center gap-4">
+                        {{ foto_form.hidden_tag() }}
+
+                        <img id="preview-foto" src="{{ foto_perfil or '#' }}" alt="Preview"
+                             class="w-16 h-16 rounded-full object-cover border {{ tema.card_border }} {{ '' if foto_perfil else 'hidden' }}">
+                        <div id="preview-inicial"
+                             class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-semibold {{ tema.accent_text }} {{ 'hidden' if foto_perfil else '' }}">
+                            {{ primeiro_nome[0]|upper }}
+                        </div>
+
+                        <div class="flex-1">
+                            {{ foto_form.foto(id="input-foto", accept="image/png, image/jpeg", class_="block w-full text-sm " ~ tema.text_secondary) }}
+                            {% for erro in foto_form.foto.errors %}
+                                <p class="text-xs text-red-600 mt-1">{{ erro }}</p>
+                            {% endfor %}
+                            <p class="text-xs {{ tema.text_secondary }} mt-1">JPG ou PNG, ate 2 MB.</p>
+                        </div>
+
+                        {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0") }}
+                    </form>
+                </div>
+
+                <!-- Aparencia / tema -->
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Aparencia</h2>
+                    <form method="POST" action="{{ url_for('main.salvar_tema') }}" class="space-y-4">
+                        {{ tema_form.hidden_tag() }}
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {% for chave, dado in temas.items() %}
+                            <label class="flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer border-2 {{ tema.accent_border if chave == tema_atual else tema.card_border }}">
+                                <input type="radio" name="tema" value="{{ chave }}" {{ "checked" if chave == tema_atual else "" }}>
+                                <span class="w-4 h-4 rounded-full {{ dado.swatch }} border border-black/10"></span>
+                                <span class="text-sm {{ tema.text_primary }}">{{ dado.label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {{ tema_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition") }}
+                    </form>
+                </div>
+
+                <!-- E-mail -->
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium {{ tema.text_primary }}">E-mail</p>
+                            <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
+                        </div>
+                        <button type="button"
+                                class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition">
+                            Alterar senha
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Chat -->
+    <div id="chat-panel"
+         class="hidden fixed bottom-24 right-6 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl flex flex-col overflow-hidden z-20"
+         style="height: 480px;">
+        <div class="{{ tema.accent_bg }} text-white px-4 py-3 flex items-center justify-between shrink-0">
+            <span class="font-medium text-sm">Assistente do site</span>
+            <button type="button" id="chat-fechar" aria-label="Fechar chat" class="text-white/80 hover:text-white text-lg leading-none">
+                &times;
+            </button>
+        </div>
+        <div id="chat-mensagens" class="flex-1 overflow-y-auto p-4 space-y-2 text-sm"></div>
+        <form id="chat-form" class="border-t {{ tema.card_border }} p-3 flex items-center gap-2 shrink-0">
+            <input id="chat-input" type="text" placeholder="Digite sua duvida..." autocomplete="off"
+                   class="flex-1 rounded-lg border {{ tema.card_border }} px-3 py-2 text-sm focus:outline-none {{ tema.text_primary }}">
+            <button type="submit" aria-label="Enviar"
+                    class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white rounded-lg px-3 py-2 text-sm shrink-0">
+                Enviar
+            </button>
+        </form>
+    </div>
+
+    <button type="button" id="chat-fab" aria-label="Abrir chat"
+            class="fixed bottom-6 right-6 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-20">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+    </button>
+</div>
+
+<script>
+    // --- Tabs ---
+    (function () {
+        var tabsNav = document.querySelector('[data-accent-text]');
+        var accentText = (tabsNav && tabsNav.dataset.accentText || '').split(' ').filter(Boolean);
+        var accentBorder = (tabsNav && tabsNav.dataset.accentBorder || '').split(' ').filter(Boolean);
+
+        function ativarTab(target) {
+            document.querySelectorAll('.tab-btn').forEach(function (btn) {
+                var ativo = btn.getAttribute('data-tab-btn') === target;
+                accentText.forEach(function (c) { btn.classList.toggle(c, ativo); });
+                accentBorder.forEach(function (c) { btn.classList.toggle(c, ativo); });
+                btn.classList.toggle('text-gray-400', !ativo);
+                btn.classList.toggle('border-transparent', !ativo);
+            });
+            document.querySelectorAll('[data-tab-panel]').forEach(function (painel) {
+                painel.classList.toggle('hidden', painel.getAttribute('data-tab-panel') !== target);
+            });
+        }
+
+        document.querySelectorAll('[data-tab-btn]').forEach(function (btn) {
+            btn.addEventListener('click', function () { ativarTab(btn.getAttribute('data-tab-btn')); });
+        });
+        document.querySelectorAll('[data-tab-jump]').forEach(function (btn) {
+            btn.addEventListener('click', function () { ativarTab(btn.getAttribute('data-tab-jump')); });
+        });
+
+        if (window.location.hash === '#config') {
+            ativarTab('config');
+        }
+    })();
+
+    // --- Sino de notificacoes ---
+    (function () {
+        var sino = document.getElementById('sino-notificacoes');
+        var painel = document.getElementById('painel-notificacoes');
+        if (!sino || !painel) return;
+
+        sino.addEventListener('click', function (evento) {
+            evento.stopPropagation();
+            painel.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', function (evento) {
+            if (!painel.classList.contains('hidden') && !painel.contains(evento.target)) {
+                painel.classList.add('hidden');
+            }
+        });
+    })();
+
+    // --- Preview da foto de perfil ---
+    (function () {
+        var input = document.getElementById('input-foto');
+        var preview = document.getElementById('preview-foto');
+        var inicial = document.getElementById('preview-inicial');
+        if (!input) return;
+
+        input.addEventListener('change', function () {
+            var arquivo = input.files && input.files[0];
+            if (!arquivo) return;
+
+            if (['image/jpeg', 'image/png'].indexOf(arquivo.type) === -1) {
+                alert('Envie apenas arquivos JPG ou PNG.');
+                input.value = '';
+                return;
+            }
+            if (arquivo.size > 2 * 1024 * 1024) {
+                alert('A imagem deve ter no maximo 2 MB.');
+                input.value = '';
+                return;
+            }
+
+            var leitor = new FileReader();
+            leitor.onload = function (evento) {
+                preview.src = evento.target.result;
+                preview.classList.remove('hidden');
+                if (inicial) inicial.classList.add('hidden');
+            };
+            leitor.readAsDataURL(arquivo);
+        });
+    })();
+
+    // --- Chatbot ---
+    (function () {
+        var fab = document.getElementById('chat-fab');
+        var painel = document.getElementById('chat-panel');
+        var fechar = document.getElementById('chat-fechar');
+        var form = document.getElementById('chat-form');
+        var input = document.getElementById('chat-input');
+        var mensagensEl = document.getElementById('chat-mensagens');
+        var historico = [];
+
+        function renderMensagem(autor, texto) {
+            var bolha = document.createElement('div');
+            var souUsuario = autor === 'usuario';
+            bolha.className = 'max-w-[80%] px-3 py-2 rounded-lg ' + (souUsuario
+                ? 'ml-auto {{ tema.accent_bg }} text-white'
+                : 'mr-auto bg-gray-100 text-gray-800');
+            bolha.textContent = texto;
+            mensagensEl.appendChild(bolha);
+            mensagensEl.scrollTop = mensagensEl.scrollHeight;
+        }
+
+        function mostrarDigitando() {
+            var bolha = document.createElement('div');
+            bolha.id = 'chat-digitando';
+            bolha.className = 'mr-auto bg-gray-100 text-gray-500 text-xs px-3 py-2 rounded-lg italic';
+            bolha.textContent = 'digitando...';
+            mensagensEl.appendChild(bolha);
+            mensagensEl.scrollTop = mensagensEl.scrollHeight;
+        }
+
+        function removerDigitando() {
+            var el = document.getElementById('chat-digitando');
+            if (el) el.remove();
+        }
+
+        if (fab && painel) {
+            fab.addEventListener('click', function () {
+                painel.classList.toggle('hidden');
+                if (!painel.classList.contains('hidden') && mensagensEl.children.length === 0) {
+                    var boasVindas = 'Oi! Sou o assistente do site. Pode perguntar sobre login, cadastro, foto de perfil ou temas.';
+                    renderMensagem('bot', boasVindas);
+                    historico.push({ autor: 'bot', texto: boasVindas });
+                }
+            });
+        }
+        if (fechar && painel) {
+            fechar.addEventListener('click', function () { painel.classList.add('hidden'); });
+        }
+
+        if (form) {
+            form.addEventListener('submit', function (evento) {
+                evento.preventDefault();
+                var texto = input.value.trim();
+                if (!texto) return;
+
+                renderMensagem('usuario', texto);
+                historico.push({ autor: 'usuario', texto: texto });
+                input.value = '';
+                mostrarDigitando();
+
+                fetch('{{ url_for("main.chat") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mensagem: texto, historico: historico })
+                })
+                    .then(function (resp) { return resp.json(); })
+                    .then(function (dados) {
+                        removerDigitando();
+                        var resposta = dados.resposta || 'Desculpe, nao consegui responder agora.';
+                        renderMensagem('bot', resposta);
+                        historico.push({ autor: 'bot', texto: resposta });
+                    })
+                    .catch(function () {
+                        removerDigitando();
+                        renderMensagem('bot', 'Ocorreu um erro ao falar com o assistente. Tente novamente.');
+                    });
+            });
+        }
+    })();
+</script>
+{% endblock %}

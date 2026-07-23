@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.env
+*.db
+*.sqlite3
+.pytest_cache/
+instance/
+.coverage
+htmlcov/
+node_modules/
+dist/
+build/
+app/static/uploads/avatars/*
+!app/static/uploads/avatars/.gitkeep

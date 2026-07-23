@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Nova Escala{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #escala-rapida { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="escala-rapida" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Nova Escala</span>
+        </a>
+    </header>
+
+    <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">
+        <p class="text-xs font-semibold {{ tema.accent_text }} uppercase tracking-wide mb-1">Etapa 1 de 2</p>
+        <h1 class="text-xl font-semibold {{ tema.text_primary }} mb-1">Configuracao da escala</h1>
+        <p class="text-sm {{ tema.text_secondary }} mb-6">
+            Nova escala em <span class="{{ tema.text_primary }} font-medium">{{ ministerio.nome }}</span>.
+            Depois de criada, voce escolhe quem entra em cada funcao na proxima tela.
+        </p>
+
+        <form method="POST" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
+            {{ form.hidden_tag() }}
+
+            <div>
+                {{ form.nome.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.nome(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="Ex: Culto de Domingo") }}
+                {% for erro in form.nome.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                {{ form.departamento.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.departamento(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Define as funcoes sugeridas na proxima tela (voce pode ajustar depois).</p>
+                {% for erro in form.departamento.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    {{ form.data.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                    {{ form.data(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    {% for erro in form.data.errors %}
+                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                    {% endfor %}
+                </div>
+                <div>
+                    {{ form.horario.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                    {{ form.horario(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    {% for erro in form.horario.errors %}
+                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+            <p class="text-xs {{ tema.text_secondary }} -mt-2">
+                Data e horario sao opcionais, mas sao usados para notificar automaticamente
+                a equipe 24h e 16h antes do evento.
+            </p>
+
+            {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-lg transition") }}
+        </form>
+    </main>
+</div>
+{% endblock %}

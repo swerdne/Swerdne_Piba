@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="ministerio-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Editar Ministerio</span>
+        </a>
+    </header>
+
+    <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">
+        {% if ministerio.imagem %}
+        <div class="flex justify-center mb-4">
+            <img src="{{ ministerio.imagem }}" alt="" class="w-20 h-20 rounded-full object-cover border {{ tema.card_border }}">
+        </div>
+        {% endif %}
+
+        <form method="POST" enctype="multipart/form-data" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
+            {{ form.hidden_tag() }}
+
+            <div>
+                {{ form.nome.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.nome(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {% for erro in form.nome.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                {{ form.descricao.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.descricao(rows=3, class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {% for erro in form.descricao.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                {{ form.imagem.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.imagem(class_=tema.text_secondary ~ " w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600") }}
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Deixe em branco pra manter a imagem atual. JPG ou PNG, ate 2 MB.</p>
+                {% for erro in form.imagem.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
+            {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-lg transition") }}
+        </form>
+    </main>
+</div>
+{% endblock %}

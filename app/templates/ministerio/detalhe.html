@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}{{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="ministerio-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <a href="{{ url_for('comunidade.detalhe', comunidade_id=ministerio.comunidade_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                    <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+                </a>
+                {% if ministerio.imagem %}
+                    <img src="{{ ministerio.imagem }}" alt="" class="w-8 h-8 rounded-full object-cover shrink-0">
+                {% endif %}
+                <span class="font-semibold {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
+            </div>
+            <a href="{{ url_for('ministerio.editar', ministerio_id=ministerio.id) }}"
+               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition shrink-0" aria-label="Editar ministerio">
+                <i class="fa-solid fa-pen"></i>
+            </a>
+        </div>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-5xl mx-auto">
+        {% if ministerio.descricao %}
+        <p class="text-sm {{ tema.text_secondary }} mb-4">{{ ministerio.descricao }}</p>
+        {% endif %}
+
+        <div class="grid lg:grid-cols-[1fr_280px] gap-6 items-start">
+
+            <!-- Coluna das escalas -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Escalas</h2>
+                    <a href="{{ url_for('escala.nova', ministerio_id=ministerio.id) }}"
+                       class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
+                        <i class="fa-solid fa-plus mr-1"></i>Nova escala
+                    </a>
+                </div>
+
+                {% if not escalas %}
+                <div class="text-center py-16">
+                    <i class="fa-solid fa-calendar-days text-4xl {{ tema.text_secondary }}"></i>
+                    <p class="mt-4 {{ tema.text_secondary }}">Nenhuma escala criada ainda neste ministerio.</p>
+                </div>
+                {% endif %}
+
+                <div class="space-y-3">
+                    {% for escala in escalas %}
+                    <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                       class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+                        <span class="w-2.5 h-2.5 rounded-full {{ escala.cor }} shrink-0"></span>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ escala.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }}">
+                                {{ escala.departamento }}
+                                {% if escala.data %}
+                                    &middot; {{ escala.data.strftime('%d/%m/%Y') }}
+                                    {% if escala.horario %} &middot; {{ escala.horario.strftime('%H:%M') }}{% endif %}
+                                {% else %}
+                                    &middot; sem data definida
+                                {% endif %}
+                            </p>
+                        </div>
+                        <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
+                    </a>
+                    {% endfor %}
+                </div>
+
+                <div class="flex items-center justify-between pt-2">
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodizio</h2>
+                    <a href="{{ url_for('plantao.nova', ministerio_id=ministerio.id) }}"
+                       class="{{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
+                        <i class="fa-solid fa-arrows-rotate mr-1"></i>Novo Turno de Rodizio
+                    </a>
+                </div>
+                <p class="text-xs {{ tema.text_secondary }} -mt-2">As ocorrencias geradas por rodizio ja aparecem na lista de Escalas e no calendario acima.</p>
+
+                {% if not turnos_plantao %}
+                <div class="text-center py-10">
+                    <i class="fa-solid fa-people-arrows text-3xl {{ tema.text_secondary }}"></i>
+                    <p class="mt-3 {{ tema.text_secondary }}">Nenhum turno de rodizio criado ainda neste ministerio.</p>
+                </div>
+                {% endif %}
+
+                <div class="space-y-3">
+                    {% for turno in turnos_plantao %}
+                    <a href="{{ url_for('plantao.detalhe', turno_id=turno.id) }}"
+                       class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+                        <i class="fa-solid fa-arrows-rotate {{ tema.text_secondary }}"></i>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ turno.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }}">
+                                {{ {"diaria": "Diaria", "semanal": "Semanal", "mensal": "Mensal"}.get(turno.recorrencia, turno.recorrencia) }}
+                                &middot; {{ turno.fila_ordenada|length }} na fila
+                            </p>
+                        </div>
+                        <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Calendario -->
+            <div class="{{ tema.card_bg }} rounded-2xl overflow-hidden lg:sticky lg:top-4">
+
+                <!-- Data de hoje por extenso + recolher/expandir -->
+                <div class="flex items-center justify-between px-5 py-4">
+                    <span class="text-sm {{ tema.text_primary }} truncate">{{ data_extenso }}</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id) }}"
+                           class="w-9 h-9 flex items-center justify-center rounded-full border {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} transition"
+                           title="Ver calendario completo" aria-label="Ver calendario completo">
+                            <i class="fa-solid fa-expand text-xs"></i>
+                        </a>
+                        <button type="button" data-toggle-calendario
+                                class="w-9 h-9 flex items-center justify-center rounded-full border {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} transition"
+                                aria-label="Recolher calendario">
+                            <i class="fa-solid fa-chevron-down text-xs transition-transform" data-toggle-calendario-icone></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div data-calendario-corpo class="px-5 pb-5">
+                    <!-- Cabecalho do mes -->
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-base font-bold {{ tema.text_primary }} capitalize">{{ mes_ano_texto }}</span>
+                        <div class="flex flex-col items-center gap-1 leading-none">
+                            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id, ano=ano_anterior, mes=mes_anterior) }}"
+                               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Mes anterior">
+                                <i class="fa-solid fa-caret-up"></i>
+                            </a>
+                            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id, ano=ano_proximo, mes=mes_proximo) }}"
+                               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Proximo mes">
+                                <i class="fa-solid fa-caret-down"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Dias da semana -->
+                    <div class="grid grid-cols-7 mb-2">
+                        {% for letra in ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'] %}
+                        <span class="text-center text-xs font-medium {{ tema.text_secondary }}">{{ letra }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Grade: 7 colunas x 6 linhas, sem bordas, bastante respiro -->
+                    <div class="grid grid-cols-7 gap-y-3">
+                        {% for semana in semanas %}
+                            {% for dia in semana %}
+                            {% set eventos = escalas_por_dia.get(dia, []) %}
+                            <div class="flex flex-col items-center justify-center gap-1">
+                                {% if dia == hoje %}
+                                <span class="w-7 h-7 flex items-center justify-center rounded-full bg-[#3ecbff] text-gray-900 text-sm font-bold">{{ dia.day }}</span>
+                                {% else %}
+                                <span class="w-7 h-7 flex items-center justify-center text-sm {{ tema.text_secondary if dia.month != mes else tema.text_primary }}">{{ dia.day }}</span>
+                                {% endif %}
+                                {% if eventos %}
+                                <div class="flex items-center gap-0.5">
+                                    {% for escala, cor in eventos[:3] %}
+                                    <span class="w-1 h-1 rounded-full {{ cor }}" title="{{ escala.nome }}"></span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+
+                    {% if legenda %}
+                    <div class="mt-4 pt-3 border-t {{ tema.card_border }} space-y-1.5">
+                        {% for escala, cor in legenda %}
+                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                           class="flex items-center gap-1.5 text-[11px] {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                            <span class="w-2 h-2 rounded-full {{ cor }} shrink-0"></span>
+                            <span class="truncate">{{ escala.nome }}</span>
+                            <span class="{{ tema.text_secondary }} shrink-0">{{ escala.data.strftime('%d/%m') }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-[11px] {{ tema.text_secondary }} mt-3">Nenhuma escala com data neste mes.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<script>
+    (function () {
+        var botao = document.querySelector('[data-toggle-calendario]');
+        var corpo = document.querySelector('[data-calendario-corpo]');
+        var icone = document.querySelector('[data-toggle-calendario-icone]');
+        if (!botao || !corpo) return;
+        botao.addEventListener('click', function () {
+            corpo.classList.toggle('hidden');
+            if (icone) icone.classList.toggle('rotate-180');
+        });
+    })();
+</script>
+{% endblock %}

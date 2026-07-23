@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Meu Projeto{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    {% if request.endpoint != 'main.dashboard'
+        and not (request.endpoint or '').startswith('escala.')
+        and not (request.endpoint or '').startswith('comunidade.')
+        and not (request.endpoint or '').startswith('ministerio.') %}
+    <nav class="bg-white border-b border-gray-200">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-6">
+            <a href="{{ url_for('main.index') }}" class="font-semibold text-gray-800">Inicio</a>
+            <a href="{{ url_for('auth.login') }}" class="text-sm text-gray-600 hover:text-gray-900">Login</a>
+            <a href="{{ url_for('auth.register') }}" class="text-sm text-gray-600 hover:text-gray-900">Cadastro</a>
+        </div>
+    </nav>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="max-w-5xl mx-auto w-full px-4 mt-4 space-y-2">
+          {% for category, message in messages %}
+            <div class="rounded-md px-4 py-3 text-sm border
+                {% if category == 'danger' %}bg-red-50 text-red-700 border-red-200
+                {% elif category == 'success' %}bg-green-50 text-green-700 border-green-200
+                {% else %}bg-blue-50 text-blue-700 border-blue-200{% endif %}">
+                {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

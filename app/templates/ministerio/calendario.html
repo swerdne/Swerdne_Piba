@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Calendario - {{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="ministerio-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            </a>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Calendario - {{ ministerio.nome }}</span>
+        </div>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-4xl mx-auto">
+
+        <!-- Navegacao do mes -->
+        <div class="flex items-center justify-center gap-4 mb-4">
+            <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_anterior, mes=mes_anterior) }}"
+               class="w-8 h-8 flex items-center justify-center border {{ tema.card_border }} rounded-lg {{ tema.text_secondary }} {{ tema.text_hover }} transition"
+               aria-label="Mes anterior">
+                <i class="fa-solid fa-chevron-left text-xs"></i>
+            </a>
+            <span class="text-lg font-semibold {{ tema.text_primary }} capitalize w-48 text-center">{{ mes_ano_texto }}</span>
+            <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_proximo, mes=mes_proximo) }}"
+               class="w-8 h-8 flex items-center justify-center border {{ tema.card_border }} rounded-lg {{ tema.text_secondary }} {{ tema.text_hover }} transition"
+               aria-label="Proximo mes">
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+            </a>
+        </div>
+
+        <!-- Grade: linhas = semanas, colunas = dias da semana -->
+        <div class="grid grid-cols-7 border-l border-t {{ tema.card_border }} rounded-lg overflow-hidden">
+            {% for nome_dia in ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'] %}
+            <div class="text-center text-xs font-semibold {{ tema.text_secondary }} py-2 border-r border-b {{ tema.card_border }} {{ tema.card_bg }}">
+                {{ nome_dia }}
+            </div>
+            {% endfor %}
+
+            {% for semana in semanas %}
+                {% for dia in semana %}
+                {% set eventos = escalas_por_dia.get(dia, []) %}
+                <div class="min-h-24 sm:min-h-28 p-1.5 border-r border-b {{ tema.card_border }}">
+                    {% if dia == hoje %}
+                    <span class="w-6 h-6 flex items-center justify-center rounded-full bg-blue-500 text-white text-xs font-semibold">{{ dia.day }}</span>
+                    {% else %}
+                    <span class="text-xs {{ tema.text_secondary if dia.month != mes else tema.text_primary }}">{{ dia.day }}</span>
+                    {% endif %}
+
+                    {% if eventos %}
+                    <div class="mt-1 space-y-1">
+                        {% for escala, cor in eventos[:3] %}
+                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                           class="flex items-center gap-1 {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} rounded px-1 py-0.5 transition"
+                           title="{{ escala.nome }}{% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}">
+                            <span class="w-1.5 h-1.5 rounded-full {{ cor }} shrink-0"></span>
+                            <span class="text-[10px] {{ tema.secondary_text }} truncate">{{ escala.nome }}</span>
+                        </a>
+                        {% endfor %}
+                        {% if eventos|length > 3 %}
+                        <p class="text-[10px] {{ tema.text_secondary }} px-1">+{{ eventos|length - 3 }} mais</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+
+        {% if not legenda %}
+        <p class="text-sm {{ tema.text_secondary }} mt-4 text-center">Nenhuma escala com data neste mes.</p>
+        {% endif %}
+
+    </main>
+</div>
+{% endblock %}
