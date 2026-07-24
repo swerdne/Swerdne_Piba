@@ -10,3 +10,5 @@ requests
 email-validator
 twilio
 apscheduler
+psycopg2-binary
+gunicorn
