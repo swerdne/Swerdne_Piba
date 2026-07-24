@@ -87,14 +87,14 @@
                     {% endfor %}
                 </div>
 
-                <div class="flex items-center justify-between pt-2">
+                <div class="pt-2">
                     <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodizio</h2>
-                    <a href="{{ url_for('plantao.nova', ministerio_id=ministerio.id) }}"
-                       class="{{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
-                        <i class="fa-solid fa-arrows-rotate mr-1"></i>Novo Turno de Rodizio
-                    </a>
                 </div>
-                <p class="text-xs {{ tema.text_secondary }} -mt-2">As ocorrencias geradas por rodizio ja aparecem na lista de Escalas e no calendario acima.</p>
+                <p class="text-xs {{ tema.text_secondary }} -mt-2">
+                    As ocorrencias geradas por rodizio ja aparecem na lista de Escalas e no calendario acima.
+                    Para criar um turno novo, abra uma escala com gente ja escalada e use "Criar turno de rodizio
+                    com esta equipe" -- a fila comeca com quem ja esta la, sem recadastrar ninguem.
+                </p>
 
                 {% if not turnos_plantao %}
                 <div class="text-center py-10">
