@@ -36,7 +36,7 @@
         </p>
         {% endif %}
 
-        <form method="POST" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
+        <form method="POST" id="form-turno" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
             {{ form.hidden_tag() }}
 
             <div>
@@ -228,6 +228,21 @@
             dataInicioInput.addEventListener('change', atualizarModoMensal);
             dataInicioInput.addEventListener('input', atualizarModoMensal);
             atualizarModoMensal();
+        }
+
+        // Trava o botao no primeiro envio -- clique duplo (ou duplo-clique
+        // acidental) enviava o formulario duas vezes e criava dois turnos
+        // identicos, cada um gerando suas proprias ocorrencias (pareciam
+        // "duplicadas" no calendario, mas eram dois TurnoPlantao diferentes).
+        var formTurno = document.querySelector('#form-turno');
+        if (formTurno) {
+            formTurno.addEventListener('submit', function () {
+                var botao = formTurno.querySelector('button[type="submit"]');
+                if (botao) {
+                    botao.disabled = true;
+                    botao.textContent = 'Salvando...';
+                }
+            });
         }
     })();
 </script>

@@ -28,7 +28,7 @@
             intocadas, como historico).
         </p>
 
-        <form method="POST" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
+        <form method="POST" id="form-turno" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
             {{ form.hidden_tag() }}
 
             <div>
@@ -216,6 +216,19 @@
             dataInicioInput.addEventListener('change', atualizarModoMensal);
             dataInicioInput.addEventListener('input', atualizarModoMensal);
             atualizarModoMensal();
+        }
+
+        // Trava o botao no primeiro envio -- evita reenvio duplicado (ver
+        // mesmo comentario em plantao/nova.html).
+        var formTurno = document.querySelector('#form-turno');
+        if (formTurno) {
+            formTurno.addEventListener('submit', function () {
+                var botao = formTurno.querySelector('button[type="submit"]');
+                if (botao) {
+                    botao.disabled = true;
+                    botao.textContent = 'Salvando...';
+                }
+            });
         }
     })();
 </script>
