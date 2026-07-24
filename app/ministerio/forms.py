@@ -17,3 +17,8 @@ class MinisterioForm(FlaskForm):
         ],
     )
     submit = SubmitField("Salvar")
+
+
+class AcaoForm(FlaskForm):
+    """Form vazio, usado so para validar o token CSRF em acoes simples (excluir)."""
+    pass

@@ -25,7 +25,12 @@ depends_on = None
 def upgrade():
     op.execute("ALTER TABLE escalas ADD COLUMN plantao_turno_id INTEGER")
     op.execute("ALTER TABLE escalas ADD COLUMN plantao_periodo INTEGER")
-    op.execute("ALTER TABLE escalas ADD COLUMN plantao_fixado BOOLEAN NOT NULL DEFAULT 0")
+    # SQLite nao tem tipo BOOLEAN de verdade (armazena como INTEGER, aceita
+    # DEFAULT 0 direto); o Postgres tem BOOLEAN de verdade e nao faz cast
+    # implicito de literal inteiro pra booleano em DEFAULT (erro
+    # DatatypeMismatch), precisa do literal "false".
+    default_falso = "false" if op.get_bind().dialect.name == "postgresql" else "0"
+    op.execute(f"ALTER TABLE escalas ADD COLUMN plantao_fixado BOOLEAN NOT NULL DEFAULT {default_falso}")
 
 
 def downgrade():

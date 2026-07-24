@@ -117,7 +117,7 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
     turno = TurnoPlantao(
         ministerio_id=ministerio.id, nome="Plantao Recepcao", departamento="Louvor",
         nome_funcao="Responsavel", data_inicio=daqui_24h.date(), horario=daqui_24h.time(),
-        recorrencia="diaria",
+        unidade_recorrencia="dia", intervalo_recorrencia=1, termino_tipo="nunca",
     )
     db.session.add(turno)
     db.session.commit()
@@ -147,7 +147,7 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     turno = TurnoPlantao(
         ministerio_id=ministerio.id, nome="Plantao Recepcao", departamento="Louvor",
         nome_funcao="Responsavel", data_inicio=daqui_16h.date(), horario=daqui_16h.time(),
-        recorrencia="diaria",
+        unidade_recorrencia="dia", intervalo_recorrencia=1, termino_tipo="nunca",
     )
     db.session.add(turno)
     db.session.commit()

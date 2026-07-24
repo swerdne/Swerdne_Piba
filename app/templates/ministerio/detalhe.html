@@ -24,10 +24,20 @@
                 {% endif %}
                 <span class="font-semibold {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
             </div>
-            <a href="{{ url_for('ministerio.editar', ministerio_id=ministerio.id) }}"
-               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition shrink-0" aria-label="Editar ministerio">
-                <i class="fa-solid fa-pen"></i>
-            </a>
+            <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ url_for('ministerio.editar', ministerio_id=ministerio.id) }}"
+                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Editar ministerio">
+                    <i class="fa-solid fa-pen"></i>
+                </a>
+                <form method="POST" action="{{ url_for('ministerio.excluir_ministerio', ministerio_id=ministerio.id) }}"
+                      onsubmit="return confirm('Tem certeza que deseja apagar o ministerio \'{{ ministerio.nome }}\'? Todas as escalas e turnos de rodizio dele tambem serao apagados. Essa acao nao pode ser desfeita.');">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" title="Excluir ministerio" aria-label="Excluir ministerio"
+                            class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            </div>
         </div>
     </header>
 
@@ -101,7 +111,7 @@
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ turno.nome }}</p>
                             <p class="text-xs {{ tema.text_secondary }}">
-                                {{ {"diaria": "Diaria", "semanal": "Semanal", "mensal": "Mensal"}.get(turno.recorrencia, turno.recorrencia) }}
+                                {{ turno.descricao_recorrencia }}
                                 &middot; {{ turno.fila_ordenada|length }} na fila
                             </p>
                         </div>

@@ -26,7 +26,7 @@
                     </div>
                     <p class="text-xs {{ tema.text_secondary }}">
                         {{ turno.departamento }}
-                        &middot; {{ {"diaria": "Diaria", "semanal": "Semanal", "mensal": "Mensal"}.get(turno.recorrencia, turno.recorrencia) }}
+                        &middot; {{ turno.descricao_recorrencia }}
                         &middot; inicio em {{ turno.data_inicio.strftime('%d/%m/%Y') }}
                         {% if turno.horario %} &middot; {{ turno.horario.strftime('%H:%M') }}{% endif %}
                     </p>

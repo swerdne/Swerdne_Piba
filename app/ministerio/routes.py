@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.ministerio import bp
-from app.ministerio.forms import MinisterioForm
+from app.ministerio.forms import MinisterioForm, AcaoForm
 from app.ministerio.models import Ministerio, criar_ministerio
 
 MESES_PT = [
@@ -155,6 +155,7 @@ def detalhe(ministerio_id):
         escalas=escalas,
         turnos_plantao=turnos_plantao,
         data_extenso=data_extenso,
+        acao_form=AcaoForm(),
         **dados_calendario,
     )
 
@@ -193,3 +194,29 @@ def editar(ministerio_id):
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
     return render_template("ministerio/editar.html", form=form, ministerio=ministerio)
+
+
+@bp.route("/<int:ministerio_id>/excluir", methods=["POST"])
+@login_required
+def excluir_ministerio(ministerio_id):
+    ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
+
+    # Cascade (cascade="all, delete-orphan" em Ministerio.escalas e
+    # Ministerio.turnos_plantao) apaga junto todas as Escalas do ministerio
+    # -- manuais e as geradas por rodizio -- e os Turnos de Rodizio. Diferente
+    # de plantao.excluir_turno (que preserva historico ao apagar so a regra),
+    # aqui o ministerio inteiro some, entao nao ha nada a preservar.
+    _remover_logo_antiga(ministerio.imagem)
+
+    nome = ministerio.nome
+    comunidade_id = ministerio.comunidade_id
+    db.session.delete(ministerio)
+    db.session.commit()
+
+    flash(f'Ministerio "{nome}" excluido.', "success")
+    return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade_id))

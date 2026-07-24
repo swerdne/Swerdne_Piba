@@ -91,6 +91,11 @@
                     <i class="fa-solid fa-person-walking-arrow-right mr-2"></i>Registrar ausencia
                 </button>
             </form>
+            {% elif not escala.plantao_turno_id and (escala.funcoes | selectattr('membro_id') | list) %}
+            <a href="{{ url_for('plantao.nova', ministerio_id=escala.ministerio_id, escala_id=escala.id) }}"
+               class="flex-1 flex items-center justify-center {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-xl transition">
+                <i class="fa-solid fa-arrows-rotate mr-2"></i>Criar turno de rodizio com esta equipe
+            </a>
             {% endif %}
         </div>
         {% if escala.data %}

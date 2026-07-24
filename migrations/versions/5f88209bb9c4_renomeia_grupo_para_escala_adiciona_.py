@@ -25,9 +25,9 @@ def upgrade():
     op.execute("ALTER TABLE escala_grupos ADD COLUMN horario TIME")
     # SQLite nao aceita CURRENT_TIMESTAMP como default em ADD COLUMN (precisa
     # ser uma constante) -- usa uma data fixa soh para preencher linhas antigas.
-    op.execute("ALTER TABLE escala_grupos ADD COLUMN criada_em DATETIME NOT NULL DEFAULT '2026-01-01 00:00:00'")
-    op.execute("ALTER TABLE escala_grupos ADD COLUMN notificado_24h_em DATETIME")
-    op.execute("ALTER TABLE escala_grupos ADD COLUMN notificado_16h_em DATETIME")
+    op.execute("ALTER TABLE escala_grupos ADD COLUMN criada_em TIMESTAMP NOT NULL DEFAULT '2026-01-01 00:00:00'")
+    op.execute("ALTER TABLE escala_grupos ADD COLUMN notificado_24h_em TIMESTAMP")
+    op.execute("ALTER TABLE escala_grupos ADD COLUMN notificado_16h_em TIMESTAMP")
 
     # O nome de uma escala agora pode se repetir (ex: "Culto Domingo" toda
     # semana) -- a restricao antiga de nome unico por usuario nao faz mais sentido.
@@ -51,7 +51,7 @@ def upgrade():
             ordem INTEGER NOT NULL,
             membro_id INTEGER,
             status VARCHAR(20),
-            notificado_em DATETIME,
+            notificado_em TIMESTAMP,
             PRIMARY KEY (id),
             FOREIGN KEY(escala_id) REFERENCES escalas (id),
             FOREIGN KEY(membro_id) REFERENCES escala_membros (id)

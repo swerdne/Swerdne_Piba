@@ -72,7 +72,20 @@ class TestingConfig(Config):
 
 
 class ProductionConfig(Config):
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+    _database_url = os.environ.get("DATABASE_URL")
+    # Alguns provedores (Heroku, Render) ainda entregam a URL com o prefixo
+    # antigo "postgres://" -- o SQLAlchemy 1.4+ so reconhece "postgresql://".
+    if _database_url and _database_url.startswith("postgres://"):
+        _database_url = _database_url.replace("postgres://", "postgresql://", 1)
+    SQLALCHEMY_DATABASE_URI = _database_url
+
+    # Reciclagem de conexao (equivalente ao conn_max_age do Django) e SSL
+    # obrigatorio -- so fazem sentido pra Postgres, nao pra SQLite.
+    if _database_url and _database_url.startswith("postgresql://"):
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "pool_recycle": 600,
+            "connect_args": {"sslmode": "require"},
+        }
 
     # Trava de seguranca: em producao o mock fica sempre desligado,
     # nao importa o que estiver escrito na env var MOCK_GOOGLE_OAUTH.

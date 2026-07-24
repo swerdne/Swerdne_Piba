@@ -20,9 +20,13 @@ from app.plantao.models import TurnoPlantao, data_do_periodo, periodo_da_data, m
 JANELA_GERACAO_DIAS = 90
 
 
-def _materializar_periodo(turno, periodo):
-    """Cria a Escala+Funcao de um periodo que ainda nao existe."""
-    data_periodo = data_do_periodo(turno, periodo)
+def _materializar_periodo(turno, periodo, data_periodo):
+    """Cria a Escala+Funcao de um periodo que ainda nao existe.
+
+    Recebe `data_periodo` ja calculado pelo chamador (nunca recalcula via
+    data_do_periodo aqui) -- sincronizar_turno ja percorre os periodos via
+    data_do_periodo pra decidir ate onde materializar; recalcular de novo
+    aqui dentro do loop viraria O(n^2) pra recorrencias sem formula fechada."""
     membro = membro_do_periodo(turno, periodo)
 
     escala = Escala(
@@ -49,16 +53,16 @@ def _materializar_periodo(turno, periodo):
     return escala
 
 
-def _atualizar_periodo_existente(turno, escala):
+def _atualizar_periodo_existente(turno, escala, data_periodo):
     """Recalcula uma Escala nao-fixada e ainda nao ocorrida a partir da config
     atual do turno -- so escreve/reseta notificacao se algo realmente mudou
     (idempotencia e obrigatoria aqui: essa funcao roda a cada 15 min pelo
     agendador; sem a checagem, resetaria notificado_24h_em/16h_em a cada tick
-    e causaria renotificacao em loop)."""
+    e causaria renotificacao em loop). Recebe `data_periodo` ja calculado
+    pelo chamador, mesmo motivo de _materializar_periodo."""
     from app.escala.routes import enviar_notificacao_de_alteracao
 
     periodo = escala.plantao_periodo
-    data_periodo = data_do_periodo(turno, periodo)
     membro = membro_do_periodo(turno, periodo)
     funcao = escala.funcoes[0]
     membro_id_novo = membro.id if membro else None
@@ -98,7 +102,18 @@ def sincronizar_turno(turno, ate_data=None):
     ate_data (padrao: hoje + JANELA_GERACAO_DIAS). Cria as que faltam,
     atualiza (idempotentemente) as nao-fixadas ainda nao ocorridas, nunca
     mexe nas ja ocorridas nem nas fixadas (excecao pontual de ausencia ou
-    edicao manual)."""
+    edicao manual).
+
+    Caminha periodo a periodo via data_do_periodo (nao usa mais range() com
+    limites pre-calculados) -- necessario porque, com a recorrencia flexivel
+    (semana com varios dias, mes com modo enesimo-dia-da-semana), nao da mais
+    pra garantir que uma data de corte arbitraria como `ate_data` caia
+    exatamente numa ocorrencia. Para no primeiro ValueError (a recorrencia
+    terminou, por data ou por numero de ocorrencias) ou ao ultrapassar
+    ate_data. `periodo_da_data` aqui e so uma estimativa conservadora (nunca
+    overestima) do ponto de partida -- comecar um pouco antes do real custa
+    so algumas iteracoes descartadas, nunca incorretude.
+    """
     agora = datetime.now()
     hoje = agora.date()
     ate_data = ate_data or hoje + timedelta(days=JANELA_GERACAO_DIAS)
@@ -108,9 +123,6 @@ def sincronizar_turno(turno, ate_data=None):
         db.session.commit()
         return
 
-    periodo_inicial = periodo_da_data(turno, data_inicial)
-    periodo_final = periodo_da_data(turno, ate_data)
-
     existentes = {
         escala.plantao_periodo: escala
         for escala in Escala.query.filter(
@@ -118,20 +130,29 @@ def sincronizar_turno(turno, ate_data=None):
         ).all()
     }
 
-    for periodo in range(periodo_inicial, periodo_final + 1):
-        escala = existentes.get(periodo)
+    periodo = periodo_da_data(turno, data_inicial)
+    while True:
+        try:
+            data_periodo = data_do_periodo(turno, periodo)
+        except ValueError:
+            break  # recorrencia terminou (por data ou por numero de ocorrencias)
 
-        if escala is None:
-            _materializar_periodo(turno, periodo)
-            continue
+        if data_periodo > ate_data:
+            break
 
-        if escala.data_hora and escala.data_hora <= agora:
-            continue  # ja ocorreu -- historico intocavel
+        if data_periodo >= data_inicial:
+            escala = existentes.get(periodo)
 
-        if escala.plantao_fixado:
-            continue  # excecao pontual preservada
+            if escala is None:
+                _materializar_periodo(turno, periodo, data_periodo)
+            elif escala.data_hora and escala.data_hora <= agora:
+                pass  # ja ocorreu -- historico intocavel
+            elif escala.plantao_fixado:
+                pass  # excecao pontual preservada
+            else:
+                _atualizar_periodo_existente(turno, escala, data_periodo)
 
-        _atualizar_periodo_existente(turno, escala)
+        periodo += 1
 
     db.session.commit()
 
@@ -169,7 +190,8 @@ def preparar_para_renumeracao(turno):
 def _escala_do_periodo(turno, periodo):
     escala = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=periodo).first()
     if escala is None:
-        escala = _materializar_periodo(turno, periodo)
+        data_periodo = data_do_periodo(turno, periodo)  # ValueError se periodo alem do termino
+        escala = _materializar_periodo(turno, periodo, data_periodo)
     return escala
 
 
@@ -186,7 +208,12 @@ def marcar_ausencia(turno, periodo):
     if escala_atual.data_hora and escala_atual.data_hora <= agora:
         raise ValueError("Esse periodo ja ocorreu, nao e possivel remanejar.")
 
-    escala_seguinte = _escala_do_periodo(turno, periodo + 1)
+    try:
+        escala_seguinte = _escala_do_periodo(turno, periodo + 1)
+    except ValueError:
+        raise ValueError(
+            "Nao ha proximo periodo para remanejar -- a recorrencia deste turno termina aqui."
+        )
 
     funcao_atual = escala_atual.funcoes[0]
     funcao_seguinte = escala_seguinte.funcoes[0]

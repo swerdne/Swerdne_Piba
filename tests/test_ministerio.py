@@ -1,7 +1,11 @@
 """Testes do modulo ministerio."""
+from app.escala.models import Escala
 from app.ministerio.models import Ministerio
+from app.plantao.models import TurnoPlantao
+from app.plantao.sincronizacao import sincronizar_turno
 from tests.conftest import sessao_isolada
 from tests.test_escala import _criar_comunidade, _criar_ministerio, _criar_escala
+from tests.test_plantao import _criar_turno_teste
 
 
 def test_ministerio_sem_login_redireciona(client):
@@ -170,6 +174,57 @@ def test_usuario_nao_consegue_ver_calendario_de_outra_conta(logged_in_client, ou
     with sessao_isolada(app):
         response = outro_logged_in_client.get(f"/ministerio/{ministerio_id}/calendario")
         assert response.status_code == 404
+
+
+# --- Exclusao -----------------------------------------------------------------
+
+def test_excluir_ministerio_remove_e_redireciona_para_comunidade(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Ministerio a Apagar")
+        ministerio_id = ministerio.id
+
+        response = logged_in_client.post(
+            f"/ministerio/{ministerio_id}/excluir", data={}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert db.session.get(Ministerio, ministerio_id) is None
+        assert "excluido" in response.data.decode("utf-8")
+
+
+def test_excluir_ministerio_apaga_escalas_e_turnos_de_rodizio_em_cascata(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        turno = _criar_turno_teste(ministerio.id)
+        sincronizar_turno(turno)
+
+        escala_id = escala.id
+        turno_id = turno.id
+        assert Escala.query.filter_by(plantao_turno_id=turno_id).count() > 0
+
+        logged_in_client.post(f"/ministerio/{ministerio.id}/excluir", data={}, follow_redirects=True)
+
+        assert db.session.get(Escala, escala_id) is None
+        assert db.session.get(TurnoPlantao, turno_id) is None
+        assert Escala.query.filter_by(plantao_turno_id=turno_id).count() == 0
+
+
+def test_usuario_nao_consegue_excluir_ministerio_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        ministerio_id = ministerio.id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.post(
+            f"/ministerio/{ministerio_id}/excluir", data={}, follow_redirects=True
+        )
+        assert response.status_code == 404
+
+    with sessao_isolada(app):
+        assert db.session.get(Ministerio, ministerio_id) is not None
 
 
 # --- Isolamento entre contas -------------------------------------------------

@@ -58,7 +58,7 @@
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     {{ form.data_inicio.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
-                    {{ form.data_inicio(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    {{ form.data_inicio(id="data_inicio", class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
                     {% for erro in form.data_inicio.errors %}
                         <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
                     {% endfor %}
@@ -73,15 +73,150 @@
             </div>
 
             <div>
-                {{ form.recorrencia.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
-                {{ form.recorrencia(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
-                {% for erro in form.recorrencia.errors %}
-                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
-                {% endfor %}
+                <label class="{{ tema.text_secondary }} block text-sm font-medium mb-1">Repetir</label>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm {{ tema.text_secondary }} shrink-0">A cada</span>
+                    {{ form.intervalo_recorrencia(class_="w-20 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-2 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    {{ form.unidade_recorrencia(id="unidade_recorrencia", class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                </div>
+                {% for erro in form.intervalo_recorrencia.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                {% for erro in form.unidade_recorrencia.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+
+            <div data-secao-semana class="hidden">
+                <label class="{{ tema.text_secondary }} block text-sm font-medium mb-1">Dias da semana</label>
+                <div class="flex flex-wrap gap-x-4 gap-y-2">
+                    {% for subfield in form.dias_semana %}
+                    <label class="flex items-center gap-1.5 text-sm {{ tema.text_primary }}">
+                        {{ subfield }} {{ subfield.label.text }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Se nenhum dia for marcado, usa o dia da semana da data de inicio.</p>
+            </div>
+
+            <div data-secao-mes class="hidden">
+                <label class="{{ tema.text_secondary }} block text-sm font-medium mb-1">Repetir mensalmente</label>
+                <p class="text-xs {{ tema.text_secondary }} mb-1.5" data-modo-mensal-explicacao>
+                    Calculado a partir do dia da semana e da posicao no mes da data de inicio escolhida acima.
+                </p>
+                <div class="space-y-1.5">
+                    {% for subfield in form.modo_mensal %}
+                    <label class="flex items-center gap-2 text-sm {{ tema.text_primary }}" data-modo-opcao="{{ subfield.data }}">
+                        {{ subfield }} <span data-modo-texto>{{ subfield.label.text }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% for erro in form.modo_mensal.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+
+            <div>
+                <label class="{{ tema.text_secondary }} block text-sm font-medium mb-1">Termina</label>
+                <div class="space-y-1.5">
+                    {% for subfield in form.termino_tipo %}
+                    <label class="flex items-center gap-2 text-sm {{ tema.text_primary }}">
+                        {{ subfield }} {{ subfield.label.text }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <div data-secao-termino-data class="hidden mt-2">
+                    {{ form.termino_data(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    {% for erro in form.termino_data.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div data-secao-termino-ocorrencias class="hidden mt-2">
+                    {{ form.termino_ocorrencias(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="Ex: 10") }}
+                    {% for erro in form.termino_ocorrencias.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
             </div>
 
             {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-lg transition") }}
         </form>
     </main>
 </div>
+
+<script>
+    (function () {
+        var unidadeSelect = document.querySelector('#unidade_recorrencia');
+        var secaoSemana = document.querySelector('[data-secao-semana]');
+        var secaoMes = document.querySelector('[data-secao-mes]');
+        function atualizarUnidade() {
+            var valor = unidadeSelect.value;
+            secaoSemana.classList.toggle('hidden', valor !== 'semana');
+            secaoMes.classList.toggle('hidden', valor !== 'mes');
+        }
+        if (unidadeSelect) {
+            unidadeSelect.addEventListener('change', atualizarUnidade);
+            atualizarUnidade();
+        }
+
+        var terminoRadios = document.querySelectorAll('input[name="termino_tipo"]');
+        var secaoData = document.querySelector('[data-secao-termino-data]');
+        var secaoOcorrencias = document.querySelector('[data-secao-termino-ocorrencias]');
+        function atualizarTermino() {
+            var selecionado = document.querySelector('input[name="termino_tipo"]:checked');
+            var valor = selecionado ? selecionado.value : 'nunca';
+            secaoData.classList.toggle('hidden', valor !== 'data');
+            secaoOcorrencias.classList.toggle('hidden', valor !== 'ocorrencias');
+        }
+        if (terminoRadios.length) {
+            terminoRadios.forEach(function (radio) { radio.addEventListener('change', atualizarTermino); });
+            atualizarTermino();
+        }
+
+        // Recalcula ao vivo, a partir da data de inicio escolhida, o dia da
+        // semana e a posicao dele no mes (1a, 2a, ... ultima) -- as opcoes de
+        // repeticao mensal precisam refletir a data ESCOLHIDA, nao uma
+        // referencia desatualizada (a data original do turno, ou a de uma
+        // tentativa anterior de envio). Espelha exatamente a conta feita no
+        // servidor em app/plantao/models.py (_ordinal_do_dia_semana_no_mes).
+        var NOMES_DIA_SEMANA = ['segunda-feira', 'terca-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sabado', 'domingo'];
+        var ORDINAIS = { 1: '1a', 2: '2a', 3: '3a', 4: '4a', 5: '5a' };
+
+        var dataInicioInput = document.querySelector('#data_inicio');
+        var opcaoDiaFixo = document.querySelector('[data-modo-opcao="dia_fixo"] [data-modo-texto]');
+        var opcaoEnesimo = document.querySelector('[data-modo-opcao="enesimo_dia_semana"]');
+        var textoEnesimo = opcaoEnesimo ? opcaoEnesimo.querySelector('[data-modo-texto]') : null;
+        var radioEnesimo = opcaoEnesimo ? opcaoEnesimo.querySelector('input[type="radio"]') : null;
+        var opcaoUltimo = document.querySelector('[data-modo-opcao="ultimo_dia_semana"]');
+        var textoUltimo = opcaoUltimo ? opcaoUltimo.querySelector('[data-modo-texto]') : null;
+        var radioUltimo = opcaoUltimo ? opcaoUltimo.querySelector('input[type="radio"]') : null;
+
+        function atualizarModoMensal() {
+            if (!dataInicioInput || !dataInicioInput.value) return;
+            var partes = dataInicioInput.value.split('-');
+            if (partes.length !== 3) return;
+            // new Date(ano, mes, dia) usa o fuso local -- evita o shift de um
+            // dia que "new Date('YYYY-MM-DD')" causa (ele interpreta como UTC).
+            var data = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+            if (isNaN(data.getTime())) return;
+
+            var diaSemanaJs = data.getDay(); // 0=domingo..6=sabado
+            var diaSemanaPy = (diaSemanaJs + 6) % 7; // 0=segunda..6=domingo, igual ao Python
+            var nomeDia = NOMES_DIA_SEMANA[diaSemanaPy];
+            var ordinal = Math.floor((data.getDate() - 1) / 7) + 1;
+            var rotuloOrdinal = ORDINAIS[ordinal] || (ordinal + 'a');
+
+            if (opcaoDiaFixo) opcaoDiaFixo.textContent = 'Mensalmente no dia ' + data.getDate();
+            if (textoUltimo) textoUltimo.textContent = 'Mensalmente na ultima ' + nomeDia;
+
+            if (opcaoEnesimo && textoEnesimo) {
+                if (ordinal >= 5) {
+                    opcaoEnesimo.classList.add('hidden');
+                    if (radioEnesimo && radioEnesimo.checked && radioUltimo) {
+                        radioUltimo.checked = true;
+                    }
+                } else {
+                    opcaoEnesimo.classList.remove('hidden');
+                    textoEnesimo.textContent = 'Mensalmente na ' + rotuloOrdinal + ' ' + nomeDia;
+                }
+            }
+        }
+
+        if (dataInicioInput) {
+            dataInicioInput.addEventListener('change', atualizarModoMensal);
+            dataInicioInput.addEventListener('input', atualizarModoMensal);
+            atualizarModoMensal();
+        }
+    })();
+</script>
 {% endblock %}

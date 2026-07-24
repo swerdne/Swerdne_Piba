@@ -38,7 +38,19 @@ def upgrade():
         "INSERT INTO escala_grupos (id, usuario_id, nome, ordem) "
         "SELECT id, NULL, nome, ordem FROM escala_grupos_old"
     )
-    op.execute("DROP TABLE escala_grupos_old")
+    # No Postgres a FK escala_funcoes.grupo_id -> escala_grupos_old (o RENAME
+    # nao muda o OID, so o nome de exibicao) ainda depende dessa tabela --
+    # sem CASCADE o DROP falha (DependentObjectsStillExist). So derruba a
+    # CONSTRAINT orfa (nao a tabela/dado de escala_funcoes); ela e recriada
+    # apontando pro nome certo na migration seguinte (5f88209bb9c4), que ja
+    # documentava esse orfao como inofensivo no SQLite (FK nao e enforced
+    # aqui) -- so deixou de ser inofensivo quando passamos a rodar em cima de
+    # um banco que aplica FK de verdade. SQLite nao aceita a clausula CASCADE
+    # em DROP TABLE, entao so usa no Postgres.
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TABLE escala_grupos_old CASCADE")
+    else:
+        op.execute("DROP TABLE escala_grupos_old")
 
 
 def downgrade():
@@ -57,4 +69,8 @@ def downgrade():
     op.execute(
         "INSERT INTO escala_grupos (id, nome, ordem) SELECT id, nome, ordem FROM escala_grupos_new"
     )
-    op.execute("DROP TABLE escala_grupos_new")
+    # Mesmo motivo do upgrade() -- ver comentario acima.
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TABLE escala_grupos_new CASCADE")
+    else:
+        op.execute("DROP TABLE escala_grupos_new")

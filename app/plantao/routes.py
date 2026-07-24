@@ -14,7 +14,7 @@ from app.extensions import db
 from app.escala.models import Escala, Membro
 from app.plantao import bp
 from app.plantao.forms import TurnoPlantaoForm, AdicionarMembroFilaForm, AcaoForm
-from app.plantao.models import TurnoPlantao, MembroTurno, periodo_da_data
+from app.plantao.models import TurnoPlantao, MembroTurno, opcoes_modo_mensal_completas, periodo_exato_da_data
 from app.plantao.sincronizacao import (
     sincronizar_turno,
     preparar_para_renumeracao,
@@ -22,6 +22,14 @@ from app.plantao.sincronizacao import (
 )
 
 PROXIMAS_OCORRENCIAS_EXIBIDAS = 10
+
+# Campos do turno que, ao mudar, invalidam a numeracao de periodo ja usada
+# nas Escala geradas (ver preparar_para_renumeracao) -- qualquer um deles
+# muda o que "periodo N" significa, nao so data_inicio/unidade.
+CAMPOS_QUE_AFETAM_NUMERACAO = (
+    "data_inicio", "intervalo_recorrencia", "unidade_recorrencia", "dias_semana",
+    "modo_mensal", "termino_tipo", "termino_data", "termino_ocorrencias",
+)
 
 
 def _turno_do_usuario_ou_404(turno_id):
@@ -32,31 +40,87 @@ def _turno_do_usuario_ou_404(turno_id):
     return turno
 
 
+def _aplicar_campos_do_form(turno, form):
+    """Copia os campos do TurnoPlantaoForm pro model, tratando as conversoes
+    que o WTForms nao faz sozinho (CSV<->lista de dias_semana; campos de
+    modo_mensal/termino_data/termino_ocorrencias so valem pra unidade/tipo
+    correspondente)."""
+    turno.nome = form.nome.data.strip()
+    turno.departamento = form.departamento.data
+    turno.nome_funcao = form.nome_funcao.data.strip() or "Responsavel"
+    turno.data_inicio = form.data_inicio.data
+    turno.horario = form.horario.data
+    turno.intervalo_recorrencia = form.intervalo_recorrencia.data
+    turno.unidade_recorrencia = form.unidade_recorrencia.data
+    turno.dias_semana = (
+        ",".join(str(d) for d in sorted(form.dias_semana.data)) if form.dias_semana.data else None
+    )
+    turno.modo_mensal = form.modo_mensal.data if form.unidade_recorrencia.data == "mes" else None
+    turno.termino_tipo = form.termino_tipo.data
+    turno.termino_data = form.termino_data.data if form.termino_tipo.data == "data" else None
+    turno.termino_ocorrencias = (
+        form.termino_ocorrencias.data if form.termino_tipo.data == "ocorrencias" else None
+    )
+
+
+def _semear_fila_a_partir_da_escala(turno, escala):
+    """Pre-popula a fila do turno com os membros ja escalados nas funcoes da
+    escala de origem (na ordem em que aparecem na grade, sem repetir a mesma
+    pessoa) -- poupa o passo manual de re-selecionar cada pessoa, um a um, na
+    tela de fila do turno."""
+    vistos = set()
+    posicao = 0
+    for funcao in sorted(escala.funcoes, key=lambda f: f.ordem):
+        if funcao.membro_id is None or funcao.membro_id in vistos:
+            continue
+        vistos.add(funcao.membro_id)
+        db.session.add(MembroTurno(turno_id=turno.id, membro_id=funcao.membro_id, posicao=posicao))
+        posicao += 1
+    db.session.commit()
+
+
 @bp.route("/ministerio/<int:ministerio_id>/nova", methods=["GET", "POST"])
 @login_required
 def nova(ministerio_id):
     from app.ministerio.routes import _ministerio_do_usuario_ou_404
+    from app.escala.routes import _escala_do_usuario_ou_404
 
     ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
+
+    # Turno "nascido" a partir de uma Escala (ver escala/detalhe.html): a
+    # fila do rodizio reaproveita quem ja esta escalado nela, em vez do
+    # usuario ter que recadastrar cada pessoa manualmente.
+    escala_origem = None
+    escala_id = request.args.get("escala_id", type=int)
+    if escala_id:
+        escala_origem = _escala_do_usuario_ou_404(escala_id)
+        if escala_origem.ministerio_id != ministerio.id:
+            abort(404)
+
     form = TurnoPlantaoForm()
+    if request.method == "GET" and escala_origem:
+        form.nome.data = escala_origem.nome
+        form.departamento.data = escala_origem.departamento
+        form.data_inicio.data = escala_origem.data
+        form.horario.data = escala_origem.horario
+
+    data_referencia = form.data_inicio.data or date.today()
+    form.modo_mensal.choices = opcoes_modo_mensal_completas(data_referencia)
 
     if form.validate_on_submit():
-        turno = TurnoPlantao(
-            ministerio_id=ministerio.id,
-            nome=form.nome.data.strip(),
-            departamento=form.departamento.data,
-            nome_funcao=form.nome_funcao.data.strip() or "Responsavel",
-            data_inicio=form.data_inicio.data,
-            horario=form.horario.data,
-            recorrencia=form.recorrencia.data,
-        )
+        turno = TurnoPlantao(ministerio_id=ministerio.id)
+        _aplicar_campos_do_form(turno, form)
         db.session.add(turno)
         db.session.commit()
+
+        if escala_origem:
+            _semear_fila_a_partir_da_escala(turno, escala_origem)
+
         sincronizar_turno(turno)
         flash(f'Turno de rodizio "{turno.nome}" criado! Agora monte a fila de rodizio.', "success")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
-    return render_template("plantao/nova.html", form=form, ministerio=ministerio)
+    return render_template("plantao/nova.html", form=form, ministerio=ministerio, escala_origem=escala_origem)
 
 
 @bp.route("/<int:turno_id>", methods=["GET"])
@@ -99,17 +163,24 @@ def editar(turno_id):
     turno = _turno_do_usuario_ou_404(turno_id)
     form = TurnoPlantaoForm(obj=turno)
 
+    if request.method == "GET":
+        # SelectMultipleField nao entende a coluna CSV crua via obj= --
+        # sobrescreve com a lista ja convertida (so no GET: no POST o
+        # formdata submetido sempre tem prioridade sobre obj=).
+        form.dias_semana.data = turno.dias_semana_efetivos
+
+    data_referencia = form.data_inicio.data or turno.data_inicio
+    form.modo_mensal.choices = opcoes_modo_mensal_completas(data_referencia)
+
     if form.validate_on_submit():
-        muda_numeracao = (
-            form.data_inicio.data != turno.data_inicio or form.recorrencia.data != turno.recorrencia
+        valores_antigos = {campo: getattr(turno, campo) for campo in CAMPOS_QUE_AFETAM_NUMERACAO}
+
+        _aplicar_campos_do_form(turno, form)
+
+        muda_numeracao = any(
+            valores_antigos[campo] != getattr(turno, campo) for campo in CAMPOS_QUE_AFETAM_NUMERACAO
         )
 
-        turno.nome = form.nome.data.strip()
-        turno.departamento = form.departamento.data
-        turno.nome_funcao = form.nome_funcao.data.strip() or "Responsavel"
-        turno.data_inicio = form.data_inicio.data
-        turno.horario = form.horario.data
-        turno.recorrencia = form.recorrencia.data
         db.session.commit()
 
         if muda_numeracao:
@@ -238,9 +309,8 @@ def registrar_ausencia(turno_id):
         flash("Data invalida.", "danger")
         return redirect(redirecionamento)
 
-    periodo = periodo_da_data(turno, data_ausencia)
-
     try:
+        periodo = periodo_exato_da_data(turno, data_ausencia)
         marcar_ausencia_no_periodo(turno, periodo)
     except ValueError as erro:
         flash(str(erro), "danger")
