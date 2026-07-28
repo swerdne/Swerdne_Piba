@@ -50,6 +50,8 @@ $env:FLASK_DEBUG="1"; ./venv/Scripts/python.exe -m flask --app run run
 
 **Banco Postgres externo (Neon, Supabase etc.) em vez do SQLite local:** basta preencher `DATABASE_URL` no `.env` com a connection string do provedor (`postgresql://usuario:senha@host/banco?sslmode=require`) — `DevelopmentConfig` já lê `DATABASE_URL` do ambiente e só cai no SQLite (`sqlite:///dev.db`) quando a variável **não está definida**; não é preciso mudar `FLASK_CONFIG` para isso (`FLASK_CONFIG=development` continua certo, é só sobre qual banco, não qual conjunto de configurações). O driver (`psycopg2-binary`) já está no `requirements.txt`. Prefixo antigo `postgres://` (Heroku/Render) é normalizado para `postgresql://` automaticamente em `ProductionConfig` — se for usar um Postgres externo com `FLASK_CONFIG=development` (comum em dev), confira se a URL já vem com `postgresql://`, já que `DevelopmentConfig` não faz essa normalização.
 
+**Cold start em produção (planos gratuitos):** Render free hiberna o servidor após ~15 min sem tráfego (~30-60s pra religar na próxima requisição); Neon free hiberna o Postgres separadamente após alguns minutos de inatividade (~1-3s pra acordar na próxima query). Não é bug de código nem algo que otimização de query resolve. `GET /healthz` (`app/main/routes.py`) é um endpoint público e leve pensado justamente pra isso: faz uma consulta real no banco (`SELECT 1`) de propósito, pra um ping externo (cron-job.org, UptimeRobot etc.) manter os dois serviços acordados — pingar só `/` ou `/auth/login` não seria suficiente, porque não tocam no banco.
+
 CSS (Tailwind, só necessário se mexer em classes/estilo):
 
 ```powershell

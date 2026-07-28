@@ -9,6 +9,14 @@ def test_index_sem_login_redireciona_para_login(client):
     assert "Entrar".encode() in response.data
 
 
+def test_healthz_nao_exige_login_e_consulta_o_banco(client):
+    # publico de proposito -- e o endpoint usado por ping externo de
+    # keep-alive (cron-job.org etc.), que nao tem como autenticar.
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.data == b"ok"
+
+
 def test_dashboard_com_login(logged_in_client):
     response = logged_in_client.get("/dashboard")
     assert response.status_code == 200

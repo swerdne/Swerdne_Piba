@@ -6,6 +6,7 @@ import uuid
 
 from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
+from sqlalchemy import text
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
@@ -18,6 +19,16 @@ from app.notificacoes import Notificacao
 @bp.route("/")
 def index():
     return redirect(url_for("main.dashboard"))
+
+
+@bp.route("/healthz")
+def healthz():
+    """Endpoint publico e leve pra ping externo de keep-alive (cron-job.org,
+    UptimeRobot etc.). Faz uma consulta real no banco de proposito -- so
+    manter o servidor Flask acordado nao evita o Postgres (Neon) hibernar
+    por inatividade, os dois hibernam de forma independente."""
+    db.session.execute(text("SELECT 1"))
+    return "ok", 200
 
 
 @bp.route("/dashboard")

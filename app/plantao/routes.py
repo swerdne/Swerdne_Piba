@@ -21,7 +21,7 @@ from app.plantao.sincronizacao import (
     marcar_ausencia as marcar_ausencia_no_periodo,
 )
 
-PROXIMAS_OCORRENCIAS_EXIBIDAS = 10
+OCORRENCIAS_EXIBIDAS = 20
 
 # Campos do turno que, ao mudar, invalidam a numeracao de periodo ja usada
 # nas Escala geradas (ver preparar_para_renumeracao) -- qualquer um deles
@@ -136,14 +136,18 @@ def detalhe(turno_id):
     form_adicionar.membro_id.choices = [(m.id, m.nome) for m in diretorio_disponivel]
 
     hoje = date.today()
-    proximas_ocorrencias = (
+    # Mostra passado e futuro (nao so "proximas") -- essa e a tela pra onde
+    # a capa do turno na lista de Escalas do Ministerio leva, entao precisa
+    # dar pra ver o historico completo daquele turno, nao so o que vem
+    # depois de hoje. Mais recente/proximo primeiro; limitado pra nao pesar
+    # em turnos recorrentes de longa duracao.
+    ocorrencias = (
         Escala.query.filter(
             Escala.plantao_turno_id == turno.id,
             Escala.data.isnot(None),
-            Escala.data >= hoje,
         )
-        .order_by(Escala.data)
-        .limit(PROXIMAS_OCORRENCIAS_EXIBIDAS)
+        .order_by(Escala.data.desc())
+        .limit(OCORRENCIAS_EXIBIDAS)
         .all()
     )
 
@@ -153,7 +157,8 @@ def detalhe(turno_id):
         diretorio_vazio=not diretorio,
         form_adicionar=form_adicionar,
         acao_form=AcaoForm(),
-        proximas_ocorrencias=proximas_ocorrencias,
+        ocorrencias=ocorrencias,
+        hoje=hoje,
     )
 
 

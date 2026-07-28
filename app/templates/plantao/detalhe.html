@@ -118,22 +118,23 @@
             {% endif %}
         </div>
 
-        <!-- Proximas ocorrencias -->
+        <!-- Ocorrencias (passadas e futuras) -->
         <div>
             <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
-                Proximas ocorrencias geradas
+                Ocorrencias geradas
             </h2>
 
             {% if not turno.fila_ordenada %}
             <p class="text-sm {{ tema.text_secondary }}">Adicione pessoas na fila pra as ocorrencias serem geradas.</p>
-            {% elif not proximas_ocorrencias %}
-            <p class="text-sm {{ tema.text_secondary }}">Nenhuma ocorrencia futura gerada ainda.</p>
+            {% elif not ocorrencias %}
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma ocorrencia gerada ainda.</p>
             {% else %}
             <div class="rounded-xl border {{ tema.card_border }} overflow-hidden divide-y {{ tema.card_border }}">
-                {% for escala in proximas_ocorrencias %}
+                {% for escala in ocorrencias %}
                 {% set funcao = escala.funcoes[0] if escala.funcoes else None %}
+                {% set ja_ocorreu = escala.data < hoje %}
                 <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
-                   class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} px-4 py-2.5 transition">
+                   class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} px-4 py-2.5 transition {{ 'opacity-60' if ja_ocorreu }}">
                     <span class="text-sm {{ tema.text_primary }} w-24 shrink-0">{{ escala.data.strftime('%d/%m (%a)') }}</span>
                     <div class="w-7 h-7 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-[11px] font-semibold {{ tema.secondary_text }} shrink-0">
                         {{ funcao.membro.iniciais if funcao and funcao.membro else '?' }}
@@ -141,7 +142,9 @@
                     <span class="text-sm {{ tema.text_primary }} flex-1 min-w-0 truncate">
                         {{ funcao.membro.nome if funcao and funcao.membro else "ninguem na fila" }}
                     </span>
-                    {% if escala.plantao_fixado %}
+                    {% if ja_ocorreu %}
+                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">ja ocorreu</span>
+                    {% elif escala.plantao_fixado %}
                     <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Remanejada por ausencia ou editada manualmente">
                         <i class="fa-solid fa-thumbtack"></i> fixada
                     </span>

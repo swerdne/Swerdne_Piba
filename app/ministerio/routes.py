@@ -134,18 +134,45 @@ def _dados_calendario(ministerio, hoje):
     }
 
 
+def _escalas_agrupadas_por_turno(ministerio, hoje):
+    """Escalas manuais aparecem uma a uma, como sempre. Escalas geradas por
+    rodizio (plantao_turno_id preenchido) sao agrupadas por turno de origem
+    -- a listagem mostra so 1 capa por turno (a proxima ocorrencia, ou a mais
+    recente ja ocorrida se nao houver nenhuma futura) em vez de um card por
+    ocorrencia, que poluiria a lista pra turnos recorrentes de longa duracao.
+    A tela completa de ocorrencias daquele turno fica em plantao.detalhe.
+    """
+    escalas_manuais = [e for e in ministerio.escalas if e.plantao_turno_id is None]
+
+    ocorrencias_por_turno = {}
+    for escala in ministerio.escalas:
+        if escala.plantao_turno_id is not None:
+            ocorrencias_por_turno.setdefault(escala.plantao_turno_id, []).append(escala)
+
+    capas = []
+    qtd_ocorrencias_por_turno = {}
+    for turno_id, ocorrencias in ocorrencias_por_turno.items():
+        ocorrencias.sort(key=lambda e: e.data)
+        futuras = [e for e in ocorrencias if e.data >= hoje]
+        capas.append(futuras[0] if futuras else ocorrencias[-1])
+        qtd_ocorrencias_por_turno[turno_id] = len(ocorrencias)
+
+    escalas = sorted(
+        escalas_manuais + capas,
+        key=lambda e: (e.data is None, e.data, e.horario is None, e.horario),
+    )
+    return escalas, qtd_ocorrencias_por_turno
+
+
 @bp.route("/<int:ministerio_id>")
 @login_required
 def detalhe(ministerio_id):
     ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
 
-    escalas = sorted(
-        ministerio.escalas,
-        key=lambda e: (e.data is None, e.data, e.horario is None, e.horario),
-    )
+    hoje = date.today()
+    escalas, qtd_ocorrencias_por_turno = _escalas_agrupadas_por_turno(ministerio, hoje)
     turnos_plantao = sorted(ministerio.turnos_plantao, key=lambda t: t.nome)
 
-    hoje = date.today()
     dados_calendario = _dados_calendario(ministerio, hoje)
     data_extenso = f"{DIAS_SEMANA_PT[hoje.weekday()]}, {hoje.day} de {MESES_PT[hoje.month].lower()}"
 
@@ -153,6 +180,7 @@ def detalhe(ministerio_id):
         "ministerio/detalhe.html",
         ministerio=ministerio,
         escalas=escalas,
+        qtd_ocorrencias_por_turno=qtd_ocorrencias_por_turno,
         turnos_plantao=turnos_plantao,
         data_extenso=data_extenso,
         acao_form=AcaoForm(),

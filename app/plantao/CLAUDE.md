@@ -68,6 +68,12 @@ As opções de `modo_mensal` (`dia_fixo`/`enésimo_dia_semana`/`último_dia_sema
 
 Pra isso funcionar sem precisar criar/remover elementos do DOM em JS, as rotas passam a montar `form.modo_mensal.choices` sempre com as **3** opções (`opcoes_modo_mensal_completas`, em vez de `opcoes_modo_mensal` que omite "enésimo" no caso raro da 5ª ocorrência) — o JS é quem esconde a opção "enésimo" (e troca a seleção pra "último" se estiver marcada) quando a data escolhida cai numa 5ª ocorrência do dia da semana no mês. `opcoes_modo_mensal` (a que omite) continua existindo e testada — é a função "canônica"/defesa em profundidade; `opcoes_modo_mensal_completas` só embrulha ela garantindo as 3 chaves sempre presentes.
 
+## Capa agrupada na lista de Escalas do Ministério
+
+Um turno de rodízio recorrente pode gerar muitas `Escala` (uma por período) — listar todas soltas na seção "Escalas" do Ministério poluiria a lista. `ministerio.routes._escalas_agrupadas_por_turno(ministerio, hoje)` resolve isso: escalas manuais continuam uma a uma; escalas com `plantao_turno_id` preenchido são agrupadas por turno de origem e só a **próxima ocorrência** (ou a mais recente já ocorrida, se não houver nenhuma futura) aparece como "capa" — 1 card por turno, não 1 por ocorrência. O card da capa linka pra `plantao.detalhe` (não `escala.detalhe`), e mostra um badge com a quantidade total de ocorrências daquele turno (`qtd_ocorrencias_por_turno`, calculado na mesma função).
+
+`plantao.detalhe` (a tela do card) foi expandida pra ser a "visão completa": mostra passado **e** futuro (não só as próximas), ordenado do mais recente pro mais antigo, limitado a `OCORRENCIAS_EXIBIDAS = 20`. Ocorrências já passadas ficam com opacidade reduzida e um marcador "já ocorreu" no lugar do selo de "fixada".
+
 ## Edição manual de uma ocorrência gerada
 
 Uma escala gerada por rodízio pode ser editada manualmente como qualquer escala (trocar responsável, editar nome/data) — mas isso marca `plantao_fixado=True` (via `escala.routes._fixar_se_gerada_por_rodizio`) para o próximo sync não sobrescrever. Ela **não** oferece "adicionar função"/"nova categoria" (sempre exatamente 1 função, a rotacionada) — reforçado tanto na UI (`escala/detalhe.html`) quanto nas rotas `escala.adicionar_funcao`/`adicionar_subcabecalho`.

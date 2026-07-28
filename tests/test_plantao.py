@@ -1052,6 +1052,43 @@ def test_marcar_ausencia_via_escala_gerada(logged_in_client, app, db):
         assert _membro_materializado(turno, 0).nome == "Bruno"
 
 
+def test_detalhe_do_turno_mostra_ocorrencias_passadas_e_futuras(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(ministerio.id, nome="Turno Historico", data_inicio=date.today())
+        _adicionar_a_fila(turno, [_criar_membro_teste(comunidade.id, "Ana")])
+
+        # sincronizar_turno nunca gera retroativo (por design -- so materializa
+        # a partir de hoje) -- uma ocorrencia so vira "passado" com o tempo real
+        # passando. Simula isso criando uma ocorrencia ja materializada com
+        # data no passado direto, como se tivesse sido gerada ha dias atras.
+        data_passada = date.today() - timedelta(days=10)
+        escala_passada = Escala(
+            ministerio_id=ministerio.id, nome=turno.nome, departamento=turno.departamento,
+            data=data_passada, horario=turno.horario,
+            plantao_turno_id=turno.id, plantao_periodo=-1,
+        )
+        db.session.add(escala_passada)
+        db.session.flush()
+        db.session.add(Funcao(escala_id=escala_passada.id, nome=turno.nome_funcao, ordem=0))
+        db.session.commit()
+
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
+
+        response = logged_in_client.get(f"/plantao/{turno.id}")
+        html = response.data.decode("utf-8")
+        assert response.status_code == 200
+
+        futura = Escala.query.filter(
+            Escala.plantao_turno_id == turno.id, Escala.data >= date.today()
+        ).first()
+        assert futura is not None
+        assert data_passada.strftime("%d/%m") in html
+        assert futura.data.strftime("%d/%m") in html
+        assert "ja ocorreu" in html  # marcador na ocorrencia passada
+
+
 def test_usuario_nao_consegue_ver_turno_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")

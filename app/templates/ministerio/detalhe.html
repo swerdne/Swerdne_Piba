@@ -67,7 +67,8 @@
 
                 <div class="space-y-3">
                     {% for escala in escalas %}
-                    <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                    {% set qtd = qtd_ocorrencias_por_turno.get(escala.plantao_turno_id) if escala.plantao_turno_id else None %}
+                    <a href="{{ url_for('plantao.detalhe', turno_id=escala.plantao_turno_id) if escala.plantao_turno_id else url_for('escala.detalhe', escala_id=escala.id) }}"
                        class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
                         <span class="w-2.5 h-2.5 rounded-full {{ escala.cor }} shrink-0"></span>
                         <div class="flex-1 min-w-0">
@@ -82,6 +83,11 @@
                                 {% endif %}
                             </p>
                         </div>
+                        {% if qtd and qtd > 1 %}
+                        <span class="flex items-center gap-1 text-[11px] {{ tema.text_secondary }} shrink-0" title="Gerado por rodizio">
+                            <i class="fa-solid fa-arrows-rotate"></i>{{ qtd }}
+                        </span>
+                        {% endif %}
                         <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
                     </a>
                     {% endfor %}

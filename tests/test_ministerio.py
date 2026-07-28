@@ -1,4 +1,6 @@
 """Testes do modulo ministerio."""
+from datetime import date, timedelta
+
 from app.escala.models import Escala
 from app.ministerio.models import Ministerio
 from app.plantao.models import TurnoPlantao
@@ -174,6 +176,72 @@ def test_usuario_nao_consegue_ver_calendario_de_outra_conta(logged_in_client, ou
     with sessao_isolada(app):
         response = outro_logged_in_client.get(f"/ministerio/{ministerio_id}/calendario")
         assert response.status_code == 404
+
+
+# --- Agrupamento de ocorrencias de rodizio na lista de Escalas ----------------
+
+def test_ocorrencias_do_mesmo_turno_aparecem_como_1_card_agrupado(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        # data_inicio amanha: garante que os 3 periodos materializados caiam
+        # todos no futuro (nao "ja ocorridos"), independente da hora do teste.
+        turno = _criar_turno_teste(ministerio.id, nome="Turno Louvor", data_inicio=date.today() + timedelta(days=1))
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
+        ocorrencias = Escala.query.filter_by(plantao_turno_id=turno.id).order_by(Escala.plantao_periodo).all()
+        assert len(ocorrencias) == 3  # 3 ocorrencias diarias no intervalo
+
+        _criar_escala(logged_in_client, ministerio.id, "Culto Manual")
+
+        response = logged_in_client.get(f"/ministerio/{ministerio.id}")
+        html = response.data.decode("utf-8")
+        assert response.status_code == 200
+
+        # so a capa (proxima ocorrencia) vira card na lista de Escalas -- as
+        # outras 2 datas do mesmo turno nao aparecem como cards separados
+        assert ocorrencias[0].data.strftime("%d/%m/%Y") in html
+        assert ocorrencias[1].data.strftime("%d/%m/%Y") not in html
+        assert ocorrencias[2].data.strftime("%d/%m/%Y") not in html
+        assert "Culto Manual" in html
+        # o link pro turno aparece 2x na pagina: 1x como capa na lista de
+        # Escalas, 1x na secao separada "Turnos de Rodizio" (nao mudou) --
+        # nao 1x por ocorrencia, que seria o bug de poluir a lista
+        assert html.count(f'href="/plantao/{turno.id}"') == 2
+        assert "Culto Manual" in html
+        assert '<i class="fa-solid fa-arrows-rotate"></i>3' in html  # badge de contagem
+
+
+def test_capa_do_turno_mostra_a_proxima_ocorrencia_nao_a_mais_antiga(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        agora_pouco_atras = date.today() - timedelta(days=10)
+        turno = _criar_turno_teste(ministerio.id, nome="Turno Antigo", data_inicio=agora_pouco_atras)
+        # materializa passado (varios periodos ja ocorridos) e futuro
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
+
+        response = logged_in_client.get(f"/ministerio/{ministerio.id}")
+        html = response.data.decode("utf-8")
+        # a capa (unico link pro turno) deve estar associada a proxima
+        # ocorrencia futura, nao a primeira (mais antiga) ocorrencia gerada
+        proxima = Escala.query.filter(
+            Escala.plantao_turno_id == turno.id, Escala.data >= date.today()
+        ).order_by(Escala.data).first()
+        assert proxima is not None
+        assert proxima.data.strftime("%d/%m/%Y") in html
+
+
+def test_escalas_manuais_continuam_aparecendo_uma_a_uma(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        _criar_escala(logged_in_client, ministerio.id, "Culto 1")
+        _criar_escala(logged_in_client, ministerio.id, "Culto 2")
+
+        response = logged_in_client.get(f"/ministerio/{ministerio.id}")
+        html = response.data.decode("utf-8")
+        assert "Culto 1" in html
+        assert "Culto 2" in html
 
 
 # --- Exclusao -----------------------------------------------------------------
