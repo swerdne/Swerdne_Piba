@@ -43,6 +43,7 @@
                     {% endif %}
                 </div>
             </div>
+            {% if eh_dono %}
             <div class="flex items-center gap-3 shrink-0">
                 <a href="{{ url_for('escala.editar', escala_id=escala.id) }}"
                    title="Editar escala" aria-label="Editar escala"
@@ -58,6 +59,11 @@
                     </button>
                 </form>
             </div>
+            {% else %}
+            <span class="text-[11px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Voce foi convidado(a) pra esta escala -- so pode visualizar">
+                <i class="fa-solid fa-eye"></i> Visualizacao
+            </span>
+            {% endif %}
         </div>
     </header>
 
@@ -73,6 +79,7 @@
             {% endfor %}
         </div>
 
+        {% if eh_dono %}
         <!-- Acoes -->
         <div class="flex flex-col sm:flex-row gap-3">
             <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1">
@@ -82,16 +89,7 @@
                     <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe
                 </button>
             </form>
-            {% if escala.plantao_turno_id and escala.funcoes and escala.funcoes[0].membro_id %}
-            <form method="POST" action="{{ url_for('plantao.registrar_ausencia_na_escala', escala_id=escala.id) }}" class="flex-1"
-                  onsubmit="return confirm('Marcar falta de {{ escala.funcoes[0].membro.nome }} nesta ocorrencia? Quem seria o proximo da fila cobre este periodo, e {{ escala.funcoes[0].membro.nome }} passa a cobrir o periodo seguinte.');">
-                {{ acao_form.hidden_tag() }}
-                <button type="submit"
-                        class="w-full {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-xl transition">
-                    <i class="fa-solid fa-person-walking-arrow-right mr-2"></i>Registrar ausencia
-                </button>
-            </form>
-            {% elif not escala.plantao_turno_id and (escala.funcoes | selectattr('membro_id') | list) %}
+            {% if not escala.plantao_turno_id and (escala.funcoes | selectattr('membro_id') | list) %}
             <a href="{{ url_for('plantao.nova', ministerio_id=escala.ministerio_id, escala_id=escala.id) }}"
                class="flex-1 flex items-center justify-center {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-xl transition">
                 <i class="fa-solid fa-arrows-rotate mr-2"></i>Criar turno de rodizio com esta equipe
@@ -104,6 +102,7 @@
             Alem do botao acima, a equipe escalada e notificada automaticamente 24h e 16h antes do evento.
         </p>
         {% endif %}
+        {% endif %}
 
         <!-- Grid da escala -->
         <div class="rounded-xl border {{ tema.card_border }} overflow-hidden">
@@ -115,6 +114,7 @@
                     <span class="text-xs font-semibold text-gray-300 uppercase tracking-wide truncate" data-funcao-nome="{{ funcao.id }}">
                         {{ funcao.nome }}
                     </span>
+                    {% if eh_dono %}
                     <div class="flex items-center gap-2 shrink-0">
                         <button type="button" data-editar-funcao="{{ funcao.id }}"
                                 title="Renomear categoria" class="text-gray-400 hover:text-white transition">
@@ -138,11 +138,13 @@
                             <i class="fa-solid fa-check text-xs"></i>
                         </button>
                     </form>
+                    {% endif %}
                 </div>
                 {% else %}
                 <div class="bg-green-800 text-white text-xs sm:text-sm font-medium px-2 sm:px-4 py-3 border-t border-green-900 {{ 'border-t-0' if loop.first else '' }}">
                     <div class="flex items-center justify-between gap-1" data-funcao-nome="{{ funcao.id }}">
                         <span class="truncate">{{ funcao.nome }}</span>
+                        {% if eh_dono %}
                         <div class="flex items-center gap-1.5 shrink-0">
                             <button type="button" data-editar-funcao="{{ funcao.id }}"
                                     title="Renomear funcao" class="text-green-200 hover:text-white transition">
@@ -156,7 +158,9 @@
                                 </button>
                             </form>
                         </div>
+                        {% endif %}
                     </div>
+                    {% if eh_dono %}
                     <form method="POST" action="{{ url_for('escala.editar_funcao', funcao_id=funcao.id) }}"
                           data-editar-funcao-form="{{ funcao.id }}" class="hidden mt-1.5 flex items-center gap-1">
                         {{ formularios_editar_funcao[funcao.id].hidden_tag() }}
@@ -167,6 +171,7 @@
                             <i class="fa-solid fa-check text-xs"></i>
                         </button>
                     </form>
+                    {% endif %}
                 </div>
                 <div class="{{ tema.page_bg }} px-3 sm:px-4 py-2.5 border-t {{ tema.card_border }} {{ 'border-t-0' if loop.first else '' }} flex items-center">
                     {% if funcao.membro_id %}
@@ -176,7 +181,12 @@
                                 {{ pessoa.iniciais }}
                             </div>
                             <span class="text-sm {{ tema.text_primary }} truncate max-w-[9rem] sm:max-w-none">{{ pessoa.nome }}</span>
+                            {% if funcao.eh_convidado %}
+                            <span class="text-[10px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-1.5 py-0.5 shrink-0"
+                                  title="Participacao pontual -- nao e membro fixo da equipe">Convidado</span>
+                            {% endif %}
 
+                            {% if eh_dono %}
                             <form method="POST" action="{{ url_for('escala.atualizar_status', funcao_id=funcao.id) }}" class="shrink-0">
                                 {{ formularios_status[funcao.id].hidden_tag() }}
                                 {{ formularios_status[funcao.id].status(
@@ -197,41 +207,72 @@
                             </form>
                             {% endif %}
 
-                            <form method="POST" action="{{ url_for('escala.remover_membro', funcao_id=funcao.id) }}" class="ml-auto shrink-0">
+                            <form method="POST" action="{{ url_for('escala.remover_membro', funcao_id=funcao.id) }}" class="ml-auto shrink-0"
+                                  {% if escala.plantao_turno_id %}onsubmit="return confirm('Marcar falta de {{ pessoa.nome }} nesta ocorrencia? A vaga fica em aberto so aqui -- o resto da equipe (se houver) continua normalmente, e o rodizio nao remaneja ninguem automaticamente.');"{% endif %}>
                                 {{ acao_form.hidden_tag() }}
-                                <button type="submit" aria-label="Remover" class="text-red-500 hover:text-red-400 transition">
+                                <button type="submit" title="Remover" aria-label="Remover" class="text-red-500 hover:text-red-400 transition">
                                     <i class="fa-solid fa-circle-xmark"></i>
                                 </button>
                             </form>
+                            {% endif %}
                         </div>
-                    {% elif diretorio_vazio %}
-                        <p class="text-xs {{ tema.text_secondary }} w-full">
-                            Diretorio da comunidade vazio.
-                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
-                               class="{{ tema.accent_text }} hover:underline">Cadastrar membros</a>
-                        </p>
+                    {% elif not eh_dono %}
+                        <p class="text-xs {{ tema.text_secondary }} w-full">Vaga em aberto.</p>
                     {% else %}
-                        {% set form = formularios_membro[funcao.id] %}
-                        <form method="POST" action="{{ url_for('escala.adicionar_membro', funcao_id=funcao.id) }}"
-                              class="flex flex-wrap items-center gap-2 w-full">
-                            {{ form.hidden_tag() }}
-                            {{ form.membro_id(class_="flex-1 min-w-0 " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
-                            <button type="submit"
-                                    class="ml-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-3 py-2 rounded-lg transition shrink-0">
-                                <i class="fa-solid fa-plus"></i>
+                        {% if diretorio_vazio %}
+                            <p class="text-xs {{ tema.text_secondary }} w-full mb-2">Diretorio da comunidade vazio.</p>
+                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
+                               class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
+                                <i class="fa-solid fa-address-book"></i>
+                                Cadastrar membros no diretorio
+                            </a>
+                        {% else %}
+                            {% set form = formularios_membro[funcao.id] %}
+                            <form method="POST" action="{{ url_for('escala.adicionar_membro', funcao_id=funcao.id) }}"
+                                  class="flex flex-wrap items-center gap-2 w-full">
+                                {{ form.hidden_tag() }}
+                                {{ form.membro_id(class_="flex-1 min-w-0 " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                                <button type="submit"
+                                        class="ml-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-3 py-2 rounded-lg transition shrink-0">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                            </form>
+                            {% for erro in form.membro_id.errors %}
+                                <p class="text-xs text-red-400 mt-1 w-full">{{ erro }}</p>
+                            {% endfor %}
+                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
+                               class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
+                                <i class="fa-solid fa-user-plus"></i>
+                                Adicionar novo membro ao diretorio
+                            </a>
+                        {% endif %}
+
+                        <div class="w-full mt-2" data-convidado-bloco>
+                            <button type="button" data-toggle-busca-convidado="{{ funcao.id }}"
+                                    class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.accent_border }} {{ tema.accent_text }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
+                                <i class="fa-solid fa-user-plus"></i>
+                                Convidar conta ja cadastrada
                             </button>
-                        </form>
-                        {% for erro in form.membro_id.errors %}
-                            <p class="text-xs text-red-400 mt-1 w-full">{{ erro }}</p>
-                        {% endfor %}
-                        <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
-                           class="text-xs {{ tema.text_secondary }} {{ tema.text_hover }} underline w-full">+ Adicionar novo membro ao diretorio</a>
+                            <div class="hidden relative mt-2" data-busca-convidado="{{ funcao.id }}"
+                                 data-busca-convidado-url="{{ url_for('escala.buscar_usuario', funcao_id=funcao.id) }}">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs {{ tema.text_secondary }}"></i>
+                                <input type="text" placeholder="Nome, e-mail ou usuario..." autocomplete="off"
+                                       class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-lg pl-9 pr-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"
+                                       data-busca-convidado-input>
+                                <div class="hidden absolute z-10 w-full mt-1 rounded-lg border {{ tema.card_border }} {{ tema.card_bg }} divide-y {{ tema.card_border }} overflow-hidden shadow-lg"
+                                     data-busca-convidado-resultados></div>
+                            </div>
+                            <form method="POST" action="{{ url_for('escala.adicionar_convidado', funcao_id=funcao.id) }}" data-form-convidado="{{ funcao.id }}">
+                                {{ acao_form.hidden_tag() }}
+                                <input type="hidden" name="usuario_id" data-busca-convidado-usuario-id>
+                            </form>
+                        </div>
                     {% endif %}
                 </div>
                 {% endif %}
                 {% endfor %}
 
-                {% if not escala.plantao_turno_id %}
+                {% if eh_dono and not escala.plantao_turno_id %}
                 <div class="col-span-2 {{ tema.card_bg }} border-t {{ tema.card_border }} px-3 sm:px-4 py-3">
                     <form method="POST" action="{{ url_for('escala.adicionar_funcao', escala_id=escala.id) }}"
                           class="flex items-center gap-2">
@@ -301,6 +342,73 @@
             if (!window.confirm(form.getAttribute('data-confirm-excluir'))) {
                 evento.preventDefault();
             }
+        });
+    });
+
+    document.querySelectorAll('[data-toggle-busca-convidado]').forEach(function (botao) {
+        botao.addEventListener('click', function () {
+            var id = botao.getAttribute('data-toggle-busca-convidado');
+            var bloco = document.querySelector('[data-busca-convidado="' + id + '"]');
+            if (bloco) {
+                bloco.classList.toggle('hidden');
+                var input = bloco.querySelector('[data-busca-convidado-input]');
+                if (input && !bloco.classList.contains('hidden')) input.focus();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-busca-convidado]').forEach(function (bloco) {
+        var funcaoId = bloco.getAttribute('data-busca-convidado');
+        var buscaUrl = bloco.getAttribute('data-busca-convidado-url');
+        var input = bloco.querySelector('[data-busca-convidado-input]');
+        var resultados = bloco.querySelector('[data-busca-convidado-resultados]');
+        var form = document.querySelector('[data-form-convidado="' + funcaoId + '"]');
+        var campoUsuarioId = form ? form.querySelector('[data-busca-convidado-usuario-id]') : null;
+        var temporizador = null;
+
+        function limparResultados() {
+            resultados.innerHTML = '';
+            resultados.classList.add('hidden');
+        }
+
+        input.addEventListener('input', function () {
+            var termo = input.value.trim();
+            clearTimeout(temporizador);
+            if (termo.length < 2) {
+                limparResultados();
+                return;
+            }
+            temporizador = setTimeout(function () {
+                fetch(buscaUrl + '?q=' + encodeURIComponent(termo))
+                    .then(function (resp) { return resp.json(); })
+                    .then(function (usuarios) {
+                        resultados.innerHTML = '';
+                        if (!usuarios.length) {
+                            limparResultados();
+                            return;
+                        }
+                        usuarios.forEach(function (usuario) {
+                            var item = document.createElement('button');
+                            item.type = 'button';
+                            item.className = 'flex items-center gap-2 w-full text-left px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5';
+                            item.innerHTML = '<i class="fa-solid fa-circle-user opacity-60"></i><span class="truncate"></span>';
+                            item.querySelector('span').textContent = usuario.label;
+                            item.addEventListener('click', function () {
+                                input.value = usuario.label;
+                                if (campoUsuarioId) campoUsuarioId.value = usuario.id;
+                                limparResultados();
+                                if (form) form.submit();
+                            });
+                            resultados.appendChild(item);
+                        });
+                        resultados.classList.remove('hidden');
+                    })
+                    .catch(function () { limparResultados(); });
+            }, 250);
+        });
+
+        document.addEventListener('click', function (evento) {
+            if (!bloco.contains(evento.target)) limparResultados();
         });
     });
 </script>

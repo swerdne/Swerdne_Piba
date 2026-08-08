@@ -4,8 +4,9 @@ O rodizio (TurnoPlantao: fila+offset+recorrencia+departamento) e materializado
 em Escala/Funcao reais por app/plantao/sincronizacao.py -- os testes aqui
 cobrem o motor de recorrencia estilo Google Agenda (app/plantao/models.py),
 o motor de sincronizacao (criacao, idempotencia, respeito a plantao_fixado,
-imutabilidade do passado) e o remanejamento por ausencia sobre o estado
-materializado.
+imutabilidade do passado) e a formula de rotacao por EQUIPES (grupos de 1+
+pessoas que atuam juntas na mesma ocorrencia -- rotacao individual e so o
+caso particular de equipes com 1 integrante).
 """
 from datetime import date, datetime, time, timedelta
 
@@ -15,18 +16,17 @@ from app.extensions import db
 from app.escala.models import Escala, Funcao, Membro
 from app.plantao.models import (
     TurnoPlantao,
-    MembroTurno,
+    EquipeTurno,
+    EquipeMembro,
     data_do_periodo,
     periodo_da_data,
-    periodo_exato_da_data,
-    membro_do_periodo,
+    equipe_do_periodo,
     opcoes_modo_mensal,
     opcoes_modo_mensal_completas,
 )
 from app.plantao.sincronizacao import (
     sincronizar_turno,
     preparar_para_renumeracao,
-    marcar_ausencia,
     JANELA_GERACAO_DIAS,
 )
 from tests.conftest import sessao_isolada
@@ -78,9 +78,32 @@ def _criar_membro_teste(comunidade_id, nome):
 
 
 def _adicionar_a_fila(turno, membros):
-    for posicao, membro in enumerate(membros):
-        db.session.add(MembroTurno(turno_id=turno.id, membro_id=membro.id, posicao=posicao))
+    """Adiciona cada membro como uma equipe (posicao) de 1 pessoa -- equivale
+    ao rodizio puramente individual de sempre: e so o caso particular onde
+    toda equipe da fila tem 1 integrante. Continua uma posicao por chamada
+    (recalcula o proximo `posicao` a cada chamada, entao pode ser chamada
+    mais de uma vez pra ir incrementando a fila aos poucos)."""
+    posicao = max([e.posicao for e in turno.fila], default=-1) + 1
+    for membro in membros:
+        equipe = EquipeTurno(turno_id=turno.id, posicao=posicao)
+        db.session.add(equipe)
+        db.session.flush()
+        db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
+        posicao += 1
     db.session.commit()
+
+
+def _adicionar_equipe(turno, membros):
+    """Adiciona TODOS os membros como uma UNICA equipe (mesma posicao) --
+    pra testar o rodizio revezando GRUPOS inteiros, nao pessoas isoladas."""
+    posicao = max([e.posicao for e in turno.fila], default=-1) + 1
+    equipe = EquipeTurno(turno_id=turno.id, posicao=posicao)
+    db.session.add(equipe)
+    db.session.flush()
+    for membro in membros:
+        db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
+    db.session.commit()
+    return equipe
 
 
 def _escala_do_periodo(turno, periodo):
@@ -88,10 +111,22 @@ def _escala_do_periodo(turno, periodo):
 
 
 def _membro_materializado(turno, periodo):
+    """Nome do 1o (e normalmente unico, pra equipes de 1 pessoa) escalado no
+    periodo. Pra periodos com equipes de varias pessoas, use
+    _membros_materializados."""
     escala = _escala_do_periodo(turno, periodo)
     if escala is None or not escala.funcoes:
         return None
     return escala.funcoes[0].membro
+
+
+def _membros_materializados(turno, periodo):
+    """Nomes (ordenados) de todo mundo escalado no periodo -- usado pra
+    testar ocorrencias geradas por equipes com mais de 1 integrante."""
+    escala = _escala_do_periodo(turno, periodo)
+    if escala is None:
+        return []
+    return sorted(f.membro.nome for f in escala.funcoes if f.membro_id)
 
 
 # --- Motor de recorrencia (matematica pura, estilo Google Agenda) --------------
@@ -228,21 +263,6 @@ def test_termino_ocorrencias_nao_conta_mes_pulado(app, db):
             data_do_periodo(turno, 2)
 
 
-# --- periodo_exato_da_data (usado por "registrar ausencia por data") -----------
-
-def test_periodo_exato_da_data_acha_ocorrencia_valida(app, db):
-    with app.app_context():
-        turno = _criar_turno_teste(1, data_inicio=date(2026, 1, 1), unidade_recorrencia="semana", dias_semana="0,3")
-        assert periodo_exato_da_data(turno, date(2026, 1, 8)) == 2
-
-
-def test_periodo_exato_da_data_rejeita_data_que_nao_e_ocorrencia(app, db):
-    with app.app_context():
-        turno = _criar_turno_teste(1, data_inicio=date(2026, 1, 1), unidade_recorrencia="semana", dias_semana="0,3")
-        with pytest.raises(ValueError):
-            periodo_exato_da_data(turno, date(2026, 1, 2))  # sexta, nao e ocorrencia
-
-
 def test_periodo_da_data_estimativa_nunca_overestima(app, db):
     """periodo_da_data e so uma ESTIMATIVA conservadora agora (nao mais um
     mapeamento exato) -- garante que nunca aponta pra um periodo cuja data
@@ -299,7 +319,9 @@ def test_opcoes_modo_mensal_completas_bate_com_a_versao_normal_fora_do_ordinal_5
 
 # --- Formula pura do rodizio -----------------------------------------------------
 
-def test_membro_do_periodo_rodizio_simples(logged_in_client, app, db):
+def test_equipe_do_periodo_rodizio_individual_simples(logged_in_client, app, db):
+    """Equipes de 1 pessoa cada -- comportamento identico ao rodizio
+    individual de sempre."""
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
@@ -310,15 +332,15 @@ def test_membro_do_periodo_rodizio_simples(logged_in_client, app, db):
         c = _criar_membro_teste(comunidade.id, "Carlos")
         _adicionar_a_fila(turno, [a, b, c])
 
-        assert membro_do_periodo(turno, 0).nome == "Ana"
-        assert membro_do_periodo(turno, 1).nome == "Bruno"
-        assert membro_do_periodo(turno, 2).nome == "Carlos"
+        assert [m.nome for m in equipe_do_periodo(turno, 0).membros_ordenados] == ["Ana"]
+        assert [m.nome for m in equipe_do_periodo(turno, 1).membros_ordenados] == ["Bruno"]
+        assert [m.nome for m in equipe_do_periodo(turno, 2).membros_ordenados] == ["Carlos"]
         # wraparound do modulo
-        assert membro_do_periodo(turno, 3).nome == "Ana"
-        assert membro_do_periodo(turno, 5).nome == "Carlos"
+        assert [m.nome for m in equipe_do_periodo(turno, 3).membros_ordenados] == ["Ana"]
+        assert [m.nome for m in equipe_do_periodo(turno, 5).membros_ordenados] == ["Carlos"]
 
 
-def test_membro_do_periodo_com_offset(logged_in_client, app, db):
+def test_equipe_do_periodo_com_offset(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
@@ -328,17 +350,37 @@ def test_membro_do_periodo_com_offset(logged_in_client, app, db):
         b = _criar_membro_teste(comunidade.id, "Bruno")
         _adicionar_a_fila(turno, [a, b])
 
-        assert membro_do_periodo(turno, 0).nome == "Bruno"
-        assert membro_do_periodo(turno, 1).nome == "Ana"
+        assert [m.nome for m in equipe_do_periodo(turno, 0).membros_ordenados] == ["Bruno"]
+        assert [m.nome for m in equipe_do_periodo(turno, 1).membros_ordenados] == ["Ana"]
 
 
-def test_membro_do_periodo_fila_vazia(logged_in_client, app, db):
+def test_equipe_do_periodo_fila_vazia(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
         turno = _criar_turno_teste(ministerio.id)
 
-        assert membro_do_periodo(turno, 0) is None
+        assert equipe_do_periodo(turno, 0) is None
+
+
+def test_equipe_do_periodo_rotaciona_grupos_inteiros(logged_in_client, app, db):
+    """O caso central deste modulo: uma equipe com varias pessoas revezando
+    como GRUPO contra outra equipe -- nao pessoa por pessoa."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(ministerio.id)
+
+        cima = _criar_membro_teste(comunidade.id, "Cima")
+        emilly = _criar_membro_teste(comunidade.id, "Emilly")
+        outra = _criar_membro_teste(comunidade.id, "Outra")
+        _adicionar_equipe(turno, [cima, emilly])  # posicao 0: equipe de 2
+        _adicionar_equipe(turno, [outra])  # posicao 1: equipe de 1
+
+        assert sorted(m.nome for m in equipe_do_periodo(turno, 0).membros_ordenados) == ["Cima", "Emilly"]
+        assert [m.nome for m in equipe_do_periodo(turno, 1).membros_ordenados] == ["Outra"]
+        # wraparound: volta pra equipe {Cima, Emilly}, os dois juntos de novo
+        assert sorted(m.nome for m in equipe_do_periodo(turno, 2).membros_ordenados) == ["Cima", "Emilly"]
 
 
 # --- Motor de sincronizacao (materializacao em Escala/Funcao reais) ------------
@@ -362,6 +404,38 @@ def test_sincronizar_turno_cria_ocorrencias(logged_in_client, app, db):
         assert escalas[0].funcoes[0].nome == "Plantonista"
         assert [e.funcoes[0].membro.nome for e in escalas] == ["Ana", "Bruno", "Ana", "Bruno", "Ana", "Bruno"]
         assert escalas[0].plantao_fixado is False
+
+
+def test_sincronizar_turno_materializa_equipe_inteira_na_mesma_ocorrencia(logged_in_client, app, db):
+    """Regressao do bug relatado: uma equipe com 2+ pessoas deve aparecer
+    JUNTA, na mesma data/Escala -- nunca uma pessoa por ocorrencia separada
+    (que era o comportamento antigo, tratando cada pessoa como uma posicao
+    isolada da fila)."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(
+            ministerio.id, data_inicio=date.today(), unidade_recorrencia="dia", nome_funcao="Responsavel"
+        )
+        cima = _criar_membro_teste(comunidade.id, "Cima")
+        emilly = _criar_membro_teste(comunidade.id, "Emilly")
+        outra = _criar_membro_teste(comunidade.id, "Outra")
+        _adicionar_equipe(turno, [cima, emilly])
+        _adicionar_equipe(turno, [outra])
+
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
+
+        # periodo 0: Cima e Emilly na MESMA Escala (mesma data)
+        escala_0 = _escala_do_periodo(turno, 0)
+        assert len(escala_0.funcoes) == 2
+        assert sorted(f.nome for f in escala_0.funcoes) == ["Responsavel", "Responsavel"]
+        assert _membros_materializados(turno, 0) == ["Cima", "Emilly"]
+
+        # periodo 1: so a equipe da Outra
+        assert _membros_materializados(turno, 1) == ["Outra"]
+
+        # periodo 2: equipe {Cima, Emilly} de volta, ainda juntos
+        assert _membros_materializados(turno, 2) == ["Cima", "Emilly"]
 
 
 def test_sincronizar_turno_com_fila_vazia_materializa_sem_membro(logged_in_client, app, db):
@@ -620,8 +694,7 @@ def test_adicionar_membro_na_fila_reajusta_so_o_futuro(logged_in_client, app, db
         assert _escala_do_periodo(turno, 0).funcoes[0].membro.nome == "Ana"  # ja ocorrido
 
         b = _criar_membro_teste(comunidade.id, "Bruno")
-        db.session.add(MembroTurno(turno_id=turno.id, membro_id=b.id, posicao=1))
-        db.session.commit()
+        _adicionar_a_fila(turno, [b])
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
         db.session.expire_all()
 
@@ -629,83 +702,79 @@ def test_adicionar_membro_na_fila_reajusta_so_o_futuro(logged_in_client, app, db
         assert _escala_do_periodo(turno, 1).funcoes[0].membro.nome == "Bruno"  # futuro reajustado
 
 
-# --- Remanejamento por falta (sobre estado materializado) -----------------------
+# --- Ausencia numa ocorrencia gerada (fluxo generico de escala) -----------------
+#
+# Nao ha mais remanejamento automatico (trocar com o periodo seguinte): a
+# ausencia de uma pessoa numa ocorrencia gerada por rodizio usa o MESMO
+# fluxo generico de qualquer escala manual (escala.routes.remover_membro) --
+# so aquela pessoa sai (vaga fica aberta), o resto da equipe (se houver)
+# continua normalmente, e a Escala e fixada pra o proximo sync nao restaurar
+# a pessoa removida.
 
-def test_marcar_ausencia_troca_com_o_periodo_seguinte(logged_in_client, app, db):
-    with app.app_context():
-        comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        turno = _criar_turno_teste(ministerio.id, data_inicio=date.today())
-
-        a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        c = _criar_membro_teste(comunidade.id, "Carlos")
-        _adicionar_a_fila(turno, [a, b, c])
-        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
-
-        marcar_ausencia(turno, 1)  # Bruno falta no periodo 1
-
-        assert _membro_materializado(turno, 1).nome == "Carlos"
-        assert _membro_materializado(turno, 2).nome == "Bruno"
-        assert _membro_materializado(turno, 0).nome == "Ana"  # resto intocado
-        assert _escala_do_periodo(turno, 1).plantao_fixado is True
-        assert _escala_do_periodo(turno, 2).plantao_fixado is True
-
-
-def test_marcar_ausencia_em_cascata_respeita_remanejamento_anterior(logged_in_client, app, db):
+def test_remover_pessoa_de_ocorrencia_gerada_deixa_vaga_aberta_e_fixa(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
         turno = _criar_turno_teste(ministerio.id, data_inicio=date.today() + timedelta(days=1))
-
         a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        c = _criar_membro_teste(comunidade.id, "Carlos")
-        _adicionar_a_fila(turno, [a, b, c])
-        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
+        _adicionar_a_fila(turno, [a])
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
 
-        marcar_ausencia(turno, 0)  # Ana falta -> Bruno cobre 0, Ana cobre 1
-        assert _membro_materializado(turno, 0).nome == "Bruno"
-        assert _membro_materializado(turno, 1).nome == "Ana"
+        escala = _escala_do_periodo(turno, 0)
+        funcao = escala.funcoes[0]
+        assert escala.plantao_fixado is False
 
-        marcar_ausencia(turno, 1)  # quem estava no periodo 1 era Ana (remanejada) -- nao a formula base
-        assert _membro_materializado(turno, 1).nome == "Carlos"
-        assert _membro_materializado(turno, 2).nome == "Ana"
+        response = logged_in_client.post(
+            f"/escala/funcao/{funcao.id}/remover", data={}, follow_redirects=True
+        )
+        assert response.status_code == 200
+
+        db.session.expire_all()
+        escala_atualizada = _escala_do_periodo(turno, 0)
+        assert escala_atualizada.funcoes[0].membro_id is None  # vaga aberta
+        assert escala_atualizada.plantao_fixado is True  # sync nao restaura Ana
 
 
-def test_marcar_ausencia_rejeita_periodo_ja_ocorrido(logged_in_client, app, db):
+def test_remover_uma_pessoa_de_equipe_multipla_mantem_resto_do_grupo(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        agora = datetime.now()
-        ha_pouco = agora - timedelta(minutes=5)
-        turno = _criar_turno_teste(
-            ministerio.id, data_inicio=ha_pouco.date(), unidade_recorrencia="dia", horario=ha_pouco.time()
-        )
-        a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        _adicionar_a_fila(turno, [a, b])
-        sincronizar_turno(turno)
+        turno = _criar_turno_teste(ministerio.id, data_inicio=date.today() + timedelta(days=1))
+        cima = _criar_membro_teste(comunidade.id, "Cima")
+        emilly = _criar_membro_teste(comunidade.id, "Emilly")
+        _adicionar_equipe(turno, [cima, emilly])
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
 
-        with pytest.raises(ValueError):
-            marcar_ausencia(turno, 0)
+        escala = _escala_do_periodo(turno, 0)
+        funcao_cima = next(f for f in escala.funcoes if f.membro.nome == "Cima")
+
+        logged_in_client.post(f"/escala/funcao/{funcao_cima.id}/remover", data={}, follow_redirects=True)
+
+        db.session.expire_all()
+        escala_atualizada = _escala_do_periodo(turno, 0)
+        nomes_restantes = sorted(f.membro.nome for f in escala_atualizada.funcoes if f.membro_id)
+        assert nomes_restantes == ["Emilly"]  # Cima saiu, Emilly continua
+        assert escala_atualizada.plantao_fixado is True
 
 
-def test_marcar_ausencia_no_ultimo_periodo_de_termino_por_ocorrencias_da_erro_amigavel(logged_in_client, app, db):
+def test_sync_nao_restaura_pessoa_removida_manualmente(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        turno = _criar_turno_teste(
-            ministerio.id, data_inicio=date.today() + timedelta(days=1),
-            termino_tipo="ocorrencias", termino_ocorrencias=2,
-        )
+        turno = _criar_turno_teste(ministerio.id, data_inicio=date.today() + timedelta(days=1))
         a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        _adicionar_a_fila(turno, [a, b])
-        sincronizar_turno(turno)
+        _adicionar_a_fila(turno, [a])
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
 
-        with pytest.raises(ValueError, match="termina aqui"):
-            marcar_ausencia(turno, 1)  # ultimo periodo (0 e 1) -- nao ha periodo 2
+        escala = _escala_do_periodo(turno, 0)
+        funcao = escala.funcoes[0]
+        logged_in_client.post(f"/escala/funcao/{funcao.id}/remover", data={}, follow_redirects=True)
+
+        # sync roda de novo (ex: tick do agendador) -- nao deve reatribuir Ana
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
+        db.session.expire_all()
+
+        assert _escala_do_periodo(turno, 0).funcoes[0].membro_id is None
 
 
 # --- Exclusao de turno ------------------------------------------------------------
@@ -849,6 +918,10 @@ def test_form_novo_turno_pre_preenche_a_partir_da_escala_de_origem(logged_in_cli
 
 
 def test_criar_turno_a_partir_de_escala_semeia_fila_com_os_escalados(logged_in_client, app, db):
+    """As pessoas ja escaladas na Escala de origem viram UMA UNICA equipe
+    (nao posicoes separadas) -- e assim que "criar turno com esta equipe"
+    faz elas continuarem aparecendo juntas nas ocorrencias geradas, em vez de
+    o rodizio passar a alterna-las em datas separadas."""
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
@@ -864,13 +937,14 @@ def test_criar_turno_a_partir_de_escala_semeia_fila_com_os_escalados(logged_in_c
 
         turno = TurnoPlantao.query.filter_by(nome="Rodizio Louvor", ministerio_id=ministerio.id).first()
         assert turno is not None
-        fila_nomes = [m.membro.nome for m in turno.fila]
-        assert fila_nomes == ["Ana", "Bruno"]  # mesma ordem das funcoes (Baixo antes de Bateria)
+        assert len(turno.fila) == 1  # UMA equipe, nao duas posicoes
+        nomes_da_equipe = [m.membro.nome for m in turno.fila[0].integrantes]
+        assert nomes_da_equipe == ["Ana", "Bruno"]  # mesma ordem das funcoes (Baixo antes de Bateria)
 
         # ja materializou ocorrencias usando essa fila (sem precisar montar
-        # a fila manualmente na tela seguinte)
+        # a fila manualmente na tela seguinte) -- Ana e Bruno na MESMA Escala
         primeira = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=0).first()
-        assert primeira.funcoes[0].membro.nome == "Ana"
+        assert sorted(f.membro.nome for f in primeira.funcoes if f.membro_id) == ["Ana", "Bruno"]
 
 
 def test_criar_turno_a_partir_de_escala_ignora_funcao_repetida_e_vazia(logged_in_client, app, db):
@@ -894,7 +968,8 @@ def test_criar_turno_a_partir_de_escala_ignora_funcao_repetida_e_vazia(logged_in
         )
 
         turno = TurnoPlantao.query.filter_by(nome="Rodizio Ana").first()
-        assert [m.membro.nome for m in turno.fila] == ["Ana"]
+        assert len(turno.fila) == 1
+        assert [m.membro.nome for m in turno.fila[0].integrantes] == ["Ana"]
 
 
 def test_usuario_nao_consegue_usar_escala_de_outra_conta_como_origem_do_turno(
@@ -949,6 +1024,14 @@ def test_link_para_criar_turno_nao_aparece_em_escala_sem_ninguem_escalado(logged
         assert "Criar turno de rodizio com esta equipe" not in html
 
 
+def _equipe_membro_de(turno, membro_id):
+    return (
+        EquipeMembro.query.join(EquipeTurno)
+        .filter(EquipeTurno.turno_id == turno.id, EquipeMembro.membro_id == membro_id)
+        .first()
+    )
+
+
 def test_adicionar_e_remover_membro_da_fila_via_rota(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
@@ -957,17 +1040,49 @@ def test_adicionar_e_remover_membro_da_fila_via_rota(logged_in_client, app, db):
         membro = _criar_membro_teste(comunidade.id, "Ana")
 
         response = logged_in_client.post(
-            f"/plantao/{turno.id}/fila/adicionar", data={"membro_id": membro.id}, follow_redirects=True
+            f"/plantao/{turno.id}/fila/adicionar",
+            data={"membro_id": membro.id, "equipe_turno_id": "0"},  # 0 = nova equipe
+            follow_redirects=True,
         )
         assert response.status_code == 200
-        assert MembroTurno.query.filter_by(turno_id=turno.id, membro_id=membro.id).count() == 1
+        assert _equipe_membro_de(turno, membro.id) is not None
         assert Escala.query.filter_by(plantao_turno_id=turno.id).count() > 0
 
-        item = MembroTurno.query.filter_by(turno_id=turno.id, membro_id=membro.id).first()
+        item = _equipe_membro_de(turno, membro.id)
         logged_in_client.post(
             f"/plantao/{turno.id}/fila/{item.id}/remover", data={}, follow_redirects=True
         )
-        assert MembroTurno.query.filter_by(turno_id=turno.id, membro_id=membro.id).count() == 0
+        assert _equipe_membro_de(turno, membro.id) is None
+        assert EquipeTurno.query.filter_by(turno_id=turno.id).count() == 0  # equipe vazia tambem some
+
+
+def test_adicionar_segundo_membro_na_mesma_equipe_via_rota(logged_in_client, app, db):
+    """Escolher uma equipe ja existente (em vez de "+ Nova equipe") junta a
+    pessoa ao MESMO grupo -- e assim que 2 pessoas passam a revezar juntas."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(ministerio.id, data_inicio=date.today())
+        cima = _criar_membro_teste(comunidade.id, "Cima")
+        emilly = _criar_membro_teste(comunidade.id, "Emilly")
+
+        logged_in_client.post(
+            f"/plantao/{turno.id}/fila/adicionar",
+            data={"membro_id": cima.id, "equipe_turno_id": "0"},
+            follow_redirects=True,
+        )
+        equipe = EquipeTurno.query.filter_by(turno_id=turno.id).first()
+
+        logged_in_client.post(
+            f"/plantao/{turno.id}/fila/adicionar",
+            data={"membro_id": emilly.id, "equipe_turno_id": str(equipe.id)},
+            follow_redirects=True,
+        )
+
+        db.session.expire_all()
+        assert EquipeTurno.query.filter_by(turno_id=turno.id).count() == 1  # uma unica equipe
+        nomes = sorted(m.nome for m in EquipeTurno.query.get(equipe.id).membros_ordenados)
+        assert nomes == ["Cima", "Emilly"]
 
 
 def test_editar_turno_via_rota(logged_in_client, app, db):
@@ -989,67 +1104,6 @@ def test_editar_turno_via_rota(logged_in_client, app, db):
         assert turno_atualizado.nome == "Turno Renomeado"
         assert turno_atualizado.unidade_recorrencia == "semana"
         assert turno_atualizado.dias_semana_efetivos == [1, 4]
-
-
-def test_marcar_ausencia_via_rota(logged_in_client, app, db):
-    with app.app_context():
-        comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        amanha = date.today() + timedelta(days=1)
-        turno = _criar_turno_teste(ministerio.id, data_inicio=amanha)
-
-        a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        _adicionar_a_fila(turno, [a, b])
-        sincronizar_turno(turno, ate_data=amanha + timedelta(days=2))
-
-        response = logged_in_client.post(
-            f"/plantao/{turno.id}/ausencia", data={"data": amanha.isoformat()}, follow_redirects=True
-        )
-        assert response.status_code == 200
-        assert "fila reorganizada a partir dai" in response.data.decode("utf-8")
-        assert _membro_materializado(turno, 0).nome == "Bruno"
-        assert _membro_materializado(turno, 1).nome == "Ana"
-
-
-def test_marcar_ausencia_via_rota_com_data_invalida(logged_in_client, app, db):
-    with app.app_context():
-        comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        amanha = date.today() + timedelta(days=1)
-        turno = _criar_turno_teste(ministerio.id, data_inicio=amanha, unidade_recorrencia="semana", dias_semana=str(amanha.weekday()))
-
-        a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        _adicionar_a_fila(turno, [a, b])
-        sincronizar_turno(turno, ate_data=amanha + timedelta(days=14))
-
-        data_sem_ocorrencia = (amanha + timedelta(days=1)).isoformat()
-        response = logged_in_client.post(
-            f"/plantao/{turno.id}/ausencia", data={"data": data_sem_ocorrencia}, follow_redirects=True
-        )
-        assert response.status_code == 200
-        assert "nao corresponde a uma ocorrencia" in response.data.decode("utf-8")
-
-
-def test_marcar_ausencia_via_escala_gerada(logged_in_client, app, db):
-    with app.app_context():
-        comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        amanha = date.today() + timedelta(days=1)
-        turno = _criar_turno_teste(ministerio.id, data_inicio=amanha)
-
-        a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        _adicionar_a_fila(turno, [a, b])
-        sincronizar_turno(turno, ate_data=amanha + timedelta(days=2))
-        escala = _escala_do_periodo(turno, 0)
-
-        response = logged_in_client.post(
-            f"/plantao/escala/{escala.id}/ausencia", data={}, follow_redirects=True
-        )
-        assert response.status_code == 200
-        assert _membro_materializado(turno, 0).nome == "Bruno"
 
 
 def test_detalhe_do_turno_mostra_ocorrencias_passadas_e_futuras(logged_in_client, app, db):
@@ -1101,26 +1155,31 @@ def test_usuario_nao_consegue_ver_turno_de_outra_conta(logged_in_client, outro_l
         assert outro_logged_in_client.get(f"/plantao/{turno_id}/editar").status_code == 404
 
 
-def test_usuario_nao_consegue_marcar_ausencia_em_turno_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+def test_usuario_nao_consegue_mexer_na_fila_de_turno_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
         turno = _criar_turno_teste(ministerio.id, data_inicio=date.today())
         a = _criar_membro_teste(comunidade.id, "Ana")
-        b = _criar_membro_teste(comunidade.id, "Bruno")
-        _adicionar_a_fila(turno, [a, b])
-        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
+        _adicionar_a_fila(turno, [a])
         turno_id = turno.id
+        equipe_membro_id = _equipe_membro_de(turno, a.id).id
 
     with sessao_isolada(app):
         response = outro_logged_in_client.post(
-            f"/plantao/{turno_id}/ausencia", data={"data": date.today().isoformat()}, follow_redirects=True
+            f"/plantao/{turno_id}/fila/adicionar",
+            data={"membro_id": a.id, "equipe_turno_id": "0"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 404
+
+        response = outro_logged_in_client.post(
+            f"/plantao/{turno_id}/fila/{equipe_membro_id}/remover", data={}, follow_redirects=True
         )
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        turno_recarregado = db.session.get(TurnoPlantao, turno_id)
-        assert _escala_do_periodo(turno_recarregado, 0).plantao_fixado is False
+        assert _equipe_membro_de(db.session.get(TurnoPlantao, turno_id), a.id) is not None
 
 
 # --- Integracao com calendario/relatorio do resto do sistema --------------------

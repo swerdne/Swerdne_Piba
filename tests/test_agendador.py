@@ -108,7 +108,7 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
     dentro de _verificar_e_notificar."""
     from app.auth.models import User
     from app.escala.models import Membro
-    from app.plantao.models import TurnoPlantao, MembroTurno
+    from app.plantao.models import TurnoPlantao, EquipeTurno, EquipeMembro
 
     usuario = User.query.filter_by(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
@@ -124,7 +124,10 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
     membro = Membro(comunidade_id=ministerio.comunidade_id, nome="Fulano", email="fulano@example.com")
     db.session.add(membro)
     db.session.flush()
-    db.session.add(MembroTurno(turno_id=turno.id, membro_id=membro.id, posicao=0))
+    equipe = EquipeTurno(turno_id=turno.id, posicao=0)
+    db.session.add(equipe)
+    db.session.flush()
+    db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
     db.session.commit()
 
     _verificar_e_notificar(app)
@@ -138,7 +141,7 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
 def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, app, db):
     from app.auth.models import User
     from app.escala.models import Membro
-    from app.plantao.models import TurnoPlantao, MembroTurno
+    from app.plantao.models import TurnoPlantao, EquipeTurno, EquipeMembro
 
     usuario = User.query.filter_by(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
@@ -154,7 +157,10 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     membro = Membro(comunidade_id=ministerio.comunidade_id, nome="Fulano", email="fulano@example.com")
     db.session.add(membro)
     db.session.flush()
-    db.session.add(MembroTurno(turno_id=turno.id, membro_id=membro.id, posicao=0))
+    equipe = EquipeTurno(turno_id=turno.id, posicao=0)
+    db.session.add(equipe)
+    db.session.flush()
+    db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
     db.session.commit()
 
     _verificar_e_notificar(app)

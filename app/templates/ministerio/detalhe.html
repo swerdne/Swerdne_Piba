@@ -118,7 +118,7 @@
                             <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ turno.nome }}</p>
                             <p class="text-xs {{ tema.text_secondary }}">
                                 {{ turno.descricao_recorrencia }}
-                                &middot; {{ turno.fila_ordenada|length }} na fila
+                                &middot; {{ turno.fila_ordenada|length }} equipe{{ 's' if turno.fila_ordenada|length != 1 }} na fila
                             </p>
                         </div>
                         <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>

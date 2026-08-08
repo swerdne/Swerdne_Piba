@@ -63,8 +63,14 @@
         <!-- Fila de rodizio -->
         <div>
             <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
-                Fila de rodizio ({{ turno.fila_ordenada|length }})
+                Fila de rodizio ({{ turno.fila_ordenada|length }} equipe{{ 's' if turno.fila_ordenada|length != 1 }})
             </h2>
+            <p class="text-xs {{ tema.text_secondary }} -mt-2 mb-3">
+                <i class="fa-solid fa-circle-info mr-1"></i>
+                Cada posicao da fila e uma equipe -- quando ela e sorteada, todas as pessoas
+                dela aparecem juntas, na mesma ocorrencia. Uma equipe com 1 so pessoa se
+                comporta como um rodizio individual comum.
+            </p>
 
             {% if not turno.fila_ordenada %}
             <div class="text-center py-10 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl mb-3">
@@ -73,22 +79,31 @@
             </div>
             {% else %}
             <div class="space-y-2 mb-3">
-                {% for item in turno.fila %}
-                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
-                    <span class="w-6 h-6 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-[11px] font-semibold {{ tema.secondary_text }} shrink-0">
-                        {{ loop.index }}
-                    </span>
-                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
-                        {{ item.membro.iniciais }}
+                {% for equipe in turno.fila_ordenada %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="w-6 h-6 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-[11px] font-semibold {{ tema.secondary_text }} shrink-0">
+                            {{ loop.index }}
+                        </span>
+                        <span class="text-xs {{ tema.text_secondary }}">Equipe {{ loop.index }}</span>
                     </div>
-                    <p class="text-sm {{ tema.text_primary }} flex-1 min-w-0 truncate">{{ item.membro.nome }}</p>
-                    <form method="POST" action="{{ url_for('plantao.remover_membro_fila', turno_id=turno.id, membro_turno_id=item.id) }}"
-                          onsubmit="return confirm('Remover {{ item.membro.nome }} da fila deste rodizio? As proximas ocorrencias ainda nao ocorridas se reajustam automaticamente.');">
-                        {{ acao_form.hidden_tag() }}
-                        <button type="submit" aria-label="Remover" class="text-red-500 hover:text-red-400 transition shrink-0">
-                            <i class="fa-solid fa-circle-xmark"></i>
-                        </button>
-                    </form>
+                    <div class="space-y-1.5">
+                        {% for item in equipe.integrantes %}
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                                {{ item.membro.iniciais }}
+                            </div>
+                            <p class="text-sm {{ tema.text_primary }} flex-1 min-w-0 truncate">{{ item.membro.nome }}</p>
+                            <form method="POST" action="{{ url_for('plantao.remover_membro_fila', turno_id=turno.id, equipe_membro_id=item.id) }}"
+                                  onsubmit="return confirm('Remover {{ item.membro.nome }} da fila deste rodizio? As proximas ocorrencias ainda nao ocorridas se reajustam automaticamente.');">
+                                {{ acao_form.hidden_tag() }}
+                                <button type="submit" aria-label="Remover" class="text-red-500 hover:text-red-400 transition shrink-0">
+                                    <i class="fa-solid fa-circle-xmark"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -102,9 +117,10 @@
             </p>
             {% elif form_adicionar.membro_id.choices %}
             <form method="POST" action="{{ url_for('plantao.adicionar_membro_fila', turno_id=turno.id) }}"
-                  class="flex items-center gap-2">
+                  class="flex flex-wrap items-center gap-2">
                 {{ form_adicionar.hidden_tag() }}
-                {{ form_adicionar.membro_id(class_="flex-1 " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {{ form_adicionar.membro_id(class_="flex-1 min-w-[8rem] " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                {{ form_adicionar.equipe_turno_id(class_="flex-1 min-w-[8rem] " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
                 <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-3 py-2 rounded-lg transition shrink-0">
                     <i class="fa-solid fa-plus"></i>
                 </button>
@@ -131,16 +147,22 @@
             {% else %}
             <div class="rounded-xl border {{ tema.card_border }} overflow-hidden divide-y {{ tema.card_border }}">
                 {% for escala in ocorrencias %}
-                {% set funcao = escala.funcoes[0] if escala.funcoes else None %}
+                {% set escalados = escala.funcoes | selectattr('membro_id') | list %}
                 {% set ja_ocorreu = escala.data < hoje %}
                 <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
                    class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} px-4 py-2.5 transition {{ 'opacity-60' if ja_ocorreu }}">
                     <span class="text-sm {{ tema.text_primary }} w-24 shrink-0">{{ escala.data.strftime('%d/%m (%a)') }}</span>
                     <div class="w-7 h-7 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-[11px] font-semibold {{ tema.secondary_text }} shrink-0">
-                        {{ funcao.membro.iniciais if funcao and funcao.membro else '?' }}
+                        {% if escalados|length == 1 %}
+                            {{ escalados[0].membro.iniciais }}
+                        {% elif escalados|length > 1 %}
+                            <i class="fa-solid fa-users text-[10px]"></i>
+                        {% else %}
+                            ?
+                        {% endif %}
                     </div>
                     <span class="text-sm {{ tema.text_primary }} flex-1 min-w-0 truncate">
-                        {{ funcao.membro.nome if funcao and funcao.membro else "ninguem na fila" }}
+                        {{ escalados | map(attribute='membro.nome') | join(', ') if escalados else "ninguem na fila" }}
                     </span>
                     {% if ja_ocorreu %}
                     <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">ja ocorreu</span>

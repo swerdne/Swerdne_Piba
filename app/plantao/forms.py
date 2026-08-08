@@ -10,7 +10,7 @@ from wtforms import (
     TimeField,
     SubmitField,
 )
-from wtforms.validators import DataRequired, Length, Optional, NumberRange, ValidationError
+from wtforms.validators import DataRequired, InputRequired, Length, Optional, NumberRange, ValidationError
 from wtforms.widgets import ListWidget, CheckboxInput
 
 from app.escala.models import DEPARTAMENTOS
@@ -91,6 +91,10 @@ class TurnoPlantaoForm(FlaskForm):
 
 class AdicionarMembroFilaForm(FlaskForm):
     membro_id = SelectField("Pessoa", coerce=int, validators=[DataRequired()])
+    # 0 = "+ Nova equipe" (sentinela; DataRequired trataria 0 como "faltando"
+    # por ser falsy, por isso InputRequired -- ver choices montadas em
+    # routes.py::_choices_equipes).
+    equipe_turno_id = SelectField("Adicionar em", coerce=int, validators=[InputRequired()])
     submit = SubmitField("Adicionar a fila")
 
 

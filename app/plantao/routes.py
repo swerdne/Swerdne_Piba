@@ -14,12 +14,8 @@ from app.extensions import db
 from app.escala.models import Escala, Membro
 from app.plantao import bp
 from app.plantao.forms import TurnoPlantaoForm, AdicionarMembroFilaForm, AcaoForm
-from app.plantao.models import TurnoPlantao, MembroTurno, opcoes_modo_mensal_completas, periodo_exato_da_data
-from app.plantao.sincronizacao import (
-    sincronizar_turno,
-    preparar_para_renumeracao,
-    marcar_ausencia as marcar_ausencia_no_periodo,
-)
+from app.plantao.models import TurnoPlantao, EquipeTurno, EquipeMembro, opcoes_modo_mensal_completas
+from app.plantao.sincronizacao import sincronizar_turno, preparar_para_renumeracao
 
 OCORRENCIAS_EXIBIDAS = 20
 
@@ -63,19 +59,38 @@ def _aplicar_campos_do_form(turno, form):
     )
 
 
+def _choices_equipes(turno):
+    """Choices do seletor "Adicionar em" (ver AdicionarMembroFilaForm): a
+    "+ Nova equipe" (sentinela 0, sempre 1a) mais uma opcao por equipe ja
+    existente na fila, identificada pelos nomes de quem ja esta nela."""
+    escolhas = [(0, "+ Nova equipe")]
+    for indice, equipe in enumerate(turno.fila_ordenada, start=1):
+        escolhas.append((equipe.id, f"Equipe {indice}: {equipe.nomes}"))
+    return escolhas
+
+
 def _semear_fila_a_partir_da_escala(turno, escala):
-    """Pre-popula a fila do turno com os membros ja escalados nas funcoes da
-    escala de origem (na ordem em que aparecem na grade, sem repetir a mesma
-    pessoa) -- poupa o passo manual de re-selecionar cada pessoa, um a um, na
-    tela de fila do turno."""
+    """Pre-popula a fila do turno com UMA equipe contendo todos os membros ja
+    escalados nas funcoes da escala de origem (na ordem em que aparecem na
+    grade, sem repetir a mesma pessoa) -- essas pessoas ja atuam juntas
+    naquela escala, entao viram uma unica equipe que revezara em bloco,
+    poupando o passo manual de montar o grupo do zero na tela de fila."""
     vistos = set()
-    posicao = 0
+    membros_ids = []
     for funcao in sorted(escala.funcoes, key=lambda f: f.ordem):
         if funcao.membro_id is None or funcao.membro_id in vistos:
             continue
         vistos.add(funcao.membro_id)
-        db.session.add(MembroTurno(turno_id=turno.id, membro_id=funcao.membro_id, posicao=posicao))
-        posicao += 1
+        membros_ids.append(funcao.membro_id)
+
+    if not membros_ids:
+        return
+
+    equipe = EquipeTurno(turno_id=turno.id, posicao=0)
+    db.session.add(equipe)
+    db.session.flush()
+    for membro_id in membros_ids:
+        db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro_id))
     db.session.commit()
 
 
@@ -129,11 +144,12 @@ def detalhe(turno_id):
     turno = _turno_do_usuario_ou_404(turno_id)
 
     diretorio = Membro.query.filter_by(comunidade_id=turno.ministerio.comunidade_id).order_by(Membro.nome).all()
-    ids_na_fila = {item.membro_id for item in turno.fila}
+    ids_na_fila = {em.membro_id for equipe in turno.fila for em in equipe.integrantes}
     diretorio_disponivel = [m for m in diretorio if m.id not in ids_na_fila]
 
     form_adicionar = AdicionarMembroFilaForm()
     form_adicionar.membro_id.choices = [(m.id, m.nome) for m in diretorio_disponivel]
+    form_adicionar.equipe_turno_id.choices = _choices_equipes(turno)
 
     hoje = date.today()
     # Mostra passado e futuro (nao so "proximas") -- essa e a tela pra onde
@@ -239,11 +255,12 @@ def adicionar_membro_fila(turno_id):
     turno = _turno_do_usuario_ou_404(turno_id)
 
     diretorio = Membro.query.filter_by(comunidade_id=turno.ministerio.comunidade_id).order_by(Membro.nome).all()
-    ids_na_fila = {item.membro_id for item in turno.fila}
+    ids_na_fila = {em.membro_id for equipe in turno.fila for em in equipe.integrantes}
     diretorio_disponivel = [m for m in diretorio if m.id not in ids_na_fila]
 
     form = AdicionarMembroFilaForm()
     form.membro_id.choices = [(m.id, m.nome) for m in diretorio_disponivel]
+    form.equipe_turno_id.choices = _choices_equipes(turno)
 
     if not form.validate_on_submit():
         erros = [erro for lista in form.errors.values() for erro in lista]
@@ -255,8 +272,19 @@ def adicionar_membro_fila(turno_id):
         flash("Pessoa invalida para esta comunidade.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
-    maior_posicao = max([item.posicao for item in turno.fila], default=-1)
-    db.session.add(MembroTurno(turno_id=turno.id, membro_id=membro.id, posicao=maior_posicao + 1))
+    equipe_id = form.equipe_turno_id.data
+    if equipe_id:
+        equipe = EquipeTurno.query.filter_by(id=equipe_id, turno_id=turno.id).first()
+        if equipe is None:
+            flash("Equipe invalida.", "danger")
+            return redirect(url_for("plantao.detalhe", turno_id=turno.id))
+    else:
+        maior_posicao = max([e.posicao for e in turno.fila], default=-1)
+        equipe = EquipeTurno(turno_id=turno.id, posicao=maior_posicao + 1)
+        db.session.add(equipe)
+        db.session.flush()
+
+    db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
     db.session.commit()
 
     sincronizar_turno(turno)
@@ -265,9 +293,9 @@ def adicionar_membro_fila(turno_id):
     return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
 
-@bp.route("/<int:turno_id>/fila/<int:membro_turno_id>/remover", methods=["POST"])
+@bp.route("/<int:turno_id>/fila/<int:equipe_membro_id>/remover", methods=["POST"])
 @login_required
-def remover_membro_fila(turno_id, membro_turno_id):
+def remover_membro_fila(turno_id, equipe_membro_id):
     turno = _turno_do_usuario_ou_404(turno_id)
     form = AcaoForm()
 
@@ -275,80 +303,27 @@ def remover_membro_fila(turno_id, membro_turno_id):
         flash("Acao invalida.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
-    item = MembroTurno.query.filter_by(id=membro_turno_id, turno_id=turno.id).first_or_404()
+    item = (
+        EquipeMembro.query.join(EquipeTurno)
+        .filter(EquipeMembro.id == equipe_membro_id, EquipeTurno.turno_id == turno.id)
+        .first_or_404()
+    )
     nome = item.membro.nome
-    db.session.delete(item)
+    equipe = item.equipe
+    equipe.integrantes.remove(item)  # cascade delete-orphan apaga o EquipeMembro
     db.session.flush()
 
-    # renumera as posicoes restantes pra ficarem contiguas (0..N-1)
-    restante = MembroTurno.query.filter_by(turno_id=turno.id).order_by(MembroTurno.posicao).all()
-    for indice, item_restante in enumerate(restante):
-        item_restante.posicao = indice
+    if not equipe.integrantes:
+        db.session.delete(equipe)
+        db.session.flush()
+        # renumera as posicoes restantes pra ficarem contiguas (0..N-1)
+        restante = EquipeTurno.query.filter_by(turno_id=turno.id).order_by(EquipeTurno.posicao).all()
+        for indice, equipe_restante in enumerate(restante):
+            equipe_restante.posicao = indice
+
     db.session.commit()
 
     sincronizar_turno(turno)
 
     flash(f"{nome} removido(a) da fila do rodizio.", "success")
     return redirect(url_for("plantao.detalhe", turno_id=turno.id))
-
-
-@bp.route("/<int:turno_id>/ausencia", methods=["POST"])
-@login_required
-def registrar_ausencia(turno_id):
-    """Registra ausencia a partir da data (usado pela tela de configuracao do
-    turno). Ver tambem registrar_ausencia_na_escala, acionada direto da tela
-    da Escala gerada."""
-    turno = _turno_do_usuario_ou_404(turno_id)
-    form = AcaoForm()
-
-    data_str = request.form.get("data", "")
-    redirecionamento = request.form.get("voltar_para") or url_for("plantao.detalhe", turno_id=turno.id)
-
-    if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
-        return redirect(redirecionamento)
-
-    try:
-        data_ausencia = datetime.strptime(data_str, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Data invalida.", "danger")
-        return redirect(redirecionamento)
-
-    try:
-        periodo = periodo_exato_da_data(turno, data_ausencia)
-        marcar_ausencia_no_periodo(turno, periodo)
-    except ValueError as erro:
-        flash(str(erro), "danger")
-        return redirect(redirecionamento)
-
-    flash(f"Falta em {data_ausencia.strftime('%d/%m/%Y')} remanejada -- fila reorganizada a partir dai.", "success")
-    return redirect(redirecionamento)
-
-
-@bp.route("/escala/<int:escala_id>/ausencia", methods=["POST"])
-@login_required
-def registrar_ausencia_na_escala(escala_id):
-    """Registra ausencia a partir da propria tela da Escala gerada por
-    rodizio (escala/detalhe.html) -- equivalente a registrar_ausencia, so que
-    resolvendo turno/periodo a partir da Escala em vez de uma data digitada."""
-    escala = Escala.query.get_or_404(escala_id)
-    if escala.ministerio.comunidade.usuario_id != current_user.id:
-        abort(404)
-    if escala.plantao_turno_id is None or escala.plantao_periodo is None:
-        abort(404)
-
-    form = AcaoForm()
-    if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=escala.id))
-
-    turno = _turno_do_usuario_ou_404(escala.plantao_turno_id)
-
-    try:
-        marcar_ausencia_no_periodo(turno, escala.plantao_periodo)
-    except ValueError as erro:
-        flash(str(erro), "danger")
-        return redirect(url_for("escala.detalhe", escala_id=escala.id))
-
-    flash("Ausencia remanejada -- fila reorganizada a partir dai.", "success")
-    return redirect(url_for("escala.detalhe", escala_id=escala.id))

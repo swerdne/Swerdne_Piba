@@ -1,12 +1,16 @@
 """Models (M do MVC): Escala de Plantao.
 
-Rodizio dinamico por deslocamento (round-robin com offset): a fila de membros
-de um turno e fixa, mas quem esta escalado num periodo N e sempre CALCULADO
-pela formula (nunca decidido "do nada"). A formula em si (membro_do_periodo)
-nao persiste nada -- quem persiste e o motor de sincronizacao (ver
+Rodizio dinamico por deslocamento (round-robin com offset): a fila de um
+turno e fixa, mas QUEM esta escalado num periodo N e sempre CALCULADO pela
+formula (nunca decidido "do nada"). Cada posicao da fila e uma EquipeTurno --
+um grupo de 1+ pessoas que atuam juntas, na mesma data, sempre que essa
+posicao e sorteada (rotacao puramente individual e so o caso particular de
+equipes com 1 integrante). A formula em si (equipe_do_periodo) nao persiste
+nada -- quem persiste e o motor de sincronizacao (ver
 app/plantao/sincronizacao.py), que materializa o resultado da formula em
-Escala/Funcao reais (as mesmas do modulo app/escala), pra aparecer no
-calendario/lista do Ministerio e usar a notificacao 24h/16h ja existente.
+Escala/Funcao reais (uma Funcao por integrante da equipe, as mesmas do
+modulo app/escala), pra aparecer no calendario/lista do Ministerio e usar a
+notificacao 24h/16h ja existente.
 
 A recorrencia (quais datas contam como "periodo N") segue a mesma logica do
 Google Agenda: intervalo livre ("a cada N dias/semanas/meses/anos"), dias da
@@ -226,8 +230,7 @@ def periodo_da_data(turno, data):
 
     Usada so como ponto de partida barato por sincronizar_turno, que tolera
     uma subestimativa (custa so algumas iteracoes extras descartadas, nunca
-    incorretude). Pra achar o periodo EXATO de uma data digitada pelo
-    usuario (ex: registrar ausencia por data), use periodo_exato_da_data.
+    incorretude).
     """
     unidade = turno.unidade_recorrencia
     intervalo = turno.intervalo_recorrencia
@@ -240,24 +243,6 @@ def periodo_da_data(turno, data):
     meses_passados = _diferenca_em_meses(turno.data_inicio, data)
     passo = intervalo if unidade == "mes" else intervalo * 12
     return max(0, (meses_passados // passo) - 1)
-
-
-def periodo_exato_da_data(turno, data):
-    """Acha o indice do periodo cuja data() bate EXATAMENTE com `data`, ou
-    levanta ValueError se essa data nao corresponde a nenhuma ocorrencia
-    deste turno. Parte da estimativa conservadora e caminha pra frente --
-    caminhada curta (limitada a ~1 ciclo), nao a historia inteira."""
-    periodo = periodo_da_data(turno, data)
-    while True:
-        try:
-            data_periodo = data_do_periodo(turno, periodo)
-        except ValueError:
-            raise ValueError("Essa data nao corresponde a uma ocorrencia deste turno.")
-        if data_periodo == data:
-            return periodo
-        if data_periodo > data:
-            raise ValueError("Essa data nao corresponde a uma ocorrencia deste turno.")
-        periodo += 1
 
 
 class TurnoPlantao(db.Model):
@@ -301,7 +286,11 @@ class TurnoPlantao(db.Model):
 
     @property
     def fila_ordenada(self):
-        return [item.membro for item in self.fila]
+        """Lista ordenada de EquipeTurno (cada posicao da fila e um GRUPO de
+        1+ pessoas que atuam juntas na mesma ocorrencia -- uma fila de
+        rotacao puramente individual, como antes, e so o caso particular
+        onde toda equipe tem 1 integrante)."""
+        return list(self.fila)
 
     @property
     def cor(self):
@@ -351,38 +340,69 @@ class TurnoPlantao(db.Model):
         return f"<TurnoPlantao {self.nome} do ministerio {self.ministerio_id}>"
 
 
-class MembroTurno(db.Model):
-    """Uma posicao na fila de rodizio de um turno -- referencia o MESMO Membro
-    do diretorio da comunidade (ver app/escala/models.py::Membro), nao um
-    cadastro separado."""
+class EquipeTurno(db.Model):
+    """Uma posicao na fila de rodizio de um turno -- um GRUPO de 1+ pessoas
+    (ver EquipeMembro abaixo) que atuam JUNTAS, na mesma ocorrencia, sempre
+    que essa posicao e sorteada pela formula do rodizio. Uma fila de rotacao
+    puramente individual (uma pessoa por ocorrencia, como o rodizio sempre
+    funcionou antes) e so o caso particular onde toda equipe tem exatamente
+    1 integrante -- nao ha um modo separado no motor pra isso."""
 
-    __tablename__ = "turno_plantao_membros"
+    __tablename__ = "turno_plantao_equipes"
 
     id = db.Column(db.Integer, primary_key=True)
     turno_id = db.Column(db.Integer, db.ForeignKey("turnos_plantao.id"), nullable=False)
-    membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=False)
     posicao = db.Column(db.Integer, nullable=False)
 
     turno = db.relationship(
         "TurnoPlantao",
-        backref=db.backref("fila", cascade="all, delete-orphan", order_by="MembroTurno.posicao"),
+        backref=db.backref("fila", cascade="all, delete-orphan", order_by="EquipeTurno.posicao"),
+    )
+
+    @property
+    def membros_ordenados(self):
+        return [item.membro for item in self.integrantes]
+
+    @property
+    def nomes(self):
+        return ", ".join(m.nome for m in self.membros_ordenados)
+
+    def __repr__(self):
+        return f"<EquipeTurno pos={self.posicao} do turno {self.turno_id}>"
+
+
+class EquipeMembro(db.Model):
+    """Uma pessoa dentro de uma EquipeTurno (ver acima) -- referencia o MESMO
+    Membro do diretorio da comunidade (ver app/escala/models.py::Membro), nao
+    um cadastro separado."""
+
+    __tablename__ = "turno_plantao_equipe_membros"
+
+    id = db.Column(db.Integer, primary_key=True)
+    equipe_turno_id = db.Column(db.Integer, db.ForeignKey("turno_plantao_equipes.id"), nullable=False)
+    membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=False)
+
+    equipe = db.relationship(
+        "EquipeTurno", backref=db.backref("integrantes", cascade="all, delete-orphan")
     )
     membro = db.relationship("Membro")
 
     def __repr__(self):
-        return f"<MembroTurno {self.membro_id} pos={self.posicao} do turno {self.turno_id}>"
+        return f"<EquipeMembro {self.membro_id} da equipe {self.equipe_turno_id}>"
 
 
-def membro_do_periodo(turno, periodo):
-    """A formula PURA do rodizio: membros[(offset + periodo) % tamanho].
+def equipe_do_periodo(turno, periodo):
+    """A formula PURA do rodizio: equipes[(offset + periodo) % tamanho].
 
-    Uso exclusivo de app/plantao/sincronizacao.py pra decidir o valor de um
-    periodo ainda NAO fixado. NAO representa "quem esta escalado agora" --
-    isso e sempre lido de Escala/Funcao materializadas (que podem ter
-    divergido da formula por causa de plantao_fixado). Nao chame esta funcao
-    pra descobrir a atribuicao atual de um periodo especifico.
+    Uso exclusivo de app/plantao/sincronizacao.py pra decidir a equipe (grupo
+    de pessoas que atuam juntas) de um periodo ainda NAO fixado. NAO
+    representa "quem esta escalado agora" -- isso e sempre lido de
+    Escala/Funcao materializadas (que podem ter divergido da formula porque
+    alguem foi removido manualmente de uma ocorrencia, ver
+    escala.routes.remover_membro). Nao chame esta funcao pra descobrir a
+    atribuicao atual de um periodo especifico.
     """
-    fila = turno.fila_ordenada
-    if not fila:
+    equipes = turno.fila_ordenada
+    if not equipes:
         return None
-    return fila[(turno.offset + periodo) % len(fila)]
+    return equipes[(turno.offset + periodo) % len(equipes)]

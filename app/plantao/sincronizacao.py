@@ -14,20 +14,23 @@ tempo -- ver sincronizar_todos_os_turnos_ativos).
 from datetime import datetime, timedelta
 
 from app.extensions import db
-from app.escala.models import Escala, Funcao, STATUS_PADRAO, trocar_atribuicao
-from app.plantao.models import TurnoPlantao, data_do_periodo, periodo_da_data, membro_do_periodo
+from app.escala.models import Escala, Funcao, STATUS_PADRAO
+from app.plantao.models import TurnoPlantao, data_do_periodo, periodo_da_data, equipe_do_periodo
 
 JANELA_GERACAO_DIAS = 90
 
 
 def _materializar_periodo(turno, periodo, data_periodo):
-    """Cria a Escala+Funcao de um periodo que ainda nao existe.
+    """Cria a Escala+Funcao(oes) de um periodo que ainda nao existe -- 1
+    Funcao por integrante da equipe sorteada (ver equipe_do_periodo), todas
+    na mesma Escala, pra equipe inteira aparecer agrupada na mesma data.
 
     Recebe `data_periodo` ja calculado pelo chamador (nunca recalcula via
     data_do_periodo aqui) -- sincronizar_turno ja percorre os periodos via
     data_do_periodo pra decidir ate onde materializar; recalcular de novo
     aqui dentro do loop viraria O(n^2) pra recorrencias sem formula fechada."""
-    membro = membro_do_periodo(turno, periodo)
+    equipe = equipe_do_periodo(turno, periodo)
+    membros = equipe.membros_ordenados if equipe else []
 
     escala = Escala(
         ministerio_id=turno.ministerio_id,
@@ -39,16 +42,16 @@ def _materializar_periodo(turno, periodo, data_periodo):
         plantao_periodo=periodo,
     )
     db.session.add(escala)
-    db.session.flush()  # garante escala.id antes de criar a funcao
+    db.session.flush()  # garante escala.id antes de criar as funcoes
 
-    funcao = Funcao(
-        escala_id=escala.id,
-        nome=turno.nome_funcao,
-        ordem=0,
-        membro_id=membro.id if membro else None,
-        status=STATUS_PADRAO if membro else None,
-    )
-    db.session.add(funcao)
+    if membros:
+        for ordem, membro in enumerate(membros):
+            db.session.add(Funcao(
+                escala_id=escala.id, nome=turno.nome_funcao, ordem=ordem,
+                membro_id=membro.id, status=STATUS_PADRAO,
+            ))
+    else:
+        db.session.add(Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0))
     db.session.flush()
     return escala
 
@@ -59,21 +62,31 @@ def _atualizar_periodo_existente(turno, escala, data_periodo):
     (idempotencia e obrigatoria aqui: essa funcao roda a cada 15 min pelo
     agendador; sem a checagem, resetaria notificado_24h_em/16h_em a cada tick
     e causaria renotificacao em loop). Recebe `data_periodo` ja calculado
-    pelo chamador, mesmo motivo de _materializar_periodo."""
+    pelo chamador, mesmo motivo de _materializar_periodo.
+
+    So chega aqui uma Escala nunca tocada manualmente (a 1a edicao manual --
+    remover/adicionar alguem, editar nome/data -- marca plantao_fixado=True
+    e o sync para de considerar essa Escala pra sempre, ver sincronizar_turno
+    abaixo) -- entao, se a composicao da equipe mudou, e seguro recriar as
+    Funcao do zero a partir dela: nao ha status/atribuicao anterior que valha
+    a pena preservar num slot que ainda era so-formula."""
     from app.escala.routes import enviar_notificacao_de_alteracao
 
     periodo = escala.plantao_periodo
-    membro = membro_do_periodo(turno, periodo)
-    funcao = escala.funcoes[0]
-    membro_id_novo = membro.id if membro else None
+    equipe = equipe_do_periodo(turno, periodo)
+    membros_novos = equipe.membros_ordenados if equipe else []
+    ids_novos = [m.id for m in membros_novos]
+
+    funcoes_atuais = list(escala.funcoes)
+    ids_atuais = [f.membro_id for f in funcoes_atuais if f.membro_id is not None]
 
     mudou_data_horario = escala.data != data_periodo or escala.horario != turno.horario
     mudou_nome = escala.nome != turno.nome
     mudou_departamento = escala.departamento != turno.departamento
-    mudou_nome_funcao = funcao.nome != turno.nome_funcao
-    mudou_membro = funcao.membro_id != membro_id_novo
+    mudou_nome_funcao = any(f.nome != turno.nome_funcao for f in funcoes_atuais)
+    mudou_equipe = ids_novos != ids_atuais
 
-    if not (mudou_data_horario or mudou_nome or mudou_departamento or mudou_nome_funcao or mudou_membro):
+    if not (mudou_data_horario or mudou_nome or mudou_departamento or mudou_nome_funcao or mudou_equipe):
         return
 
     data_antiga, horario_antigo = escala.data, escala.horario
@@ -82,14 +95,24 @@ def _atualizar_periodo_existente(turno, escala, data_periodo):
     escala.departamento = turno.departamento
     escala.data = data_periodo
     escala.horario = turno.horario
-    funcao.nome = turno.nome_funcao
 
-    if mudou_membro:
-        funcao.membro_id = membro_id_novo
-        funcao.status = STATUS_PADRAO if membro else None
-        funcao.notificado_em = None
+    if mudou_equipe:
+        for funcao in funcoes_atuais:
+            db.session.delete(funcao)
+        db.session.flush()
+        if membros_novos:
+            for ordem, membro in enumerate(membros_novos):
+                db.session.add(Funcao(
+                    escala_id=escala.id, nome=turno.nome_funcao, ordem=ordem,
+                    membro_id=membro.id, status=STATUS_PADRAO,
+                ))
+        else:
+            db.session.add(Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0))
+    elif mudou_nome_funcao:
+        for funcao in funcoes_atuais:
+            funcao.nome = turno.nome_funcao
 
-    if mudou_data_horario or mudou_membro:
+    if mudou_data_horario or mudou_equipe:
         escala.notificado_24h_em = None
         escala.notificado_16h_em = None
 
@@ -184,48 +207,4 @@ def preparar_para_renumeracao(turno):
             escala.plantao_periodo = None
         else:
             db.session.delete(escala)
-    db.session.commit()
-
-
-def _escala_do_periodo(turno, periodo):
-    escala = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=periodo).first()
-    if escala is None:
-        data_periodo = data_do_periodo(turno, periodo)  # ValueError se periodo alem do termino
-        escala = _materializar_periodo(turno, periodo, data_periodo)
-    return escala
-
-
-def marcar_ausencia(turno, periodo):
-    """Remanejamento por falta: troca a atribuicao do periodo informado com a
-    do periodo seguinte (quem cobriria o seguinte cobre este no lugar; quem
-    faltou passa a cobrir o seguinte). Le o estado ATUAL materializado (nunca
-    a formula pura -- o periodo pode ja ter sido remanejado antes por uma
-    ausencia anterior) e marca as duas Escala como fixadas, preservando a
-    regra base (fila/offset) intocada."""
-    agora = datetime.now()
-
-    escala_atual = _escala_do_periodo(turno, periodo)
-    if escala_atual.data_hora and escala_atual.data_hora <= agora:
-        raise ValueError("Esse periodo ja ocorreu, nao e possivel remanejar.")
-
-    try:
-        escala_seguinte = _escala_do_periodo(turno, periodo + 1)
-    except ValueError:
-        raise ValueError(
-            "Nao ha proximo periodo para remanejar -- a recorrencia deste turno termina aqui."
-        )
-
-    funcao_atual = escala_atual.funcoes[0]
-    funcao_seguinte = escala_seguinte.funcoes[0]
-
-    if funcao_atual.membro_id is None or funcao_seguinte.membro_id is None:
-        raise ValueError("Turno sem membros suficientes na fila para remanejar.")
-
-    trocar_atribuicao(funcao_atual, funcao_seguinte)
-
-    for escala in (escala_atual, escala_seguinte):
-        escala.plantao_fixado = True
-        escala.notificado_24h_em = None
-        escala.notificado_16h_em = None
-
     db.session.commit()
