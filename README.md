@@ -23,3 +23,6 @@ flask --app run run
 ```bash
 pytest
 ```
+git add .
+git commit -m "sua mensagem"
+git push

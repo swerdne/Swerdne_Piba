@@ -738,3 +738,271 @@ def test_usuario_nao_consegue_editar_escala_de_outra_conta(logged_in_client, out
         atual = db.session.get(Escala, escala_id)
         assert atual.data == data_original
         assert atual.nome == nome_original
+
+
+# --- Convidado: vincular uma conta ja existente a uma funcao -------------------
+
+def test_buscar_usuario_encontra_por_username_e_email(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+
+        resposta_username = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=bruno")
+        assert resposta_username.status_code == 200
+        assert resposta_username.get_json() == []  # bruno ainda nao existe
+
+        from app.auth.models import User
+        usuario = User(email="bruno@example.com", username="bruno")
+        usuario.set_password("senha123")
+        db.session.add(usuario)
+        db.session.commit()
+
+        por_username = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=bruno").get_json()
+        assert len(por_username) == 1
+        assert por_username[0]["id"] == usuario.id
+        assert "bruno@example.com" in por_username[0]["label"]
+
+        por_email = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=bruno@example.com").get_json()
+        assert len(por_email) == 1
+        assert por_email[0]["id"] == usuario.id
+
+
+def test_buscar_usuario_encontra_por_nome(logged_in_client, app, db):
+    with app.app_context():
+        from app.auth.models import User
+
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+
+        usuario = User(email="carlos@example.com", username="carlosz", name="Carlos Eduardo")
+        usuario.set_password("senha123")
+        db.session.add(usuario)
+        db.session.commit()
+
+        resultado = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=Carlos").get_json()
+        assert len(resultado) == 1
+        assert resultado[0]["id"] == usuario.id
+
+
+def test_buscar_usuario_exige_termo_minimo(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+
+        resposta = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=a")
+        assert resposta.get_json() == []
+
+
+def test_buscar_usuario_nao_vaza_campos_sensiveis(logged_in_client, app, db):
+    with app.app_context():
+        from app.auth.models import User
+
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+
+        usuario = User(email="carlos@example.com", username="carlosz", name="Carlos Eduardo")
+        usuario.set_password("senha123")
+        db.session.add(usuario)
+        db.session.commit()
+
+        resultado = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=Carlos").get_json()
+        assert list(resultado[0].keys()) == ["id", "label"]
+        assert "senha123" not in str(resultado)
+
+
+def test_buscar_usuario_exige_dono_da_funcao(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo_id = _funcao_por_nome(escala, "Baixo").id
+
+    with sessao_isolada(app):
+        resposta = outro_logged_in_client.get(f"/escala/funcao/{baixo_id}/buscar-usuario?q=bruno")
+        assert resposta.status_code == 404
+
+
+def test_opcao_de_convidado_aparece_mesmo_com_diretorio_vazio(logged_in_client, app, db):
+    """Regressao: a busca de convidado nao pode ficar escondida atras do
+    ramo 'diretorio vazio' -- convidado nao depende do diretorio da comunidade
+    ter algum Membro cadastrado."""
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        assert Membro.query.filter_by(comunidade_id=escala.ministerio.comunidade_id).count() == 0
+
+        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+        assert "Diretorio da comunidade vazio" in html
+        assert "Convidar conta ja cadastrada" in html
+        assert "data-toggle-busca-convidado" in html
+
+
+def test_adicionar_convidado_cria_membro_novo_e_marca_flag(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo_id = _funcao_por_nome(escala, "Baixo").id
+
+    with sessao_isolada(app):
+        from app.auth.models import User
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+
+        assert Membro.query.filter_by(email="bruno@example.com").first() is None
+
+        resposta = logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/adicionar-convidado",
+            data={"usuario_id": bruno.id},
+            follow_redirects=True,
+        )
+        assert resposta.status_code == 200
+
+        funcao_atualizada = db.session.get(Funcao, baixo_id)
+        assert funcao_atualizada.eh_convidado is True
+        membro = funcao_atualizada.membro
+        assert membro is not None
+        assert membro.email == "bruno@example.com"
+
+
+def test_adicionar_convidado_reaproveita_membro_existente(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        escala1 = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo1_id = _funcao_por_nome(escala1, "Baixo").id
+        ministerio_id = escala1.ministerio_id
+
+    with sessao_isolada(app):
+        from app.auth.models import User
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        logged_in_client.post(
+            f"/escala/funcao/{baixo1_id}/adicionar-convidado",
+            data={"usuario_id": bruno.id},
+            follow_redirects=True,
+        )
+        membro_id_primeira_vez = db.session.get(Funcao, baixo1_id).membro_id
+
+    with sessao_isolada(app):
+        escala2 = _criar_escala(logged_in_client, ministerio_id, "Culto de Quarta")
+        bateria2 = _funcao_por_nome(escala2, "Bateria")
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+
+        logged_in_client.post(
+            f"/escala/funcao/{bateria2.id}/adicionar-convidado",
+            data={"usuario_id": bruno.id},
+            follow_redirects=True,
+        )
+
+        funcao2_atualizada = db.session.get(Funcao, bateria2.id)
+        assert funcao2_atualizada.membro_id == membro_id_primeira_vez
+        assert Membro.query.filter_by(email="bruno@example.com").count() == 1
+
+
+def test_adicionar_convidado_dispara_notificacao_no_app(logged_in_client, outro_logged_in_client, app, db):
+    from app.notificacoes import Notificacao
+    from app.auth.models import User
+
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        logged_in_client.post(
+            f"/escala/funcao/{baixo.id}/adicionar-convidado",
+            data={"usuario_id": bruno.id},
+            follow_redirects=True,
+        )
+        logged_in_client.post(f"/escala/{escala.id}/notificar", data={}, follow_redirects=True)
+
+    with sessao_isolada(app):
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id).first()
+        assert notificacao is not None
+
+
+def test_adicionar_convidado_marca_plantao_fixado_em_escala_de_rodizio(logged_in_client, outro_logged_in_client, app, db):
+    from datetime import date
+    from app.auth.models import User
+    from app.plantao.models import TurnoPlantao
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+
+        turno = TurnoPlantao(
+            ministerio_id=ministerio.id, nome="Turno Teste", data_inicio=date(2026, 1, 1),
+            unidade_recorrencia="dia", intervalo_recorrencia=1,
+            termino_tipo="nunca", departamento="Louvor", nome_funcao="Responsavel",
+        )
+        db.session.add(turno)
+        db.session.flush()
+
+        escala = Escala(
+            ministerio_id=ministerio.id, nome="Ocorrencia", departamento="Louvor",
+            data=date(2026, 1, 1), plantao_turno_id=turno.id, plantao_periodo=0,
+        )
+        db.session.add(escala)
+        db.session.flush()
+        funcao = Funcao(escala_id=escala.id, nome="Responsavel", ordem=0)
+        db.session.add(funcao)
+        db.session.commit()
+        funcao_id = funcao.id
+
+        assert db.session.get(Escala, escala.id).plantao_fixado is False
+
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        logged_in_client.post(
+            f"/escala/funcao/{funcao_id}/adicionar-convidado",
+            data={"usuario_id": bruno.id},
+            follow_redirects=True,
+        )
+
+        assert db.session.get(Escala, escala.id).plantao_fixado is True
+
+
+def test_adicionar_convidado_exige_dono_da_funcao(logged_in_client, outro_logged_in_client, app, db):
+    from app.auth.models import User
+
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo_id = _funcao_por_nome(escala, "Baixo").id
+
+    with sessao_isolada(app):
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        resposta = outro_logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/adicionar-convidado",
+            data={"usuario_id": bruno.id},
+            follow_redirects=True,
+        )
+        assert resposta.status_code == 404
+
+
+def test_convidado_consegue_ver_mas_nao_escrever_na_escala(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        escala_id = escala.id
+
+        from app.auth.models import User
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        logged_in_client.post(
+            f"/escala/funcao/{baixo.id}/adicionar-convidado",
+            data={"usuario_id": bruno.id},
+            follow_redirects=True,
+        )
+
+    with sessao_isolada(app):
+        resposta_leitura = outro_logged_in_client.get(f"/escala/{escala_id}")
+        assert resposta_leitura.status_code == 200
+        html = resposta_leitura.data.decode("utf-8")
+        assert "Convidado" in html
+        assert "Visualizacao" in html
+
+        resposta_escrita = outro_logged_in_client.post(
+            f"/escala/{escala_id}/excluir", data={}, follow_redirects=True
+        )
+        assert resposta_escrita.status_code == 404
+
+
+def test_usuario_sem_vinculo_nao_ve_escala_de_convidado_de_outro(logged_in_client, outro_logged_in_client, app, db):
+    """Terceira conta, sem nenhum vinculo (nem dona, nem convidada), continua 404."""
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        escala_id = escala.id
+
+    with sessao_isolada(app):
+        # bruno nunca foi convidado nesta escala -- so registrado na plataforma.
+        resposta = outro_logged_in_client.get(f"/escala/{escala_id}")
+        assert resposta.status_code == 404

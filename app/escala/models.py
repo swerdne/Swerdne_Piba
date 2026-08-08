@@ -205,6 +205,15 @@ class Funcao(db.Model):
     status = db.Column(db.String(20), nullable=True)
     notificado_em = db.Column(db.DateTime, nullable=True)
 
+    # Marca uma atribuicao pontual: o Membro por tras dela foi encontrado/criado
+    # a partir de uma conta (User) ja existente na plataforma, buscada na hora
+    # (ver escala.routes.adicionar_convidado), em vez de escolhido do diretorio
+    # fixo da comunidade. Nao afeta notificacao/rodizio (ambos operam em cima
+    # de Membro normalmente) -- so controla o selo visual "Convidado" e concede
+    # ao dono dessa conta visibilidade de LEITURA desta Escala especifica (ver
+    # escala.routes._escala_visivel_ou_404).
+    eh_convidado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
     membro = db.relationship("Membro")
 
     @property
@@ -245,6 +254,7 @@ def trocar_atribuicao(funcao_a, funcao_b):
     funcao_a.membro_id, funcao_b.membro_id = funcao_b.membro_id, funcao_a.membro_id
     funcao_a.status, funcao_b.status = funcao_b.status, funcao_a.status
     funcao_a.notificado_em, funcao_b.notificado_em = funcao_b.notificado_em, funcao_a.notificado_em
+    funcao_a.eh_convidado, funcao_b.eh_convidado = funcao_b.eh_convidado, funcao_a.eh_convidado
 
 
 def mensagem_para(escala, funcao, membro):

@@ -1,6 +1,7 @@
 """Controller (C do MVC): rotas do modulo escala."""
-from flask import render_template, redirect, url_for, flash, abort
+from flask import render_template, redirect, url_for, flash, abort, request, jsonify
 from flask_login import login_required, current_user
+from sqlalchemy import or_
 
 from app.extensions import db
 from app.escala import bp
@@ -51,6 +52,23 @@ def _funcao_do_usuario_ou_404(funcao_id):
     if funcao.escala.ministerio.comunidade.usuario_id != current_user.id:
         abort(404)
     return funcao
+
+
+def _escala_visivel_ou_404(escala_id):
+    """Acesso de LEITURA: dono OU convidado escalado nesta Escala especifica
+    (Funcao.eh_convidado=True cujo Membro tem o mesmo e-mail da conta logada)
+    -- mesmo mecanismo de match por e-mail ja usado em
+    comunidade.routes._comunidade_visivel_ou_404, so que escopado a 1 unica
+    Escala em vez da comunidade inteira. Retorna (escala, eh_dono)."""
+    escala = Escala.query.get_or_404(escala_id)
+    eh_dono = escala.ministerio.comunidade.usuario_id == current_user.id
+    eh_convidado_vinculado = any(
+        f.eh_convidado and f.membro and f.membro.email == current_user.email
+        for f in escala.funcoes
+    )
+    if not eh_dono and not eh_convidado_vinculado:
+        abort(404)
+    return escala, eh_dono
 
 
 def _fixar_se_gerada_por_rodizio(escala):
@@ -148,39 +166,44 @@ def editar(escala_id):
 @bp.route("/<int:escala_id>")
 @login_required
 def detalhe(escala_id):
-    escala = _escala_do_usuario_ou_404(escala_id)
+    escala, eh_dono = _escala_visivel_ou_404(escala_id)
 
     formularios_membro = {}
     formularios_mover = {}
     formularios_status = {}
     formularios_editar_funcao = {}
+    diretorio_vazio = False
 
-    diretorio = Membro.query.filter_by(comunidade_id=escala.ministerio.comunidade_id).order_by(Membro.nome).all()
+    if eh_dono:
+        # Convidado so le a grade (ver template) -- monta os forms de escrita
+        # so pra quem pode escrever, poupa consultas desnecessarias pro convidado.
+        diretorio = Membro.query.filter_by(comunidade_id=escala.ministerio.comunidade_id).order_by(Membro.nome).all()
+        diretorio_vazio = not diretorio
+        destinos_possiveis = [f for f in escala.funcoes if not f.eh_subcabecalho]
 
-    destinos_possiveis = [f for f in escala.funcoes if not f.eh_subcabecalho]
+        for funcao in escala.funcoes:
+            formularios_editar_funcao[funcao.id] = FuncaoForm(nome=funcao.nome)
 
-    for funcao in escala.funcoes:
-        formularios_editar_funcao[funcao.id] = FuncaoForm(nome=funcao.nome)
+            if funcao.eh_subcabecalho:
+                continue
 
-        if funcao.eh_subcabecalho:
-            continue
-
-        if funcao.membro_id is None:
-            form_membro = SelecionarMembroForm()
-            form_membro.membro_id.choices = [(m.id, m.nome) for m in diretorio]
-            formularios_membro[funcao.id] = form_membro
-        else:
-            mover_form = MoverForm()
-            mover_form.destino_funcao_id.choices = [
-                (f.id, f.nome) for f in destinos_possiveis if f.id != funcao.id
-            ]
-            formularios_mover[funcao.id] = mover_form
-            formularios_status[funcao.id] = StatusForm(status=funcao.status or STATUS_PADRAO)
+            if funcao.membro_id is None:
+                form_membro = SelecionarMembroForm()
+                form_membro.membro_id.choices = [(m.id, m.nome) for m in diretorio]
+                formularios_membro[funcao.id] = form_membro
+            else:
+                mover_form = MoverForm()
+                mover_form.destino_funcao_id.choices = [
+                    (f.id, f.nome) for f in destinos_possiveis if f.id != funcao.id
+                ]
+                formularios_mover[funcao.id] = mover_form
+                formularios_status[funcao.id] = StatusForm(status=funcao.status or STATUS_PADRAO)
 
     return render_template(
         "escala/detalhe.html",
         escala=escala,
-        diretorio_vazio=not diretorio,
+        eh_dono=eh_dono,
+        diretorio_vazio=diretorio_vazio,
         formularios_membro=formularios_membro,
         formularios_mover=formularios_mover,
         formularios_status=formularios_status,
@@ -314,10 +337,82 @@ def adicionar_membro(funcao_id):
     funcao.membro_id = membro.id
     funcao.status = STATUS_PADRAO
     funcao.notificado_em = None
+    funcao.eh_convidado = False
     _fixar_se_gerada_por_rodizio(funcao.escala)
     db.session.commit()
 
     flash(f"{membro.nome} adicionado(a) em {funcao.nome}.", "success")
+    return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
+
+
+@bp.route("/funcao/<int:funcao_id>/buscar-usuario")
+@login_required
+def buscar_usuario(funcao_id):
+    """Busca contas (User) ja cadastradas na plataforma por nome/username/
+    e-mail, pra vincular como convidado (ver adicionar_convidado). JSON, sem
+    campos sensiveis -- so o que aparece no autocomplete de busca."""
+    _funcao_do_usuario_ou_404(funcao_id)
+    termo = request.args.get("q", "").strip()
+
+    if len(termo) < 2:
+        return jsonify([])
+
+    padrao = f"%{termo}%"
+    usuarios = (
+        User.query.filter(
+            or_(User.name.ilike(padrao), User.username.ilike(padrao), User.email.ilike(padrao))
+        )
+        .order_by(User.name)
+        .limit(8)
+        .all()
+    )
+
+    return jsonify([
+        {"id": u.id, "label": f"{u.name or u.username or u.email} ({u.email})"}
+        for u in usuarios
+    ])
+
+
+@bp.route("/funcao/<int:funcao_id>/adicionar-convidado", methods=["POST"])
+@login_required
+def adicionar_convidado(funcao_id):
+    """Vincula uma conta (User) ja existente na plataforma a funcao, como
+    convidado -- participacao pontual. Nao cria uma conta nova nem duplica
+    cadastro: encontra ou cria o Membro correspondente (por e-mail) no
+    diretorio da comunidade, reaproveitando o mesmo caminho de atribuicao
+    (Funcao.membro_id) que ja existe, so marcado com eh_convidado=True."""
+    funcao = _funcao_do_usuario_ou_404(funcao_id)
+    comunidade_id = funcao.escala.ministerio.comunidade_id
+
+    form = AcaoForm()
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
+
+    usuario_id = request.form.get("usuario_id", type=int)
+    usuario = User.query.get(usuario_id) if usuario_id else None
+    if usuario is None:
+        flash("Selecione um usuario valido na busca.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
+
+    membro = Membro.query.filter_by(comunidade_id=comunidade_id, email=usuario.email).first()
+    if membro is None:
+        membro = Membro(
+            comunidade_id=comunidade_id,
+            nome=usuario.name or usuario.username or usuario.email,
+            email=usuario.email,
+        )
+        db.session.add(membro)
+        db.session.flush()
+
+    funcao.membro_id = membro.id
+    funcao.status = STATUS_PADRAO
+    funcao.notificado_em = None
+    funcao.eh_convidado = True
+    _fixar_se_gerada_por_rodizio(funcao.escala)
+    db.session.commit()
+
+    flash(f"{membro.nome} adicionado(a) como convidado(a) em {funcao.nome}.", "success")
     return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
 
@@ -336,6 +431,7 @@ def remover_membro(funcao_id):
     funcao.membro_id = None
     funcao.status = None
     funcao.notificado_em = None
+    funcao.eh_convidado = False
     _fixar_se_gerada_por_rodizio(funcao.escala)
     db.session.commit()
 
