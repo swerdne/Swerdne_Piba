@@ -1,6 +1,6 @@
 """Controller (C do MVC): rotas do modulo auth."""
-from flask import render_template, redirect, url_for, flash, request, current_app
-from flask_login import login_user, logout_user, login_required
+from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
+from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
 from app.extensions import db, oauth
 from app.auth import bp
@@ -47,6 +47,18 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for("main.index"))
+
+
+@bp.route("/sessao-atual")
+def sessao_atual():
+    """Endpoint leve pra JS detectar troca/perda de sessao NESTA aba (ver
+    static/js/main.js) -- o cookie de sessao e compartilhado por todo o
+    navegador, entao logar com outra conta numa aba troca a sessao de todas
+    as abas silenciosamente. Sem @login_required de proposito: precisa
+    responder tambem quando a sessao virou anonima (logout/expirou em outra
+    aba), nao so quando trocou de usuario."""
+    usuario_id = current_user.id if current_user.is_authenticated else None
+    return jsonify({"usuario_id": usuario_id})
 
 
 @bp.route("/google")

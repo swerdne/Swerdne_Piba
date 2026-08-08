@@ -53,6 +53,50 @@ def test_editar_comunidade_atualiza_nome(logged_in_client, app, db):
         assert atualizada.descricao == "Descricao nova"
 
 
+def test_excluir_comunidade_remove_e_redireciona_para_lista(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade a Apagar")
+        comunidade_id = comunidade.id
+
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade_id}/excluir", data={}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert db.session.get(Comunidade, comunidade_id) is None
+        assert "excluida" in response.data.decode("utf-8")
+
+
+def test_excluir_comunidade_apaga_ministerios_e_diretorio_em_cascata(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        membro = _criar_membro(logged_in_client, comunidade.id, "Fulano")
+
+        ministerio_id = ministerio.id
+        membro_id = membro.id
+
+        logged_in_client.post(f"/comunidade/{comunidade.id}/excluir", data={}, follow_redirects=True)
+
+        from app.ministerio.models import Ministerio
+        assert db.session.get(Ministerio, ministerio_id) is None
+        assert db.session.get(Membro, membro_id) is None
+
+
+def test_usuario_nao_consegue_excluir_comunidade_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.post(
+            f"/comunidade/{comunidade_id}/excluir", data={}, follow_redirects=True
+        )
+        assert response.status_code == 404
+
+    with sessao_isolada(app):
+        assert db.session.get(Comunidade, comunidade_id) is not None
+
+
 # --- Isolamento entre contas -------------------------------------------------
 
 def test_usuario_nao_consegue_ver_comunidade_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):

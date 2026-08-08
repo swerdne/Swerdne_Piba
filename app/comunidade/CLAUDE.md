@@ -39,7 +39,8 @@ def _comunidade_visivel_ou_404(comunidade_id):
 
 ## Regras específicas
 
-- Exclusão de `Membro` é bloqueada se ele estiver escalado em algum lugar: `Funcao.query.filter_by(membro_id=...).count() > 0` impede a exclusão (evita quebrar referências históricas em escalas já criadas).
+- `POST /comunidade/<id>/excluir` (`excluir_comunidade`, botão no header de `comunidade/detalhe.html`) apaga a comunidade inteira — mesmo padrão de `ministerio.excluir_ministerio`: cascade do ORM (`cascade="all, delete-orphan"` em `Comunidade.ministerios` e `Comunidade.membros`) apaga junto todos os `Ministerio` (e, por tabela, todas as `Escala`/`Funcao`/`TurnoPlantao` deles) e todo o diretório de `Membro` — nada é preservado como histórico, diferente de `plantao.excluir_turno`. Exige dono (`_comunidade_do_usuario_ou_404`) e confirmação client-side (`confirm(...)`), como toda ação destrutiva do projeto.
+- Exclusão de `Membro` é bloqueada se ele estiver escalado em algum lugar: `Funcao.query.filter_by(membro_id=...).count() > 0` impede a exclusão (evita quebrar referências históricas em escalas já criadas). Essa checagem não se aplica à exclusão da comunidade inteira acima, que apaga tudo incondicionalmente.
 - `GET /comunidade/<id>/escalados` junta `Funcao → Escala → Ministerio`, com filtros `data_de`, `data_ate`, `departamento`, `funcao` — é o único relatório cross-ministério do sistema; ao adicionar um novo tipo de escalação (ex. se `plantao` ganhar um relatório equivalente), considere se deve entrar aqui também em vez de criar um relatório paralelo.
 - Upload de logo (`_salvar_logo`/`_remover_logo_antiga`) usa nome de arquivo UUID em `COMUNIDADE_UPLOAD_FOLDER` — mesmo padrão usado por avatar de usuário (`app/main`) e logo de ministério.
 

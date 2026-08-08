@@ -117,6 +117,7 @@ def detalhe(comunidade_id):
         comunidade=comunidade,
         ministerios=ministerios,
         total_membros=total_membros,
+        acao_form=AcaoForm(),
     )
 
 
@@ -140,6 +141,30 @@ def editar(comunidade_id):
         return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
 
     return render_template("comunidade/editar.html", form=form, comunidade=comunidade)
+
+
+@bp.route("/<int:comunidade_id>/excluir", methods=["POST"])
+@login_required
+def excluir_comunidade(comunidade_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
+
+    # Cascade (cascade="all, delete-orphan" em Comunidade.ministerios e
+    # Comunidade.membros) apaga junto todos os Ministerios (e as Escalas e
+    # Turnos de Rodizio deles, mesmo mecanismo de ministerio.excluir_ministerio)
+    # e todo o diretorio de Membros da comunidade.
+    _remover_logo_antiga(comunidade.imagem)
+
+    nome = comunidade.nome
+    db.session.delete(comunidade)
+    db.session.commit()
+
+    flash(f'Comunidade "{nome}" excluida.', "success")
+    return redirect(url_for("comunidade.index"))
 
 
 @bp.route("/<int:comunidade_id>/membros", methods=["GET", "POST"])

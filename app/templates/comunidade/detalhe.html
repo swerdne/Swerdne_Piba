@@ -24,10 +24,20 @@
                 {% endif %}
                 <span class="font-semibold {{ tema.text_primary }} truncate">{{ comunidade.nome }}</span>
             </div>
-            <a href="{{ url_for('comunidade.editar', comunidade_id=comunidade.id) }}"
-               class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0" aria-label="Editar comunidade">
-                <i class="fa-solid fa-pen"></i>
-            </a>
+            <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ url_for('comunidade.editar', comunidade_id=comunidade.id) }}"
+                   class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition" aria-label="Editar comunidade">
+                    <i class="fa-solid fa-pen"></i>
+                </a>
+                <form method="POST" action="{{ url_for('comunidade.excluir_comunidade', comunidade_id=comunidade.id) }}"
+                      onsubmit="return confirm('Tem certeza que deseja apagar a comunidade \'{{ comunidade.nome }}\'? Todos os ministerios, escalas, turnos de rodizio e o diretorio de membros dela tambem serao apagados. Essa acao nao pode ser desfeita.');">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" title="Excluir comunidade" aria-label="Excluir comunidade"
+                            class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            </div>
         </div>
     </header>
 

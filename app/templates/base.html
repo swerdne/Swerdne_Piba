@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block head %}{% endblock %}
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col"
+      {% if current_user.is_authenticated %}data-user-id="{{ current_user.id }}"{% endif %}>
     {% if request.endpoint != 'main.dashboard'
         and not (request.endpoint or '').startswith('escala.')
         and not (request.endpoint or '').startswith('comunidade.')
