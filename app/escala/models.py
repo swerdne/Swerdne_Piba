@@ -24,12 +24,29 @@ STATUS_CORES = {
     "troca_solicitada": "bg-red-500",
 }
 
-# Cor de identificacao de cada departamento (usada em listagens/calendario).
+# Cor de identificacao de cada departamento (usada em listagens/calendario) --
+# cor PADRAO de uma Escala quando ela nao tem cor_selecionada propria.
 DEPARTAMENTO_CORES = {
     "Louvor": "bg-orange-500",
     "Midia": "bg-blue-500",
     "Kids": "bg-emerald-500",
     "Coreografia": "bg-pink-500",
+}
+
+# Paleta de cores que o usuario pode escolher manualmente pra UMA Escala
+# especifica (Escala.cor_selecionada guarda a CHAVE, nunca a classe Tailwind
+# direto, pra widget/forms nao precisarem montar string -- ver Escala.cor).
+# Classes sempre como string literal completa (nunca concatenada) pro scanner
+# estatico do Tailwind conseguir achar.
+CORES_DISPONIVEIS = {
+    "laranja": "bg-orange-500",
+    "azul": "bg-blue-500",
+    "verde": "bg-emerald-500",
+    "rosa": "bg-pink-500",
+    "roxo": "bg-purple-500",
+    "amarelo": "bg-yellow-500",
+    "vermelho": "bg-red-500",
+    "ciano": "bg-cyan-500",
 }
 
 # Departamento -> funcoes padrao sugeridas ao criar uma escala nova (template).
@@ -147,6 +164,21 @@ class Escala(db.Model):
     plantao_periodo = db.Column(db.Integer, nullable=True)
     plantao_fixado = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
 
+    # Preenchido quando esta Escala foi a ORIGEM usada para "Criar turno de
+    # rodizio com esta equipe" (ver plantao.routes.nova) -- direcao OPOSTA de
+    # plantao_turno_id (que marca "esta Escala FOI GERADA por aquele turno").
+    # Uma Escala manual pode ser origem de no maximo 1 TurnoPlantao (por isso
+    # uselist=False no backref). So existe pra turnos criados a partir de uma
+    # escala existente -- turnos criados sem escala_id (caminho nao alcancavel
+    # por nenhum link da UI, ver app/plantao/CLAUDE.md) nunca preenchem isso.
+    turno_plantao_origem_id = db.Column(db.Integer, db.ForeignKey("turnos_plantao.id"), nullable=True)
+
+    # Cor escolhida manualmente pra esta Escala (chave de CORES_DISPONIVEIS,
+    # abaixo) -- sobrepoe a cor padrao do departamento (DEPARTAMENTO_CORES)
+    # tanto na lista de Escalas quanto no calendario do Ministerio. None =
+    # usa a cor do departamento (comportamento de sempre).
+    cor_selecionada = db.Column(db.String(20), nullable=True)
+
     funcoes = db.relationship(
         "Funcao", backref="escala", order_by="Funcao.ordem", cascade="all, delete-orphan"
     )
@@ -156,7 +188,11 @@ class Escala(db.Model):
     # Sem cascade aqui de proposito: excluir o TurnoPlantao nao pode apagar
     # escalas ja ocorridas/fixadas (historico) -- ver plantao.routes.excluir_turno.
     plantao_turno = db.relationship(
-        "TurnoPlantao", backref=db.backref("escalas_geradas")
+        "TurnoPlantao", foreign_keys=[plantao_turno_id], backref=db.backref("escalas_geradas")
+    )
+    turno_plantao_origem = db.relationship(
+        "TurnoPlantao", foreign_keys=[turno_plantao_origem_id],
+        backref=db.backref("escala_origem", uselist=False),
     )
 
     __table_args__ = (
@@ -165,6 +201,8 @@ class Escala(db.Model):
 
     @property
     def cor(self):
+        if self.cor_selecionada and self.cor_selecionada in CORES_DISPONIVEIS:
+            return CORES_DISPONIVEIS[self.cor_selecionada]
         return DEPARTAMENTO_CORES.get(self.departamento, "bg-gray-500")
 
     @property
@@ -224,10 +262,11 @@ class Funcao(db.Model):
         return f"<Funcao {self.nome} da escala {self.escala_id}>"
 
 
-def criar_escala_com_funcoes_padrao(ministerio_id, nome, departamento, data=None, horario=None):
+def criar_escala_com_funcoes_padrao(ministerio_id, nome, departamento, data=None, horario=None, cor_selecionada=None):
     """Cria uma escala nova ja com as funcoes padrao do departamento escolhido."""
     escala = Escala(
-        ministerio_id=ministerio_id, nome=nome, departamento=departamento, data=data, horario=horario
+        ministerio_id=ministerio_id, nome=nome, departamento=departamento, data=data, horario=horario,
+        cor_selecionada=cor_selecionada,
     )
     db.session.add(escala)
     db.session.flush()  # garante escala.id antes de criar as funcoes

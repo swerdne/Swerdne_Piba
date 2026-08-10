@@ -29,6 +29,7 @@ from app.plantao.sincronizacao import (
     preparar_para_renumeracao,
     JANELA_GERACAO_DIAS,
 )
+from app.plantao.routes import OCORRENCIAS_EXIBIDAS
 from tests.conftest import sessao_isolada
 from tests.test_escala import (
     _criar_comunidade,
@@ -947,6 +948,110 @@ def test_criar_turno_a_partir_de_escala_semeia_fila_com_os_escalados(logged_in_c
         assert sorted(f.membro.nome for f in primeira.funcoes if f.membro_id) == ["Ana", "Bruno"]
 
 
+# --- Vinculo permanente entre a Escala de origem e o TurnoPlantao criado -------
+
+def test_criar_turno_a_partir_de_escala_vincula_permanentemente(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala, ana, bruno = _criar_escala_com_dois_escalados(logged_in_client, ministerio.id)
+
+        logged_in_client.post(
+            f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
+            data=_payload_turno(
+                nome="Rodizio Vinculado", departamento="Louvor",
+                data_inicio=(date.today() + timedelta(days=30)).isoformat(),
+            ),
+            follow_redirects=True,
+        )
+
+        turno = TurnoPlantao.query.filter_by(nome="Rodizio Vinculado").first()
+        db.session.expire_all()
+        escala_recarregada = db.session.get(Escala, escala.id)
+        assert escala_recarregada.turno_plantao_origem_id == turno.id
+        assert turno.escala_origem.id == escala.id
+
+
+def test_escala_de_origem_nao_gera_capa_separada_na_lista_do_ministerio(logged_in_client, app, db):
+    """O bug relatado: escala de origem e capa do turno apareciam como duas
+    entradas parecidas (mesmo nome/departamento) na listagem do Ministerio."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala, ana, bruno = _criar_escala_com_dois_escalados(logged_in_client, ministerio.id, "Escala Vermelha")
+
+        logged_in_client.post(
+            f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
+            data=_payload_turno(
+                nome="Escala Vermelha", departamento="Louvor",
+                data_inicio=(date.today() + timedelta(days=1)).isoformat(),
+            ),
+            follow_redirects=True,
+        )
+        turno = TurnoPlantao.query.filter_by(nome="Escala Vermelha", ministerio_id=ministerio.id).first()
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
+
+        response = logged_in_client.get(f"/ministerio/{ministerio.id}")
+        html = response.data.decode("utf-8")
+        # o link pro turno so existe 1x (na secao "Turnos de Rodizio"), nao
+        # mais 2x (capa + secao) como no caso sem vinculo
+        assert html.count(f'href="/plantao/{turno.id}"') == 1
+
+
+def test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala, ana, bruno = _criar_escala_com_dois_escalados(logged_in_client, ministerio.id)
+
+        logged_in_client.post(
+            f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
+            data=_payload_turno(
+                nome="Rodizio X", departamento="Louvor",
+                data_inicio=(date.today() + timedelta(days=30)).isoformat(),
+            ),
+            follow_redirects=True,
+        )
+        turno = TurnoPlantao.query.filter_by(nome="Rodizio X").first()
+
+        html_escala = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+        assert "Rodizio vinculado" in html_escala
+        assert f'/plantao/{turno.id}"' in html_escala
+        # o botao de criar um SEGUNDO turno a partir da mesma escala some
+        assert "Criar turno de rodizio com esta equipe" not in html_escala
+
+        html_turno = logged_in_client.get(f"/plantao/{turno.id}").data.decode("utf-8")
+        assert "Ver escala de origem" in html_turno
+        assert f'/escala/{escala.id}"' in html_turno
+
+
+def test_excluir_escala_de_origem_faz_turno_voltar_a_gerar_capa(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala, ana, bruno = _criar_escala_com_dois_escalados(logged_in_client, ministerio.id)
+
+        logged_in_client.post(
+            f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
+            data=_payload_turno(
+                nome="Rodizio Orfao", departamento="Louvor",
+                data_inicio=(date.today() + timedelta(days=1)).isoformat(),
+            ),
+            follow_redirects=True,
+        )
+        turno = TurnoPlantao.query.filter_by(nome="Rodizio Orfao").first()
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
+
+        logged_in_client.post(f"/escala/{escala.id}/excluir", data={}, follow_redirects=True)
+
+        db.session.expire_all()
+        turno_recarregado = db.session.get(TurnoPlantao, turno.id)
+        assert turno_recarregado.escala_origem is None  # sem cascade, turno sobrevive
+
+        response = logged_in_client.get(f"/ministerio/{ministerio.id}")
+        assert f'href="/plantao/{turno.id}"' in response.data.decode("utf-8")  # capa voltou a aparecer
+
+
 def test_criar_turno_a_partir_de_escala_ignora_funcao_repetida_e_vazia(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
@@ -1143,6 +1248,67 @@ def test_detalhe_do_turno_mostra_ocorrencias_passadas_e_futuras(logged_in_client
         assert "ja ocorreu" in html  # marcador na ocorrencia passada
 
 
+def test_janela_de_geracao_e_de_180_dias():
+    assert JANELA_GERACAO_DIAS == 180
+
+
+def test_detalhe_do_turno_mostra_divisor_entre_passado_e_futuro(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(ministerio.id, nome="Turno Divisor", data_inicio=date.today())
+        _adicionar_a_fila(turno, [_criar_membro_teste(comunidade.id, "Ana")])
+
+        data_passada = date.today() - timedelta(days=5)
+        escala_passada = Escala(
+            ministerio_id=ministerio.id, nome=turno.nome, departamento=turno.departamento,
+            data=data_passada, horario=turno.horario,
+            plantao_turno_id=turno.id, plantao_periodo=-1,
+        )
+        db.session.add(escala_passada)
+        db.session.flush()
+        db.session.add(Funcao(escala_id=escala_passada.id, nome=turno.nome_funcao, ordem=0))
+        db.session.commit()
+
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
+
+        html = logged_in_client.get(f"/plantao/{turno.id}").data.decode("utf-8")
+        assert "Hoje em diante" in html
+        # o divisor aparece DEPOIS da data passada e ANTES da data futura --
+        # usa o padrao exato renderizado pela linha da ocorrencia (com dia da
+        # semana) em vez de so "%d/%m", pra nao colidir por acidente com outro
+        # numero qualquer solto na pagina (ex: dentro de uma classe CSS).
+        pos_passada = html.index(data_passada.strftime("%d/%m (%a)"))
+        pos_divisor = html.index("Hoje em diante")
+        pos_futura = html.index(date.today().strftime("%d/%m (%a)"))
+        assert pos_passada < pos_divisor < pos_futura
+
+
+def test_detalhe_do_turno_nao_corta_ocorrencias_futuras_alem_de_20(logged_in_client, app, db):
+    """Regressao: um unico order_by(desc()).limit(20) pegaria so as 20 datas
+    MAIS DISTANTES no futuro (a janela de geracao agora tem 180 dias) e
+    esconderia o 'hoje' inteiro pra um turno diario. As ocorrencias futuras
+    nao podem ser cortadas."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(
+            ministerio.id, nome="Turno Diario", data_inicio=date.today(), unidade_recorrencia="dia"
+        )
+        _adicionar_a_fila(turno, [_criar_membro_teste(comunidade.id, "Ana")])
+
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=40))
+        total_futuras = Escala.query.filter(
+            Escala.plantao_turno_id == turno.id, Escala.data >= date.today()
+        ).count()
+        assert total_futuras > OCORRENCIAS_EXIBIDAS  # mais de 20 -- o cenario do bug
+
+        html = logged_in_client.get(f"/plantao/{turno.id}").data.decode("utf-8")
+        assert date.today().strftime("%d/%m (%a)") in html  # hoje aparece
+        ultima_data = date.today() + timedelta(days=40)
+        assert ultima_data.strftime("%d/%m (%a)") in html  # a ocorrencia mais distante tambem
+
+
 def test_usuario_nao_consegue_ver_turno_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
@@ -1210,3 +1376,5 @@ def test_ocorrencia_gerada_aparece_no_relatorio_escalados(logged_in_client, app,
         response = logged_in_client.get(f"/comunidade/{comunidade.id}/escalados")
         assert response.status_code == 200
         assert b"Ana" in response.data
+
+

@@ -17,7 +17,7 @@ from app.extensions import db
 from app.escala.models import Escala, Funcao, STATUS_PADRAO
 from app.plantao.models import TurnoPlantao, data_do_periodo, periodo_da_data, equipe_do_periodo
 
-JANELA_GERACAO_DIAS = 90
+JANELA_GERACAO_DIAS = 180  # ~6 meses -- ver app/plantao/CLAUDE.md
 
 
 def _materializar_periodo(turno, periodo, data_periodo):

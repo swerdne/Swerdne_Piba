@@ -101,6 +101,7 @@ def nova(ministerio_id):
             departamento=form.departamento.data,
             data=form.data.data,
             horario=form.horario.data,
+            cor_selecionada=form.cor.data or None,
         )
         flash(f'Escala "{escala.nome}" criada!', "success")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
@@ -115,6 +116,10 @@ def editar(escala_id):
     # obj= (nao kwargs soltos) porque nosso campo se chama "data", que colide
     # com o parametro reservado `data=` do proprio construtor do WTForms.
     form = EditarEscalaForm(obj=escala)
+    if request.method == "GET":
+        # obj= so casa por nome de atributo -- o campo se chama "cor" mas o
+        # model guarda em cor_selecionada, entao precisa popular na mao.
+        form.cor.data = escala.cor_selecionada or ""
 
     if form.validate_on_submit():
         nome_antigo = escala.nome
@@ -126,6 +131,7 @@ def editar(escala_id):
         escala.nome = form.nome.data.strip()
         escala.data = form.data.data
         escala.horario = form.horario.data
+        escala.cor_selecionada = form.cor.data or None
 
         if mudou_data_horario:
             # A data/horario mudou -- as notificacoes automaticas de 24h/16h

@@ -40,6 +40,12 @@
                         <i class="fa-solid fa-arrows-rotate"></i>
                         Gerada por rodizio{% if escala.plantao_fixado %} &middot; fixada{% endif %}
                     </a>
+                    {% elif escala.turno_plantao_origem_id %}
+                    <a href="{{ url_for('plantao.detalhe', turno_id=escala.turno_plantao_origem_id) }}"
+                       class="inline-flex items-center gap-1 text-[11px] {{ tema.accent_text }} hover:underline mt-0.5">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        Rodizio vinculado &middot; ver ocorrencias
+                    </a>
                     {% endif %}
                 </div>
             </div>
@@ -89,7 +95,7 @@
                     <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe
                 </button>
             </form>
-            {% if not escala.plantao_turno_id and (escala.funcoes | selectattr('membro_id') | list) %}
+            {% if not escala.plantao_turno_id and not escala.turno_plantao_origem_id and (escala.funcoes | selectattr('membro_id') | list) %}
             <a href="{{ url_for('plantao.nova', ministerio_id=escala.ministerio_id, escala_id=escala.id) }}"
                class="flex-1 flex items-center justify-center {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-xl transition">
                 <i class="fa-solid fa-arrows-rotate mr-2"></i>Criar turno de rodizio com esta equipe

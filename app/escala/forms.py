@@ -3,7 +3,11 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, SubmitField, DateField, TimeField
 from wtforms.validators import DataRequired, Length, Optional
 
-from app.escala.models import DEPARTAMENTOS
+from app.escala.models import DEPARTAMENTOS, CORES_DISPONIVEIS
+
+# "" (vazio) = usa a cor padrao do departamento (Escala.cor_selecionada fica
+# None) -- sempre a 1a opcao, pra nao forcar o usuario a escolher uma cor.
+_CHOICES_COR = [("", "Cor do departamento (padrao)")] + [(chave, chave.capitalize()) for chave in CORES_DISPONIVEIS]
 
 
 class EscalaForm(FlaskForm):
@@ -15,6 +19,7 @@ class EscalaForm(FlaskForm):
     )
     data = DateField("Data do ensaio/evento", validators=[Optional()])
     horario = TimeField("Horario do ensaio/evento", validators=[Optional()])
+    cor = SelectField("Cor na lista e no calendario", choices=_CHOICES_COR, validators=[Optional()])
     submit = SubmitField("Criar escala")
 
 
@@ -22,6 +27,7 @@ class EditarEscalaForm(FlaskForm):
     nome = StringField("Nome da escala", validators=[DataRequired(), Length(max=80)])
     data = DateField("Data do ensaio/evento", validators=[Optional()])
     horario = TimeField("Horario do ensaio/evento", validators=[Optional()])
+    cor = SelectField("Cor na lista e no calendario", choices=_CHOICES_COR, validators=[Optional()])
     submit = SubmitField("Salvar")
 
 

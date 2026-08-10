@@ -69,6 +69,15 @@
                 a equipe 24h e 16h antes do evento.
             </p>
 
+            <div>
+                {{ form.cor.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                {{ form.cor(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Aparece na lista de escalas e no calendario do ministerio.</p>
+                {% for erro in form.cor.errors %}
+                    <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                {% endfor %}
+            </div>
+
             {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-lg transition") }}
         </form>
     </main>

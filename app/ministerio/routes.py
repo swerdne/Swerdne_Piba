@@ -140,13 +140,22 @@ def _escalas_agrupadas_por_turno(ministerio, hoje):
     -- a listagem mostra so 1 capa por turno (a proxima ocorrencia, ou a mais
     recente ja ocorrida se nao houver nenhuma futura) em vez de um card por
     ocorrencia, que poluiria a lista pra turnos recorrentes de longa duracao.
-    A tela completa de ocorrencias daquele turno fica em plantao.detalhe.
+
+    EXCECAO: turnos com uma Escala de origem vinculada (Escala.turno_plantao_origem_id
+    -- "Criar turno de rodizio com esta equipe", ver app/plantao/CLAUDE.md) nao
+    geram capa nenhuma aqui -- a propria escala de origem (que ja aparece na
+    lista como escala manual) e o unico ponto de entrada, com um link pra
+    plantao.detalhe (ver escala/detalhe.html). Sem isso, a escala de origem E
+    a capa do turno apareceriam como duas entradas parecidas na mesma lista.
     """
     escalas_manuais = [e for e in ministerio.escalas if e.plantao_turno_id is None]
 
     ocorrencias_por_turno = {}
     for escala in ministerio.escalas:
         if escala.plantao_turno_id is not None:
+            turno = escala.plantao_turno
+            if turno is not None and turno.escala_origem is not None:
+                continue
             ocorrencias_por_turno.setdefault(escala.plantao_turno_id, []).append(escala)
 
     capas = []

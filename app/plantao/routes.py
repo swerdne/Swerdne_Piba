@@ -17,6 +17,8 @@ from app.plantao.forms import TurnoPlantaoForm, AdicionarMembroFilaForm, AcaoFor
 from app.plantao.models import TurnoPlantao, EquipeTurno, EquipeMembro, opcoes_modo_mensal_completas
 from app.plantao.sincronizacao import sincronizar_turno, preparar_para_renumeracao
 
+# Quantas ocorrencias JA OCORRIDAS (passado) plantao.detalhe mostra -- as
+# futuras nunca sao cortadas aqui, ver detalhe() abaixo.
 OCORRENCIAS_EXIBIDAS = 20
 
 # Campos do turno que, ao mudar, invalidam a numeracao de periodo ja usada
@@ -130,6 +132,12 @@ def nova(ministerio_id):
 
         if escala_origem:
             _semear_fila_a_partir_da_escala(turno, escala_origem)
+            # Vincula permanentemente: a escala de origem passa a ser o unico
+            # lugar de onde o rodizio e alcancado na tela do Ministerio (ver
+            # ministerio.routes._escalas_agrupadas_por_turno) -- o turno para
+            # de gerar uma capa propria na listagem.
+            escala_origem.turno_plantao_origem_id = turno.id
+            db.session.commit()
 
         sincronizar_turno(turno)
         flash(f'Turno de rodizio "{turno.nome}" criado! Agora monte a fila de rodizio.', "success")
@@ -153,19 +161,29 @@ def detalhe(turno_id):
 
     hoje = date.today()
     # Mostra passado e futuro (nao so "proximas") -- essa e a tela pra onde
-    # a capa do turno na lista de Escalas do Ministerio leva, entao precisa
-    # dar pra ver o historico completo daquele turno, nao so o que vem
-    # depois de hoje. Mais recente/proximo primeiro; limitado pra nao pesar
-    # em turnos recorrentes de longa duracao.
-    ocorrencias = (
-        Escala.query.filter(
-            Escala.plantao_turno_id == turno.id,
-            Escala.data.isnot(None),
-        )
+    # a capa/link do turno leva, entao precisa dar pra ver o historico
+    # completo daquele turno, nao so o que vem depois de hoje. Consultas
+    # SEPARADAS (nao um unico order_by(desc()).limit(N)) de proposito: com a
+    # janela de geracao de 180 dias (ver JANELA_GERACAO_DIAS), um turno diario
+    # pode ter bem mais de OCORRENCIAS_PASSADAS_EXIBIDAS ocorrencias futuras --
+    # um limit() unico por data desc pegaria so as mais distantes no futuro e
+    # esconderia tanto o "hoje" quanto todo o historico recente. Passado
+    # limitado (historico recente), futuro sempre completo (ja e naturalmente
+    # limitado pela janela de geracao). Ordem cronologica (passado -> hoje ->
+    # futuro); o template desenha um divisor exatamente na fronteira de hoje.
+    passadas = (
+        Escala.query.filter(Escala.plantao_turno_id == turno.id, Escala.data < hoje)
         .order_by(Escala.data.desc())
         .limit(OCORRENCIAS_EXIBIDAS)
         .all()
     )
+    passadas.reverse()
+    futuras = (
+        Escala.query.filter(Escala.plantao_turno_id == turno.id, Escala.data >= hoje)
+        .order_by(Escala.data.asc())
+        .all()
+    )
+    ocorrencias = passadas + futuras
 
     return render_template(
         "plantao/detalhe.html",

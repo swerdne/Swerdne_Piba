@@ -30,6 +30,13 @@
                         &middot; inicio em {{ turno.data_inicio.strftime('%d/%m/%Y') }}
                         {% if turno.horario %} &middot; {{ turno.horario.strftime('%H:%M') }}{% endif %}
                     </p>
+                    {% if turno.escala_origem %}
+                    <a href="{{ url_for('escala.detalhe', escala_id=turno.escala_origem.id) }}"
+                       class="inline-flex items-center gap-1 text-[11px] {{ tema.accent_text }} hover:underline mt-0.5">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        Ver escala de origem: {{ turno.escala_origem.nome }}
+                    </a>
+                    {% endif %}
                 </div>
             </div>
             <div class="flex items-center gap-3 shrink-0">
@@ -146,9 +153,20 @@
             <p class="text-sm {{ tema.text_secondary }}">Nenhuma ocorrencia gerada ainda.</p>
             {% else %}
             <div class="rounded-xl border {{ tema.card_border }} overflow-hidden divide-y {{ tema.card_border }}">
+                {% set ns = namespace(divisor_mostrado=false) %}
                 {% for escala in ocorrencias %}
                 {% set escalados = escala.funcoes | selectattr('membro_id') | list %}
                 {% set ja_ocorreu = escala.data < hoje %}
+                {% if not ja_ocorreu and not ns.divisor_mostrado %}
+                <div class="flex items-center gap-3 px-4 py-2 {{ tema.card_bg }}">
+                    <span class="flex-1 border-t {{ tema.card_border }}"></span>
+                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">
+                        <i class="fa-solid fa-calendar-day mr-1"></i>Hoje em diante
+                    </span>
+                    <span class="flex-1 border-t {{ tema.card_border }}"></span>
+                </div>
+                {% set ns.divisor_mostrado = true %}
+                {% endif %}
                 <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
                    class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} px-4 py-2.5 transition {{ 'opacity-60' if ja_ocorreu }}">
                     <span class="text-sm {{ tema.text_primary }} w-24 shrink-0">{{ escala.data.strftime('%d/%m (%a)') }}</span>

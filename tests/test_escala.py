@@ -113,6 +113,63 @@ def test_criar_escala_kids_semeia_funcoes_diferentes(logged_in_client, app, db):
         assert "Recepcao Kids" in html
 
 
+# --- Cor por escala (sobrepoe a cor padrao do departamento) --------------------
+
+def test_escala_sem_cor_escolhida_usa_cor_do_departamento(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")
+        assert escala.cor_selecionada is None
+        assert escala.cor == "bg-orange-500"  # DEPARTAMENTO_CORES["Louvor"]
+
+
+def test_criar_escala_com_cor_escolhida_sobrepoe_departamento(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        logged_in_client.post(
+            f"/escala/ministerio/{ministerio.id}/nova",
+            data={"nome": "Culto Azul", "departamento": "Louvor", "data": "", "horario": "", "cor": "azul"},
+            follow_redirects=True,
+        )
+        escala = Escala.query.filter_by(nome="Culto Azul").first()
+        assert escala.cor_selecionada == "azul"
+        assert escala.cor == "bg-blue-500"  # nao o laranja do departamento Louvor
+
+
+def test_editar_escala_muda_a_cor(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")
+        assert escala.cor == "bg-orange-500"
+
+        response = logged_in_client.post(
+            f"/escala/{escala.id}/editar",
+            data={"nome": escala.nome, "data": "", "horario": "", "cor": "roxo"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        db.session.expire_all()
+        escala_atualizada = db.session.get(Escala, escala.id)
+        assert escala_atualizada.cor_selecionada == "roxo"
+        assert escala_atualizada.cor == "bg-purple-500"
+
+
+def test_cor_da_escala_aparece_na_lista_do_ministerio(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        logged_in_client.post(
+            f"/escala/ministerio/{ministerio.id}/nova",
+            data={"nome": "Culto Verde", "departamento": "Louvor", "data": "", "horario": "", "cor": "verde"},
+            follow_redirects=True,
+        )
+        escala = Escala.query.filter_by(nome="Culto Verde").first()
+
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
+        assert f'w-2.5 h-2.5 rounded-full {escala.cor} shrink-0' in html
+        assert escala.cor == "bg-emerald-500"
+
+
 def test_criar_escala_sem_nome_mostra_erro(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
