@@ -237,7 +237,15 @@ def detalhe(ministerio_id):
 
     hoje = date.today()
     escalas, qtd_ocorrencias_por_turno = _escalas_agrupadas_por_turno(ministerio, hoje)
-    turnos_plantao = sorted(ministerio.turnos_plantao, key=lambda t: t.nome)
+    # Mesma excecao de _escalas_agrupadas_por_turno acima: um turno com escala
+    # de origem vinculada (Escala.turno_plantao_origem_id) ja aparece na lista
+    # de Escalas, atraves da propria escala de origem -- sem isso aqui, ele
+    # apareceria DE NOVO, agora como card independente nesta secao, dando
+    # impressao de que o rodizio existe solto fora da escala.
+    turnos_plantao = sorted(
+        (t for t in ministerio.turnos_plantao if t.escala_origem is None),
+        key=lambda t: t.nome,
+    )
 
     dados_calendario = _dados_calendario(ministerio, hoje)
     data_extenso = f"{DIAS_SEMANA_PT[hoje.weekday()]}, {hoje.day} de {MESES_PT[hoje.month].lower()}"

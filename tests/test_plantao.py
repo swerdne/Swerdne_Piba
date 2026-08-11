@@ -993,9 +993,36 @@ def test_escala_de_origem_nao_gera_capa_separada_na_lista_do_ministerio(logged_i
 
         response = logged_in_client.get(f"/ministerio/{ministerio.id}")
         html = response.data.decode("utf-8")
-        # o link pro turno so existe 1x (na secao "Turnos de Rodizio"), nao
-        # mais 2x (capa + secao) como no caso sem vinculo
-        assert html.count(f'href="/plantao/{turno.id}"') == 1
+        # um turno com escala de origem nao aparece em NENHUMA lista geral da
+        # pagina do Ministerio -- nem como capa duplicada em "Escalas", nem
+        # como card proprio em "Turnos de Rodizio". O unico ponto de entrada
+        # pra ele e o badge "Rodizio vinculado" dentro da propria escala (ver
+        # test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem).
+        assert html.count(f'href="/plantao/{turno.id}"') == 0
+
+
+def test_turno_sem_escala_de_origem_continua_aparecendo_na_secao_do_ministerio(logged_in_client, app, db):
+    """O filtro que esconde turnos vinculados (teste acima) e especifico pra
+    quem tem escala_origem -- um turno criado direto (sem vir de uma escala)
+    nao tem outro ponto de entrada, entao precisa continuar aparecendo."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+
+        logged_in_client.post(
+            f"/plantao/ministerio/{ministerio.id}/nova",
+            data=_payload_turno(nome="Turno Solto", departamento="Louvor"),
+            follow_redirects=True,
+        )
+        turno = TurnoPlantao.query.filter_by(nome="Turno Solto", ministerio_id=ministerio.id).first()
+        assert turno.escala_origem is None
+
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
+        # sem escala de origem, o turno nao tem outro ponto de entrada -- ao
+        # contrario do teste acima, aqui o link PRECISA continuar existindo
+        # (a contagem exata nao importa: a materializacao automatica tambem
+        # gera uma capa na lista de Escalas, que tem seu proprio link).
+        assert html.count(f'href="/plantao/{turno.id}"') >= 1
 
 
 def test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem(logged_in_client, app, db):
