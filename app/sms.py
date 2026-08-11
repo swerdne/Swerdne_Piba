@@ -1,7 +1,14 @@
 """Envio de SMS via Twilio."""
 from flask import current_app
 from twilio.base.exceptions import TwilioException
+from twilio.http.http_client import TwilioHttpClient
 from twilio.rest import Client
+
+# Mesmo raciocinio do timeout em app/emailing.py: sem isso, o cliente HTTP do
+# Twilio nao tem timeout nenhum por padrao e pode travar a chamada
+# indefinidamente se a rede estiver com problema, derrubando o worker do
+# servidor (ver historico do timeout de e-mail).
+_TIMEOUT_SEGUNDOS = 12
 
 
 class SmsNaoEnviadoError(Exception):
@@ -48,7 +55,11 @@ def enviar_sms(destinatario, corpo):
         raise SmsNaoEnviadoError(f"Telefone invalido: {destinatario!r}")
 
     try:
-        client = Client(account_sid, auth_token)
+        client = Client(account_sid, auth_token, http_client=TwilioHttpClient(timeout=_TIMEOUT_SEGUNDOS))
         client.messages.create(to=numero_destino, from_=numero_remetente, body=corpo)
-    except TwilioException as erro:
+    except (TwilioException, OSError) as erro:
+        # OSError cobre timeout/erro de conexao do requests (usado por baixo do
+        # cliente HTTP do Twilio) -- ele nao envolve isso em TwilioException,
+        # deixa subir cru; sem isso aqui, um timeout de rede vira excecao nao
+        # tratada em vez de SmsNaoEnviadoError.
         raise SmsNaoEnviadoError(f"Falha ao enviar SMS para {numero_destino}: {erro}") from erro

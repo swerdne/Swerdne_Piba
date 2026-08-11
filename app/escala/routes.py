@@ -1,5 +1,7 @@
 """Controller (C do MVC): rotas do modulo escala."""
-from flask import render_template, redirect, url_for, flash, abort, request, jsonify
+import concurrent.futures
+
+from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import or_
 
@@ -528,6 +530,66 @@ def atualizar_status(funcao_id):
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
 
+# Teto pro tempo TOTAL de uma leva de notificacoes, nao por pessoa. Cada
+# enviar_email/enviar_sms ja tem seu proprio timeout individual (~12s), mas
+# antes disso as tentativas rodavam uma de cada vez -- uma escala com N
+# pessoas e um servidor de e-mail fora do ar levava N vezes o timeout de uma
+# unica tentativa, o que ja estourou o timeout do worker do servidor de
+# producao (gunicorn) e derrubou o processo (SIGKILL) mesmo depois do
+# timeout individual existir. Ver _disparar_notificacoes_em_paralelo abaixo.
+_TIMEOUT_TOTAL_NOTIFICACAO_SEGUNDOS = 20
+
+
+def _disparar_notificacoes_em_paralelo(tarefas):
+    """Dispara e-mail/SMS de cada tarefa ao mesmo tempo (nao uma por vez).
+
+    So faz chamada de rede -- nunca toca no ORM/sessao do banco, que nao e
+    thread-safe entre threads diferentes. `tarefas` e uma lista de dicts com
+    dados ja extraidos (nao objetos do SQLAlchemy), pra cada worker ficar
+    isolado de qualquer estado da sessao da request original.
+    """
+    resultados = {t["funcao_id"]: {"email_ok": False, "sms_ok": False} for t in tarefas}
+    if not tarefas:
+        return resultados
+
+    app_obj = current_app._get_current_object()
+
+    def _enviar_para_uma_tarefa(tarefa):
+        resultado = {"email_ok": False, "sms_ok": False}
+        with app_obj.app_context():
+            if tarefa["email"]:
+                try:
+                    enviar_email(destinatario=tarefa["email"], assunto=tarefa["assunto"], corpo=tarefa["mensagem"])
+                    resultado["email_ok"] = True
+                except EmailNaoEnviadoError:
+                    pass
+            if tarefa["telefone"]:
+                try:
+                    enviar_sms(destinatario=tarefa["telefone"], corpo=tarefa["mensagem"])
+                    resultado["sms_ok"] = True
+                except SmsNaoEnviadoError:
+                    pass
+        return tarefa["funcao_id"], resultado
+
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tarefas), 8))
+    futuro_para_tarefa = {pool.submit(_enviar_para_uma_tarefa, t): t for t in tarefas}
+
+    # wait() com timeout unico pro lote inteiro -- nao um .result(timeout=X)
+    # por future em sequencia, que voltaria a somar o tempo por pessoa.
+    concluidos, _pendentes = concurrent.futures.wait(
+        futuro_para_tarefa.keys(), timeout=_TIMEOUT_TOTAL_NOTIFICACAO_SEGUNDOS
+    )
+    for futuro in concluidos:
+        funcao_id, resultado = futuro.result()
+        resultados[funcao_id] = resultado
+
+    # wait=False: tarefas que ainda nao terminaram ficam presas em segundo
+    # plano (pool com tamanho fixo, entao o teto de memoria e limitado) em vez
+    # de travar a resposta da request esperando elas acabarem.
+    pool.shutdown(wait=False)
+    return resultados
+
+
 def enviar_notificacoes_da_escala(escala):
     """Notifica todo mundo escalado numa escala (por e-mail/SMS/app).
 
@@ -536,6 +598,18 @@ def enviar_notificacoes_da_escala(escala):
     """
     escalados = [f for f in escala.funcoes if f.membro_id is not None]
 
+    tarefas = [
+        {
+            "funcao_id": funcao.id,
+            "email": funcao.membro.email,
+            "telefone": funcao.membro.telefone,
+            "mensagem": mensagem_para(escala, funcao, funcao.membro),
+            "assunto": f"Voce foi escalado(a): {funcao.nome} - {escala.nome}",
+        }
+        for funcao in escalados
+    ]
+    resultados_por_funcao = _disparar_notificacoes_em_paralelo(tarefas)
+
     notificacoes_app = 0
     email_enviados = email_falhas = 0
     sms_enviados = sms_falhas = 0
@@ -543,7 +617,7 @@ def enviar_notificacoes_da_escala(escala):
 
     for funcao in escalados:
         membro = funcao.membro
-        mensagem = mensagem_para(escala, funcao, membro)
+        resultado = resultados_por_funcao[funcao.id]
         notificou_algum_canal = False
 
         if membro.email:
@@ -559,23 +633,17 @@ def enviar_notificacoes_da_escala(escala):
                 notificacoes_app += 1
                 notificou_algum_canal = True
 
-            try:
-                enviar_email(
-                    destinatario=membro.email,
-                    assunto=f"Voce foi escalado(a): {funcao.nome} - {escala.nome}",
-                    corpo=mensagem,
-                )
+            if resultado["email_ok"]:
                 email_enviados += 1
                 notificou_algum_canal = True
-            except EmailNaoEnviadoError:
+            else:
                 email_falhas += 1
 
         if membro.telefone:
-            try:
-                enviar_sms(destinatario=membro.telefone, corpo=mensagem)
+            if resultado["sms_ok"]:
                 sms_enviados += 1
                 notificou_algum_canal = True
-            except SmsNaoEnviadoError:
+            else:
                 sms_falhas += 1
 
         if not membro.email and not membro.telefone:

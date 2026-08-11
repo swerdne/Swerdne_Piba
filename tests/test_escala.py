@@ -298,6 +298,50 @@ def test_notificar_sem_smtp_configurado_nao_derruba_o_servidor(logged_in_client,
         assert "Internal Server Error" not in response.data.decode("utf-8")
 
 
+def test_notificar_varios_escalados_dispara_em_paralelo_nao_em_serie(logged_in_client, app, db, monkeypatch):
+    """Antes dessa mudanca, cada pessoa escalada esperava o timeout inteiro de
+    envio antes de tentar a proxima -- numa escala com N pessoas e o servidor
+    de e-mail fora do ar, o tempo total (N vezes o timeout de uma tentativa)
+    ja estourou o timeout do worker do servidor em producao e derrubou o
+    processo. Aqui simulamos varias tentativas lentas ao mesmo tempo e
+    conferimos que o tempo total fica proximo do de UMA tentativa, nao da
+    soma de todas."""
+    import time
+    import app.escala.routes as escala_routes
+    from app.emailing import EmailNaoEnviadoError
+
+    def _enviar_email_lento(destinatario, assunto, corpo):
+        time.sleep(1.5)
+        raise EmailNaoEnviadoError("simulado: servidor de e-mail fora do ar")
+
+    monkeypatch.setattr(escala_routes, "enviar_email", _enviar_email_lento)
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+
+        for nome_funcao, nome_membro, email in [
+            ("Baixo", "Pessoa Um", "pessoa1@example.com"),
+            ("Bateria", "Pessoa Dois", "pessoa2@example.com"),
+            ("Guitarra", "Pessoa Tres", "pessoa3@example.com"),
+            ("Teclado", "Pessoa Quatro", "pessoa4@example.com"),
+        ]:
+            funcao = _funcao_por_nome(escala, nome_funcao)
+            membro = _criar_membro(logged_in_client, comunidade.id, nome_membro, email=email)
+            _escalar(logged_in_client, funcao.id, membro.id)
+
+        inicio = time.time()
+        response = logged_in_client.post(f"/escala/{escala.id}/notificar", data={}, follow_redirects=True)
+        decorrido = time.time() - inicio
+
+        assert response.status_code == 200
+        # 4 pessoas x 1.5s em serie seria ~6s; em paralelo fica perto de 1.5s.
+        # Margem generosa (4s) pra nao dar flaky por lentidao do ambiente de
+        # teste, mas ainda bem abaixo da soma serial.
+        assert decorrido < 4, f"levou {decorrido:.1f}s -- parece que voltou a ser sequencial"
+
+
 def test_notificar_sem_twilio_configurado_nao_derruba_o_servidor(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)

@@ -12,7 +12,17 @@ from flask import current_app
 # nao tem timeout na stdlib) - um host mal configurado pode travar a chamada
 # indefinidamente e derrubar o worker do servidor (gunicorn manda SIGKILL num
 # worker travado), virando um 500 pro usuario em vez de um EmailNaoEnviadoError.
-_TIMEOUT_SEGUNDOS = 15
+_TIMEOUT_SEGUNDOS = 12
+
+# Compartilhado entre todas as chamadas (nao um executor novo por e-mail): uma
+# tentativa que trava de verdade (rede bloqueada, DNS que nunca responde)
+# deixa a thread presa pra sempre em segundo plano, mesmo depois que
+# desistimos de esperar por ela (nao da pra "matar" uma thread do Python no
+# meio de uma chamada de rede). Um pool novo a cada chamada deixaria esse
+# numero de threads presas crescer sem limite a cada e-mail/clique; um pool
+# compartilhado com tamanho fixo garante um teto de memoria mesmo se o
+# MAIL_SERVER estiver permanentemente inalcancavel.
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 
 
 class EmailNaoEnviadoError(Exception):
@@ -52,8 +62,7 @@ def enviar_email(destinatario, assunto, corpo):
     mensagem["To"] = destinatario
     mensagem.set_content(corpo)
 
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    futuro = executor.submit(
+    futuro = _executor.submit(
         _enviar_via_smtp, servidor, porta, usar_tls, usuario, senha, mensagem
     )
     try:
@@ -65,8 +74,3 @@ def enviar_email(destinatario, assunto, corpo):
         ) from erro
     except (smtplib.SMTPException, OSError) as erro:
         raise EmailNaoEnviadoError(f"Falha ao enviar e-mail para {destinatario}: {erro}") from erro
-    finally:
-        # wait=False: se a thread ainda estiver presa em getaddrinfo/connect, nao
-        # bloqueamos a resposta da request esperando ela terminar - ela morre
-        # sozinha (ou fica presa em segundo plano) sem afetar o worker principal.
-        executor.shutdown(wait=False)
