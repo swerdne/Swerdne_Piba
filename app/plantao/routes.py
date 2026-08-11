@@ -31,9 +31,12 @@ CAMPOS_QUE_AFETAM_NUMERACAO = (
 
 
 def _turno_do_usuario_ou_404(turno_id):
-    """Busca o turno garantindo que pertence ao dono da comunidade do ministerio dele."""
+    """Busca o turno garantindo que quem pede e admin da comunidade ou lider
+    do ministerio dele (ver ministerio.routes._eh_lider_do_ministerio)."""
+    from app.ministerio.routes import _eh_lider_do_ministerio
+
     turno = TurnoPlantao.query.get_or_404(turno_id)
-    if turno.ministerio.comunidade.usuario_id != current_user.id:
+    if not _eh_lider_do_ministerio(turno.ministerio, current_user):
         abort(404)
     return turno
 
@@ -99,10 +102,10 @@ def _semear_fila_a_partir_da_escala(turno, escala):
 @bp.route("/ministerio/<int:ministerio_id>/nova", methods=["GET", "POST"])
 @login_required
 def nova(ministerio_id):
-    from app.ministerio.routes import _ministerio_do_usuario_ou_404
+    from app.ministerio.routes import _ministerio_gerenciavel_ou_404
     from app.escala.routes import _escala_do_usuario_ou_404
 
-    ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
 
     # Turno "nascido" a partir de uma Escala (ver escala/detalhe.html): a
     # fila do rodizio reaproveita quem ja esta escalado nela, em vez do

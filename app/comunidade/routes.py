@@ -9,34 +9,60 @@ from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.comunidade import bp
 from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, AcaoForm
-from app.comunidade.models import Comunidade, criar_comunidade
+from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, criar_comunidade
 from app.ministerio.models import Ministerio
 from app.escala.models import Escala, Funcao, Membro, DEPARTAMENTOS, STATUS_LABELS, STATUS_CORES
+from app.convites.forms import ConvidarForm
+from app.convites.models import Convite, criar_ou_reenviar_convite
+from app.convites.routes import _enviar_email_de_convite
+
+
+def _eh_admin_da_comunidade(comunidade, usuario):
+    """Admin: Super Admin da plataforma (acesso total, bypassa qualquer
+    checagem) OU dono original (Comunidade.usuario_id -- metadado historico,
+    ver models.py) OU papel=admin em UsuarioComunidade (concedido por convite
+    aceito, ver app/convites/CLAUDE.md)."""
+    if usuario.eh_super_admin:
+        return True
+    if comunidade.usuario_id == usuario.id:
+        return True
+    return UsuarioComunidade.query.filter_by(
+        comunidade_id=comunidade.id, usuario_id=usuario.id, papel="admin"
+    ).first() is not None
+
+
+def _eh_membro_da_comunidade(comunidade, usuario):
+    """Papel=membro em UsuarioComunidade -- visibilidade de leitura, mesmo
+    nivel do vinculo por e-mail com o diretorio (ver _comunidade_visivel_ou_404)."""
+    return UsuarioComunidade.query.filter_by(
+        comunidade_id=comunidade.id, usuario_id=usuario.id, papel="membro"
+    ).first() is not None
 
 
 def _comunidade_do_usuario_ou_404(comunidade_id):
-    """Acesso de DONO (leitura+escrita). Usado por toda rota de gestao.
+    """Acesso de ADMIN (leitura+escrita). Usado por toda rota de gestao.
 
     Sem essa checagem, qualquer pessoa logada poderia mexer numa comunidade de
     outra conta so adivinhando o id na URL.
     """
     comunidade = Comunidade.query.get_or_404(comunidade_id)
-    if comunidade.usuario_id != current_user.id:
+    if not _eh_admin_da_comunidade(comunidade, current_user):
         abort(404)
     return comunidade
 
 
 def _comunidade_visivel_ou_404(comunidade_id):
-    """Acesso de LEITURA: dono OU membro do diretorio cujo email bate com a
-    conta logada -- mesmo mecanismo de match por e-mail ja usado para ligar
-    notificacoes in-app (ver app/escala/routes.py::enviar_notificacoes_da_escala).
+    """Acesso de LEITURA: admin OU papel=membro OU membro do diretorio cujo
+    email bate com a conta logada -- mesmo mecanismo de match por e-mail ja
+    usado para ligar notificacoes in-app (ver
+    app/escala/routes.py::enviar_notificacoes_da_escala).
     """
     comunidade = Comunidade.query.get_or_404(comunidade_id)
-    eh_dono = comunidade.usuario_id == current_user.id
-    eh_membro_vinculado = Membro.query.filter_by(
+    eh_dono = _eh_admin_da_comunidade(comunidade, current_user)
+    eh_membro_vinculado = eh_dono or _eh_membro_da_comunidade(comunidade, current_user) or Membro.query.filter_by(
         comunidade_id=comunidade.id, email=current_user.email
     ).first() is not None
-    if not eh_dono and not eh_membro_vinculado:
+    if not eh_membro_vinculado:
         abort(404)
     return comunidade, eh_dono
 
@@ -65,16 +91,28 @@ def _remover_logo_antiga(caminho):
 @bp.route("/")
 @login_required
 def index():
-    comunidades_dono = Comunidade.query.filter_by(usuario_id=current_user.id).order_by(Comunidade.nome).all()
+    if current_user.eh_super_admin:
+        comunidades_dono = Comunidade.query.order_by(Comunidade.nome).all()
+    else:
+        ids_admin = [
+            row.comunidade_id for row in
+            UsuarioComunidade.query.filter_by(usuario_id=current_user.id, papel="admin").all()
+        ]
+        comunidades_dono = (
+            Comunidade.query.filter(Comunidade.id.in_(ids_admin)).order_by(Comunidade.nome).all()
+            if ids_admin else []
+        )
 
-    comunidades_membro_ids = (
-        db.session.query(Membro.comunidade_id)
-        .filter(Membro.email == current_user.email)
-        .distinct()
-        .all()
-    )
+    comunidades_membro_ids = {
+        cid for (cid,) in
+        db.session.query(Membro.comunidade_id).filter(Membro.email == current_user.email).distinct().all()
+    }
+    ids_papel_membro = {
+        row.comunidade_id for row in
+        UsuarioComunidade.query.filter_by(usuario_id=current_user.id, papel="membro").all()
+    }
     ids_dono = {c.id for c in comunidades_dono}
-    ids_membro = [cid for (cid,) in comunidades_membro_ids if cid not in ids_dono]
+    ids_membro = (comunidades_membro_ids | ids_papel_membro) - ids_dono
     comunidades_participa = Comunidade.query.filter(Comunidade.id.in_(ids_membro)).order_by(Comunidade.nome).all() if ids_membro else []
 
     return render_template(
@@ -259,3 +297,87 @@ def escalados(comunidade_id):
             "funcao": funcao_nome,
         },
     )
+
+
+# --- Papeis e convites -------------------------------------------------------
+#
+# So admin da comunidade chega aqui (_comunidade_do_usuario_ou_404). Um admin
+# pode conceder papel "admin" ou "membro" nesta comunidade -- nunca
+# "super_admin" (nem e uma opcao: PAPEIS_COMUNIDADE so tem admin/membro, ver
+# app/comunidade/models.py). Ver app/convites/CLAUDE.md pro fluxo completo.
+
+@bp.route("/<int:comunidade_id>/papeis", methods=["GET", "POST"])
+@login_required
+def papeis(comunidade_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    form = ConvidarForm()
+    form.papel.choices = [(p, p.capitalize()) for p in PAPEIS_COMUNIDADE]
+
+    if form.validate_on_submit():
+        convite = criar_ou_reenviar_convite(
+            escopo_tipo="comunidade", escopo_id=comunidade.id,
+            papel=form.papel.data, email=form.email.data,
+            convidado_por_id=current_user.id,
+        )
+        _enviar_email_de_convite(convite)
+        flash(f"Convite enviado para {convite.email}.", "success")
+        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+    papeis_atuais = (
+        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id)
+        .order_by(UsuarioComunidade.papel)
+        .all()
+    )
+    convites_pendentes = (
+        Convite.query.filter_by(escopo_tipo="comunidade", escopo_id=comunidade.id, status="pendente")
+        .order_by(Convite.criado_em.desc())
+        .all()
+    )
+
+    return render_template(
+        "comunidade/papeis.html",
+        comunidade=comunidade,
+        form=form,
+        papeis_atuais=papeis_atuais,
+        convites_pendentes=convites_pendentes,
+        acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/<int:comunidade_id>/papeis/<int:usuario_comunidade_id>/remover", methods=["POST"])
+@login_required
+def remover_papel(comunidade_id, usuario_comunidade_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    papel = UsuarioComunidade.query.filter_by(id=usuario_comunidade_id, comunidade_id=comunidade.id).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+    nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
+    db.session.delete(papel)
+    db.session.commit()
+    flash(f"{nome} removido(a) dos administradores/membros da comunidade.", "success")
+    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+
+@bp.route("/<int:comunidade_id>/papeis/convite/<int:convite_id>/cancelar", methods=["POST"])
+@login_required
+def cancelar_convite(comunidade_id, convite_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    convite = Convite.query.filter_by(
+        id=convite_id, escopo_tipo="comunidade", escopo_id=comunidade.id, status="pendente"
+    ).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+    db.session.delete(convite)
+    db.session.commit()
+    flash("Convite cancelado.", "success")
+    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+

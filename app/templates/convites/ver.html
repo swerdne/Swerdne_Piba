@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Convite{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #convite-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="convite-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} flex items-center justify-center px-4">
+    <div class="max-w-md w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl p-6 text-center space-y-4">
+
+        <div class="w-14 h-14 mx-auto rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center">
+            <i class="fa-solid fa-envelope-open-text {{ tema.accent_text }} text-xl"></i>
+        </div>
+
+        {% if convite.status == 'aceito' %}
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Convite ja aceito</h1>
+            <p class="text-sm {{ tema.text_secondary }}">
+                Este convite pra "{{ convite.papel }}" em {{ convite.escopo_nome }} ja foi aceito
+                {% if convite.respondido_em %}em {{ convite.respondido_em.strftime('%d/%m/%Y') }}{% endif %}.
+            </p>
+            <a href="{{ url_for('main.dashboard') }}" class="inline-block {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">Ir para o dashboard</a>
+
+        {% elif convite.status == 'recusado' %}
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Convite recusado</h1>
+            <p class="text-sm {{ tema.text_secondary }}">Este convite ja foi recusado.</p>
+
+        {% elif precisa_login %}
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Voce foi convidado(a)!</h1>
+            <p class="text-sm {{ tema.text_secondary }}">
+                Pra assumir o papel de <strong>{{ convite.papel }}</strong> em <strong>{{ convite.escopo_nome }}</strong>,
+                entre ou crie uma conta com o e-mail <strong>{{ convite.email }}</strong>.
+            </p>
+            <div class="flex flex-col gap-2 pt-2">
+                <a href="{{ url_for('auth.login') }}" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                    Ja tenho conta -- Entrar
+                </a>
+                {% if not tem_conta %}
+                <a href="{{ url_for('auth.register') }}" class="border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                    Criar conta com este e-mail
+                </a>
+                {% endif %}
+            </div>
+
+        {% elif not email_bate %}
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Convite pra outro e-mail</h1>
+            <p class="text-sm {{ tema.text_secondary }}">
+                Este convite foi enviado pra <strong>{{ convite.email }}</strong>, mas voce esta logado(a) com outra conta.
+                Saia e entre com a conta certa pra aceitar.
+            </p>
+            <a href="{{ url_for('auth.logout') }}" class="inline-block border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-lg transition">Sair</a>
+
+        {% else %}
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Voce foi convidado(a)!</h1>
+            <p class="text-sm {{ tema.text_secondary }}">
+                <strong>{{ convite.convidado_por.name or convite.convidado_por.username or convite.convidado_por.email }}</strong>
+                te convidou pra ser <strong>{{ convite.papel }}</strong> em <strong>{{ convite.escopo_nome }}</strong>.
+            </p>
+            <div class="flex gap-3 pt-2">
+                <form method="POST" action="{{ url_for('convites.recusar_convite', token=convite.token) }}" class="flex-1">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" class="w-full border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-4 py-2.5 rounded-lg transition">Recusar</button>
+                </form>
+                <form method="POST" action="{{ url_for('convites.aceitar_convite', token=convite.token) }}" class="flex-1">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">Aceitar</button>
+                </form>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

@@ -94,10 +94,11 @@ app/
   emailing.py          # Envio de e-mail (SMTP) para notificações
   sms.py                # Envio de SMS (Twilio) para notificações
   auth/                 # Login/registro/Google OAuth — models.py (User), routes.py, forms.py
-  comunidade/            # Comunidade + Membro (diretório de pessoas) — ver app/comunidade/CLAUDE.md
-  ministerio/             # Ministério (organizacional) + calendário mensal
+  comunidade/            # Comunidade + Membro (diretório de pessoas) + UsuarioComunidade (papel) — ver app/comunidade/CLAUDE.md
+  ministerio/             # Ministério (organizacional) + calendário mensal + UsuarioMinisterio (papel)
   escala/                  # Escala (manual ou gerada por rodízio) — ver app/escala/CLAUDE.md. Único módulo com agendador.py (o scheduler é único no projeto).
   plantao/                  # Motor de rodízio: TurnoPlantao + sincronizacao.py, materializa em Escala real — ver app/plantao/CLAUDE.md
+  convites/                 # Papel por convite de e-mail (aceitar/recusar) — ver app/convites/CLAUDE.md
   main/                      # Dashboard, chatbot mock, upload de avatar, temas — ver app/main/themes.py
   templates/<módulo>/<ação>.html   # nome do template espelha o nome da view (nova.html, detalhe.html, editar.html)
   static/{css,js,img,uploads}
@@ -113,7 +114,7 @@ Cada blueprint segue o mesmo layout interno: `models.py`, `routes.py`, `forms.py
 - Blueprint sempre chamado literalmente `bp` em todo módulo.
 - Rotas de criação são sempre `nova` (nunca `criar`/`novo`) — concordância de gênero é seguida à risca (Comunidade, Escala → "nova"; não existe "novo" em lugar nenhum).
 - Verbos de rota em snake_case português: `nova`, `detalhe`, `editar`, `excluir_*`, `adicionar_*`, `remover_*`.
-- Helpers privados de autorização seguem o padrão `_<recurso>_do_usuario_ou_404(id)`: `_comunidade_do_usuario_ou_404`, `_ministerio_do_usuario_ou_404`, `_escala_do_usuario_ou_404`, `_funcao_do_usuario_ou_404`, `_turno_do_usuario_ou_404`. Ao adicionar um recurso novo com dono, crie o helper equivalente em vez de inline-checar em cada rota. Quando o recurso também tem um caminho de acesso somente-leitura pra não-donos, o padrão é `_<recurso>_visivel_ou_404(id)`, retornando `(recurso, eh_dono)` (`comunidade._comunidade_visivel_ou_404`, `escala._escala_visivel_ou_404`) — nunca embuta a checagem de leitura dentro do helper `_do_usuario_ou_404` estrito, que continua exclusivo pra rotas de escrita.
+- Helpers privados de autorização seguem o padrão `_<recurso>_do_usuario_ou_404(id)`: `_comunidade_do_usuario_ou_404`, `_ministerio_do_usuario_ou_404` (estrito, só CRUD do Ministério), `_escala_do_usuario_ou_404`, `_funcao_do_usuario_ou_404`, `_turno_do_usuario_ou_404` — todos, por baixo, delegam pra `_eh_admin_da_comunidade`/`_eh_lider_do_ministerio` (ver [app/convites/CLAUDE.md](app/convites/CLAUDE.md)). Ao adicionar um recurso novo com dono, crie o helper equivalente em vez de inline-checar em cada rota. Quando o recurso também tem um caminho de acesso somente-leitura (não só pra escrita), o padrão é `_<recurso>_visivel_ou_404(id)`, retornando `(recurso, pode_gerenciar)` (`comunidade._comunidade_visivel_ou_404`, `ministerio._ministerio_visivel_ou_404`, `escala._escala_visivel_ou_404`) — nunca embuta a checagem de leitura dentro do helper `_do_usuario_ou_404`/`_gerenciavel_ou_404` estrito, que continua exclusivo pra rotas de escrita. `_ministerio_gerenciavel_ou_404` (admin OU líder) é o helper usado por conteúdo do ministério (escalas, turnos) — diferente do `_ministerio_do_usuario_ou_404` estrito (só admin), que é exclusivo pro CRUD do Ministério em si.
 - Forms terminam em `Form` (`EscalaForm`, `StatusForm`); `AcaoForm` é um form vazio (só CSRF) reimplementado em cada blueprint para ações simples de POST (excluir, remover, notificar) — não existe uma classe compartilhada.
 - Models em PascalCase português; `__tablename__` em snake_case, às vezes prefixado pelo módulo dono para evitar colisão (`escala_membros`, `escala_funcoes`, `turnos_plantao`).
 - Templates em `app/templates/<módulo>/<ação>.html`, nome espelhando a view.
@@ -122,9 +123,9 @@ Cada blueprint segue o mesmo layout interno: `models.py`, `routes.py`, `forms.py
 ## Autenticação / Autorização
 
 - Flask-Login (`@login_required`) em toda rota que exige usuário logado; `login_manager.login_view = "auth.login"` redireciona não-autenticados.
-- **Não há papéis/admin.** Autorização é 100% por posse: cada blueprint sobe a cadeia de FKs até `Comunidade.usuario_id` e compara com `current_user.id`, retornando **404 (não 403)** em caso de descompasso — propositalmente, para não revelar a existência do recurso a quem está adivinhando IDs pela URL. Siga o mesmo padrão (404, não 403) ao adicionar novas rotas de recurso.
-- Duas exceções, mesmo mecanismo (match por `email` entre `Membro` e `User`), ambas **somente leitura**: `comunidade._comunidade_visivel_ou_404` (quem tem um `Membro` no diretório da comunidade, usado no relatório "Escalados") e `escala._escala_visivel_ou_404` (convidado — `Funcao.eh_convidado=True` — escopado a 1 única `Escala`, ver [app/escala/CLAUDE.md](app/escala/CLAUDE.md)). Nenhuma das duas dá acesso de escrita.
-- `User` acumula login tradicional e Google OAuth na mesma tabela (`password_hash` nullable para contas só-Google; `check_password` retorna `False` se não houver hash). Vínculo de conta Google a uma conta existente é por e-mail (`auth/routes.py`).
+- **Sistema de papéis contextual** (Super Admin → Admin da Comunidade → Líder de Ministério → Membro → Convidado), concedido sempre via convite por e-mail aceito (`app/convites`) — ver [app/convites/CLAUDE.md](app/convites/CLAUDE.md) pro fluxo completo. Cada blueprint sobe a cadeia de FKs e consulta o papel via helpers centralizados (`comunidade.routes._eh_admin_da_comunidade`, `ministerio.routes._eh_lider_do_ministerio`/`_eh_membro_do_ministerio`), retornando **404 (não 403)** em caso de descompasso — propositalmente, para não revelar a existência do recurso a quem está adivinhando IDs pela URL. Siga o mesmo padrão (404, não 403) ao adicionar novas rotas de recurso.
+- Além das duas exceções somente-leitura por match de `email` já existentes (`comunidade._comunidade_visivel_ou_404`, diretório de `Membro`; `escala._escala_visivel_ou_404`, `Funcao.eh_convidado=True`, ver [app/escala/CLAUDE.md](app/escala/CLAUDE.md)), papel=membro (`UsuarioComunidade`/`UsuarioMinisterio`) agora também concede leitura pelo mesmo mecanismo de helpers — nenhuma das duas formas dá acesso de escrita por si só.
+- `User` acumula login tradicional e Google OAuth na mesma tabela (`password_hash` nullable para contas só-Google; `check_password` retorna `False` se não houver hash). Vínculo de conta Google a uma conta existente é por e-mail (`auth/routes.py`). `User.eh_super_admin` (bool) só é atribuível via `flask criar-super-admin <email>` (comando de terminal, nunca uma rota HTTP).
 - `MOCK_GOOGLE_OAUTH` permite testar o fluxo Google sem credenciais reais (renderiza `auth/google_mock.html`, simula sucesso/negação/timeout via `?cenario=`); `ProductionConfig` trava esse mock como sempre `False` independentemente da env var — não remova essa trava.
 
 ## Regras de negócio importantes
@@ -156,3 +157,4 @@ Cada blueprint segue o mesmo layout interno: `models.py`, `routes.py`, `forms.py
 - [app/escala/CLAUDE.md](app/escala/CLAUDE.md) — Escala (manual e gerada por rodízio): models, geração por template, restrições de UI para escalas geradas, notificações, scheduler único.
 - [app/plantao/CLAUDE.md](app/plantao/CLAUDE.md) — motor de rodízio: regra (`TurnoPlantao`), sincronização/materialização em `Escala` real, `plantao_fixado`, ausências.
 - [app/comunidade/CLAUDE.md](app/comunidade/CLAUDE.md) — Comunidade, diretório de Membros, autorização de leitura vinculada por e-mail.
+- [app/convites/CLAUDE.md](app/convites/CLAUDE.md) — sistema de papéis (Super Admin/Admin da Comunidade/Líder de Ministério/Membro/Convidado), convite por e-mail, hierarquia de quem pode conceder qual papel.

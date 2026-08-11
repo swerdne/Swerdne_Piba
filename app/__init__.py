@@ -1,5 +1,6 @@
 """Application Factory."""
 import os
+import click
 from flask import Flask
 from .config import config
 from .extensions import db, migrate, login_manager, oauth
@@ -42,6 +43,25 @@ def create_app(config_name="default"):
 
     from .plantao import bp as plantao_bp
     app.register_blueprint(plantao_bp, url_prefix="/plantao")
+
+    from .convites import bp as convites_bp
+    app.register_blueprint(convites_bp, url_prefix="/convite")
+
+    # Bootstrap do primeiro Super Admin -- proposital que so exista via
+    # comando de terminal (nunca uma rota HTTP): ver app/convites/CLAUDE.md,
+    # papel reservado ao dono/equipe tecnica, nunca atribuivel por convite.
+    @app.cli.command("criar-super-admin")
+    @click.argument("email")
+    def criar_super_admin(email):
+        from .auth.models import User
+
+        usuario = User.query.filter_by(email=email).first()
+        if usuario is None:
+            click.echo(f"Nenhuma conta encontrada com o e-mail {email}. Peca pra pessoa se cadastrar primeiro.")
+            return
+        usuario.eh_super_admin = True
+        db.session.commit()
+        click.echo(f"{email} agora e Super Admin.")
 
     # Disponibiliza `tema`/`temas` em TODOS os templates automaticamente (nao
     # so no dashboard) -- assim comunidade/escala/ministerio tambem respeitam

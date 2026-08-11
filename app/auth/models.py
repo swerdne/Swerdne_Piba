@@ -24,6 +24,13 @@ class User(UserMixin, db.Model):
     # Preferencia de aparencia do dashboard (ver app/main/themes.py)
     theme = db.Column(db.String(20), nullable=False, default="indigo", server_default="indigo")
 
+    # Acesso total a plataforma (gerencia qualquer Comunidade/Ministerio,
+    # bypassa toda checagem de posse/papel) -- NUNCA atribuivel por convite
+    # comum (ver app/convites/CLAUDE.md), so pelo comando
+    # `flask criar-super-admin <email>` (app/__init__.py), que exige acesso
+    # ao servidor/terminal.
+    eh_super_admin = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 

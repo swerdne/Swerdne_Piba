@@ -25,6 +25,10 @@
                 <span class="font-semibold {{ tema.text_primary }} truncate">{{ comunidade.nome }}</span>
             </div>
             <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ url_for('comunidade.papeis', comunidade_id=comunidade.id) }}"
+                   class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition" aria-label="Papeis e convites">
+                    <i class="fa-solid fa-user-group"></i>
+                </a>
                 <a href="{{ url_for('comunidade.editar', comunidade_id=comunidade.id) }}"
                    class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition" aria-label="Editar comunidade">
                     <i class="fa-solid fa-pen"></i>

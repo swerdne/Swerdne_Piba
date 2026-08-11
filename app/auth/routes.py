@@ -1,11 +1,20 @@
 """Controller (C do MVC): rotas do modulo auth."""
-from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
+from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
 from app.extensions import db, oauth
 from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm
 from app.auth.models import User
+
+
+def _redirecionar_apos_login():
+    """Depois de login/registro/Google, volta pro link que o usuario estava
+    tentando acessar antes de autenticar (ex: aceitar um convite, ver
+    app/convites/routes.py::ver_convite) -- cai no dashboard se nao havia
+    nenhum destino guardado. `pop` de proposito: o destino so vale uma vez."""
+    destino = session.pop("proximo_apos_login", None)
+    return redirect(destino or url_for("main.dashboard"))
 
 # Usuario fake devolvido pelo "Google simulado" no cenario de sucesso.
 MOCK_GOOGLE_USER = {
@@ -23,7 +32,7 @@ def login():
         user = User.query.filter_by(email=form.email.data).first()
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
-            return redirect(url_for("main.dashboard"))
+            return _redirecionar_apos_login()
         flash("Credenciais invalidas.", "danger")
     return render_template("auth/login.html", form=form)
 
@@ -38,7 +47,7 @@ def register():
         db.session.commit()
         login_user(user)
         flash("Conta criada com sucesso! Bem-vindo(a).", "success")
-        return redirect(url_for("main.dashboard"))
+        return _redirecionar_apos_login()
     return render_template("auth/register.html", form=form)
 
 
@@ -126,4 +135,4 @@ def google_callback():
 
     login_user(user)
     flash("Login com Google realizado com sucesso!", "success")
-    return redirect(url_for("main.dashboard"))
+    return _redirecionar_apos_login()

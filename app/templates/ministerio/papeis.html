@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Papeis - {{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="ministerio-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Papeis - {{ ministerio.nome }}</span>
+        </a>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+
+        {% if pode_convidar %}
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Convidar por e-mail</h2>
+            <form method="POST" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
+                {{ form.hidden_tag() }}
+                <div class="grid sm:grid-cols-[1fr_auto] gap-3">
+                    <div>
+                        {{ form.email(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="E-mail da pessoa") }}
+                        {% for erro in form.email.errors %}
+                            <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                        {% endfor %}
+                    </div>
+                    <div>
+                        {{ form.papel(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                </div>
+                <p class="text-xs {{ tema.text_secondary }}">
+                    Nao precisa ja ter conta na plataforma -- o convite fica pendente ate ser aceito.
+                </p>
+                {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-4 py-2 rounded-lg transition") }}
+            </form>
+        </div>
+        {% endif %}
+
+        {% if convites_pendentes %}
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Convites pendentes ({{ convites_pendentes|length }})</h2>
+            <div class="space-y-2">
+                {% for convite in convites_pendentes %}
+                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center {{ tema.secondary_text }} shrink-0">
+                        <i class="fa-solid fa-envelope text-xs"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm {{ tema.text_primary }} truncate">{{ convite.email }}</p>
+                        <p class="text-xs {{ tema.text_secondary }}">papel: {{ convite.papel }} &middot; enviado {{ convite.criado_em.strftime('%d/%m/%Y') }}</p>
+                    </div>
+                    <form method="POST" action="{{ url_for('ministerio.cancelar_convite', ministerio_id=ministerio.id, convite_id=convite.id) }}"
+                          onsubmit="return confirm('Cancelar o convite pra {{ convite.email }}?');">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" aria-label="Cancelar convite" class="text-red-500 hover:text-red-400 transition shrink-0">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Lideres e membros ({{ papeis_atuais|length }})</h2>
+
+            {% if not papeis_atuais %}
+            <div class="text-center py-12">
+                <i class="fa-solid fa-user-group text-4xl {{ tema.text_secondary }}"></i>
+                <p class="mt-4 {{ tema.text_secondary }}">Ninguem com papel formal ainda neste ministerio.</p>
+            </div>
+            {% endif %}
+
+            <div class="space-y-2">
+                {% for papel in papeis_atuais %}
+                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                        {{ (papel.usuario.name or papel.usuario.username or papel.usuario.email)[:2].upper() }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm {{ tema.text_primary }} truncate">{{ papel.usuario.name or papel.usuario.username or papel.usuario.email }}</p>
+                        <p class="text-xs {{ tema.text_secondary }} truncate">{{ papel.usuario.email }}</p>
+                    </div>
+                    <span class="text-[11px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-2 py-1 shrink-0">{{ papel.papel }}</span>
+                    {% if pode_convidar %}
+                    <form method="POST" action="{{ url_for('ministerio.remover_papel', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}"
+                          onsubmit="return confirm('Remover {{ papel.usuario.name or papel.usuario.email }} deste ministerio?');">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" aria-label="Remover" class="text-red-500 hover:text-red-400 transition shrink-0">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </main>
+</div>
+{% endblock %}

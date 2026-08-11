@@ -35,40 +35,49 @@ from app.notificacoes import Notificacao
 
 
 def _escala_do_usuario_ou_404(escala_id):
-    """Busca a escala garantindo que pertence ao dono da comunidade dela.
+    """Busca a escala garantindo que quem pede e admin da comunidade ou lider
+    do ministerio dela (ver ministerio.routes._eh_lider_do_ministerio).
 
     Sem essa checagem, qualquer pessoa logada poderia mexer nos dados de
     outra conta so adivinhando o id na URL -- cada conta ve e altera apenas
     as proprias escalas/funcoes/membros.
     """
+    from app.ministerio.routes import _eh_lider_do_ministerio
+
     escala = Escala.query.get_or_404(escala_id)
-    if escala.ministerio.comunidade.usuario_id != current_user.id:
+    if not _eh_lider_do_ministerio(escala.ministerio, current_user):
         abort(404)
     return escala
 
 
 def _funcao_do_usuario_ou_404(funcao_id):
+    from app.ministerio.routes import _eh_lider_do_ministerio
+
     funcao = Funcao.query.get_or_404(funcao_id)
-    if funcao.escala.ministerio.comunidade.usuario_id != current_user.id:
+    if not _eh_lider_do_ministerio(funcao.escala.ministerio, current_user):
         abort(404)
     return funcao
 
 
 def _escala_visivel_ou_404(escala_id):
-    """Acesso de LEITURA: dono OU convidado escalado nesta Escala especifica
-    (Funcao.eh_convidado=True cujo Membro tem o mesmo e-mail da conta logada)
-    -- mesmo mecanismo de match por e-mail ja usado em
-    comunidade.routes._comunidade_visivel_ou_404, so que escopado a 1 unica
-    Escala em vez da comunidade inteira. Retorna (escala, eh_dono)."""
+    """Acesso de LEITURA: admin/lider (gerencia) OU membro do ministerio OU
+    convidado escalado nesta Escala especifica (Funcao.eh_convidado=True cujo
+    Membro tem o mesmo e-mail da conta logada) -- mesmo mecanismo de match
+    por e-mail ja usado em comunidade.routes._comunidade_visivel_ou_404, so
+    que escopado a 1 unica Escala em vez da comunidade inteira. Retorna
+    (escala, pode_gerenciar)."""
+    from app.ministerio.routes import _eh_lider_do_ministerio, _eh_membro_do_ministerio
+
     escala = Escala.query.get_or_404(escala_id)
-    eh_dono = escala.ministerio.comunidade.usuario_id == current_user.id
+    pode_gerenciar = _eh_lider_do_ministerio(escala.ministerio, current_user)
+    eh_membro = pode_gerenciar or _eh_membro_do_ministerio(escala.ministerio, current_user)
     eh_convidado_vinculado = any(
         f.eh_convidado and f.membro and f.membro.email == current_user.email
         for f in escala.funcoes
     )
-    if not eh_dono and not eh_convidado_vinculado:
+    if not eh_membro and not eh_convidado_vinculado:
         abort(404)
-    return escala, eh_dono
+    return escala, pode_gerenciar
 
 
 def _fixar_se_gerada_por_rodizio(escala):
@@ -89,9 +98,9 @@ def index():
 @bp.route("/ministerio/<int:ministerio_id>/nova", methods=["GET", "POST"])
 @login_required
 def nova(ministerio_id):
-    from app.ministerio.routes import _ministerio_do_usuario_ou_404
+    from app.ministerio.routes import _ministerio_gerenciavel_ou_404
 
-    ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
     form = EscalaForm()
 
     if form.validate_on_submit():
@@ -203,6 +212,17 @@ def detalhe(escala_id):
                     (f.id, f.nome) for f in destinos_possiveis if f.id != funcao.id
                 ]
                 formularios_mover[funcao.id] = mover_form
+                formularios_status[funcao.id] = StatusForm(status=funcao.status or STATUS_PADRAO)
+    else:
+        # Nao gerencia a escala, mas pode marcar o PROPRIO status (ver
+        # escala.routes.atualizar_status) -- so monta o form pra funcao(oes)
+        # cujo Membro bate por e-mail com a conta logada.
+        email_logado = (current_user.email or "").lower()
+        for funcao in escala.funcoes:
+            if (
+                not funcao.eh_subcabecalho and funcao.membro_id and funcao.membro.email
+                and funcao.membro.email.lower() == email_logado
+            ):
                 formularios_status[funcao.id] = StatusForm(status=funcao.status or STATUS_PADRAO)
 
     return render_template(
@@ -479,7 +499,19 @@ def mover_membro(funcao_id):
 @bp.route("/funcao/<int:funcao_id>/status", methods=["POST"])
 @login_required
 def atualizar_status(funcao_id):
-    funcao = _funcao_do_usuario_ou_404(funcao_id)
+    # Excecao proposital: marcar o PROPRIO status (presente/confirmado/etc)
+    # e permitido pra quem esta escalado naquela funcao (Membro.email bate
+    # com a conta logada, mesmo mecanismo de convidado/visibilidade por
+    # e-mail), sem precisar ser lider/admin -- "marcar ausencia -> o proprio
+    # membro escalado, ou lider/admin" (ver app/convites/CLAUDE.md). Qualquer
+    # outra pessoa continua exigindo _funcao_do_usuario_ou_404 (lider/admin).
+    funcao_bruta = Funcao.query.get_or_404(funcao_id)
+    eh_proprio_escalado = (
+        funcao_bruta.membro_id is not None
+        and funcao_bruta.membro.email
+        and funcao_bruta.membro.email.lower() == (current_user.email or "").lower()
+    )
+    funcao = funcao_bruta if eh_proprio_escalado else _funcao_do_usuario_ou_404(funcao_id)
     escala_id = funcao.escala_id
 
     if funcao.membro_id is None:

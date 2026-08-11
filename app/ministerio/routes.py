@@ -11,7 +11,10 @@ from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.ministerio import bp
 from app.ministerio.forms import MinisterioForm, AcaoForm
-from app.ministerio.models import Ministerio, criar_ministerio
+from app.ministerio.models import Ministerio, UsuarioMinisterio, PAPEIS_MINISTERIO, criar_ministerio
+from app.convites.forms import ConvidarForm
+from app.convites.models import Convite, criar_ou_reenviar_convite
+from app.convites.routes import _enviar_email_de_convite
 
 MESES_PT = [
     "", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
@@ -24,12 +27,63 @@ DIAS_SEMANA_PT = [
 ]
 
 
+def _eh_lider_do_ministerio(ministerio, usuario):
+    """Lider: admin da comunidade dona (autoridade cascata pra qualquer
+    ministerio dela, mesmo sem linha propria em UsuarioMinisterio) OU
+    papel=lider em UsuarioMinisterio (concedido por convite aceito)."""
+    from app.comunidade.routes import _eh_admin_da_comunidade
+
+    if _eh_admin_da_comunidade(ministerio.comunidade, usuario):
+        return True
+    return UsuarioMinisterio.query.filter_by(
+        ministerio_id=ministerio.id, usuario_id=usuario.id, papel="lider"
+    ).first() is not None
+
+
+def _eh_membro_do_ministerio(ministerio, usuario):
+    """Papel=membro em UsuarioMinisterio -- participa do ministerio,
+    visualiza as escalas dele (leitura)."""
+    return UsuarioMinisterio.query.filter_by(
+        ministerio_id=ministerio.id, usuario_id=usuario.id, papel="membro"
+    ).first() is not None
+
+
 def _ministerio_do_usuario_ou_404(ministerio_id):
-    """Busca o ministerio garantindo que pertence ao dono da comunidade dele."""
+    """Acesso ESTRITO de admin da comunidade -- so pras acoes de CRUD do
+    proprio Ministerio (criar/editar/excluir). Um lider de ministerio NAO
+    passa aqui (pode gerenciar o CONTEUDO do ministerio -- escalas, turnos,
+    membros -- mas nao apagar/renomear o ministerio em si); ver
+    _ministerio_gerenciavel_ou_404 pra essa checagem mais ampla."""
+    from app.comunidade.routes import _eh_admin_da_comunidade
+
     ministerio = Ministerio.query.get_or_404(ministerio_id)
-    if ministerio.comunidade.usuario_id != current_user.id:
+    if not _eh_admin_da_comunidade(ministerio.comunidade, current_user):
         abort(404)
     return ministerio
+
+
+def _ministerio_gerenciavel_ou_404(ministerio_id):
+    """Acesso de GESTAO DE CONTEUDO: admin da comunidade OU lider do
+    ministerio. Usado por toda acao dentro do ministerio que nao seja CRUD do
+    ministerio em si -- criar/editar escala ou turno de rodizio,
+    adicionar/remover membro de funcao, adicionar convidado, etc. (ver
+    app/escala/routes.py, app/plantao/routes.py)."""
+    ministerio = Ministerio.query.get_or_404(ministerio_id)
+    if not _eh_lider_do_ministerio(ministerio, current_user):
+        abort(404)
+    return ministerio
+
+
+def _ministerio_visivel_ou_404(ministerio_id):
+    """Acesso de LEITURA: admin da comunidade, lider OU membro do ministerio.
+    Retorna (ministerio, pode_gerenciar) -- pode_gerenciar distingue quem so
+    visualiza (membro) de quem tambem gerencia conteudo (admin/lider), pro
+    template esconder acoes de escrita."""
+    ministerio = Ministerio.query.get_or_404(ministerio_id)
+    pode_gerenciar = _eh_lider_do_ministerio(ministerio, current_user)
+    if not pode_gerenciar and not _eh_membro_do_ministerio(ministerio, current_user):
+        abort(404)
+    return ministerio, pode_gerenciar
 
 
 def _salvar_logo(arquivo):
@@ -176,7 +230,10 @@ def _escalas_agrupadas_por_turno(ministerio, hoje):
 @bp.route("/<int:ministerio_id>")
 @login_required
 def detalhe(ministerio_id):
-    ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
+    from app.comunidade.routes import _eh_admin_da_comunidade
+
+    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
+    eh_admin = _eh_admin_da_comunidade(ministerio.comunidade, current_user)
 
     hoje = date.today()
     escalas, qtd_ocorrencias_por_turno = _escalas_agrupadas_por_turno(ministerio, hoje)
@@ -188,6 +245,8 @@ def detalhe(ministerio_id):
     return render_template(
         "ministerio/detalhe.html",
         ministerio=ministerio,
+        pode_gerenciar=pode_gerenciar,
+        eh_admin=eh_admin,
         escalas=escalas,
         qtd_ocorrencias_por_turno=qtd_ocorrencias_por_turno,
         turnos_plantao=turnos_plantao,
@@ -200,13 +259,14 @@ def detalhe(ministerio_id):
 @bp.route("/<int:ministerio_id>/calendario")
 @login_required
 def calendario(ministerio_id):
-    ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
+    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
     hoje = date.today()
     dados_calendario = _dados_calendario(ministerio, hoje)
 
     return render_template(
         "ministerio/calendario.html",
         ministerio=ministerio,
+        pode_gerenciar=pode_gerenciar,
         **dados_calendario,
     )
 
@@ -257,3 +317,111 @@ def excluir_ministerio(ministerio_id):
 
     flash(f'Ministerio "{nome}" excluido.', "success")
     return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade_id))
+
+
+# --- Papeis e convites -------------------------------------------------------
+#
+# Admin da comunidade pode conceder "lider" ou "membro" neste ministerio.
+# Lider (que nao seja tambem admin) so pode conceder "membro" -- nunca outro
+# lider nem admin de comunidade (hierarquia, ver app/convites/CLAUDE.md).
+
+def _papeis_convidaveis_no_ministerio(ministerio, usuario):
+    from app.comunidade.routes import _eh_admin_da_comunidade
+
+    if _eh_admin_da_comunidade(ministerio.comunidade, usuario):
+        return list(PAPEIS_MINISTERIO)  # ["lider", "membro"]
+    if _eh_lider_do_ministerio(ministerio, usuario):
+        return ["membro"]
+    return []
+
+
+@bp.route("/<int:ministerio_id>/papeis", methods=["GET", "POST"])
+@login_required
+def papeis(ministerio_id):
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    papeis_permitidos = _papeis_convidaveis_no_ministerio(ministerio, current_user)
+
+    form = ConvidarForm()
+    form.papel.choices = [(p, p.capitalize()) for p in papeis_permitidos]
+
+    if form.validate_on_submit():
+        # Defesa em profundidade: o form ja limita as choices, mas confirma
+        # de novo aqui -- alguem poderia montar o POST na mao com um papel
+        # fora da hierarquia que tem permissao de conceder.
+        if form.papel.data not in papeis_permitidos:
+            flash("Voce nao tem permissao para conceder esse papel.", "danger")
+            return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+        convite = criar_ou_reenviar_convite(
+            escopo_tipo="ministerio", escopo_id=ministerio.id,
+            papel=form.papel.data, email=form.email.data,
+            convidado_por_id=current_user.id,
+        )
+        _enviar_email_de_convite(convite)
+        flash(f"Convite enviado para {convite.email}.", "success")
+        return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+    papeis_atuais = (
+        UsuarioMinisterio.query.filter_by(ministerio_id=ministerio.id)
+        .order_by(UsuarioMinisterio.papel)
+        .all()
+    )
+    convites_pendentes = (
+        Convite.query.filter_by(escopo_tipo="ministerio", escopo_id=ministerio.id, status="pendente")
+        .order_by(Convite.criado_em.desc())
+        .all()
+    )
+
+    return render_template(
+        "ministerio/papeis.html",
+        ministerio=ministerio,
+        form=form,
+        pode_convidar=bool(papeis_permitidos),
+        papeis_atuais=papeis_atuais,
+        convites_pendentes=convites_pendentes,
+        acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/<int:ministerio_id>/papeis/<int:usuario_ministerio_id>/remover", methods=["POST"])
+@login_required
+def remover_papel(ministerio_id, usuario_ministerio_id):
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    papel = UsuarioMinisterio.query.filter_by(id=usuario_ministerio_id, ministerio_id=ministerio.id).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+    # Um lider (nao-admin) so pode remover papeis que ele mesmo poderia
+    # conceder (membro) -- nao pode expulsar outro lider.
+    papeis_permitidos = _papeis_convidaveis_no_ministerio(ministerio, current_user)
+    if papel.papel not in papeis_permitidos:
+        flash("Voce nao tem permissao para remover esse papel.", "danger")
+        return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+    nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
+    db.session.delete(papel)
+    db.session.commit()
+    flash(f"{nome} removido(a) do ministerio.", "success")
+    return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+
+@bp.route("/<int:ministerio_id>/papeis/convite/<int:convite_id>/cancelar", methods=["POST"])
+@login_required
+def cancelar_convite(ministerio_id, convite_id):
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    convite = Convite.query.filter_by(
+        id=convite_id, escopo_tipo="ministerio", escopo_id=ministerio.id, status="pendente"
+    ).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+    db.session.delete(convite)
+    db.session.commit()
+    flash("Convite cancelado.", "success")
+    return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))

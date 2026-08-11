@@ -24,7 +24,13 @@
                 {% endif %}
                 <span class="font-semibold {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
             </div>
+            {% if pode_gerenciar %}
             <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ url_for('ministerio.papeis', ministerio_id=ministerio.id) }}"
+                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Papeis e convites">
+                    <i class="fa-solid fa-user-group"></i>
+                </a>
+                {% if eh_admin %}
                 <a href="{{ url_for('ministerio.editar', ministerio_id=ministerio.id) }}"
                    class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Editar ministerio">
                     <i class="fa-solid fa-pen"></i>
@@ -37,7 +43,9 @@
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </form>
+                {% endif %}
             </div>
+            {% endif %}
         </div>
     </header>
 
@@ -52,10 +60,12 @@
             <div class="space-y-4">
                 <div class="flex items-center justify-between">
                     <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Escalas</h2>
+                    {% if pode_gerenciar %}
                     <a href="{{ url_for('escala.nova', ministerio_id=ministerio.id) }}"
                        class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
                         <i class="fa-solid fa-plus mr-1"></i>Nova escala
                     </a>
+                    {% endif %}
                 </div>
 
                 {% if not escalas %}
