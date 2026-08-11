@@ -47,6 +47,9 @@ def create_app(config_name="default"):
     from .convites import bp as convites_bp
     app.register_blueprint(convites_bp, url_prefix="/convite")
 
+    from .errors import registrar_error_handlers
+    registrar_error_handlers(app)
+
     # Bootstrap do primeiro Super Admin -- proposital que so exista via
     # comando de terminal (nunca uma rota HTTP): ver app/convites/CLAUDE.md,
     # papel reservado ao dono/equipe tecnica, nunca atribuivel por convite.
