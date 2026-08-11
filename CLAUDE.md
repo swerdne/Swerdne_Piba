@@ -19,7 +19,7 @@ Não existe sistema de papéis (não há admin/regular user). Autorização é t
 
 ## Stack
 
-- **Backend:** Flask (Application Factory em [app/\_\_init\_\_.py](app/__init__.py)), Flask-SQLAlchemy, Flask-Migrate (Alembic), Flask-Login, Flask-WTF, Authlib (OAuth), APScheduler, Twilio (SMS), smtplib via `app/emailing.py`.
+- **Backend:** Flask (Application Factory em [app/\_\_init\_\_.py](app/__init__.py)), Flask-SQLAlchemy, Flask-Migrate (Alembic), Flask-Login, Flask-WTF, Authlib (OAuth), APScheduler, Twilio (SMS), API HTTP da Resend via `app/emailing.py` (não SMTP — ver o próprio arquivo pra saber por quê).
 - **Banco:** SQLite (`dev.db` em dev, `:memory:` em teste). `DATABASE_URL` troca para outro banco em produção.
 - **Frontend:** Server-side rendering com Jinja2 + Tailwind CSS v4 (compilado via `@tailwindcss/cli`, sem framework JS — só `app/static/js/main.js`, mínimo).
 - **Testes:** pytest, com fixtures que sobem um app Flask completo em SQLite in-memory (`tests/conftest.py`).
@@ -91,7 +91,7 @@ app/
   config.py           # Config por ambiente (development/testing/production) via FLASK_CONFIG
   extensions.py        # db, migrate, login_manager, oauth — instâncias soltas (evita import circular)
   notificacoes.py      # Model Notificacao (sino in-app) — fora de qualquer blueprint, ver seção "Regras de negócio" abaixo
-  emailing.py          # Envio de e-mail (SMTP) para notificações
+  emailing.py          # Envio de e-mail (API HTTP da Resend, não SMTP) para notificações
   sms.py                # Envio de SMS (Twilio) para notificações
   auth/                 # Login/registro/Google OAuth — models.py (User), routes.py, forms.py
   comunidade/            # Comunidade + Membro (diretório de pessoas) + UsuarioComunidade (papel) — ver app/comunidade/CLAUDE.md
@@ -146,7 +146,7 @@ Cada blueprint segue o mesmo layout interno: `models.py`, `routes.py`, `forms.py
 
 - Explore o módulo relevante (e o `CLAUDE.md` local, se existir) antes de codar — a maior parte da lógica de negócio não óbvia já está documentada em comentários no próprio código-fonte (em português); leia-os.
 - Siga os padrões já existentes (helpers `_..._ou_404`, `bp`, layout `models/routes/forms`, nomenclatura em português) em vez de introduzir um estilo novo.
-- Não introduza bibliotecas novas sem necessidade — a stack já cobre auth (Flask-Login/Authlib), formulários (Flask-WTF), e-mail/SMS (smtplib/Twilio), agendamento (APScheduler).
+- Não introduza bibliotecas novas sem necessidade — a stack já cobre auth (Flask-Login/Authlib), formulários (Flask-WTF), e-mail/SMS (Resend via `requests`/Twilio), agendamento (APScheduler).
 - `escala` e `plantao` são acoplados de propósito (`app/plantao/sincronizacao.py` importa de `app/escala/models.py`/`routes.py`) — ao mexer no swap de membro (`trocar_atribuicao`) ou no fluxo de notificação (`enviar_notificacoes_da_escala`/`enviar_notificacao_de_alteracao`), lembre que `plantao` reaproveita essas mesmas funções; não duplique.
 - Rode `pytest` ao final de qualquer mudança (veja comandos acima); há cobertura de isolamento entre contas (cross-account 404) em quase todo módulo — não quebre esse comportamento. Ao escrever teste envolvendo `TurnoPlantao`/`Escala` "futura", não use `date.today()` sem horário — o fallback de `Escala.data_hora` pra meia-noite faz uma ocorrência "de hoje" já contar como passada a qualquer hora do dia; use `date.today() + timedelta(days=1)`.
 - Ao adicionar coluna obrigatória em tabela já populada com dado derivável por linha, siga o padrão de 3 migrations (nullable → backfill → not null) visto no histórico de `migrations/versions/`; se não há dado correlato pra derivar (valor é sempre uma constante arbitrária), um `ADD COLUMN ... DEFAULT` direto é aceitável (ver `889df47f5510`).

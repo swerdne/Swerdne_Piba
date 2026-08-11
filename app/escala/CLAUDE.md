@@ -45,12 +45,10 @@ Quando um `TurnoPlantao` nasce a partir desta `Escala` (botão "Criar turno de r
 
 ## Notificações
 
-`enviar_notificacoes_da_escala(escala)` em `routes.py` é a função central (chamada tanto pelo botão manual `POST /escala/<id>/notificar` quanto pelo scheduler). Para cada `Funcao` com `membro_id`:
+`enviar_notificacoes_da_escala(escala)` em `routes.py` é a função central (chamada tanto pelo botão manual `POST /escala/<id>/notificar` quanto pelo scheduler). Para cada `Funcao` com `membro_id`, o envio de e-mail/SMS (`_disparar_notificacoes_em_paralelo`) roda **em paralelo, não um de cada vez** — sequencial faria o tempo total somar por pessoa (N escalados × timeout de uma tentativa), o que já derrubou o worker do servidor em produção por estourar o timeout dele (ver `app/emailing.py`). Os workers só extraem dados simples (e-mail/telefone/mensagem em dicts) antes de paralelizar — nunca passam objetos do SQLAlchemy pra outra thread, que não é thread-safe entre threads diferentes. Depois de coletados os resultados:
 1. Se `Membro.email` bate com um `User.email` existente, cria `Notificacao` in-app (extra, não substitui e-mail).
-2. Tenta `enviar_email` (se `membro.email`).
-3. Tenta `enviar_sms` (se `membro.telefone`).
-4. Falhas de e-mail/SMS são capturadas (`EmailNaoEnviadoError`/`SmsNaoEnviadoError`), nunca propagam como 500 — só entram na contagem de retorno (`email_falhas`, `sms_falhas`, `sem_contato`).
-5. `marcar_notificado` só stampa `notificado_em` se pelo menos um canal teve sucesso.
+2. Falhas de e-mail/SMS (`EmailNaoEnviadoError`/`SmsNaoEnviadoError`, capturadas dentro do worker) nunca propagam como 500 — só entram na contagem de retorno (`email_falhas`, `sms_falhas`, `sem_contato`).
+3. `marcar_notificado` só stampa `notificado_em` se pelo menos um canal teve sucesso.
 
 Editar `data`/`horario` de uma `Escala` existente reseta `notificado_24h_em`/`notificado_16h_em` para `None` (para o scheduler reconsiderar) e chama `enviar_notificacao_de_alteracao(...)` avisando proativamente quem já estava escalado.
 
@@ -62,4 +60,4 @@ Editar `data`/`horario` de uma `Escala` existente reseta `notificado_24h_em`/`no
 
 ## Testes
 
-`tests/test_escala.py` cobre: criação com funções padrão, atribuição/troca/status/remoção de membro, envio de notificação (com SMTP/Twilio não configurados, sem 500), sino in-app, subcabeçalhos, isolamento cross-account (404 para outro dono). `tests/test_agendador.py` cobre a janela de disparo do scheduler, incluindo a materialização+notificação de `Escala` geradas por `TurnoPlantao`.
+`tests/test_escala.py` cobre: criação com funções padrão, atribuição/troca/status/remoção de membro, envio de notificação (com Resend/Twilio não configurados, sem 500; e envio a vários escalados em paralelo, sem o tempo total somar por pessoa), sino in-app, subcabeçalhos, isolamento cross-account (404 para outro dono). `tests/test_agendador.py` cobre a janela de disparo do scheduler, incluindo a materialização+notificação de `Escala` geradas por `TurnoPlantao`.

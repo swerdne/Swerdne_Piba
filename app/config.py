@@ -31,13 +31,14 @@ class Config:
     # API real (Anthropic/OpenAI), as respostas sao simuladas por regras simples.
     MOCK_CHATBOT = os.environ.get("MOCK_CHATBOT", "true").lower() == "true"
 
-    # Envio de e-mail (notificacoes da Escala Rapida, ver app/emailing.py).
-    MAIL_SERVER = os.environ.get("MAIL_SERVER")
-    MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
-    MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
-    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
-    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
-    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER")
+    # Envio de e-mail via API HTTP da Resend (notificacoes da Escala Rapida,
+    # ver app/emailing.py). Nao usa SMTP: a rede de saida do Render (e da
+    # maioria dos PaaS gratuitos) bloqueia as portas 25/465/587 por padrao
+    # antiabuso, entao qualquer envio por SMTP falha com "Network is
+    # unreachable" antes mesmo de chegar no servidor de e-mail. A API HTTPS
+    # (porta 443) nao tem essa restricao.
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+    RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL")
 
     # Envio de SMS via Twilio (notificacoes da Escala Rapida, ver app/sms.py).
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
@@ -62,10 +63,8 @@ class TestingConfig(Config):
 
     # Isola os testes das credenciais reais do .env: sem isso, a suite de testes
     # enviaria e-mails/SMS de verdade usando a conta configurada no ambiente local.
-    MAIL_SERVER = None
-    MAIL_USERNAME = None
-    MAIL_PASSWORD = None
-    MAIL_DEFAULT_SENDER = None
+    RESEND_API_KEY = None
+    RESEND_FROM_EMAIL = None
     TWILIO_ACCOUNT_SID = None
     TWILIO_AUTH_TOKEN = None
     TWILIO_FROM_NUMBER = None
