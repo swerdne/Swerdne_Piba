@@ -34,7 +34,12 @@ def _enviar_via_smtp(servidor, porta, usar_tls, usuario, senha, mensagem):
         if usar_tls:
             smtp.starttls(context=ssl.create_default_context())
         smtp.login(usuario, senha)
-        smtp.send_message(mensagem)
+        recusados = smtp.send_message(mensagem)
+        # send_message() so levanta excecao se TODOS os destinatarios forem
+        # recusados -- com 1 unico destinatario isso ja cobre o caso, mas o
+        # print deixa explicito no log caso algum dia isso mude (varios
+        # destinatarios na mesma mensagem).
+        print(f"[emailing] SMTP aceitou o envio. Recusados: {recusados or 'nenhum'}", flush=True)
 
 
 def enviar_email(destinatario, assunto, corpo):
@@ -62,15 +67,27 @@ def enviar_email(destinatario, assunto, corpo):
     mensagem["To"] = destinatario
     mensagem.set_content(corpo)
 
+    # Log temporario de diagnostico -- nao expoe a senha, so pra confirmar em
+    # producao qual servidor/conta esta realmente sendo usado (remover depois
+    # que confirmarmos a causa do e-mail nao chegar em lugar nenhum).
+    print(
+        f"[emailing] Tentando enviar via {servidor}:{porta} (TLS={usar_tls}) "
+        f"como {usuario!r}, From={remetente!r}, para {destinatario!r}",
+        flush=True,
+    )
+
     futuro = _executor.submit(
         _enviar_via_smtp, servidor, porta, usar_tls, usuario, senha, mensagem
     )
     try:
         futuro.result(timeout=_TIMEOUT_SEGUNDOS)
+        print(f"[emailing] Concluido sem excecao para {destinatario!r}.", flush=True)
     except concurrent.futures.TimeoutError as erro:
+        print(f"[emailing] TIMEOUT tentando enviar para {destinatario!r}: {erro}", flush=True)
         raise EmailNaoEnviadoError(
             f"Envio de e-mail para {destinatario} excedeu o tempo limite "
             f"(servidor {servidor}:{porta} nao respondeu em {_TIMEOUT_SEGUNDOS}s)."
         ) from erro
     except (smtplib.SMTPException, OSError) as erro:
+        print(f"[emailing] FALHA tentando enviar para {destinatario!r}: {erro!r}", flush=True)
         raise EmailNaoEnviadoError(f"Falha ao enviar e-mail para {destinatario}: {erro}") from erro
