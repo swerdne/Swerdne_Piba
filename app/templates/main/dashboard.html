@@ -1,8 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
-{% block content %}
-<div class="min-h-screen {{ tema.page_bg }}">
 
+{% block head %}
+<style>
+    @keyframes db-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes db-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    .db-blob { animation: db-blob-a 20s ease-in-out infinite; will-change: transform; }
+    .db-blob-2 { animation: db-blob-b 24s ease-in-out infinite; will-change: transform; }
+    .db-blob-3 { animation: db-blob-a 17s ease-in-out infinite reverse; will-change: transform; }
+    @media (prefers-reduced-motion: reduce) {
+        .db-blob, .db-blob-2, .db-blob-3 { animation: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} overflow-hidden">
+
+    <!-- Fundo animado -- teste: mesma ideia da tela de login, so que sutil o
+    suficiente pra nao atrapalhar leitura de conteudo real (cards, tabelas). -->
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl db-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl db-blob-2 -z-0"></div>
+    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl db-blob-3 -z-0"></div>
+
+    <div class="relative z-10">
     <!-- Navbar -->
     <header class="{{ tema.header_bg }} border-b {{ tema.header_border }}">
         <div class="flex items-center justify-between px-4 sm:px-6 py-4">
@@ -256,6 +277,7 @@
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
     </button>
+    </div>
 </div>
 
 <script>

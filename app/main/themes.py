@@ -31,6 +31,13 @@ THEMES = {
         "secondary_text": "text-gray-900",
         "icon_hover": "group-hover:text-gray-900",
         "text_hover": "hover:text-gray-900",
+        # Fundo animado (Dashboard, ver main/dashboard.html) -- opacidade bem
+        # baixa no claro pra so dar uma atmosfera sutil sem brigar com o
+        # conteudo real das telas (diferente da tela de login, que e so um
+        # card centralizado e aguenta um efeito mais forte).
+        "blob_1": "bg-indigo-400/20",
+        "blob_2": "bg-blue-300/20",
+        "blob_3": "bg-violet-300/15",
     },
     "escuro": {
         "label": "Escuro",
@@ -56,6 +63,9 @@ THEMES = {
         "secondary_text": "text-white",
         "icon_hover": "group-hover:text-white",
         "text_hover": "hover:text-white",
+        "blob_1": "bg-indigo-600/25",
+        "blob_2": "bg-violet-600/20",
+        "blob_3": "bg-blue-500/10",
     },
 }
 

@@ -1,60 +1,95 @@
 {% extends "base.html" %}
 {% block title %}Login{% endblock %}
+
+{% block head %}
+<style>
+    @keyframes auth-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes auth-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    @keyframes auth-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    .auth-blob { animation: auth-blob-a 15s ease-in-out infinite; will-change: transform; }
+    .auth-blob-2 { animation: auth-blob-b 18s ease-in-out infinite; will-change: transform; }
+    .auth-blob-3 { animation: auth-blob-a 12s ease-in-out infinite reverse; will-change: transform; }
+    .auth-in { opacity: 0; animation: auth-fade-up .6s ease-out forwards; }
+    .auth-in-1 { animation-delay: .05s; } .auth-in-2 { animation-delay: .12s; }
+    .auth-in-3 { animation-delay: .19s; } .auth-in-4 { animation-delay: .26s; }
+    .auth-in-5 { animation-delay: .33s; } .auth-in-6 { animation-delay: .40s; }
+    .auth-in-7 { animation-delay: .47s; }
+    .auth-in-0 { animation-delay: 0s; }
+    @media (prefers-reduced-motion: reduce) {
+        .auth-blob, .auth-blob-2, .auth-blob-3 { animation: none; }
+        .auth-in, [class*="auth-in-"] { animation: none; opacity: 1; transform: none; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="min-h-[80vh] flex items-center justify-center px-4">
-  <div class="w-full max-w-md bg-white rounded-2xl shadow-md p-8">
-    <h1 class="text-2xl font-bold text-gray-900 mb-1">Entrar</h1>
-    <p class="text-gray-500 mb-6">Acesse sua conta para continuar.</p>
+<div class="relative min-h-screen flex flex-col items-center justify-center gap-8 px-4 py-10 overflow-hidden bg-gray-950">
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-indigo-600/30 blur-3xl auth-blob"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full bg-violet-600/20 blur-3xl auth-blob-2"></div>
+    <div class="pointer-events-none absolute top-1/3 right-1/4 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl auth-blob-3"></div>
 
-    <a href="{{ url_for('auth.google_login') }}"
-       class="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-lg py-2.5 mb-6 text-gray-700 font-medium hover:bg-gray-50 transition">
-        <svg class="w-5 h-5" viewBox="0 0 48 48">
-          <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
-          <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
-          <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
-          <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
-        </svg>
-        Entrar com o Google
-    </a>
+    <img src="{{ url_for('static', filename='img/marca-fundo.png') }}" alt=""
+         class="pointer-events-none select-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[110vw] max-w-[900px] opacity-[0.06]">
 
-    <div class="flex items-center gap-3 mb-6">
-      <div class="flex-1 h-px bg-gray-200"></div>
-      <span class="text-xs text-gray-400 uppercase">ou</span>
-      <div class="flex-1 h-px bg-gray-200"></div>
+    <div class="relative flex items-center gap-3 auth-in auth-in-0">
+        <span class="text-xl font-bold tracking-tight text-white">Swerdne <span class="text-violet-400 font-semibold">Piba</span></span>
     </div>
 
-    <form method="POST" novalidate class="space-y-4">
-        {{ form.hidden_tag() }}
+    <div class="relative w-full max-w-md bg-gray-900/80 backdrop-blur border border-gray-800 rounded-2xl shadow-xl shadow-black/40 p-8 auth-in auth-in-1">
+        <h1 class="text-2xl font-bold text-white mb-1 auth-in auth-in-2">Entrar</h1>
+        <p class="text-gray-400 mb-6 auth-in auth-in-2">Acesse sua conta para continuar.</p>
 
-        <div>
-            {{ form.email.label(class_="block text-sm font-medium text-gray-700 mb-1") }}
-            {{ form.email(class_="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 " ~ ("border-red-400" if form.email.errors else "border-gray-300")) }}
-            {% for error in form.email.errors %}
-              <p class="text-xs text-red-600 mt-1">{{ error }}</p>
-            {% endfor %}
+        <a href="{{ url_for('auth.google_login') }}"
+           class="auth-in auth-in-3 w-full flex items-center justify-center gap-3 border border-gray-700 bg-gray-800/50 rounded-lg py-2.5 mb-6 text-gray-200 font-medium hover:bg-gray-800 hover:border-gray-600 transition">
+            <svg class="w-5 h-5" viewBox="0 0 48 48">
+              <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+              <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+              <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+              <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+            </svg>
+            Entrar com o Google
+        </a>
+
+        <div class="flex items-center gap-3 mb-6 auth-in auth-in-3">
+          <div class="flex-1 h-px bg-gray-800"></div>
+          <span class="text-xs text-gray-500 uppercase">ou</span>
+          <div class="flex-1 h-px bg-gray-800"></div>
         </div>
 
-        <div>
-            {{ form.password.label(class_="block text-sm font-medium text-gray-700 mb-1") }}
-            {{ form.password(class_="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 " ~ ("border-red-400" if form.password.errors else "border-gray-300")) }}
-            {% for error in form.password.errors %}
-              <p class="text-xs text-red-600 mt-1">{{ error }}</p>
-            {% endfor %}
-        </div>
+        <form method="POST" novalidate class="space-y-4">
+            {{ form.hidden_tag() }}
 
-        <div class="flex items-center justify-between">
-            <label class="flex items-center gap-2 text-sm text-gray-600">
-                {{ form.remember(class_="rounded border-gray-300") }} {{ form.remember.label.text }}
-            </label>
-        </div>
+            <div class="auth-in auth-in-4">
+                {{ form.email.label(class_="block text-sm font-medium text-gray-300 mb-1") }}
+                {{ form.email(class_="w-full rounded-lg border bg-gray-800/60 text-white placeholder-gray-500 px-3 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 " ~ ("border-red-500" if form.email.errors else "border-gray-700")) }}
+                {% for error in form.email.errors %}
+                  <p class="text-xs text-red-400 mt-1">{{ error }}</p>
+                {% endfor %}
+            </div>
 
-        {{ form.submit(class_="w-full bg-blue-600 text-white rounded-lg py-2.5 font-medium hover:bg-blue-700 transition cursor-pointer") }}
-    </form>
+            <div class="auth-in auth-in-5">
+                {{ form.password.label(class_="block text-sm font-medium text-gray-300 mb-1") }}
+                {{ form.password(class_="w-full rounded-lg border bg-gray-800/60 text-white placeholder-gray-500 px-3 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 " ~ ("border-red-500" if form.password.errors else "border-gray-700")) }}
+                {% for error in form.password.errors %}
+                  <p class="text-xs text-red-400 mt-1">{{ error }}</p>
+                {% endfor %}
+            </div>
 
-    <p class="text-center text-sm text-gray-500 mt-6">
-        Nao tem conta?
-        <a href="{{ url_for('auth.register') }}" class="text-blue-600 font-medium hover:underline">Cadastre-se</a>
-    </p>
-  </div>
+            <div class="flex items-center justify-between auth-in auth-in-5">
+                <label class="flex items-center gap-2 text-sm text-gray-400">
+                    {{ form.remember(class_="rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500") }} {{ form.remember.label.text }}
+                </label>
+            </div>
+
+            <div class="auth-in auth-in-6">
+                {{ form.submit(class_="w-full bg-indigo-600 text-white rounded-lg py-2.5 font-medium transition duration-200 hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/30 active:scale-[0.98] cursor-pointer") }}
+            </div>
+        </form>
+
+        <p class="text-center text-sm text-gray-400 mt-6 auth-in auth-in-7">
+            Nao tem conta?
+            <a href="{{ url_for('auth.register') }}" class="text-indigo-400 font-medium hover:text-indigo-300 hover:underline">Cadastre-se</a>
+        </p>
+    </div>
 </div>
 {% endblock %}
