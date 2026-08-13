@@ -1,9 +1,11 @@
 """Formularios Flask-WTF do modulo auth."""
+from flask import current_app
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField
+from wtforms import StringField, PasswordField, BooleanField, HiddenField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError
 
 from app.auth.models import User
+from app.auth.dominio_email import dominio_aceita_email
 
 
 class LoginForm(FlaskForm):
@@ -32,3 +34,17 @@ class RegisterForm(FlaskForm):
             raise ValidationError(
                 "Este e-mail ja esta cadastrado. Faca login ou use 'Entrar com o Google'."
             )
+
+        if current_app.config.get("VALIDAR_DOMINIO_EMAIL", True):
+            dominio = field.data.rsplit("@", 1)[-1]
+            if not dominio_aceita_email(dominio):
+                raise ValidationError(
+                    "Nao conseguimos confirmar que esse dominio de e-mail existe. Confira se digitou certo."
+                )
+
+
+class ReenviarConfirmacaoForm(FlaskForm):
+    """E-mail vem oculto/pre-preenchido -- a pessoa ja digitou no
+    cadastro/login, aqui e so um botao de 'reenviar' (ver app/auth/routes.py)."""
+    email = HiddenField(validators=[DataRequired(), Email()])
+    submit = SubmitField("Reenviar e-mail de confirmacao")

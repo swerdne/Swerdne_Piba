@@ -8,6 +8,7 @@ pytest
 Authlib
 requests
 email-validator
+dnspython
 twilio
 apscheduler
 psycopg2-binary

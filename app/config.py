@@ -45,6 +45,12 @@ class Config:
     TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
     TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 
+    # Cadastro tradicional: confere se o dominio do e-mail tem registro MX (ou
+    # A) antes de aceitar o cadastro (ver app/auth/dominio_email.py). Flag pra
+    # poder desligar sem mexer em codigo (ex.: se a checagem de DNS comecar a
+    # dar problema em producao).
+    VALIDAR_DOMINIO_EMAIL = os.environ.get("VALIDAR_DOMINIO_EMAIL", "true").lower() == "true"
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -68,6 +74,9 @@ class TestingConfig(Config):
     TWILIO_ACCOUNT_SID = None
     TWILIO_AUTH_TOKEN = None
     TWILIO_FROM_NUMBER = None
+
+    # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
+    VALIDAR_DOMINIO_EMAIL = False
 
 
 class ProductionConfig(Config):

@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block head %}{% endblock %}
 </head>
-{% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register') %}
+{% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register', 'auth.confirmar_email', 'auth.reenviar_confirmacao') %}
 <body class="{% if eh_pagina_auth %}bg-gray-950{% else %}bg-gray-50{% endif %} min-h-screen flex flex-col"
       {% if current_user.is_authenticated %}data-user-id="{{ current_user.id }}"{% endif %}>
     {% if request.endpoint != 'main.dashboard'

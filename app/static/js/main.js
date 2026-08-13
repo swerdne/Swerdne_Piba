@@ -65,3 +65,25 @@ console.log("App carregado.");
     });
     window.addEventListener("focus", verificar);
 })();
+
+// Mostrar/ocultar senha: qualquer botao com [data-toggle-senha="<id-do-input>"]
+// alterna o input entre type="password"/"text" e troca de icone (olho aberto/fechado).
+// Generico de proposito -- funciona em qualquer tela (login, cadastro, futuras)
+// sem precisar de JS por pagina.
+(function habilitarToggleSenha() {
+    document.querySelectorAll("[data-toggle-senha]").forEach(function (botao) {
+        var input = document.getElementById(botao.getAttribute("data-toggle-senha"));
+        if (!input) return;
+
+        var iconeAberto = botao.querySelector("[data-icone-aberto]");
+        var iconeFechado = botao.querySelector("[data-icone-fechado]");
+
+        botao.addEventListener("click", function () {
+            var mostrando = input.type === "text";
+            input.type = mostrando ? "password" : "text";
+            if (iconeAberto) iconeAberto.classList.toggle("hidden", !mostrando);
+            if (iconeFechado) iconeFechado.classList.toggle("hidden", mostrando);
+            botao.setAttribute("aria-label", mostrando ? "Mostrar senha" : "Ocultar senha");
+        });
+    });
+})();
