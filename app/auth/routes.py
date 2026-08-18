@@ -193,7 +193,12 @@ def google_callback():
     else:
         try:
             token = oauth.google.authorize_access_token()
-        except OAuthError:
+        except OAuthError as erro:
+            # Log temporario de diagnostico -- sem isso o motivo exato (invalid_client,
+            # invalid_grant, redirect_uri_mismatch etc.) nao aparece em lugar nenhum,
+            # so a mensagem generica que o usuario ve. Remover depois de identificar a causa.
+            print(f"[google_callback] OAuthError: {erro!r} | error={getattr(erro, 'error', None)!r} "
+                  f"description={getattr(erro, 'description', None)!r}", flush=True)
             # Usuario cancelou o consentimento, ou a sessao expirou/o link foi reaproveitado
             flash("Nao foi possivel concluir o login com o Google. Tente novamente.", "danger")
             return redirect(url_for("auth.login"))
