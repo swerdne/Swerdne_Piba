@@ -1,5 +1,4 @@
 """Controller (C do MVC): rotas do modulo auth."""
-import hashlib
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
@@ -171,15 +170,6 @@ def google_login():
         return render_template("auth/google_mock.html")
 
     redirect_uri = url_for("auth.google_callback", _external=True)
-    # Log temporario de diagnostico -- confirma qual client_id/client_secret o
-    # processo esta de fato enxergando em runtime (mascarado), pra descartar
-    # Environment Group sobrepondo, servico errado no Render, ou deploy que
-    # nao pegou a variavel nova. Remover junto com o print de OAuthError abaixo.
-    cid = current_app.config.get("GOOGLE_CLIENT_ID") or ""
-    csec = current_app.config.get("GOOGLE_CLIENT_SECRET") or ""
-    print(f"[google_login] redirect_uri={redirect_uri!r} "
-          f"client_id_sha256={hashlib.sha256(cid.encode()).hexdigest()} "
-          f"client_secret_sha256={hashlib.sha256(csec.encode()).hexdigest()}", flush=True)
     return oauth.google.authorize_redirect(redirect_uri)
 
 
@@ -203,12 +193,7 @@ def google_callback():
     else:
         try:
             token = oauth.google.authorize_access_token()
-        except OAuthError as erro:
-            # Log temporario de diagnostico -- sem isso o motivo exato (invalid_client,
-            # invalid_grant, redirect_uri_mismatch etc.) nao aparece em lugar nenhum,
-            # so a mensagem generica que o usuario ve. Remover depois de identificar a causa.
-            print(f"[google_callback] OAuthError: {erro!r} | error={getattr(erro, 'error', None)!r} "
-                  f"description={getattr(erro, 'description', None)!r}", flush=True)
+        except OAuthError:
             # Usuario cancelou o consentimento, ou a sessao expirou/o link foi reaproveitado
             flash("Nao foi possivel concluir o login com o Google. Tente novamente.", "danger")
             return redirect(url_for("auth.login"))
