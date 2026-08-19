@@ -170,6 +170,15 @@ def google_login():
         return render_template("auth/google_mock.html")
 
     redirect_uri = url_for("auth.google_callback", _external=True)
+    # Log temporario de diagnostico -- confirma qual client_id/client_secret o
+    # processo esta de fato enxergando em runtime (mascarado), pra descartar
+    # Environment Group sobrepondo, servico errado no Render, ou deploy que
+    # nao pegou a variavel nova. Remover junto com o print de OAuthError abaixo.
+    cid = current_app.config.get("GOOGLE_CLIENT_ID") or ""
+    csec = current_app.config.get("GOOGLE_CLIENT_SECRET") or ""
+    print(f"[google_login] redirect_uri={redirect_uri!r} "
+          f"client_id_fim={cid[-10:]!r} "
+          f"client_secret_len={len(csec)} client_secret_fim={csec[-4:]!r}", flush=True)
     return oauth.google.authorize_redirect(redirect_uri)
 
 
