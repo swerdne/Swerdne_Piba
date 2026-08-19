@@ -1,4 +1,5 @@
 """Controller (C do MVC): rotas do modulo auth."""
+import hashlib
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
@@ -177,8 +178,8 @@ def google_login():
     cid = current_app.config.get("GOOGLE_CLIENT_ID") or ""
     csec = current_app.config.get("GOOGLE_CLIENT_SECRET") or ""
     print(f"[google_login] redirect_uri={redirect_uri!r} "
-          f"client_id_fim={cid[-10:]!r} "
-          f"client_secret_len={len(csec)} client_secret_fim={csec[-4:]!r}", flush=True)
+          f"client_id_sha256={hashlib.sha256(cid.encode()).hexdigest()} "
+          f"client_secret_sha256={hashlib.sha256(csec.encode()).hexdigest()}", flush=True)
     return oauth.google.authorize_redirect(redirect_uri)
 
 
