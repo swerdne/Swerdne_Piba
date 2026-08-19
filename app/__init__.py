@@ -23,6 +23,11 @@ def create_app(config_name="default"):
         name="google",
         server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
         client_kwargs={"scope": "openid email profile"},
+        # Authlib usa client_secret_basic (HTTP Basic Auth) por padrao quando
+        # ha client_secret -- forcamos client_secret_post (credenciais no
+        # corpo da requisicao) porque foi o metodo confirmado funcionando
+        # num teste manual direto contra o token endpoint do Google.
+        token_endpoint_auth_method="client_secret_post",
     )
 
     # Registra Blueprints
