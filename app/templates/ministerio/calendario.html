@@ -50,15 +50,25 @@
             {% for semana in semanas %}
                 {% for dia in semana %}
                 {% set eventos = escalas_por_dia.get(dia, []) %}
-                <div class="min-h-24 sm:min-h-28 p-1.5 border-r border-b {{ tema.card_border }}">
+                <div class="min-h-14 sm:min-h-28 p-1 sm:p-1.5 border-r border-b {{ tema.card_border }}">
                     {% if dia == hoje %}
-                    <span class="w-6 h-6 flex items-center justify-center rounded-full bg-blue-500 text-white text-xs font-semibold">{{ dia.day }}</span>
+                    <span class="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full bg-blue-500 text-white text-[11px] sm:text-xs font-semibold">{{ dia.day }}</span>
                     {% else %}
-                    <span class="text-xs {{ tema.text_secondary if dia.month != mes else tema.text_primary }}">{{ dia.day }}</span>
+                    <span class="text-[11px] sm:text-xs {{ tema.text_secondary if dia.month != mes else tema.text_primary }}">{{ dia.day }}</span>
                     {% endif %}
 
                     {% if eventos %}
-                    <div class="mt-1 space-y-1">
+                    <!-- Mobile: so os pontinhos coloridos (mesmo padrao do mini-calendario em
+                    ministerio/detalhe.html) -- nome truncado em ~50px de coluna fica ilegivel.
+                    A partir de sm: mostra a pilula com o nome, ja que ha largura de sobra. -->
+                    <div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+                        {% for escala, cor in eventos[:4] %}
+                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                           class="w-1.5 h-1.5 rounded-full {{ cor }}"
+                           title="{{ escala.nome }}{% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}"></a>
+                        {% endfor %}
+                    </div>
+                    <div class="mt-1 space-y-1 hidden sm:block">
                         {% for escala, cor in eventos[:3] %}
                         <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
                            class="flex items-center gap-1 {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} rounded px-1 py-0.5 transition"
