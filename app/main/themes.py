@@ -19,6 +19,10 @@ THEMES = {
         "text_secondary": "text-gray-500",
         "accent_bg": "bg-indigo-600",
         "accent_bg_hover": "hover:bg-indigo-700",
+        # Equivalente em bg- da cor de text_primary -- usado pra "pintar" o
+        # icone via mascara CSS (ver main/dashboard.html), que precisa de uma
+        # classe bg- (nao text-) pra funcionar como cor de preenchimento.
+        "text_primary_bg": "bg-gray-900",
         "accent_text": "text-indigo-600",
         "accent_border": "border-indigo-600",
         "accent_soft_bg": "bg-indigo-50",
@@ -51,6 +55,7 @@ THEMES = {
         "text_secondary": "text-gray-400",
         "accent_bg": "bg-indigo-500",
         "accent_bg_hover": "hover:bg-indigo-400",
+        "text_primary_bg": "bg-white",
         "accent_text": "text-indigo-400",
         "accent_border": "border-indigo-500",
         "accent_soft_bg": "bg-gray-800",

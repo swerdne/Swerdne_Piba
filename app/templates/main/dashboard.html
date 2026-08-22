@@ -30,9 +30,10 @@
             <div class="flex items-center gap-2.5">
                 <!-- O PNG e so linhas brancas (sem fundo), entao sem cor por tras ele
                 some no tema claro (cabecalho branco). Em vez do quadrado colorido,
-                usa o PNG como mascara CSS pra "pintar" o icone na cor de destaque
-                (funciona nos dois temas, sem precisar de um fundo atras). -->
-                <div class="w-8 h-8 {{ tema.accent_bg }} shrink-0"
+                usa o PNG como mascara CSS pra "pintar" o icone na cor de text_primary
+                (branco no tema escuro, escuro no tema claro pra continuar visivel
+                no cabecalho branco) -- funciona nos dois temas, sem fundo atras. -->
+                <div class="w-8 h-8 {{ tema.text_primary_bg }} shrink-0"
                      style="-webkit-mask-image:url('{{ url_for('static', filename='img/logo-icone.png') }}'); mask-image:url('{{ url_for('static', filename='img/logo-icone.png') }}'); -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-position:center; mask-position:center;">
                 </div>
                 <span class="text-base font-semibold {{ tema.text_primary }}">Piba Swerdne</span>
