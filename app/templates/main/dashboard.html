@@ -28,8 +28,8 @@
     <header class="{{ tema.header_bg }} border-b {{ tema.header_border }}">
         <div class="flex items-center justify-between px-4 sm:px-6 py-4">
             <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-lg {{ tema.accent_bg }} flex items-center justify-center text-white font-bold text-sm">
-                    PS
+                <div class="w-8 h-8 rounded-lg {{ tema.accent_bg }} flex items-center justify-center p-1.5">
+                    <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-full h-full object-contain">
                 </div>
                 <span class="text-base font-semibold {{ tema.text_primary }}">Piba Swerdne</span>
             </div>
