@@ -4,9 +4,8 @@ from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
 from app.extensions import db, oauth, limiter
 from app.auth import bp
-from app.auth.forms import LoginForm, RegisterForm, ReenviarConfirmacaoForm
+from app.auth.forms import LoginForm, RegisterForm
 from app.auth.models import User
-from app.emailing import enviar_email, EmailNaoEnviadoError
 
 
 def _redirecionar_apos_login():
@@ -16,31 +15,6 @@ def _redirecionar_apos_login():
     nenhum destino guardado. `pop` de proposito: o destino so vale uma vez."""
     destino = session.pop("proximo_apos_login", None)
     return redirect(destino or url_for("main.dashboard"))
-
-
-def _enviar_email_de_confirmacao(user):
-    """Gera um token novo (invalida qualquer link antigo) e envia o e-mail de
-    confirmacao. Falha de envio nunca quebra a requisicao (mesmo padrao de
-    app/convites/routes.py::_enviar_email_de_convite) -- a conta ja foi
-    criada/o token ja foi salvo, so avisa que o e-mail pode nao ter chegado e
-    mostra o link pra copiar manualmente."""
-    user.gerar_token_confirmacao()
-    db.session.commit()
-
-    link = url_for("auth.confirmar_email", token=user.token_confirmacao, _external=True)
-    corpo = (
-        f"Falta pouco! Confirme seu e-mail pra ativar sua conta no PIBA Swerdne.\n\n"
-        f"Acesse o link abaixo (valido por {24}h):\n{link}\n\n"
-        "Se voce nao pediu esse cadastro, pode ignorar este e-mail."
-    )
-    try:
-        enviar_email(user.email, "Confirme seu e-mail", corpo)
-    except EmailNaoEnviadoError:
-        flash(
-            f"Nao conseguimos enviar o e-mail de confirmacao agora. "
-            f"Voce pode usar este link diretamente: {link}",
-            "danger",
-        )
 
 
 # Usuario fake devolvido pelo "Google simulado" no cenario de sucesso.
@@ -59,12 +33,6 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and user.check_password(form.password.data):
-            if not user.email_confirmado:
-                return render_template(
-                    "auth/verifique_email.html",
-                    email=user.email,
-                    reenviar_form=ReenviarConfirmacaoForm(email=user.email),
-                )
             login_user(user, remember=form.remember.data)
             return _redirecionar_apos_login()
         flash("Credenciais invalidas.", "danger")
@@ -76,74 +44,16 @@ def login():
 def register():
     form = RegisterForm()
     if form.validate_on_submit():
-        user = User(username=form.username.data, email=form.email.data)
+        # Sem confirmacao de e-mail: a conta ja nasce ativa e loga direto,
+        # igual ao Google (que tambem nao passa por esse fluxo).
+        user = User(username=form.username.data, email=form.email.data, email_confirmado=True)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
 
-        _enviar_email_de_confirmacao(user)
-
-        return render_template(
-            "auth/verifique_email.html",
-            email=user.email,
-            reenviar_form=ReenviarConfirmacaoForm(email=user.email),
-            eh_cadastro_novo=True,
-        )
+        login_user(user)
+        return _redirecionar_apos_login()
     return render_template("auth/register.html", form=form)
-
-
-@bp.route("/confirmar-email/<token>")
-def confirmar_email(token):
-    user = User.query.filter_by(token_confirmacao=token).first()
-
-    if user is None:
-        flash("Link de confirmacao invalido. Se ja confirmou seu e-mail, so fazer login.", "danger")
-        return redirect(url_for("auth.login"))
-
-    if not user.token_confirmacao_valido(token):
-        return render_template(
-            "auth/verifique_email.html",
-            email=user.email,
-            reenviar_form=ReenviarConfirmacaoForm(email=user.email),
-            link_expirado=True,
-        )
-
-    user.email_confirmado = True
-    user.token_confirmacao = None
-    user.token_confirmacao_expira_em = None
-    db.session.commit()
-
-    login_user(user)
-    flash("E-mail confirmado com sucesso! Sua conta esta ativa.", "success")
-    return _redirecionar_apos_login()
-
-
-@bp.route("/reenviar-confirmacao", methods=["POST"])
-@limiter.limit("5 per hour")
-def reenviar_confirmacao():
-    form = ReenviarConfirmacaoForm()
-
-    if not form.validate_on_submit():
-        flash("Informe um e-mail valido.", "danger")
-        return redirect(url_for("auth.login"))
-
-    user = User.query.filter_by(email=form.email.data).first()
-
-    if user is None:
-        flash("Nao encontramos uma conta com esse e-mail.", "danger")
-        return redirect(url_for("auth.login"))
-
-    if user.email_confirmado:
-        flash("Esse e-mail ja esta confirmado. Voce ja pode fazer login.", "success")
-        return redirect(url_for("auth.login"))
-
-    _enviar_email_de_confirmacao(user)
-    flash("Reenviamos o e-mail de confirmacao.", "success")
-    return render_template(
-        "auth/verifique_email.html",
-        email=user.email,
-        reenviar_form=ReenviarConfirmacaoForm(email=user.email),
-    )
 
 
 @bp.route("/logout")

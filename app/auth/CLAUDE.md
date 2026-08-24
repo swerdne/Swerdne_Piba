@@ -1,32 +1,21 @@
-# app/auth — Login, cadastro e confirmação de e-mail
+# app/auth — Login e cadastro
 
 Contexto local. Visão geral do projeto e convenções gerais: [../../CLAUDE.md](../../CLAUDE.md).
 
 ## Responsabilidade
 
-Autenticação: cadastro/login tradicional (e-mail/senha) e Google OAuth (Authlib), na mesma tabela `User`. Desde a introdução da confirmação de e-mail, o cadastro tradicional só vira uma conta **ativa** (que consegue logar) depois que a pessoa clica no link enviado por e-mail — Google não passa por esse fluxo, porque o próprio Google já validou a posse do e-mail no consentimento OAuth.
+Autenticação: cadastro/login tradicional (e-mail/senha) e Google OAuth (Authlib), na mesma tabela `User`. **Não há confirmação de e-mail** — cadastro tradicional loga direto (`POST /auth/register` → `login_user` → `_redirecionar_apos_login()`), igual ao fluxo do Google. Já existiu um fluxo de confirmação por link (token + e-mail); foi desativado por decisão do usuário — ver "Ex-confirmação de e-mail" abaixo antes de reativar algo parecido.
 
 ## Segurança
 
-- **Rate limiting** (`app/extensions.py::limiter`, Flask-Limiter): `/auth/login` 10/min, `/auth/register` e `/auth/reenviar-confirmacao` 5/hora, tudo por IP. Armazenamento em memória (mesma ressalva do scheduler único sobre múltiplos workers — não há storage compartilhado configurado). Desligado em teste via `RATELIMIT_ENABLED=False` (`TestingConfig`), senão a suíte estouraria o limite (`_registrar_e_confirmar` roda em quase todo teste). Página de erro 429 estilizada em `app/errors.py`.
+- **Rate limiting** (`app/extensions.py::limiter`, Flask-Limiter): `/auth/login` 10/min, `/auth/register` 5/hora, tudo por IP. Armazenamento em memória (mesma ressalva do scheduler único sobre múltiplos workers — não há storage compartilhado configurado). Desligado em teste via `RATELIMIT_ENABLED=False` (`TestingConfig`), senão a suíte estouraria o limite (`_registrar` roda em quase todo teste, ver `tests/conftest.py`). Página de erro 429 estilizada em `app/errors.py`.
 - **`SECRET_KEY`**: `ProductionConfig` exige a env var de verdade e falha ao subir (`RuntimeError`) se ausente — não usa mais o fallback fraco da classe base `Config` (`"troque-esta-chave"`) em produção, que ficaria exposto no código-fonte público.
 - **Cookies de sessão**: `SESSION_COOKIE_SECURE`/`SAMESITE` e `REMEMBER_COOKIE_SECURE`/`SAMESITE` setados em `ProductionConfig` (só trafegam por HTTPS).
-- **Senha mínima**: 8 caracteres (`RegisterForm.password`, era 6).
+- **Senha mínima**: 8 caracteres (`RegisterForm.password`).
 
-## Confirmação de e-mail (cadastro tradicional)
+## Ex-confirmação de e-mail (desativada)
 
-Campos em `User` (`app/auth/models.py`): `email_confirmado` (bool), `token_confirmacao` (nullable, único), `token_confirmacao_expira_em` (nullable, `HORAS_VALIDADE_TOKEN_CONFIRMACAO = 24`). `User.gerar_token_confirmacao()` cria um token novo (invalida qualquer link antigo, já que troca o valor) e `User.token_confirmacao_valido(token)` confere igualdade (`secrets.compare_digest`, evita timing attack) **e** validade do prazo.
-
-- `default=False` (Python/SQLAlchemy) pro cadastro tradicional sempre nascer não-confirmado; `server_default=true()` (SQL, só usado pela migração `34872613344e`) dá como confirmadas as contas que já existiam antes dessa coluna existir — não tem como confirmar retroativamente quem já estava cadastrado, então essas contas foram "perdoadas" pra não travar ninguém de repente. Contas Google (novas ou vinculando a uma conta tradicional já existente) são marcadas `email_confirmado=True` no momento da criação/vínculo, em `auth.routes.google_callback` — nunca passam pelo token.
-
-### Fluxo (`app/auth/routes.py`)
-
-1. `POST /auth/register` — valida o form (ver abaixo), cria o `User` (`email_confirmado=False`), **não loga** (mudança de comportamento importante: antes logava direto), chama `_enviar_email_de_confirmacao` e renderiza `auth/verifique_email.html` (não redireciona) com o e-mail cadastrado.
-2. `GET /auth/confirmar-email/<token>` — busca `User` pelo token. Token inexistente → flash de erro + redireciona pro login. Token existe mas expirado (`token_confirmacao_valido` retorna `False`) → re-renderiza `verifique_email.html` com `link_expirado=True` (oferece reenvio). Token válido → `email_confirmado=True`, limpa o token, **loga** (`login_user`) e redireciona via `_redirecionar_apos_login()` — é o único lugar que loga depois do cadastro tradicional.
-3. `POST /auth/reenviar-confirmacao` (`ReenviarConfirmacaoForm`, e-mail vem oculto/pré-preenchido no template, não digitado de novo) — gera token novo e reenvia. Conta já confirmada → avisa e não reenvia nada. E-mail não cadastrado → avisa que não achou.
-4. `POST /auth/login` — se a senha bate mas `email_confirmado` é `False`, **não loga**: renderiza `verifique_email.html` (mesmo padrão do registro) em vez de `login.html`, com o formulário de reenvio.
-
-`_enviar_email_de_confirmacao` segue o mesmo padrão de `app/convites/routes.py::_enviar_email_de_convite`: nunca deixa falha de envio (`EmailNaoEnviadoError`) quebrar a request — o token já foi salvo, só avisa e mostra o link pra copiar manualmente.
+Existiu um fluxo completo de confirmação por link (token + e-mail via Resend, rotas `GET /auth/confirmar-email/<token>` e `POST /auth/reenviar-confirmacao`, template `auth/verifique_email.html`) — **removido a pedido do usuário** (cadastro tradicional passou a bloquear login até clicar no link, o que gerou fricção/problemas reais). As colunas `email_confirmado`, `token_confirmacao`, `token_confirmacao_expira_em` continuam em `User` (`app/auth/models.py`) **sem uso ativo**, de propósito — evita uma migration destrutiva sem necessidade. Toda conta nova (tradicional ou Google) nasce com `email_confirmado=True`, só por consistência de dado, nada mais lê esse campo. Se for reativar esse fluxo no futuro, o histórico de como funcionava está no commit que o removeu.
 
 ### Validação de domínio (`app/auth/dominio_email.py`)
 
@@ -34,7 +23,7 @@ Campos em `User` (`app/auth/models.py`): `email_confirmado` (bool), `token_confi
 
 ### `tests/conftest.py` — fixtures `logged_in_client`/`outro_logged_in_client`
 
-Registro sozinho **não loga mais ninguém** — por isso essas fixtures (usadas por quase todo o resto da suíte pra simular "uma conta logada") não podem mais só dar POST em `/auth/register`. `_registrar_e_confirmar(cliente, app, username, email)` registra, busca o `token_confirmacao` direto no banco (o e-mail de verdade nunca sai em teste — `RESEND_API_KEY` é `None` em `TestingConfig`) e visita `GET /auth/confirmar-email/<token>`, que é quem de fato loga. Ao adicionar um teste novo que precise de uma conta logada "do zero" (não via essas fixtures), use esse mesmo helper em vez de só `POST /auth/register`.
+`_registrar(cliente, username, email)` só dá `POST /auth/register` — registro já loga direto. Ao adicionar um teste novo que precise de uma conta logada "do zero" (não via essas fixtures), use esse mesmo helper.
 
 ## Mostrar/ocultar senha
 
@@ -42,4 +31,4 @@ Qualquer botão com `data-toggle-senha="<id-do-input>"` (mais os dois `<svg>` in
 
 ## Testes
 
-`tests/test_auth.py` cobre: hashing de senha, `/auth/sessao-atual` (detecção de troca de sessão entre abas), e o fluxo de confirmação inteiro — registro não loga, confirmação loga e redireciona, token inválido/expirado, login bloqueado sem confirmar, reenvio (token novo, já confirmado, e-mail inexistente), e recusa de domínio sem MX (via `monkeypatch` em `app.auth.forms.dominio_aceita_email`, já que `VALIDAR_DOMINIO_EMAIL` fica desligado por padrão em teste).
+`tests/test_auth.py` cobre: hashing de senha, cadastro (loga direto), login após registro/logout, `/auth/sessao-atual` (detecção de troca de sessão entre abas), e recusa de domínio sem MX (via `monkeypatch` em `app.auth.forms.dominio_aceita_email`, já que `VALIDAR_DOMINIO_EMAIL` fica desligado por padrão em teste).

@@ -1,12 +1,7 @@
 """Model (M do MVC): entidade User."""
-import secrets
-from datetime import datetime, timedelta, timezone
-
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app.extensions import db, login_manager
-
-HORAS_VALIDADE_TOKEN_CONFIRMACAO = 24
 
 
 class User(UserMixin, db.Model):
@@ -42,12 +37,10 @@ class User(UserMixin, db.Model):
     # ao servidor/terminal.
     eh_super_admin = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
-    # Confirmacao de e-mail (cadastro tradicional) -- ver app/auth/CLAUDE.md.
-    # default=False (Python/ORM) pro cadastro tradicional exigir confirmacao;
-    # server_default=true() (SQL) so pra migracao dar como confirmadas as
-    # contas que ja existiam antes dessa coluna existir (nunca teriam como
-    # confirmar retroativamente). Contas Google sao marcadas confirmadas no
-    # momento da criacao (o proprio Google ja validou a posse do e-mail).
+    # Ex-confirmacao de e-mail por link (removida -- cadastro tradicional
+    # agora loga direto, igual Google). Colunas mantidas sem uso ativo pra
+    # nao precisar de uma migration destrutiva; sempre True em conta nova
+    # (ver auth/routes.py::register e google_callback).
     email_confirmado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.true())
     token_confirmacao = db.Column(db.String(64), unique=True, nullable=True)
     token_confirmacao_expira_em = db.Column(db.DateTime, nullable=True)
@@ -60,24 +53,6 @@ class User(UserMixin, db.Model):
         if not self.password_hash:
             return False
         return check_password_hash(self.password_hash, password)
-
-    def gerar_token_confirmacao(self):
-        """Gera um novo token de confirmacao de e-mail, valido por
-        HORAS_VALIDADE_TOKEN_CONFIRMACAO horas -- usado tanto no cadastro
-        quanto no reenvio (troca o token anterior, invalidando links velhos)."""
-        self.token_confirmacao = secrets.token_urlsafe(32)
-        self.token_confirmacao_expira_em = datetime.now(timezone.utc) + timedelta(
-            hours=HORAS_VALIDADE_TOKEN_CONFIRMACAO
-        )
-        return self.token_confirmacao
-
-    def token_confirmacao_valido(self, token):
-        return (
-            self.token_confirmacao is not None
-            and secrets.compare_digest(self.token_confirmacao, token)
-            and self.token_confirmacao_expira_em is not None
-            and self.token_confirmacao_expira_em.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc)
-        )
 
     def __repr__(self):
         return f"<User {self.username}>"

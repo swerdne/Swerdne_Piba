@@ -44,27 +44,19 @@ def db(app):
     return _db
 
 
-def _registrar_e_confirmar(cliente, app, username, email, senha="senha123"):
-    """Registra e completa o fluxo de confirmacao de e-mail (o cadastro sozinho
-    nao loga mais ninguem -- ver app/auth/routes.py::register). Busca o token
-    direto no banco (o e-mail de verdade nunca sai em teste, RESEND_API_KEY
-    fica None em TestingConfig) e visita o link de confirmacao, que e quem de
-    fato loga o usuario."""
+def _registrar(cliente, username, email, senha="senha123"):
+    """Registra uma conta -- cadastro tradicional loga direto (sem
+    confirmacao de e-mail, ver app/auth/routes.py::register)."""
     cliente.post(
         "/auth/register",
         data={"username": username, "email": email, "password": senha, "confirm": senha},
         follow_redirects=True,
     )
-    with app.app_context():
-        from app.auth.models import User
-        usuario = User.query.filter_by(email=email).first()
-        token = usuario.token_confirmacao
-    cliente.get(f"/auth/confirmar-email/{token}", follow_redirects=True)
 
 
 @pytest.fixture
-def logged_in_client(client, app):
-    _registrar_e_confirmar(client, app, "ana", "ana@example.com")
+def logged_in_client(client):
+    _registrar(client, "ana", "ana@example.com")
     return client
 
 
@@ -73,5 +65,5 @@ def outro_logged_in_client(app):
     """Um segundo 'navegador' (cookies proprios) logado numa conta diferente."""
     cliente = app.test_client()
     with sessao_isolada(app):
-        _registrar_e_confirmar(cliente, app, "bruno", "bruno@example.com")
+        _registrar(cliente, "bruno", "bruno@example.com")
     return cliente
