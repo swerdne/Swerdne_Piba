@@ -29,7 +29,7 @@ def _enviar_email_de_confirmacao(user):
 
     link = url_for("auth.confirmar_email", token=user.token_confirmacao, _external=True)
     corpo = (
-        f"Falta pouco! Confirme seu e-mail pra ativar sua conta no Piba Swerdne.\n\n"
+        f"Falta pouco! Confirme seu e-mail pra ativar sua conta no PIBA Swerdne.\n\n"
         f"Acesse o link abaixo (valido por {24}h):\n{link}\n\n"
         "Se voce nao pediu esse cadastro, pode ignorar este e-mail."
     )
