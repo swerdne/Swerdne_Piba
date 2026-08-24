@@ -206,7 +206,13 @@ def detalhe(escala_id):
 
             if funcao.membro_id is None:
                 form_membro = SelecionarMembroForm()
-                form_membro.membro_id.choices = [(m.id, m.nome) for m in diretorio]
+                # Placeholder em 0 (nao um id real) -- sem isso o <select> nao
+                # tem opcao em branco e o navegador mostra a primeira pessoa
+                # da lista como se ja estivesse escolhida (DataRequired
+                # barra o 0 como valor invalido se a pessoa nao trocar).
+                form_membro.membro_id.choices = [(0, "Selecione a pessoa")] + [
+                    (m.id, m.nome) for m in diretorio
+                ]
                 formularios_membro[funcao.id] = form_membro
             else:
                 mover_form = MoverForm()
