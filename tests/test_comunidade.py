@@ -139,6 +139,40 @@ def test_adicionar_membro_ao_diretorio(logged_in_client, app, db):
         assert "Fulano" in response.data.decode("utf-8")
 
 
+def test_adicionar_membro_com_proximo_volta_pra_escala(logged_in_client, app, db):
+    """Ver escala/detalhe.html: o link "Adicionar novo membro ao diretorio"
+    carrega ?proximo=<url da escala> pra, depois de cadastrar, voltar direto
+    pra tela de edicao da escala em vez de ficar em Comunidade > Membros."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        destino = f"/escala/{escala.id}"
+
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade.id}/membros?proximo={destino}",
+            data={"nome": "Fulano", "telefone": "", "email": ""},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"] == destino
+
+
+def test_adicionar_membro_ignora_proximo_externo(logged_in_client, app, db):
+    """proximo=//evil.com ou http://evil.com nao pode virar open redirect --
+    cai no comportamento padrao (fica em Comunidade > Membros)."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade.id}/membros?proximo=//evil.com",
+            data={"nome": "Fulano", "telefone": "", "email": ""},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"] == f"/comunidade/{comunidade.id}/membros"
+
+
 def test_excluir_membro_do_diretorio(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)

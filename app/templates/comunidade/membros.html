@@ -26,6 +26,7 @@
             <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Adicionar ao diretorio</h2>
             <form method="POST" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
                 {{ form.hidden_tag() }}
+                {% if proximo %}<input type="hidden" name="proximo" value="{{ proximo }}">{% endif %}
                 <div class="grid sm:grid-cols-3 gap-3">
                     <div>
                         {{ form.nome(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="Nome") }}

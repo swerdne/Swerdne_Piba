@@ -256,6 +256,17 @@ def membros(comunidade_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
     form = MembroDiretorioForm()
 
+    # Link "de volta" opcional (ex: veio da tela de uma Escala pra cadastrar
+    # alguem que faltava no diretorio, ver escala/detalhe.html) -- so aceita
+    # caminho relativo interno (comeca com "/" e nao "//") pra nao virar um
+    # open redirect se alguem forjar o parametro. request.values cobre tanto
+    # a querystring (GET, e o form nao tem action= explicito entao ela e
+    # preservada no POST) quanto o campo oculto abaixo, entao funciona nos
+    # dois metodos sem duplicar logica.
+    proximo = request.values.get("proximo")
+    if not proximo or not proximo.startswith("/") or proximo.startswith("//"):
+        proximo = None
+
     if form.validate_on_submit():
         membro = Membro(
             comunidade_id=comunidade.id,
@@ -266,7 +277,7 @@ def membros(comunidade_id):
         db.session.add(membro)
         db.session.commit()
         flash(f"{membro.nome} adicionado(a) ao diretorio.", "success")
-        return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
+        return redirect(proximo or url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     diretorio = Membro.query.filter_by(comunidade_id=comunidade.id).order_by(Membro.nome).all()
 
@@ -276,6 +287,7 @@ def membros(comunidade_id):
         diretorio=diretorio,
         form=form,
         acao_form=AcaoForm(),
+        proximo=proximo,
     )
 
 

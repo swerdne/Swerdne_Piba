@@ -236,7 +236,7 @@
                     {% else %}
                         {% if diretorio_vazio %}
                             <p class="text-xs {{ tema.text_secondary }} w-full mb-2">Diretorio da comunidade vazio.</p>
-                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
+                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id, proximo=request.path) }}"
                                class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
                                 <i class="fa-solid fa-address-book"></i>
                                 Cadastrar membros no diretorio
@@ -255,7 +255,7 @@
                             {% for erro in form.membro_id.errors %}
                                 <p class="text-xs text-red-400 mt-1 w-full">{{ erro }}</p>
                             {% endfor %}
-                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id) }}"
+                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id, proximo=request.path) }}"
                                class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
                                 <i class="fa-solid fa-user-plus"></i>
                                 Adicionar novo membro ao diretorio
