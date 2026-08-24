@@ -4,6 +4,7 @@ import uuid
 
 from flask import render_template, redirect, url_for, flash, request, current_app, abort
 from flask_login import login_required, current_user
+from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
@@ -141,6 +142,44 @@ def nova():
     return render_template("comunidade/nova.html", form=form)
 
 
+# Passos do tutorial guiado (spotlight, ver app/static/js/main.js) mostrado
+# na primeira vez que a conta abre uma Comunidade -- "seletor" bate com os
+# atributos data-tutorial="..." em comunidade/detalhe.html. None = passo
+# centralizado, sem destacar elemento nenhum (boas-vindas/conclusao).
+PASSOS_TUTORIAL_COMUNIDADE = [
+    {
+        "seletor": None,
+        "titulo": "Bem-vindo a sua comunidade!",
+        "texto": "Vamos te mostrar rapidinho como tudo funciona por aqui -- leva menos de um minuto.",
+    },
+    {
+        "seletor": "[data-tutorial='convites']",
+        "titulo": "Convide sua equipe",
+        "texto": "Aqui voce convida outras pessoas por e-mail e define quem e admin ou apenas membro da comunidade.",
+    },
+    {
+        "seletor": "[data-tutorial='membros']",
+        "titulo": "Diretorio de membros",
+        "texto": "A lista de todo mundo que pode ser escalado -- nome, telefone e e-mail, sem precisar ter conta no sistema.",
+    },
+    {
+        "seletor": "[data-tutorial='escalados']",
+        "titulo": "Veja quem esta escalado",
+        "texto": "Um relatorio com todo mundo escalado em qualquer ministerio da comunidade, com filtros por data e departamento.",
+    },
+    {
+        "seletor": "[data-tutorial='novo-ministerio']",
+        "titulo": "Organize por ministerios",
+        "texto": "Cada area da sua comunidade (Louvor, Midia, Kids...) e um Ministerio -- e la que as escalas de verdade sao criadas.",
+    },
+    {
+        "seletor": None,
+        "titulo": "Pronto!",
+        "texto": "Voce ja sabe o essencial. Pode explorar a vontade -- da pra rever isso depois se precisar.",
+    },
+]
+
+
 @bp.route("/<int:comunidade_id>")
 @login_required
 def detalhe(comunidade_id):
@@ -156,6 +195,12 @@ def detalhe(comunidade_id):
         ministerios=ministerios,
         total_membros=total_membros,
         acao_form=AcaoForm(),
+        mostrar_tutorial=not current_user.tutorial_comunidade_visto,
+        passos_tutorial=PASSOS_TUTORIAL_COMUNIDADE,
+        # generate_csrf() direto (nao o global csrf_token() do Jinja, que so
+        # existe se CSRFProtect(app) for registrado globalmente -- nao e o
+        # caso aqui) -- funciona com WTF_CSRF_ENABLED ligado ou desligado.
+        csrf_token_tutorial=generate_csrf(),
     )
 
 

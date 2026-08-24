@@ -14,6 +14,14 @@ Contexto local. Visão geral do projeto e convenções gerais: [../../CLAUDE.md]
 
 `Membro` **não está** em `app/comunidade/models.py` — está em `app/escala/models.py` (tabela `escala_membros`), importado aqui. Se for procurar o model do diretório de pessoas, é lá. **Não confundir com `UsuarioComunidade`**: `Membro` é o diretório de pessoas escaláveis (nome/telefone/email, sem conta obrigatória); `UsuarioComunidade` é papel de uma **conta com login**. Os dois só se cruzam por coincidência de e-mail, quando faz sentido (ver `_comunidade_visivel_ou_404`).
 
+## Tutorial guiado (spotlight)
+
+`comunidade.detalhe` mostra um tour guiado (destaque com "spotlight" sobre elementos reais da tela, não um modal de slides) na **primeira vez** que a conta abre uma Comunidade — nunca mais depois disso, pra conta inteira (não é por comunidade). Controlado por `User.tutorial_comunidade_visto` (bool, `app/auth/models.py`).
+
+- Passos em `PASSOS_TUTORIAL_COMUNIDADE` (`comunidade/routes.py`), casando por `seletor` CSS com atributos `data-tutorial="..."` no template (`convites`, `membros`, `escalados`, `novo-ministerio`); `seletor: None` = passo centralizado, sem destacar nada (boas-vindas/conclusão).
+- Motor genérico em `app/static/js/main.js::iniciarTutorialSpotlight` — lê um `<script type="application/json" id="tutorial-dados">` (só existe no HTML quando `mostrar_tutorial=True`) com `{urlConcluir, csrf, passos}`. Reaproveitável em qualquer outra tela só adicionando esse bloco + atributos `data-tutorial`, sem JS novo por página.
+- `POST /tutorial-comunidade-visto` (`app/main/routes.py`) marca visto — chamado via `fetch` quando a pessoa clica "Pular"/"Concluir" ou aperta Esc. Usa `generate_csrf()` direto na rota (não o global Jinja `csrf_token()`, que só existe se `CSRFProtect(app)` for registrado globalmente — não é o caso neste projeto, que usa `FlaskForm` por rota).
+
 ## Regras específicas
 
 - `GET/POST /comunidade/<id>/papeis` (`papeis`) — tela de gestão de papéis: lista admins/membros atuais + convites pendentes, formulário pra convidar por e-mail (`app/convites`). Só admin chega aqui (`_comunidade_do_usuario_ou_404`).

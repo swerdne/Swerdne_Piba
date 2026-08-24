@@ -32,3 +32,9 @@ class TemaForm(FlaskForm):
         validators=[DataRequired()],
     )
     submit = SubmitField("Salvar tema")
+
+
+class AcaoForm(FlaskForm):
+    """Form vazio (so CSRF) -- mesmo padrao usado em outros blueprints pra
+    acoes simples de POST (ver comunidade/ministerio/escala/plantao)."""
+    pass

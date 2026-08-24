@@ -6,6 +6,13 @@ Contexto local. Visão geral do projeto e convenções gerais: [../../CLAUDE.md]
 
 Autenticação: cadastro/login tradicional (e-mail/senha) e Google OAuth (Authlib), na mesma tabela `User`. Desde a introdução da confirmação de e-mail, o cadastro tradicional só vira uma conta **ativa** (que consegue logar) depois que a pessoa clica no link enviado por e-mail — Google não passa por esse fluxo, porque o próprio Google já validou a posse do e-mail no consentimento OAuth.
 
+## Segurança
+
+- **Rate limiting** (`app/extensions.py::limiter`, Flask-Limiter): `/auth/login` 10/min, `/auth/register` e `/auth/reenviar-confirmacao` 5/hora, tudo por IP. Armazenamento em memória (mesma ressalva do scheduler único sobre múltiplos workers — não há storage compartilhado configurado). Desligado em teste via `RATELIMIT_ENABLED=False` (`TestingConfig`), senão a suíte estouraria o limite (`_registrar_e_confirmar` roda em quase todo teste). Página de erro 429 estilizada em `app/errors.py`.
+- **`SECRET_KEY`**: `ProductionConfig` exige a env var de verdade e falha ao subir (`RuntimeError`) se ausente — não usa mais o fallback fraco da classe base `Config` (`"troque-esta-chave"`) em produção, que ficaria exposto no código-fonte público.
+- **Cookies de sessão**: `SESSION_COOKIE_SECURE`/`SAMESITE` e `REMEMBER_COOKIE_SECURE`/`SAMESITE` setados em `ProductionConfig` (só trafegam por HTTPS).
+- **Senha mínima**: 8 caracteres (`RegisterForm.password`, era 6).
+
 ## Confirmação de e-mail (cadastro tradicional)
 
 Campos em `User` (`app/auth/models.py`): `email_confirmado` (bool), `token_confirmacao` (nullable, único), `token_confirmacao_expira_em` (nullable, `HORAS_VALIDADE_TOKEN_CONFIRMACAO = 24`). `User.gerar_token_confirmacao()` cria um token novo (invalida qualquer link antigo, já que troca o valor) e `User.token_confirmacao_valido(token)` confere igualdade (`secrets.compare_digest`, evita timing attack) **e** validade do prazo.

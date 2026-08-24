@@ -25,7 +25,7 @@
                 <span class="font-semibold {{ tema.text_primary }} truncate">{{ comunidade.nome }}</span>
             </div>
             <div class="flex items-center gap-3 shrink-0">
-                <a href="{{ url_for('comunidade.papeis', comunidade_id=comunidade.id) }}"
+                <a href="{{ url_for('comunidade.papeis', comunidade_id=comunidade.id) }}" data-tutorial="convites"
                    class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition" aria-label="Papeis e convites">
                     <i class="fa-solid fa-user-group"></i>
                 </a>
@@ -52,12 +52,12 @@
         {% endif %}
 
         <div class="grid grid-cols-2 gap-3">
-            <a href="{{ url_for('comunidade.membros', comunidade_id=comunidade.id) }}"
+            <a href="{{ url_for('comunidade.membros', comunidade_id=comunidade.id) }}" data-tutorial="membros"
                class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 {{ tema.card_bg_hover }} transition">
                 <i class="fa-solid fa-address-book {{ tema.text_secondary }}"></i>
                 <span class="text-sm {{ tema.text_primary }}">Membros <span class="{{ tema.text_secondary }}">({{ total_membros }})</span></span>
             </a>
-            <a href="{{ url_for('comunidade.escalados', comunidade_id=comunidade.id) }}"
+            <a href="{{ url_for('comunidade.escalados', comunidade_id=comunidade.id) }}" data-tutorial="escalados"
                class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 {{ tema.card_bg_hover }} transition">
                 <i class="fa-solid fa-calendar-check {{ tema.text_secondary }}"></i>
                 <span class="text-sm {{ tema.text_primary }}">Ver escalados</span>
@@ -66,7 +66,7 @@
 
         <div class="flex items-center justify-between">
             <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Ministerios</h2>
-            <a href="{{ url_for('ministerio.nova', comunidade_id=comunidade.id) }}"
+            <a href="{{ url_for('ministerio.nova', comunidade_id=comunidade.id) }}" data-tutorial="novo-ministerio"
                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
                 <i class="fa-solid fa-plus mr-1"></i>Novo Ministerio
             </a>
@@ -103,4 +103,10 @@
 
     </main>
 </div>
+
+{% if mostrar_tutorial %}
+<script type="application/json" id="tutorial-dados">
+    {{ {"urlConcluir": url_for('main.tutorial_comunidade_visto'), "csrf": csrf_token_tutorial, "passos": passos_tutorial} | tojson }}
+</script>
+{% endif %}
 {% endblock %}

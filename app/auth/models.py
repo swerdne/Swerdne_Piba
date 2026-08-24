@@ -29,6 +29,12 @@ class User(UserMixin, db.Model):
     # Preferencia de aparencia do dashboard (ver app/main/themes.py)
     theme = db.Column(db.String(20), nullable=False, default="indigo", server_default="indigo")
 
+    # Tutorial guiado (spotlight) mostrado na primeira vez que a conta entra
+    # numa tela de detalhe de Comunidade -- ver app/comunidade/routes.py e
+    # app/static/js/tutorial.js. Uma vez so, pra conta inteira (nao repete
+    # por comunidade).
+    tutorial_comunidade_visto = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
     # Acesso total a plataforma (gerencia qualquer Comunidade/Ministerio,
     # bypassa toda checagem de posse/papel) -- NUNCA atribuivel por convite
     # comum (ver app/convites/CLAUDE.md), so pelo comando

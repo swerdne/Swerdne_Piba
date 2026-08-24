@@ -247,3 +247,31 @@ def test_membros_do_diretorio_aparecem_no_select_da_funcao(logged_in_client, app
         response = _escalar(logged_in_client, baixo.id, membro2.id)
         assert response.status_code == 200
         assert "Ciclana" in response.data.decode("utf-8")
+
+
+# --- Tutorial guiado (spotlight) ----------------------------------------------
+
+def test_tutorial_aparece_na_primeira_visita_a_comunidade(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
+        assert 'id="tutorial-dados"' in html
+        assert "Bem-vindo a sua comunidade" in html
+
+
+def test_marcar_tutorial_visto_impede_reaparecer(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+
+        resposta = logged_in_client.post("/tutorial-comunidade-visto")
+        assert resposta.status_code == 200
+        assert resposta.get_json() == {"ok": True}
+
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
+        assert 'id="tutorial-dados"' not in html
+
+
+def test_tutorial_visto_sem_login_redireciona(client):
+    response = client.post("/tutorial-comunidade-visto", follow_redirects=False)
+    assert response.status_code == 302

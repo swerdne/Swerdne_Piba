@@ -14,12 +14,13 @@ Funcionalidades transversais:
 - **Chatbot** (`/chat`) — atualmente **mockado** por regex (`app/main/routes.py`), sem integração real de IA (é um TODO explícito no código).
 - **Login** tradicional (e-mail/senha) e via **Google OAuth** (Authlib), com mock de OAuth para testes locais sem credenciais reais.
 - **Relatório "Escalados"** por comunidade — quem está escalado em qualquer ministério, com filtros de data/departamento/função.
+- **Tutorial guiado (spotlight)** na primeira vez que a conta abre uma Comunidade — motor genérico reaproveitável em `app/static/js/main.js::iniciarTutorialSpotlight`, ver [app/comunidade/CLAUDE.md](app/comunidade/CLAUDE.md).
 
 Não existe sistema de papéis (não há admin/regular user). Autorização é toda por **posse do recurso** — ver seção "Autenticação/Autorização".
 
 ## Stack
 
-- **Backend:** Flask (Application Factory em [app/\_\_init\_\_.py](app/__init__.py)), Flask-SQLAlchemy, Flask-Migrate (Alembic), Flask-Login, Flask-WTF, Authlib (OAuth), APScheduler, Twilio (SMS), API HTTP da Resend via `app/emailing.py` (não SMTP — ver o próprio arquivo pra saber por quê).
+- **Backend:** Flask (Application Factory em [app/\_\_init\_\_.py](app/__init__.py)), Flask-SQLAlchemy, Flask-Migrate (Alembic), Flask-Login, Flask-WTF, Flask-Limiter (rate limiting, ver [app/auth/CLAUDE.md](app/auth/CLAUDE.md)), Authlib (OAuth), APScheduler, Twilio (SMS), API HTTP da Resend via `app/emailing.py` (não SMTP — ver o próprio arquivo pra saber por quê).
 - **Banco:** SQLite (`dev.db` em dev, `:memory:` em teste). `DATABASE_URL` troca para outro banco em produção.
 - **Frontend:** Server-side rendering com Jinja2 + Tailwind CSS v4 (compilado via `@tailwindcss/cli`, sem framework JS — só `app/static/js/main.js`, mínimo).
 - **Testes:** pytest, com fixtures que sobem um app Flask completo em SQLite in-memory (`tests/conftest.py`).
@@ -128,6 +129,7 @@ Cada blueprint segue o mesmo layout interno: `models.py`, `routes.py`, `forms.py
 - `User` acumula login tradicional e Google OAuth na mesma tabela (`password_hash` nullable para contas só-Google; `check_password` retorna `False` se não houver hash). Vínculo de conta Google a uma conta existente é por e-mail (`auth/routes.py`). `User.eh_super_admin` (bool) só é atribuível via `flask criar-super-admin <email>` (comando de terminal, nunca uma rota HTTP).
 - **Cadastro tradicional exige confirmação de e-mail** (`User.email_confirmado`) antes de logar — ver [app/auth/CLAUDE.md](app/auth/CLAUDE.md). Contas Google são confirmadas automaticamente (o próprio Google já validou a posse do e-mail).
 - `MOCK_GOOGLE_OAUTH` permite testar o fluxo Google sem credenciais reais (renderiza `auth/google_mock.html`, simula sucesso/negação/timeout via `?cenario=`); `ProductionConfig` trava esse mock como sempre `False` independentemente da env var — não remova essa trava.
+- **Segurança de autenticação** (rate limiting, `SECRET_KEY` obrigatória em produção, cookies `SECURE`/`SAMESITE`, senha mínima) — ver [app/auth/CLAUDE.md](app/auth/CLAUDE.md).
 
 ## Regras de negócio importantes
 

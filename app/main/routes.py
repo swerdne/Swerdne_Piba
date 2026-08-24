@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.main import bp
-from app.main.forms import FotoPerfilForm, TemaForm
+from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
 
@@ -71,6 +71,22 @@ def marcar_notificacoes_lidas():
     Notificacao.query.filter_by(usuario_id=current_user.id, lida=False).update({"lida": True})
     db.session.commit()
     return redirect(url_for("main.dashboard"))
+
+
+@bp.route("/tutorial-comunidade-visto", methods=["POST"])
+@login_required
+def tutorial_comunidade_visto():
+    """Chamado via fetch pelo tutorial guiado (spotlight) de
+    comunidade/detalhe.html quando a pessoa pula ou termina -- marca pra
+    nao aparecer de novo pra essa conta. Sem redirect: e uma acao de
+    fundo, a pagina continua onde estava."""
+    form = AcaoForm()
+    if not form.validate_on_submit():
+        return jsonify({"ok": False}), 400
+
+    current_user.tutorial_comunidade_visto = True
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @bp.route("/perfil/foto", methods=["POST"])
