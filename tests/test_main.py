@@ -83,3 +83,19 @@ def test_chat_mock_responde(logged_in_client):
 def test_chat_sem_mensagem_retorna_erro(logged_in_client):
     response = logged_in_client.post("/chat", json={"mensagem": "", "historico": []})
     assert response.status_code == 400
+
+
+def test_chat_explica_tutorial(logged_in_client):
+    response = logged_in_client.post(
+        "/chat", json={"mensagem": "como funciona o tutorial?", "historico": []}
+    )
+    assert response.status_code == 200
+    assert "tutorial" in response.get_json()["resposta"].lower()
+
+
+def test_chat_explica_comunidade_e_ministerio(logged_in_client):
+    r1 = logged_in_client.post("/chat", json={"mensagem": "o que e uma comunidade?", "historico": []})
+    assert "Comunidade" in r1.get_json()["resposta"]
+
+    r2 = logged_in_client.post("/chat", json={"mensagem": "pra que serve um ministerio?", "historico": []})
+    assert "Ministerio" in r2.get_json()["resposta"]

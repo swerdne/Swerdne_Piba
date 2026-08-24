@@ -25,6 +25,10 @@
                 <span class="font-semibold {{ tema.text_primary }} truncate">{{ comunidade.nome }}</span>
             </div>
             <div class="flex items-center gap-3 shrink-0">
+                <button type="button" data-tutorial-reiniciar title="Rever tutorial" aria-label="Rever tutorial"
+                        class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition">
+                    <i class="fa-solid fa-circle-question"></i>
+                </button>
                 <a href="{{ url_for('comunidade.papeis', comunidade_id=comunidade.id) }}" data-tutorial="convites"
                    class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition" aria-label="Papeis e convites">
                     <i class="fa-solid fa-user-group"></i>
@@ -104,9 +108,7 @@
     </main>
 </div>
 
-{% if mostrar_tutorial %}
 <script type="application/json" id="tutorial-dados">
-    {{ {"urlConcluir": url_for('main.tutorial_comunidade_visto'), "csrf": csrf_token_tutorial, "passos": passos_tutorial} | tojson }}
+    {{ {"urlConcluir": url_for('main.tutorial_comunidade_visto'), "csrf": csrf_token_tutorial, "passos": passos_tutorial, "autoIniciar": mostrar_tutorial} | tojson }}
 </script>
-{% endif %}
 {% endblock %}

@@ -11,7 +11,7 @@ Sistema de gestão para comunidades religiosas (igrejas), em português do Brasi
 
 Funcionalidades transversais:
 - **Notificações automáticas** 24h/16h antes do evento (e-mail + SMS + sino in-app), via um único job APScheduler (`app/escala/agendador.py`) — cobre escalas manuais e geradas por rodízio igualmente.
-- **Chatbot** (`/chat`) — atualmente **mockado** por regex (`app/main/routes.py`), sem integração real de IA (é um TODO explícito no código).
+- **Chatbot** (`/chat`) — atualmente **mockado** por regex (`_REGRAS_CHAT` em `app/main/routes.py`), cobrindo login/cadastro/perfil e também a estrutura do site (Comunidade, Ministério, Escala, Rodízio, convites, notificações, tutorial guiado); sem integração real de IA (é um TODO explícito no código).
 - **Login** tradicional (e-mail/senha) e via **Google OAuth** (Authlib), com mock de OAuth para testes locais sem credenciais reais.
 - **Relatório "Escalados"** por comunidade — quem está escalado em qualquer ministério, com filtros de data/departamento/função.
 - **Tutorial guiado (spotlight)** na primeira vez que a conta abre uma Comunidade — motor genérico reaproveitável em `app/static/js/main.js::iniciarTutorialSpotlight`, ver [app/comunidade/CLAUDE.md](app/comunidade/CLAUDE.md).

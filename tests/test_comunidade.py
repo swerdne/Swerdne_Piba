@@ -251,16 +251,17 @@ def test_membros_do_diretorio_aparecem_no_select_da_funcao(logged_in_client, app
 
 # --- Tutorial guiado (spotlight) ----------------------------------------------
 
-def test_tutorial_aparece_na_primeira_visita_a_comunidade(logged_in_client, app, db):
+def test_tutorial_inicia_sozinho_na_primeira_visita_a_comunidade(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
 
         html = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
         assert 'id="tutorial-dados"' in html
+        assert '"autoIniciar": true' in html
         assert "Bem-vindo a sua comunidade" in html
 
 
-def test_marcar_tutorial_visto_impede_reaparecer(logged_in_client, app, db):
+def test_marcar_tutorial_visto_impede_iniciar_sozinho_mas_dados_continuam_no_html(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
 
@@ -268,8 +269,13 @@ def test_marcar_tutorial_visto_impede_reaparecer(logged_in_client, app, db):
         assert resposta.status_code == 200
         assert resposta.get_json() == {"ok": True}
 
+        # O bloco de dados continua no HTML (o botao de rever tutorial no
+        # cabecalho depende dele pra funcionar a qualquer momento) -- so o
+        # disparo automatico e que fica desligado.
         html = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
-        assert 'id="tutorial-dados"' not in html
+        assert 'id="tutorial-dados"' in html
+        assert '"autoIniciar": false' in html
+        assert 'data-tutorial-reiniciar' in html
 
 
 def test_tutorial_visto_sem_login_redireciona(client):

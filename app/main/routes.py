@@ -147,21 +147,59 @@ _REGRAS_CHAT = [
      "Voce pode entrar com e-mail e senha, ou pelo botao \"Entrar com o Google\" na tela de login."),
     (re.compile(r"senha", re.I),
      "A troca de senha ainda nao esta disponivel na interface, mas ja esta no nosso radar."),
-    (re.compile(r"foto|avatar|imagem", re.I),
+    (re.compile(r"foto|avatar|imagem de perfil", re.I),
      "Voce envia sua foto de perfil na aba Configuracoes do Dashboard. Aceitamos JPG e PNG de ate 2 MB."),
-    (re.compile(r"tema|cor|apar[eê]ncia", re.I),
+    (re.compile(r"tema|cor do painel|apar[eê]ncia", re.I),
      "Da pra trocar o tema do painel (Indigo, Escuro, Verde ou Laranja) na aba Configuracoes."),
     (re.compile(r"cadastr|registr|criar conta", re.I),
      "Para criar uma conta, use o formulario de Cadastro ou entre direto com sua conta do Google."),
     (re.compile(r"google", re.I),
      "O login com Google usa OAuth: voce autoriza o acesso e a gente cria sua conta com seu e-mail e foto automaticamente."),
-    (re.compile(r"chat|voce e real|ia|intelig[eê]ncia", re.I),
+
+    # --- Tutorial guiado -----------------------------------------------
+    (re.compile(r"tutorial|passo a passo|primeiros passos|como (funciona|usar|come[cç]ar)", re.I),
+     "O tutorial guiado aparece sozinho na primeira vez que voce entra numa Comunidade, "
+     "destacando os principais botoes da tela. Pra rever quando quiser, clique no icone de "
+     "interrogacao (?) no topo da tela da Comunidade."),
+
+    # --- Estrutura do sistema (mais especifico antes do generico) ------
+    (re.compile(r"rod[ií]zio|plant[aã]o|fila de equipes|turno", re.I),
+     "O Rodizio cria uma fila de equipes que se revezam automaticamente numa recorrencia "
+     "(semanal, mensal...). Uma vez configurado, ele gera as escalas sozinho pros proximos meses -- "
+     "acesse pela tela do Ministerio."),
+    (re.compile(r"escalados|quem est[aá] escalado", re.I),
+     "O relatorio \"Ver escalados\" (na tela da Comunidade) mostra todo mundo escalado em "
+     "qualquer Ministerio, com filtros por data e departamento."),
+    (re.compile(r"escala r[aá]pida|nova escala|criar (uma )?escala", re.I),
+     "Pra criar uma Escala Rapida, entre num Ministerio e clique em \"Nova escala\" -- escolha "
+     "o departamento (Louvor, Midia, Kids...) e as funcoes sugeridas ja aparecem prontas pra voce "
+     "escalar as pessoas."),
+    (re.compile(r"\bescala(s)?\b", re.I),
+     "Uma Escala e um evento com pessoas atribuidas a funcoes especificas -- pode ser criada "
+     "manualmente (\"Escala Rapida\") ou gerada automaticamente por um Rodizio."),
+    (re.compile(r"membro|diret[oó]rio", re.I),
+     "O Diretorio de Membros (dentro da Comunidade) e a lista de todo mundo que pode ser "
+     "escalado -- nome, telefone e e-mail, sem precisar ter conta no sistema."),
+    (re.compile(r"convit|convidar|papel de admin|quem [eé] admin", re.I),
+     "Voce convida outras pessoas por e-mail na tela \"Papeis e convites\" da Comunidade -- "
+     "da pra definir se a pessoa entra como admin ou so como membro."),
+    (re.compile(r"minist[eé]rio", re.I),
+     "Um Ministerio e uma area da sua Comunidade (Louvor, Midia, Kids...) -- e dentro dele que "
+     "as escalas de verdade sao criadas e organizadas."),
+    (re.compile(r"comunidade", re.I),
+     "Uma Comunidade e a organizacao raiz do sistema (sua igreja ou grupo). Dentro dela voce "
+     "cria Ministerios, convida pessoas e monta escalas. Crie uma nova em \"Nova comunidade\"."),
+    (re.compile(r"notifica[cç][aã]o|avis[ao]|lembrete", re.I),
+     "O sistema notifica automaticamente por e-mail, SMS e sino no site 24h e 16h antes de cada "
+     "evento escalado -- nao precisa configurar nada, ja vem ligado."),
+
+    (re.compile(r"chat|voce e real|\bia\b|intelig[eê]ncia artificial", re.I),
      "Por enquanto sou um assistente simulado (respostas por regras). Em breve vou ser conectado a uma IA de verdade."),
 ]
 
 _RESPOSTA_PADRAO = (
-    "Ainda estou aprendendo sobre isso. Tente perguntar sobre login, cadastro, "
-    "foto de perfil ou temas do painel."
+    "Ainda estou aprendendo sobre isso. Tente perguntar sobre login, cadastro, comunidades, "
+    "ministerios, escalas, rodizio, convites ou o tutorial guiado."
 )
 
 
