@@ -3,6 +3,7 @@ Flask-SQLAlchemy
 Flask-Migrate
 Flask-WTF
 Flask-Login
+Flask-Limiter
 python-dotenv
 pytest
 Authlib

@@ -78,8 +78,36 @@ class TestingConfig(Config):
     # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
     VALIDAR_DOMINIO_EMAIL = False
 
+    # Desliga o rate limiting (app/extensions.py::limiter) nos testes -- a
+    # suite registra/loga dezenas de contas via _registrar_e_confirmar
+    # (tests/conftest.py) e estouraria qualquer limite pensado pra uso real.
+    RATELIMIT_ENABLED = False
+
 
 class ProductionConfig(Config):
+    # Trava de seguranca: em producao exige SECRET_KEY real (nao aceita o
+    # fallback fraco e publico da classe base, que so existe pra nao travar
+    # o dev local sem .env configurado). Sem isso, sessao/CSRF/"lembrar de
+    # mim" seriam assinados com uma chave conhecida (esta no codigo-fonte
+    # publico), permitindo forjar cookies. Falha alto (nao sobe o app) em vez
+    # de rodar inseguro silenciosamente.
+    _secret_key = os.environ.get("SECRET_KEY")
+    if not _secret_key:
+        raise RuntimeError(
+            "SECRET_KEY precisa estar definida como variavel de ambiente em producao "
+            "(nao pode usar o fallback de desenvolvimento)."
+        )
+    SECRET_KEY = _secret_key
+
+    # Cookie de sessao (Flask-Login) e de "lembrar de mim" so trafegam por
+    # HTTPS, e SameSite=Lax da uma camada extra contra CSRF (alem do token do
+    # Flask-WTF, que ja cobre os forms). Sem risco de quebrar nada aqui --
+    # Render serve o app so por HTTPS.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+
     _database_url = os.environ.get("DATABASE_URL")
     # Alguns provedores (Heroku, Render) ainda entregam a URL com o prefixo
     # antigo "postgres://" -- o SQLAlchemy 1.4+ so reconhece "postgresql://".

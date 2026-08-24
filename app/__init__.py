@@ -3,7 +3,7 @@ import os
 import click
 from flask import Flask
 from .config import config
-from .extensions import db, migrate, login_manager, oauth
+from .extensions import db, migrate, login_manager, oauth, limiter
 
 
 def create_app(config_name="default"):
@@ -18,6 +18,7 @@ def create_app(config_name="default"):
     # model seja registrado no metadata do SQLAlchemy (para migrations).
     from . import notificacoes  # noqa: F401
     login_manager.init_app(app)
+    limiter.init_app(app)
     oauth.init_app(app)
     oauth.register(
         name="google",

@@ -2,7 +2,7 @@
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
-from app.extensions import db, oauth
+from app.extensions import db, oauth, limiter
 from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm, ReenviarConfirmacaoForm
 from app.auth.models import User
@@ -53,6 +53,7 @@ MOCK_GOOGLE_USER = {
 
 
 @bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
@@ -71,6 +72,7 @@ def login():
 
 
 @bp.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per hour", methods=["POST"])
 def register():
     form = RegisterForm()
     if form.validate_on_submit():
@@ -117,6 +119,7 @@ def confirmar_email(token):
 
 
 @bp.route("/reenviar-confirmacao", methods=["POST"])
+@limiter.limit("5 per hour")
 def reenviar_confirmacao():
     form = ReenviarConfirmacaoForm()
 

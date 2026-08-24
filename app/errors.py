@@ -28,6 +28,11 @@ _FRASES_GENERICO = [
     "Algo saiu diferente do que estava na escala.",
 ]
 
+_FRASES_429 = [
+    "Calma, uma coisa de cada vez -- tenta de novo daqui a pouco.",
+    "Muitas tentativas seguidas. Espera um minuto e tenta outra vez.",
+]
+
 
 def registrar_error_handlers(app):
     @app.errorhandler(404)
@@ -64,6 +69,16 @@ def registrar_error_handlers(app):
             frases=_FRASES_500,
             icone="fa-triangle-exclamation",
         ), 500
+
+    @app.errorhandler(429)
+    def erro_429(error):
+        return render_template(
+            "errors/erro.html",
+            codigo=429,
+            titulo="Muitas tentativas",
+            frases=_FRASES_429,
+            icone="fa-hourglass-half",
+        ), 429
 
     @app.errorhandler(HTTPException)
     def erro_http_generico(error):

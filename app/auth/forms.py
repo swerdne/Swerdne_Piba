@@ -18,7 +18,7 @@ class LoginForm(FlaskForm):
 class RegisterForm(FlaskForm):
     username = StringField("Usuario", validators=[DataRequired(), Length(min=3, max=80)])
     email = StringField("E-mail", validators=[DataRequired(), Email()])
-    password = PasswordField("Senha", validators=[DataRequired(), Length(min=6)])
+    password = PasswordField("Senha", validators=[DataRequired(), Length(min=8)])
     confirm = PasswordField(
         "Confirme a senha",
         validators=[DataRequired(), EqualTo("password", message="As senhas devem coincidir.")],
