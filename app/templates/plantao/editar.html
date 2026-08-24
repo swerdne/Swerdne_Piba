@@ -55,7 +55,7 @@
                 {% endfor %}
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                     {{ form.data_inicio.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
                     {{ form.data_inicio(id="data_inicio", class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
