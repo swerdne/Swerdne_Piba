@@ -17,6 +17,14 @@ def test_healthz_nao_exige_login_e_consulta_o_banco(client):
     assert response.data == b"ok"
 
 
+def test_service_worker_servido_na_raiz_sem_login(client):
+    # precisa ser publico e na raiz (nao /static/js/) pro escopo do service
+    # worker cobrir o site inteiro -- exigido pro PWA ser instalavel.
+    response = client.get("/service-worker.js")
+    assert response.status_code == 200
+    assert "javascript" in response.content_type
+
+
 def test_dashboard_com_login(logged_in_client):
     response = logged_in_client.get("/dashboard")
     assert response.status_code == 200

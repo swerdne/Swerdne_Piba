@@ -1,6 +1,17 @@
 // JavaScript do projeto
 console.log("App carregado.");
 
+// Registra o service worker (PWA instalavel) -- so assets estaticos entram
+// em cache, ver app/static/js/service-worker.js. Progressive enhancement:
+// navegadores sem suporte (ou http local sem TLS) simplesmente ignoram.
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/service-worker.js").catch(function () {
+            /* instalacao como app e um extra, nao pode quebrar o site se falhar */
+        });
+    });
+}
+
 // Aviso de troca/perda de sessao nesta aba. O cookie de sessao do Flask-Login
 // e compartilhado por todo o navegador (nao por aba) -- logar com outra conta
 // numa aba troca a sessao usada por todas as outras abas do mesmo dominio,

@@ -21,6 +21,15 @@ def index():
     return redirect(url_for("main.dashboard"))
 
 
+@bp.route("/service-worker.js")
+def service_worker():
+    """Serve o arquivo de static/js/ na raiz do site -- o escopo padrao de um
+    service worker e o diretorio de onde ele e servido, entao precisa estar
+    em / (nao em /static/js/) pra conseguir controlar paginas como /dashboard
+    e /comunidade/<id> (exigido pro Chrome considerar o PWA instalavel)."""
+    return current_app.send_static_file("js/service-worker.js")
+
+
 @bp.route("/healthz")
 def healthz():
     """Endpoint publico e leve pra ping externo de keep-alive (cron-job.org,

@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PIBA Swerdne{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <!-- PWA: instalavel como app (icone proprio, sem barra de navegador) --
+    ver app/static/manifest.webmanifest e app/static/js/service-worker.js -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="icon" href="{{ url_for('static', filename='img/icon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PIBA Swerdne">
+
     {% block head %}{% endblock %}
 </head>
 {% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register', 'auth.confirmar_email', 'auth.reenviar_confirmacao') %}

@@ -15,6 +15,7 @@ Funcionalidades transversais:
 - **Login** tradicional (e-mail/senha) e via **Google OAuth** (Authlib), com mock de OAuth para testes locais sem credenciais reais.
 - **Relatório "Escalados"** por comunidade — quem está escalado em qualquer ministério, com filtros de data/departamento/função.
 - **Tutorial guiado (spotlight)** na primeira vez que a conta abre uma Comunidade — motor genérico reaproveitável em `app/static/js/main.js::iniciarTutorialSpotlight`, ver [app/comunidade/CLAUDE.md](app/comunidade/CLAUDE.md).
+- **PWA instalável** — `app/static/manifest.webmanifest` + `app/static/js/service-worker.js` (servido na raiz via `main.service_worker`, não em `/static/js/`, pro escopo cobrir o site inteiro). O service worker só cacheia assets estáticos (`/static/*`, GET) de propósito — nunca páginas HTML/rotas dinâmicas, pra não arriscar servir dado de uma conta pra outra num aparelho compartilhado. Ícones em `app/static/img/icon-*.png` (normal + versão `maskable` com mais respiro pro Android) e `apple-touch-icon.png` (iOS, sem transparência).
 
 Não existe sistema de papéis (não há admin/regular user). Autorização é toda por **posse do recurso** — ver seção "Autenticação/Autorização".
 
