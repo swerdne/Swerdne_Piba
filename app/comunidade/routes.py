@@ -120,6 +120,7 @@ def index():
         "comunidade/lista.html",
         comunidades_dono=comunidades_dono,
         comunidades_participa=comunidades_participa,
+        acao_form=AcaoForm(),
     )
 
 
@@ -247,6 +248,39 @@ def excluir_comunidade(comunidade_id):
     db.session.commit()
 
     flash(f'Comunidade "{nome}" excluida.', "success")
+    return redirect(url_for("comunidade.index"))
+
+
+@bp.route("/excluir-varias", methods=["POST"])
+@login_required
+def excluir_varias():
+    """Exclusao em lote (ver comunidade/lista.html) -- so mexe nas
+    comunidades onde o usuario e admin, mesmo que o form tenha sido
+    adulterado pra incluir id de outra conta (_eh_admin_da_comunidade
+    filtra, nunca confia cegamente na lista recebida)."""
+    form = AcaoForm()
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.index"))
+
+    ids = request.form.getlist("comunidade_ids", type=int)
+    comunidades = Comunidade.query.filter(Comunidade.id.in_(ids)).all() if ids else []
+
+    excluidas = 0
+    for comunidade in comunidades:
+        if not _eh_admin_da_comunidade(comunidade, current_user):
+            continue
+        _remover_logo_antiga(comunidade.imagem)
+        db.session.delete(comunidade)
+        excluidas += 1
+
+    if excluidas:
+        db.session.commit()
+        plural = "s" if excluidas != 1 else ""
+        flash(f"{excluidas} comunidade{plural} excluida{plural}.", "success")
+    else:
+        flash("Nenhuma comunidade valida foi selecionada.", "danger")
+
     return redirect(url_for("comunidade.index"))
 
 

@@ -787,3 +787,42 @@ def excluir_escala(escala_id):
 
     flash(f'Escala "{nome}" excluida.', "success")
     return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio_id))
+
+
+@bp.route("/excluir-varias", methods=["POST"])
+@login_required
+def excluir_varias():
+    """Exclusao em lote (ver ministerio/detalhe.html) -- so mexe em escalas
+    manuais (plantao_turno_id vazio) de ministerios que o usuario lidera/
+    administra; nunca confia cegamente na lista de ids recebida do form."""
+    from app.ministerio.routes import _eh_lider_do_ministerio
+
+    form = AcaoForm()
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(request.referrer or url_for("comunidade.index"))
+
+    ids = request.form.getlist("escala_ids", type=int)
+    escalas = Escala.query.filter(Escala.id.in_(ids)).all() if ids else []
+
+    ministerio_id = None
+    excluidas = 0
+    for escala in escalas:
+        ministerio_id = ministerio_id or escala.ministerio_id
+        if escala.plantao_turno_id is not None:
+            continue  # gerada por rodizio -- fora do escopo da exclusao em lote
+        if not _eh_lider_do_ministerio(escala.ministerio, current_user):
+            continue
+        db.session.delete(escala)
+        excluidas += 1
+
+    if excluidas:
+        db.session.commit()
+        plural = "s" if excluidas != 1 else ""
+        flash(f"{excluidas} escala{plural} excluida{plural}.", "success")
+    else:
+        flash("Nenhuma escala valida foi selecionada.", "danger")
+
+    if ministerio_id:
+        return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio_id))
+    return redirect(request.referrer or url_for("comunidade.index"))

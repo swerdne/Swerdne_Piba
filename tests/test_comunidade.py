@@ -97,6 +97,59 @@ def test_usuario_nao_consegue_excluir_comunidade_de_outra_conta(logged_in_client
         assert db.session.get(Comunidade, comunidade_id) is not None
 
 
+# --- Exclusao em lote ---------------------------------------------------------
+
+def test_excluir_varias_comunidades(logged_in_client, app, db):
+    with app.app_context():
+        c1 = _criar_comunidade(logged_in_client, "Comunidade Um")
+        c2 = _criar_comunidade(logged_in_client, "Comunidade Dois")
+        c3 = _criar_comunidade(logged_in_client, "Comunidade Tres")
+
+        response = logged_in_client.post(
+            "/comunidade/excluir-varias",
+            data={"comunidade_ids": [c1.id, c2.id]},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert "2 comunidades excluidas" in response.data.decode("utf-8")
+        assert db.session.get(Comunidade, c1.id) is None
+        assert db.session.get(Comunidade, c2.id) is None
+        assert db.session.get(Comunidade, c3.id) is not None
+
+
+def test_excluir_varias_comunidades_ignora_id_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+    """Mesmo que o form seja adulterado com o id de uma comunidade de outra
+    conta, so a comunidade de quem esta logado e apagada -- a outra fica
+    intacta (_eh_admin_da_comunidade filtra cada item, nunca confia na
+    lista recebida)."""
+    with sessao_isolada(app):
+        minha = _criar_comunidade(logged_in_client, "Minha Comunidade")
+
+    with sessao_isolada(app):
+        da_outra = _criar_comunidade(outro_logged_in_client, "Comunidade do Bruno")
+        da_outra_id = da_outra.id
+
+    response = logged_in_client.post(
+        "/comunidade/excluir-varias",
+        data={"comunidade_ids": [minha.id, da_outra_id]},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "1 comunidade excluida" in response.data.decode("utf-8")
+
+    with sessao_isolada(app):
+        assert db.session.get(Comunidade, minha.id) is None
+        assert db.session.get(Comunidade, da_outra_id) is not None
+
+
+def test_excluir_varias_comunidades_sem_selecao(logged_in_client, app, db):
+    response = logged_in_client.post(
+        "/comunidade/excluir-varias", data={}, follow_redirects=True
+    )
+    assert response.status_code == 200
+    assert "Nenhuma comunidade valida" in response.data.decode("utf-8")
+
+
 # --- Isolamento entre contas -------------------------------------------------
 
 def test_usuario_nao_consegue_ver_comunidade_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):

@@ -41,26 +41,55 @@
 
         {% if comunidades_dono %}
         <div class="space-y-3">
-            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Minhas comunidades</h2>
-            {% for comunidade in comunidades_dono %}
-            <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) }}"
-               class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
-                {% if comunidade.imagem %}
-                    <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
-                {% else %}
-                    <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
-                        <i class="fa-solid fa-people-group text-sm"></i>
-                    </div>
+            <div class="flex items-center justify-between">
+                <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Minhas comunidades</h2>
+                {% if comunidades_dono|length > 1 %}
+                <button type="button" data-selecao-alternar
+                        class="text-xs font-medium {{ tema.accent_text }} hover:underline">
+                    Selecionar
+                </button>
                 {% endif %}
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
-                    {% if comunidade.descricao %}
-                    <p class="text-xs {{ tema.text_secondary }} truncate">{{ comunidade.descricao }}</p>
-                    {% endif %}
+            </div>
+
+            <form method="POST" action="{{ url_for('comunidade.excluir_varias') }}" data-selecao-form
+                  onsubmit="return confirm('Excluir as comunidades selecionadas? Ministerios, escalas, turnos de rodizio e diretorio de cada uma tambem serao apagados. Essa acao nao pode ser desfeita.');">
+                {{ acao_form.hidden_tag() }}
+
+                {% for comunidade in comunidades_dono %}
+                <div class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition mb-3">
+                    <input type="checkbox" name="comunidade_ids" value="{{ comunidade.id }}"
+                           data-selecao-item class="hidden w-4 h-4 rounded shrink-0 accent-current {{ tema.accent_text }}">
+                    <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) }}"
+                       class="flex items-center gap-3 flex-1 min-w-0" data-selecao-link>
+                        {% if comunidade.imagem %}
+                            <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
+                        {% else %}
+                            <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
+                                <i class="fa-solid fa-people-group text-sm"></i>
+                            </div>
+                        {% endif %}
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
+                            {% if comunidade.descricao %}
+                            <p class="text-xs {{ tema.text_secondary }} truncate">{{ comunidade.descricao }}</p>
+                            {% endif %}
+                        </div>
+                        <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
+                    </a>
                 </div>
-                <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
-            </a>
-            {% endfor %}
+                {% endfor %}
+
+                <div data-selecao-barra class="hidden sticky bottom-4 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 shadow-lg">
+                    <label class="flex items-center gap-2 text-sm {{ tema.text_primary }}">
+                        <input type="checkbox" data-selecao-todas class="w-4 h-4 rounded">
+                        Selecionar todas
+                    </label>
+                    <button type="submit" data-selecao-excluir disabled
+                            class="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                        <i class="fa-solid fa-trash mr-1"></i>Excluir selecionadas (<span data-selecao-contagem>0</span>)
+                    </button>
+                </div>
+            </form>
         </div>
         {% endif %}
 

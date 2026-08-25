@@ -1,6 +1,55 @@
 // JavaScript do projeto
 console.log("App carregado.");
 
+// Selecao em lote generica (excluir varias comunidades/escalas de uma vez) --
+// funciona em qualquer pagina que tenha, no maximo, UM <form data-selecao-form>
+// com checkboxes [data-selecao-item], uma barra [data-selecao-barra] (com
+// checkbox [data-selecao-todas], botao [data-selecao-excluir] e um
+// <span data-selecao-contagem>), e um botao [data-selecao-alternar] (fora do
+// form) que entra/sai do modo selecao. Ver comunidade/lista.html e
+// ministerio/detalhe.html pros dois usos.
+(function () {
+    var form = document.querySelector("[data-selecao-form]");
+    if (!form) return;
+
+    var botaoAlternar = document.querySelector("[data-selecao-alternar]");
+    var itens = form.querySelectorAll("[data-selecao-item]");
+    var todasCheckbox = form.querySelector("[data-selecao-todas]");
+    var barra = form.querySelector("[data-selecao-barra]");
+    var botaoExcluir = form.querySelector("[data-selecao-excluir]");
+    var contagemEl = form.querySelector("[data-selecao-contagem]");
+    if (!itens.length) return;
+
+    function atualizarContagem() {
+        var marcados = 0;
+        itens.forEach(function (item) { if (item.checked) marcados++; });
+        if (contagemEl) contagemEl.textContent = marcados;
+        if (botaoExcluir) botaoExcluir.disabled = marcados === 0;
+        if (todasCheckbox) todasCheckbox.checked = marcados === itens.length;
+    }
+
+    if (botaoAlternar) {
+        botaoAlternar.addEventListener("click", function () {
+            var entrando = itens[0].classList.contains("hidden");
+            itens.forEach(function (item) {
+                item.classList.toggle("hidden", !entrando);
+                if (!entrando) item.checked = false;
+            });
+            if (barra) barra.classList.toggle("hidden", !entrando);
+            botaoAlternar.textContent = entrando ? "Cancelar" : "Selecionar";
+            atualizarContagem();
+        });
+    }
+
+    itens.forEach(function (item) { item.addEventListener("change", atualizarContagem); });
+    if (todasCheckbox) {
+        todasCheckbox.addEventListener("change", function () {
+            itens.forEach(function (item) { item.checked = todasCheckbox.checked; });
+            atualizarContagem();
+        });
+    }
+})();
+
 // Registra o service worker (PWA instalavel) -- so assets estaticos entram
 // em cache, ver app/static/js/service-worker.js. Progressive enhancement:
 // navegadores sem suporte (ou http local sem TLS) simplesmente ignoram.
