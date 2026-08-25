@@ -266,16 +266,23 @@ def excluir_varias():
     ids = request.form.getlist("comunidade_ids", type=int)
     comunidades = Comunidade.query.filter(Comunidade.id.in_(ids)).all() if ids else []
 
+    # Commit por comunidade (nao um so no final): apagar varias de uma vez
+    # cada uma cascateando Ministerios/Escalas/Funcoes/TurnoPlantao pode
+    # somar bastante tempo numa unica transacao -- se a requisicao estourar
+    # o timeout do servidor no meio do caminho, um commit so no final perde
+    # TUDO (nada fica salvo, mesmo o que ja tinha sido processado). Assim,
+    # cada exclusao que terminar fica salva, mesmo que uma requisicao muito
+    # longa seja interrompida antes de processar a lista inteira.
     excluidas = 0
     for comunidade in comunidades:
         if not _eh_admin_da_comunidade(comunidade, current_user):
             continue
         _remover_logo_antiga(comunidade.imagem)
         db.session.delete(comunidade)
+        db.session.commit()
         excluidas += 1
 
     if excluidas:
-        db.session.commit()
         plural = "s" if excluidas != 1 else ""
         flash(f"{excluidas} comunidade{plural} excluida{plural}.", "success")
     else:

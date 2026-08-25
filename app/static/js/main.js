@@ -29,6 +29,11 @@ console.log("App carregado.");
     }
 
     if (botaoAlternar) {
+        // Texto/icone em elementos separados (nao textContent do botao
+        // inteiro) pra nao apagar o icone junto na hora de trocar o rotulo.
+        var textoAlternar = botaoAlternar.querySelector("[data-selecao-alternar-texto]");
+        var iconeAlternar = botaoAlternar.querySelector("[data-selecao-alternar-icone]");
+
         botaoAlternar.addEventListener("click", function () {
             var entrando = itens[0].classList.contains("hidden");
             itens.forEach(function (item) {
@@ -36,7 +41,11 @@ console.log("App carregado.");
                 if (!entrando) item.checked = false;
             });
             if (barra) barra.classList.toggle("hidden", !entrando);
-            botaoAlternar.textContent = entrando ? "Cancelar" : "Selecionar";
+            if (textoAlternar) textoAlternar.textContent = entrando ? "Cancelar" : "Selecionar";
+            if (iconeAlternar) {
+                iconeAlternar.classList.toggle("fa-square-check", !entrando);
+                iconeAlternar.classList.toggle("fa-xmark", entrando);
+            }
             atualizarContagem();
         });
     }

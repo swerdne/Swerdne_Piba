@@ -805,6 +805,9 @@ def excluir_varias():
     ids = request.form.getlist("escala_ids", type=int)
     escalas = Escala.query.filter(Escala.id.in_(ids)).all() if ids else []
 
+    # Commit por escala (nao um so no final) -- ver mesmo comentario em
+    # comunidade.excluir_varias: um commit unico no fim perde tudo se a
+    # requisicao for interrompida no meio de um lote grande.
     ministerio_id = None
     excluidas = 0
     for escala in escalas:
@@ -814,10 +817,10 @@ def excluir_varias():
         if not _eh_lider_do_ministerio(escala.ministerio, current_user):
             continue
         db.session.delete(escala)
+        db.session.commit()
         excluidas += 1
 
     if excluidas:
-        db.session.commit()
         plural = "s" if excluidas != 1 else ""
         flash(f"{excluidas} escala{plural} excluida{plural}.", "success")
     else:

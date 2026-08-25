@@ -64,8 +64,8 @@
                     <div class="flex items-center gap-3 shrink-0">
                         {% if pode_gerenciar and escalas_manuais|length > 1 %}
                         <button type="button" data-selecao-alternar
-                                class="text-xs font-medium {{ tema.accent_text }} hover:underline">
-                            Selecionar
+                                class="flex items-center gap-2 border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-3 py-2 rounded-lg transition shrink-0">
+                            <i class="fa-solid fa-square-check" data-selecao-alternar-icone></i><span data-selecao-alternar-texto>Selecionar</span>
                         </button>
                         {% endif %}
                         {% if pode_gerenciar %}

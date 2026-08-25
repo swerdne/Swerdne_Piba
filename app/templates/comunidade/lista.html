@@ -45,8 +45,8 @@
                 <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Minhas comunidades</h2>
                 {% if comunidades_dono|length > 1 %}
                 <button type="button" data-selecao-alternar
-                        class="text-xs font-medium {{ tema.accent_text }} hover:underline">
-                    Selecionar
+                        class="flex items-center gap-2 border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-3 py-2 rounded-lg transition shrink-0">
+                    <i class="fa-solid fa-square-check" data-selecao-alternar-icone></i><span data-selecao-alternar-texto>Selecionar</span>
                 </button>
                 {% endif %}
             </div>

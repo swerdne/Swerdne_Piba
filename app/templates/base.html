@@ -10,7 +10,11 @@
     ver app/static/manifest.webmanifest e app/static/js/service-worker.js -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
     <meta name="theme-color" content="#4f46e5">
-    <link rel="icon" href="{{ url_for('static', filename='img/icon-192.png') }}">
+    <!-- Favicon (aba do navegador): fundo transparente, so o desenho em roxo --
+    diferente dos icones de instalacao do PWA acima, que precisam de fundo
+    solido (Android/iOS nao lidam bem com transparencia em icone de app). -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('static', filename='img/favicon.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
