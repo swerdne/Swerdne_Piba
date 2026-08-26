@@ -618,58 +618,20 @@ def test_usuario_nao_consegue_excluir_escala_de_outra_conta(logged_in_client, ou
         assert db.session.get(Escala, escala_id) is not None
 
 
-# --- Exclusao em lote ---------------------------------------------------------
+# --- Exclusao em lote (JS chama a rota individual de cada item, um por vez) --
 
-def test_excluir_varias_escalas(logged_in_client, app, db):
-    with app.app_context():
-        comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        e1 = _criar_escala(logged_in_client, ministerio.id, "Culto Um")
-        e2 = _criar_escala(logged_in_client, ministerio.id, "Culto Dois")
-        e3 = _criar_escala(logged_in_client, ministerio.id, "Culto Tres")
-
-        response = logged_in_client.post(
-            "/escala/excluir-varias",
-            data={"escala_ids": [e1.id, e2.id]},
-            follow_redirects=True,
-        )
-        assert response.status_code == 200
-        assert "2 escalas excluidas" in response.data.decode("utf-8")
-        db.session.remove()
-        assert db.session.get(Escala, e1.id) is None
-        assert db.session.get(Escala, e2.id) is None
-        assert db.session.get(Escala, e3.id) is not None
-
-
-def test_excluir_varias_escalas_ignora_id_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
-    with sessao_isolada(app):
-        minha = _nova_escala_completa(logged_in_client, "Culto de Domingo")
-        minha_id = minha.id
-
-    with sessao_isolada(app):
-        da_outra = _nova_escala_completa(outro_logged_in_client, "Culto do Bruno")
-        da_outra_id = da_outra.id
-
-    response = logged_in_client.post(
-        "/escala/excluir-varias",
-        data={"escala_ids": [minha_id, da_outra_id]},
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert "1 escala excluida" in response.data.decode("utf-8")
-
-    with sessao_isolada(app):
-        assert db.session.get(Escala, minha_id) is None
-        assert db.session.get(Escala, da_outra_id) is not None
-
-
-def test_excluir_varias_escalas_ignora_gerada_por_rodizio(logged_in_client, app, db):
-    """Escala com plantao_turno_id preenchido fica fora do escopo da
-    exclusao em lote -- so escalas manuais podem ser apagadas assim."""
+def test_lista_marca_checkbox_de_selecao_so_em_escala_manual(logged_in_client, app, db):
+    """A selecao em lote (ministerio/detalhe.html) nao tem rota de "excluir
+    varias" propria -- o JS (app/static/js/main.js) exclui um item por vez,
+    via fetch sequencial, direto na rota de exclusao individual de cada
+    escala (evita uma unica requisicao grande o bastante pra estourar
+    timeout num lote grande). Escala gerada por rodizio nunca ganha
+    checkbox -- fica fora do escopo da selecao em lote de proposito."""
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
         manual = _criar_escala(logged_in_client, ministerio.id, "Culto Manual")
+        _criar_escala(logged_in_client, ministerio.id, "Culto Manual Dois")  # >1 pra "Selecionar" aparecer
 
         from datetime import date
 
@@ -683,18 +645,10 @@ def test_excluir_varias_escalas_ignora_gerada_por_rodizio(logged_in_client, app,
         )
         db.session.add(gerada)
         db.session.commit()
-        gerada_id = gerada.id
 
-        response = logged_in_client.post(
-            "/escala/excluir-varias",
-            data={"escala_ids": [manual.id, gerada_id]},
-            follow_redirects=True,
-        )
-        assert response.status_code == 200
-        assert "1 escala excluida" in response.data.decode("utf-8")
-        db.session.remove()
-        assert db.session.get(Escala, manual.id) is None
-        assert db.session.get(Escala, gerada_id) is not None
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
+        assert f'data-selecao-url="/escala/{manual.id}/excluir"' in html
+        assert f'data-selecao-url="/escala/{gerada.id}/excluir"' not in html
 
 
 # --- Isolamento entre contas -------------------------------------------------

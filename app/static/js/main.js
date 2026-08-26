@@ -3,11 +3,22 @@ console.log("App carregado.");
 
 // Selecao em lote generica (excluir varias comunidades/escalas de uma vez) --
 // funciona em qualquer pagina que tenha, no maximo, UM <form data-selecao-form>
-// com checkboxes [data-selecao-item], uma barra [data-selecao-barra] (com
-// checkbox [data-selecao-todas], botao [data-selecao-excluir] e um
+// com checkboxes [data-selecao-item] (cada um com [data-selecao-url] apontando
+// pra rota de exclusao INDIVIDUAL daquele item), uma barra [data-selecao-barra]
+// (com checkbox [data-selecao-todas], botao [data-selecao-excluir] e um
 // <span data-selecao-contagem>), e um botao [data-selecao-alternar] (fora do
 // form) que entra/sai do modo selecao. Ver comunidade/lista.html e
 // ministerio/detalhe.html pros dois usos.
+//
+// Importante: exclui um item POR VEZ via fetch sequencial nas rotas de
+// exclusao individual (ja provadas rapidas/confiaveis), em vez de mandar
+// tudo junto num POST so pra uma rota de "excluir varias". Um lote grande
+// numa unica requisicao (varias comunidades, cada uma cascateando bastante
+// coisa) podia demorar o bastante pra estourar o timeout do servidor --
+// nesse caso a conexao e derrubada no meio, sem chance nem da nossa propria
+// pagina de erro aparecer (o navegador so mostra "Internal Server Error" cru),
+// e pior, se o timeout bater ANTES do commit, nada fica salvo. Excluindo um
+// de cada vez, cada requisicao e curta e ja comprovadamente funciona.
 (function () {
     var form = document.querySelector("[data-selecao-form]");
     if (!form) return;
@@ -18,6 +29,9 @@ console.log("App carregado.");
     var barra = form.querySelector("[data-selecao-barra]");
     var botaoExcluir = form.querySelector("[data-selecao-excluir]");
     var contagemEl = form.querySelector("[data-selecao-contagem]");
+    var textoExcluir = form.querySelector("[data-selecao-excluir-texto]");
+    var csrfInput = form.querySelector('input[name="csrf_token"]');
+    var csrf = csrfInput ? csrfInput.value : "";
     if (!itens.length) return;
 
     function atualizarContagem() {
@@ -57,6 +71,50 @@ console.log("App carregado.");
             atualizarContagem();
         });
     }
+
+    function excluirUm(url) {
+        return fetch(url, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "csrf_token=" + encodeURIComponent(csrf),
+        }).then(function (resposta) { return resposta.ok; }).catch(function () { return false; });
+    }
+
+    form.addEventListener("submit", function (evento) {
+        evento.preventDefault();
+        var selecionados = [];
+        itens.forEach(function (item) { if (item.checked) selecionados.push(item); });
+        if (!selecionados.length) return;
+
+        var mensagem = form.dataset.selecaoConfirmar || "Excluir os itens selecionados? Essa acao nao pode ser desfeita.";
+        if (!window.confirm(mensagem)) return;
+
+        var total = selecionados.length;
+        var falhas = 0;
+        if (botaoExcluir) botaoExcluir.disabled = true;
+        if (todasCheckbox) todasCheckbox.disabled = true;
+
+        function processar(indice) {
+            if (indice >= total) {
+                if (falhas > 0) {
+                    window.alert(
+                        falhas + " de " + total + " nao puderam ser excluidos agora. " +
+                        "O que deu certo ja foi salvo -- confira a lista e tente de novo com o restante."
+                    );
+                }
+                window.location.reload();
+                return;
+            }
+            if (textoExcluir) textoExcluir.textContent = "Excluindo " + (indice + 1) + " de " + total + "...";
+            var url = selecionados[indice].dataset.selecaoUrl;
+            excluirUm(url).then(function (ok) {
+                if (!ok) falhas++;
+                processar(indice + 1);
+            });
+        }
+        processar(0);
+    });
 })();
 
 // Registra o service worker (PWA instalavel) -- so assets estaticos entram

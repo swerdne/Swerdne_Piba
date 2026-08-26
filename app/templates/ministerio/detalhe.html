@@ -84,16 +84,17 @@
                 </div>
                 {% endif %}
 
-                <form method="POST" action="{{ url_for('escala.excluir_varias') }}" data-selecao-form
-                      onsubmit="return confirm('Excluir as escalas selecionadas? Essa acao nao pode ser desfeita.');"
+                <form method="POST" data-selecao-form
+                      data-selecao-confirmar="Excluir as escalas selecionadas? Essa acao nao pode ser desfeita."
                       class="space-y-3">
                     {{ acao_form.hidden_tag() }}
                     {% for escala in escalas %}
                     {% set qtd = qtd_ocorrencias_por_turno.get(escala.plantao_turno_id) if escala.plantao_turno_id else None %}
                     <div class="flex items-center gap-3">
                         {% if not escala.plantao_turno_id %}
-                        <input type="checkbox" name="escala_ids" value="{{ escala.id }}"
-                               data-selecao-item class="hidden w-4 h-4 rounded shrink-0 accent-current {{ tema.accent_text }}">
+                        <input type="checkbox"
+                               data-selecao-item data-selecao-url="{{ url_for('escala.excluir_escala', escala_id=escala.id) }}"
+                               class="hidden w-4 h-4 rounded shrink-0 accent-current {{ tema.accent_text }}">
                         {% endif %}
                         <a href="{{ url_for('plantao.detalhe', turno_id=escala.plantao_turno_id) if escala.plantao_turno_id else url_for('escala.detalhe', escala_id=escala.id) }}"
                            class="flex items-center gap-3 flex-1 min-w-0 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
@@ -128,7 +129,7 @@
                         </label>
                         <button type="submit" data-selecao-excluir disabled
                                 class="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-                            <i class="fa-solid fa-trash mr-1"></i>Excluir selecionadas (<span data-selecao-contagem>0</span>)
+                            <i class="fa-solid fa-trash mr-1"></i><span data-selecao-excluir-texto>Excluir selecionadas (<span data-selecao-contagem>0</span>)</span>
                         </button>
                     </div>
                     {% endif %}
