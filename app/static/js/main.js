@@ -23,7 +23,14 @@ document.querySelectorAll("form").forEach(function (form) {
         if (evento.defaultPrevented) return;
         var botao = form.querySelector('button[type="submit"], input[type="submit"]');
         if (botao && !botao.disabled) {
-            botao.disabled = true;
+            // setTimeout(0) de proposito -- desabilitar o botao de forma
+            // SINCRONA dentro do proprio handler de submit e uma pegadinha
+            // conhecida: alguns navegadores tratam isso como se o campo
+            // nunca tivesse existido a tempo de montar o envio, e o form
+            // simplesmente nao e enviado (nem da erro, so nao acontece
+            // nada). Adiar pro proximo tick deixa o navegador terminar de
+            // processar o envio em curso antes de desabilitar o botao.
+            setTimeout(function () { botao.disabled = true; }, 0);
         }
     });
 });

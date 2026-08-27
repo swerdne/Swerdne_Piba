@@ -112,11 +112,11 @@
 
         <!-- Grid da escala -->
         <div class="rounded-xl border {{ tema.card_border }} overflow-hidden">
-            <div class="grid grid-cols-[110px_1fr] sm:grid-cols-[180px_1fr]">
+            <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr]">
 
                 {% for funcao in escala.funcoes %}
                 {% if funcao.eh_subcabecalho %}
-                <div class="col-span-2 bg-gray-800/80 px-3 sm:px-4 py-2 border-t border-gray-700 {{ 'border-t-0' if loop.first else '' }} flex items-center justify-between gap-2">
+                <div class="sm:col-span-2 bg-gray-800/80 px-3 sm:px-4 py-2 border-t border-gray-700 {{ 'border-t-0' if loop.first else '' }} flex items-center justify-between gap-2">
                     <span class="text-xs font-semibold text-gray-300 uppercase tracking-wide truncate" data-funcao-nome="{{ funcao.id }}">
                         {{ funcao.nome }}
                     </span>
@@ -179,7 +179,7 @@
                     </form>
                     {% endif %}
                 </div>
-                <div class="{{ tema.page_bg }} px-3 sm:px-4 py-2.5 border-t {{ tema.card_border }} {{ 'border-t-0' if loop.first else '' }} flex items-center">
+                <div class="{{ tema.page_bg }} px-3 sm:px-4 py-2.5 sm:border-t {{ tema.card_border }} {{ 'sm:border-t-0' if loop.first else '' }} flex items-center">
                     {% if funcao.membro_id %}
                         {% set pessoa = funcao.membro %}
                         <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full">
@@ -288,7 +288,7 @@
                 {% endfor %}
 
                 {% if eh_dono and not escala.plantao_turno_id %}
-                <div class="col-span-2 {{ tema.card_bg }} border-t {{ tema.card_border }} px-3 sm:px-4 py-3">
+                <div class="sm:col-span-2 {{ tema.card_bg }} border-t {{ tema.card_border }} px-3 sm:px-4 py-3">
                     <form method="POST" action="{{ url_for('escala.adicionar_funcao', escala_id=escala.id) }}"
                           class="flex items-center gap-2">
                         {{ formulario_nova_funcao.hidden_tag() }}
@@ -306,7 +306,7 @@
                     {% endfor %}
                 </div>
 
-                <div class="col-span-2 {{ tema.card_bg }} border-t {{ tema.card_border }} px-3 sm:px-4 py-3">
+                <div class="sm:col-span-2 {{ tema.card_bg }} border-t {{ tema.card_border }} px-3 sm:px-4 py-3">
                     <form method="POST" action="{{ url_for('escala.adicionar_subcabecalho', escala_id=escala.id) }}"
                           class="flex items-center gap-2">
                         {{ formulario_novo_subcabecalho.hidden_tag() }}
