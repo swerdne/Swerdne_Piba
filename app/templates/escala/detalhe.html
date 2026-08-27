@@ -179,7 +179,7 @@
                     </form>
                     {% endif %}
                 </div>
-                <div class="{{ tema.page_bg }} px-3 sm:px-4 py-2.5 sm:border-t {{ tema.card_border }} {{ 'sm:border-t-0' if loop.first else '' }} flex items-center">
+                <div class="{{ tema.page_bg }} px-3 sm:px-4 py-2.5 sm:border-t {{ tema.card_border }} {{ 'sm:border-t-0' if loop.first else '' }} flex flex-wrap items-center">
                     {% if funcao.membro_id %}
                         {% set pessoa = funcao.membro %}
                         <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full">
