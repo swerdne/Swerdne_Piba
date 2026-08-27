@@ -1,6 +1,33 @@
 // JavaScript do projeto
 console.log("App carregado.");
 
+// Evita duplo-envio de formulario (duplo clique, ou clicar de novo por
+// impaciencia enquanto a resposta nao volta -- ex: banco hibernado
+// acordando, ver CLAUDE.md sobre cold start do Neon) -- desabilita o botao
+// de submit assim que o form REALMENTE vai ser enviado. Causa real
+// confirmada em producao: sem essa trava, um usuario acabou criando o
+// mesmo Ministerio e o mesmo Membro varias vezes seguidas.
+//
+// So desabilita se o evento nao foi cancelado por outro handler antes
+// (evento.defaultPrevented) -- isso cobre os dois casos que NAO devem
+// desabilitar o botao: um onsubmit="return confirm(...)" que o usuario
+// cancelou (nada foi enviado), ou um form que ja se vira sozinho via
+// fetch/AJAX chamando preventDefault (ex: o chat do dashboard, ou a
+// exclusao em lote acima) -- inline onsubmit e handlers de script no fim
+// do body correm ANTES deste (registrados antes no parse da pagina),
+// entao por essa altura defaultPrevented ja reflete a decisao deles.
+document.querySelectorAll("form").forEach(function (form) {
+    if (form.hasAttribute("data-selecao-form")) return; // cuida do proprio estado
+
+    form.addEventListener("submit", function (evento) {
+        if (evento.defaultPrevented) return;
+        var botao = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (botao && !botao.disabled) {
+            botao.disabled = true;
+        }
+    });
+});
+
 // Selecao em lote generica (excluir varias comunidades/escalas de uma vez) --
 // funciona em qualquer pagina que tenha, no maximo, UM <form data-selecao-form>
 // com checkboxes [data-selecao-item] (cada um com [data-selecao-url] apontando
