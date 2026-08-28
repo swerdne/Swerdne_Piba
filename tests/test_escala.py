@@ -84,6 +84,21 @@ def test_escala_index_redireciona_para_comunidades(logged_in_client):
     assert "/comunidade/" in response.headers["Location"]
 
 
+def test_detalhe_tem_o_widget_de_chat_funcional(logged_in_client, app, db):
+    """O botao flutuante de chat ja existia na pagina, mas so como enfeite --
+    sem #chat-panel/#chat-fab nem o JS de wiring, clicar nao fazia nada (bug
+    relatado). Confere que a pagina carrega o widget completo, nao so o
+    botao (ver CLAUDE.md: 'copie o bloco inteiro, nao so o botao')."""
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+
+        assert 'id="chat-fab"' in html
+        assert 'id="chat-panel"' in html
+        assert 'id="chat-form"' in html
+        assert "/chat" in html
+
+
 def test_criar_escala_semeia_funcoes_do_departamento(logged_in_client, app, db):
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")

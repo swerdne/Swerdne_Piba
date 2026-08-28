@@ -996,8 +996,8 @@ def test_escala_de_origem_nao_gera_capa_separada_na_lista_do_ministerio(logged_i
         # um turno com escala de origem nao aparece em NENHUMA lista geral da
         # pagina do Ministerio -- nem como capa duplicada em "Escalas", nem
         # como card proprio em "Turnos de Rodizio". O unico ponto de entrada
-        # pra ele e o badge "Rodizio vinculado" dentro da propria escala (ver
-        # test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem).
+        # pra ele e o botao "Editar rodizio vinculado" dentro da propria
+        # escala (ver test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem).
         assert html.count(f'href="/plantao/{turno.id}"') == 0
 
 
@@ -1042,7 +1042,7 @@ def test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem(logged_in_client
         turno = TurnoPlantao.query.filter_by(nome="Rodizio X").first()
 
         html_escala = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Rodizio vinculado" in html_escala
+        assert "Editar rodizio vinculado" in html_escala
         assert f'/plantao/{turno.id}"' in html_escala
         # o botao de criar um SEGUNDO turno a partir da mesma escala some
         assert "Criar turno de rodizio com esta equipe" not in html_escala
