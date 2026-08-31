@@ -73,6 +73,11 @@
                             {{ membro.email or '' }}{% if membro.email and membro.telefone %} &middot; {% endif %}{{ membro.telefone or '' }}
                         </p>
                     </div>
+                    <a href="{{ url_for('comunidade.disponibilidade', comunidade_id=comunidade.id, membro_id=membro.id) }}"
+                       title="Ciclos de disponibilidade" aria-label="Ciclos de disponibilidade"
+                       class="{{ tema.text_secondary }} {{ tema.text_hover }} transition shrink-0">
+                        <i class="fa-solid fa-calendar-days"></i>
+                    </a>
                     <form method="POST" action="{{ url_for('comunidade.excluir_membro', comunidade_id=comunidade.id, membro_id=membro.id) }}"
                           onsubmit="return confirm('Remover {{ membro.nome }} do diretorio?');">
                         {{ acao_form.hidden_tag() }}

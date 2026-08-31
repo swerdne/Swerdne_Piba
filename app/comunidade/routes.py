@@ -9,10 +9,19 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.comunidade import bp
-from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, AcaoForm
+from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm
 from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, criar_comunidade
 from app.ministerio.models import Ministerio
-from app.escala.models import Escala, Funcao, Membro, DEPARTAMENTOS, STATUS_LABELS, STATUS_CORES
+from app.escala.models import (
+    Escala,
+    Funcao,
+    Membro,
+    CicloDisponibilidade,
+    SegmentoCiclo,
+    DEPARTAMENTOS,
+    STATUS_LABELS,
+    STATUS_CORES,
+)
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
 from app.convites.routes import _enviar_email_de_convite
@@ -87,6 +96,34 @@ def _remover_logo_antiga(caminho):
                 os.remove(caminho_absoluto)
             except OSError:
                 pass
+
+
+def _ler_segmentos_do_form():
+    """Le os segmentos de um ciclo de disponibilidade (nome/duracao/
+    indisponivel, quantidade variavel -- ver nova_disponibilidade) do
+    request.form, indexados segmento_nome_<i>/segmento_dias_<i>/
+    segmento_indisponivel_<i> (o JS de comunidade/disponibilidade.html monta
+    esses nomes ao adicionar cada linha). Para no primeiro indice ausente;
+    ignora linhas com nome vazio ou duracao invalida/nao positiva (o usuario
+    pode ter deixado uma linha em branco ao adicionar/remover outras)."""
+    segmentos = []
+    indice = 0
+    while f"segmento_nome_{indice}" in request.form:
+        nome = request.form.get(f"segmento_nome_{indice}", "").strip()
+        duracao_bruta = request.form.get(f"segmento_dias_{indice}", "")
+        indisponivel = f"segmento_indisponivel_{indice}" in request.form
+        indice += 1
+
+        if not nome:
+            continue
+        try:
+            duracao = int(duracao_bruta)
+        except (TypeError, ValueError):
+            continue
+        if duracao <= 0:
+            continue
+        segmentos.append({"nome": nome, "duracao_dias": duracao, "indisponivel": indisponivel})
+    return segmentos
 
 
 @bp.route("/")
@@ -311,6 +348,88 @@ def excluir_membro(comunidade_id, membro_id):
     db.session.commit()
     flash(f"{membro.nome} removido(a) do diretorio.", "success")
     return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
+
+
+@bp.route("/<int:comunidade_id>/membros/<int:membro_id>/disponibilidade")
+@login_required
+def disponibilidade(comunidade_id, membro_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    membro = Membro.query.filter_by(id=membro_id, comunidade_id=comunidade.id).first_or_404()
+
+    ciclos = (
+        CicloDisponibilidade.query.filter_by(membro_id=membro.id)
+        .order_by(CicloDisponibilidade.data_inicio.desc())
+        .all()
+    )
+
+    return render_template(
+        "comunidade/disponibilidade.html",
+        comunidade=comunidade,
+        membro=membro,
+        ciclos=ciclos,
+        form=CicloDisponibilidadeForm(),
+        acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/<int:comunidade_id>/membros/<int:membro_id>/disponibilidade/nova", methods=["POST"])
+@login_required
+def nova_disponibilidade(comunidade_id, membro_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    membro = Membro.query.filter_by(id=membro_id, comunidade_id=comunidade.id).first_or_404()
+    form = CicloDisponibilidadeForm()
+
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel salvar o ciclo.", "danger")
+        return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro.id))
+
+    segmentos = _ler_segmentos_do_form()
+    if not segmentos:
+        flash("Adicione pelo menos um segmento (ex: \"Trabalho\", 4 dias) antes de salvar.", "danger")
+        return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro.id))
+
+    ciclo = CicloDisponibilidade(
+        membro_id=membro.id, nome=form.nome.data.strip(), data_inicio=form.data_inicio.data
+    )
+    db.session.add(ciclo)
+    db.session.flush()  # garante ciclo.id antes de criar os segmentos
+
+    for ordem, segmento in enumerate(segmentos):
+        db.session.add(SegmentoCiclo(
+            ciclo_id=ciclo.id,
+            ordem=ordem,
+            nome=segmento["nome"],
+            duracao_dias=segmento["duracao_dias"],
+            indisponivel=segmento["indisponivel"],
+        ))
+    db.session.commit()
+
+    flash(f'Ciclo "{ciclo.nome}" cadastrado pra {membro.nome}.', "success")
+    return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro.id))
+
+
+@bp.route("/<int:comunidade_id>/disponibilidade/<int:ciclo_id>/excluir", methods=["POST"])
+@login_required
+def excluir_disponibilidade(comunidade_id, ciclo_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    ciclo = (
+        CicloDisponibilidade.query.join(Membro, CicloDisponibilidade.membro_id == Membro.id)
+        .filter(CicloDisponibilidade.id == ciclo_id, Membro.comunidade_id == comunidade.id)
+        .first_or_404()
+    )
+    membro_id = ciclo.membro_id
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro_id))
+
+    nome = ciclo.nome
+    db.session.delete(ciclo)
+    db.session.commit()
+    flash(f'Ciclo "{nome}" removido.', "success")
+    return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro_id))
 
 
 @bp.route("/<int:comunidade_id>/escalados")

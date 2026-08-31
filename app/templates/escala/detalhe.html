@@ -192,6 +192,12 @@
                             <span class="text-[10px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-1.5 py-0.5 shrink-0"
                                   title="Participacao pontual -- nao e membro fixo da equipe">Convidado</span>
                             {% endif %}
+                            {% if funcao.id in avisos_por_funcao %}
+                            <span class="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-400 rounded px-1.5 py-0.5 shrink-0"
+                                  title="Provavelmente indisponivel nesse dia ({{ avisos_por_funcao[funcao.id]|join(', ') }}) -- so um aviso, nao impede escalar">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Possivel conflito
+                            </span>
+                            {% endif %}
 
                             {% if eh_dono %}
                             <form method="POST" action="{{ url_for('escala.atualizar_status', funcao_id=funcao.id) }}" class="shrink-0">

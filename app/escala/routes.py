@@ -29,6 +29,7 @@ from app.escala.models import (
     marcar_notificado,
     mensagem_para,
     trocar_atribuicao,
+    avisos_disponibilidade,
 )
 from app.emailing import enviar_email, EmailNaoEnviadoError
 from app.sms import enviar_sms, SmsNaoEnviadoError
@@ -189,6 +190,7 @@ def detalhe(escala_id):
     formularios_mover = {}
     formularios_status = {}
     formularios_editar_funcao = {}
+    avisos_por_funcao = {}
     diretorio_vazio = False
 
     if eh_dono:
@@ -197,6 +199,23 @@ def detalhe(escala_id):
         diretorio = Membro.query.filter_by(comunidade_id=escala.ministerio.comunidade_id).order_by(Membro.nome).all()
         diretorio_vazio = not diretorio
         destinos_possiveis = [f for f in escala.funcoes if not f.eh_subcabecalho]
+
+        # So um AVISO (nunca bloqueia) de que a pessoa provavelmente esta
+        # indisponivel na data da escala, segundo os ciclos que ela tiver
+        # cadastrados (ver CicloDisponibilidade) -- sem data definida na escala
+        # nao ha o que comparar, entao fica vazio de proposito.
+        avisos_por_membro = {}
+        if escala.data:
+            for m in diretorio:
+                avisos = avisos_disponibilidade(m, escala.data)
+                if avisos:
+                    avisos_por_membro[m.id] = avisos
+
+        def _rotulo_com_aviso(membro):
+            avisos = avisos_por_membro.get(membro.id)
+            if not avisos:
+                return membro.nome
+            return f"{membro.nome} (indisponivel: {', '.join(avisos)})"
 
         for funcao in escala.funcoes:
             formularios_editar_funcao[funcao.id] = FuncaoForm(nome=funcao.nome)
@@ -211,10 +230,13 @@ def detalhe(escala_id):
                 # da lista como se ja estivesse escolhida (DataRequired
                 # barra o 0 como valor invalido se a pessoa nao trocar).
                 form_membro.membro_id.choices = [(0, "Selecione a pessoa")] + [
-                    (m.id, m.nome) for m in diretorio
+                    (m.id, _rotulo_com_aviso(m)) for m in diretorio
                 ]
                 formularios_membro[funcao.id] = form_membro
             else:
+                if funcao.membro_id in avisos_por_membro:
+                    avisos_por_funcao[funcao.id] = avisos_por_membro[funcao.membro_id]
+
                 mover_form = MoverForm()
                 mover_form.destino_funcao_id.choices = [
                     (f.id, f.nome) for f in destinos_possiveis if f.id != funcao.id
@@ -242,6 +264,7 @@ def detalhe(escala_id):
         formularios_mover=formularios_mover,
         formularios_status=formularios_status,
         formularios_editar_funcao=formularios_editar_funcao,
+        avisos_por_funcao=avisos_por_funcao,
         formulario_nova_funcao=FuncaoForm(),
         formulario_novo_subcabecalho=FuncaoForm(),
         acao_form=AcaoForm(),

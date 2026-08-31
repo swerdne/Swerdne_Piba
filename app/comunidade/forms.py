@@ -1,7 +1,7 @@
 """Formularios Flask-WTF do modulo comunidade."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileSize
-from wtforms import StringField, TextAreaField, SubmitField
+from wtforms import StringField, TextAreaField, SubmitField, DateField
 from wtforms.validators import DataRequired, Length, Optional, Email
 
 
@@ -24,6 +24,16 @@ class MembroDiretorioForm(FlaskForm):
     telefone = StringField("Telefone", validators=[Optional(), Length(max=30)])
     email = StringField("E-mail", validators=[Optional(), Email(), Length(max=120)])
     submit = SubmitField("Adicionar ao diretorio")
+
+
+class CicloDisponibilidadeForm(FlaskForm):
+    """So o cabecalho do ciclo -- os segmentos (nome/duracao/indisponivel,
+    quantidade variavel) sao lidos direto de request.form em
+    comunidade.routes.nova_disponibilidade (indexados segmento_nome_<i> etc,
+    ver o JS de adicionar/remover linha em comunidade/disponibilidade.html)."""
+    nome = StringField("Nome do ciclo", validators=[DataRequired(), Length(max=80)])
+    data_inicio = DateField("Data de inicio (ancora do ciclo)", validators=[DataRequired()])
+    submit = SubmitField("Salvar ciclo")
 
 
 class AcaoForm(FlaskForm):

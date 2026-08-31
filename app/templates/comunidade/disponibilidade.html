@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Disponibilidade de {{ membro.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+        <a href="{{ url_for('comunidade.membros', comunidade_id=comunidade.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Disponibilidade - {{ membro.nome }}</span>
+        </a>
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+
+        <p class="text-xs {{ tema.text_secondary }}">
+            <i class="fa-solid fa-circle-info mr-1"></i>
+            Ciclos de disponibilidade servem pra avisar (nunca bloquear) quando alguem provavelmente
+            vai estar indisponivel pra servir num dia especifico -- util pra quem tem um turno de trabalho
+            externo que se repete (ex: 4 dias trabalhando / 4 de folga, ou turnos coloridos). A previsao
+            pode falhar (troca de turno, folga combinada etc.) -- quem monta a escala sempre pode escalar
+            mesmo assim.
+        </p>
+
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
+                Ciclos cadastrados ({{ ciclos|length }})
+            </h2>
+
+            {% if not ciclos %}
+            <div class="text-center py-10 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl">
+                <i class="fa-solid fa-calendar-days text-3xl {{ tema.text_secondary }}"></i>
+                <p class="mt-3 {{ tema.text_secondary }}">Nenhum ciclo cadastrado ainda.</p>
+            </div>
+            {% endif %}
+
+            <div class="space-y-3">
+                {% for ciclo in ciclos %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ ciclo.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }}">
+                                A partir de {{ ciclo.data_inicio.strftime('%d/%m/%Y') }}
+                                &middot; ciclo de {{ ciclo.segmentos|sum(attribute='duracao_dias') }} dia(s)
+                            </p>
+                        </div>
+                        <form method="POST" action="{{ url_for('comunidade.excluir_disponibilidade', comunidade_id=comunidade.id, ciclo_id=ciclo.id) }}"
+                              onsubmit="return confirm('Remover o ciclo &quot;{{ ciclo.nome }}&quot;?');">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" aria-label="Remover ciclo" class="text-red-500 hover:text-red-400 transition shrink-0">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 mt-3">
+                        {% for segmento in ciclo.segmentos %}
+                        <span class="text-[11px] font-medium rounded-full px-2.5 py-1 {{ 'bg-red-500/15 text-red-400' if segmento.indisponivel else 'bg-emerald-500/15 text-emerald-400' }}">
+                            {{ segmento.nome }} &middot; {{ segmento.duracao_dias }}d
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Novo ciclo</h2>
+            <form method="POST" action="{{ url_for('comunidade.nova_disponibilidade', comunidade_id=comunidade.id, membro_id=membro.id) }}"
+                  class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
+                {{ form.hidden_tag() }}
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                        {{ form.nome(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="Ex: Turno da empresa") }}
+                        {% for erro in form.nome.errors %}
+                            <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                        {% endfor %}
+                    </div>
+                    <div>
+                        {{ form.data_inicio(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                        {% for erro in form.data_inicio.errors %}
+                            <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Segmentos do ciclo</span>
+                        <button type="button" id="segmento-adicionar"
+                                class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                            <i class="fa-solid fa-plus mr-1"></i>Adicionar segmento
+                        </button>
+                    </div>
+                    <p class="text-xs {{ tema.text_secondary }} mb-2">
+                        Ex.: "Trabalho" 4 dias (indisponivel) + "Folga" 4 dias -- os segmentos se repetem
+                        nessa ordem, a partir da data de inicio, pra sempre.
+                    </p>
+                    <div id="segmentos-lista" class="space-y-2"></div>
+                </div>
+
+                {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-4 py-2 rounded-lg transition") }}
+            </form>
+        </div>
+
+    </main>
+</div>
+
+<script>
+    (function () {
+        var lista = document.getElementById('segmentos-lista');
+        var botaoAdicionar = document.getElementById('segmento-adicionar');
+        if (!lista || !botaoAdicionar) return;
+
+        function renumerar() {
+            lista.querySelectorAll('[data-segmento-linha]').forEach(function (linha, indice) {
+                linha.querySelector('[data-segmento-nome]').name = 'segmento_nome_' + indice;
+                linha.querySelector('[data-segmento-dias]').name = 'segmento_dias_' + indice;
+                linha.querySelector('[data-segmento-indisponivel]').name = 'segmento_indisponivel_' + indice;
+            });
+        }
+
+        function novaLinha(nomePreenchido, diasPreenchido, indisponivelPreenchido) {
+            var linha = document.createElement('div');
+            linha.setAttribute('data-segmento-linha', '');
+            linha.className = 'flex flex-wrap items-center gap-2';
+
+            var campoNome = document.createElement('input');
+            campoNome.type = 'text';
+            campoNome.placeholder = 'Nome (ex: Trabalho)';
+            campoNome.value = nomePreenchido || '';
+            campoNome.setAttribute('data-segmento-nome', '');
+            campoNome.className = 'flex-1 min-w-[8rem] {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}';
+
+            var campoDias = document.createElement('input');
+            campoDias.type = 'number';
+            campoDias.min = '1';
+            campoDias.placeholder = 'Dias';
+            campoDias.value = diasPreenchido || '';
+            campoDias.setAttribute('data-segmento-dias', '');
+            campoDias.className = 'w-20 {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}';
+
+            var rotuloIndisponivel = document.createElement('label');
+            rotuloIndisponivel.className = 'flex items-center gap-1.5 text-xs {{ tema.text_secondary }} shrink-0';
+            var campoIndisponivel = document.createElement('input');
+            campoIndisponivel.type = 'checkbox';
+            campoIndisponivel.checked = indisponivelPreenchido !== false;
+            campoIndisponivel.setAttribute('data-segmento-indisponivel', '');
+            campoIndisponivel.className = 'w-4 h-4 rounded';
+            rotuloIndisponivel.appendChild(campoIndisponivel);
+            rotuloIndisponivel.appendChild(document.createTextNode('Indisponivel'));
+
+            var botaoRemover = document.createElement('button');
+            botaoRemover.type = 'button';
+            botaoRemover.setAttribute('aria-label', 'Remover segmento');
+            botaoRemover.className = 'text-red-500 hover:text-red-400 transition shrink-0';
+            botaoRemover.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            botaoRemover.addEventListener('click', function () {
+                linha.remove();
+                renumerar();
+            });
+
+            linha.appendChild(campoNome);
+            linha.appendChild(campoDias);
+            linha.appendChild(rotuloIndisponivel);
+            linha.appendChild(botaoRemover);
+            lista.appendChild(linha);
+            renumerar();
+        }
+
+        botaoAdicionar.addEventListener('click', function () { novaLinha(); });
+
+        // Comeca com 2 linhas (trabalho + folga) -- caso mais comum, poupa
+        // o primeiro clique em "Adicionar segmento".
+        novaLinha('Trabalho', 4, true);
+        novaLinha('Folga', 4, false);
+    })();
+</script>
+{% endblock %}

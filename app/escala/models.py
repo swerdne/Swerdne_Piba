@@ -137,6 +137,98 @@ class Membro(db.Model):
         return f"<Membro {self.nome}>"
 
 
+class CicloDisponibilidade(db.Model):
+    """Ciclo recorrente que descreve quando um Membro costuma estar
+    indisponivel pra servir -- pensado pra turno de trabalho externo (fora
+    da igreja) que roda em ciclo (ex: 4 dias trabalho / 4 dias folga, ou 4
+    turnos de 1 dia cada). So um AVISO na hora de escalar (ver
+    avisos_disponibilidade abaixo, usado em escala.routes.detalhe) -- nunca
+    bloqueia a escalacao, porque a previsao pode falhar (troca de turno,
+    folga combinada com o empregador etc.); quem decide continua sendo
+    quem esta montando a escala.
+
+    Generico de proposito (nao amarrado a "4 cores" nem a nenhuma empresa
+    especifica): quem cadastra define os SegmentoCiclo (nome livre, duracao
+    em dias, se conta como indisponivel) e a partir de que data eles comecam
+    a se repetir. Um Membro pode ter mais de 1 ciclo (ex: mais de um
+    vinculo) -- todos sao checados, nao ha exclusividade forcada.
+    """
+
+    __tablename__ = "escala_ciclos_disponibilidade"
+
+    id = db.Column(db.Integer, primary_key=True)
+    membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=False)
+    nome = db.Column(db.String(80), nullable=False)
+    data_inicio = db.Column(db.Date, nullable=False)
+
+    membro = db.relationship(
+        "Membro", backref=db.backref("ciclos_disponibilidade", cascade="all, delete-orphan")
+    )
+
+    def segmento_na_data(self, data):
+        """Devolve o SegmentoCiclo (ja cadastrado, ver segmentos abaixo) em
+        que `data` cai, ou None se o ciclo ainda nao tem nenhum segmento."""
+        segmentos = self.segmentos
+        total = sum(s.duracao_dias for s in segmentos)
+        if not segmentos or total <= 0:
+            return None
+
+        # % em Python sempre devolve um resultado nao-negativo pra divisor
+        # positivo -- funciona igual pra datas antes ou depois de
+        # data_inicio, sem precisar tratar os dois casos separado.
+        posicao = (data - self.data_inicio).days % total
+
+        acumulado = 0
+        for segmento in segmentos:
+            acumulado += segmento.duracao_dias
+            if posicao < acumulado:
+                return segmento
+        return None  # inalcancavel se total > 0, so por seguranca
+
+    def __repr__(self):
+        return f"<CicloDisponibilidade {self.nome!r} do membro {self.membro_id}>"
+
+
+class SegmentoCiclo(db.Model):
+    """Um pedaco do ciclo (ex.: 'Trabalho', 4 dias, indisponivel=True --
+    ou 'Folga', 4 dias, indisponivel=False). A ordem determina a sequencia
+    em que os pedacos se repetem a partir de CicloDisponibilidade.data_inicio."""
+
+    __tablename__ = "escala_ciclo_segmentos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ciclo_id = db.Column(db.Integer, db.ForeignKey("escala_ciclos_disponibilidade.id"), nullable=False)
+    ordem = db.Column(db.Integer, nullable=False)
+    nome = db.Column(db.String(40), nullable=False)
+    duracao_dias = db.Column(db.Integer, nullable=False)
+    indisponivel = db.Column(db.Boolean, nullable=False, default=True)
+
+    ciclo = db.relationship(
+        "CicloDisponibilidade",
+        backref=db.backref(
+            "segmentos", cascade="all, delete-orphan", order_by="SegmentoCiclo.ordem"
+        ),
+    )
+
+    def __repr__(self):
+        return f"<SegmentoCiclo {self.nome!r} ({self.duracao_dias}d)>"
+
+
+def avisos_disponibilidade(membro, data):
+    """Nomes dos segmentos que marcam `membro` como indisponivel em `data`,
+    entre todos os ciclos cadastrados pra ele -- lista vazia se disponivel,
+    sem ciclo cadastrado, ou sem data pra checar (Escala sem data definida).
+    So informativo, ver CicloDisponibilidade acima."""
+    if data is None:
+        return []
+    avisos = []
+    for ciclo in membro.ciclos_disponibilidade:
+        segmento = ciclo.segmento_na_data(data)
+        if segmento is not None and segmento.indisponivel:
+            avisos.append(segmento.nome)
+    return avisos
+
+
 class Escala(db.Model):
     """Um evento de escala (ensaio/culto): nome, departamento, data e horario."""
 
