@@ -2,6 +2,7 @@
 import os
 import click
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 from .config import config
 from .extensions import db, migrate, login_manager, oauth, limiter
 
@@ -9,6 +10,17 @@ from .extensions import db, migrate, login_manager, oauth, limiter
 def create_app(config_name="default"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+
+    # Atras de um proxy reverso (Azure App Service, e qualquer PaaS que nao
+    # normalize isso sozinho) a requisicao chega no processo Flask como HTTP
+    # puro, mesmo quando o visitante usou HTTPS por fora -- o proxy so avisa
+    # isso via cabecalho X-Forwarded-Proto. Sem confiar nesse cabecalho,
+    # url_for(..., _external=True) gera "http://" em vez de "https://", o que
+    # quebra o callback do Google OAuth (redirect_uri_mismatch, ja que so o
+    # "https://" fica cadastrado no Google Cloud Console). x_proto=1/x_host=1
+    # confia em exatamente 1 proxy na frente (a variavel padrao de qualquer
+    # PaaS de camada unica como este).
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
     # Inicializa extensoes
     db.init_app(app)
