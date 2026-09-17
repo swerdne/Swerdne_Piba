@@ -145,6 +145,16 @@ def test_usuario_nao_consegue_editar_comunidade_de_outra_conta(logged_in_client,
         assert db.session.get(Comunidade, comunidade_id).nome == "Comunidade Ana"
 
 
+def test_lista_tem_logo_que_volta_direto_pro_inicio(logged_in_client, app, db):
+    """Mesmo atalho de escala/detalhe.html, ver
+    app/templates/_macros.html::logo_inicio -- confere que tambem esta
+    presente num modulo diferente (comunidade), nao so em escala."""
+    with app.app_context():
+        html = logged_in_client.get("/comunidade/").data.decode("utf-8")
+        assert 'title="Ir para o inicio"' in html
+        assert 'href="/dashboard"' in html
+
+
 # --- Diretorio de membros -----------------------------------------------------
 
 def test_adicionar_membro_ao_diretorio(logged_in_client, app, db):

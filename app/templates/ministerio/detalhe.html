@@ -10,6 +10,7 @@
 </style>
 {% endblock %}
 
+{% from "_macros.html" import logo_inicio %}
 {% block content %}
 <div id="ministerio-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
 
@@ -24,8 +25,8 @@
                 {% endif %}
                 <span class="font-semibold {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
             </div>
-            {% if pode_gerenciar %}
             <div class="flex items-center gap-3 shrink-0">
+                {% if pode_gerenciar %}
                 <a href="{{ url_for('ministerio.papeis', ministerio_id=ministerio.id) }}"
                    class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Papeis e convites">
                     <i class="fa-solid fa-user-group"></i>
@@ -44,8 +45,9 @@
                     </button>
                 </form>
                 {% endif %}
+                {% endif %}
+                {{ logo_inicio(tema) }}
             </div>
-            {% endif %}
         </div>
     </header>
 

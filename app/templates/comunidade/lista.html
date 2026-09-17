@@ -10,6 +10,7 @@
 </style>
 {% endblock %}
 
+{% from "_macros.html" import logo_inicio %}
 {% block content %}
 <div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
 
@@ -19,10 +20,13 @@
                 <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
                 <span class="font-semibold {{ tema.text_primary }} truncate">Comunidades</span>
             </a>
-            <a href="{{ url_for('comunidade.nova') }}"
-               class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
-                <i class="fa-solid fa-plus mr-1"></i>Nova comunidade
-            </a>
+            <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ url_for('comunidade.nova') }}"
+                   class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
+                    <i class="fa-solid fa-plus mr-1"></i>Nova comunidade
+                </a>
+                {{ logo_inicio(tema) }}
+            </div>
         </div>
     </header>
 

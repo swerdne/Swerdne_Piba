@@ -10,14 +10,16 @@
 </style>
 {% endblock %}
 
+{% from "_macros.html" import logo_inicio %}
 {% block content %}
 <div id="plantao-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
 
-    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
         <a href="{{ url_for('plantao.detalhe', turno_id=turno.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
             <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
             <span class="font-semibold {{ tema.text_primary }} truncate">Editar Turno de Rodizio</span>
         </a>
+        {{ logo_inicio(tema) }}
     </header>
 
     <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">

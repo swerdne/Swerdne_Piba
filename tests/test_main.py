@@ -31,6 +31,15 @@ def test_dashboard_com_login(logged_in_client):
     assert "Ola, ana".encode() in response.data
 
 
+def test_marca_pibachurch_by_swerdne_aparece_so_no_dashboard(logged_in_client):
+    """Nome do app e "Pibachurch" em todo lugar (titulo da aba, cabecalhos) --
+    o credito "By Swerdne" e so informativo, aparece so na tela inicial."""
+    html_dashboard = logged_in_client.get("/dashboard").data.decode("utf-8")
+    assert "Pibachurch" in html_dashboard
+    assert "By Swerdne" in html_dashboard
+    assert "PIBA Swerdne" not in html_dashboard
+
+
 def test_salvar_tema(logged_in_client, app, db):
     response = logged_in_client.post("/perfil/tema", data={"tema": "escuro"}, follow_redirects=True)
     assert response.status_code == 200

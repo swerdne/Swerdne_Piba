@@ -10,6 +10,7 @@
 </style>
 {% endblock %}
 
+{% from "_macros.html" import logo_inicio %}
 {% block content %}
 <div id="escala-rapida" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
 
@@ -50,8 +51,8 @@
                     {% endif %}
                 </div>
             </div>
-            {% if eh_dono %}
             <div class="flex items-center gap-3 shrink-0">
+                {% if eh_dono %}
                 <a href="{{ url_for('escala.editar', escala_id=escala.id) }}"
                    title="Editar escala" aria-label="Editar escala"
                    class="{{ tema.text_secondary }} {{ tema.text_hover }} transition">
@@ -65,12 +66,13 @@
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </form>
+                {% else %}
+                <span class="text-[11px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Voce foi convidado(a) pra esta escala -- so pode visualizar">
+                    <i class="fa-solid fa-eye"></i> Visualizacao
+                </span>
+                {% endif %}
+                {{ logo_inicio(tema) }}
             </div>
-            {% else %}
-            <span class="text-[11px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Voce foi convidado(a) pra esta escala -- so pode visualizar">
-                <i class="fa-solid fa-eye"></i> Visualizacao
-            </span>
-            {% endif %}
         </div>
     </header>
 

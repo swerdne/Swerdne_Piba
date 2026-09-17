@@ -10,6 +10,7 @@
 </style>
 {% endblock %}
 
+{% from "_macros.html" import logo_inicio %}
 {% block content %}
 <div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
 
@@ -45,6 +46,7 @@
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </form>
+                {{ logo_inicio(tema) }}
             </div>
         </div>
     </header>

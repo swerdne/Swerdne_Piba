@@ -99,6 +99,18 @@ def test_detalhe_tem_o_widget_de_chat_funcional(logged_in_client, app, db):
         assert "/chat" in html
 
 
+def test_detalhe_tem_logo_que_volta_direto_pro_inicio(logged_in_client, app, db):
+    """A seta "Voltar" so volta 1 nivel (pro Ministerio) -- o logo no
+    cabecalho e o atalho que leva direto pro Dashboard de qualquer tela,
+    sem precisar ir "aos poucos" (ver app/templates/_macros.html::logo_inicio)."""
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+
+        assert 'title="Ir para o inicio"' in html
+        assert 'href="/dashboard"' in html
+
+
 def test_criar_escala_semeia_funcoes_do_departamento(logged_in_client, app, db):
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")

@@ -1,6 +1,6 @@
 {
-    "name": "PIBA Swerdne",
-    "short_name": "PIBA Swerdne",
+    "name": "Pibachurch",
+    "short_name": "Pibachurch",
     "description": "Gestao de comunidades, ministerios e escalas.",
     "start_url": "/dashboard",
     "scope": "/",
