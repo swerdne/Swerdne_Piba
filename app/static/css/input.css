@@ -18,14 +18,24 @@
 @layer base {
   a, button, input, select, textarea, [role="button"] {
     transition-property: color, background-color, border-color, opacity, transform, box-shadow;
-    transition-duration: 150ms;
+    transition-duration: 220ms;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Leve "afundada" ao clicar -- da feedback tatil em botoes reais sem
-     mexer em links de navegacao (ficaria estranho em texto puro). */
-  button:not(:disabled):active, input[type="submit"]:not(:disabled):active {
+  /* Leve "afundada" ao clicar -- da feedback tatil tanto em botoes reais
+     quanto em links estilizados como botao (icones de editar/excluir/papeis
+     etc., que no app sao <a> com fundo/borda, nao <button>). O :active de um
+     <a> so dispara com o clique realmente em cima dele, entao nao pega
+     texto corrido sendo selecionado/arrastado. */
+  button:not(:disabled):active, input[type="submit"]:not(:disabled):active, a:active {
     transform: scale(0.97);
+  }
+
+  /* :active troca de estado na hora (sem isso o "afundar" acima nao teria
+     o que suavizar) -- uma curva mais rapida na ida (some em 90ms) e mais
+     lenta na volta (herda os 220ms de cima) da a sensacao de "mola". */
+  button:not(:disabled):active, input[type="submit"]:not(:disabled):active, a:active {
+    transition-duration: 90ms;
   }
 }
