@@ -63,6 +63,24 @@ def create_app(config_name="default"):
     from .errors import registrar_error_handlers
     registrar_error_handlers(app)
 
+    # Headers de seguranca em toda resposta -- reforcam o que o navegador ja
+    # faz por padrao, mas contra ataques comuns que nao dependem de bug no
+    # nosso codigo (ex.: um site malicioso te embutindo num <iframe> pra
+    # clickjacking, ou o navegador "adivinhando" o tipo de um upload como
+    # HTML executavel). Nao depende de config nenhuma, entao vale pra
+    # dev/producao igual -- so o HSTS (que instrui o navegador a nunca mais
+    # tentar HTTP nesse dominio) fica so em producao, onde HTTPS e garantido;
+    # em dev, com http://localhost, isso travaria o acesso local.
+    @app.after_request
+    def aplicar_headers_seguranca(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if app.config.get("SESSION_COOKIE_SECURE"):
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
     # Bootstrap do primeiro Super Admin -- proposital que so exista via
     # comando de terminal (nunca uma rota HTTP): ver app/convites/CLAUDE.md,
     # papel reservado ao dono/equipe tecnica, nunca atribuivel por convite.

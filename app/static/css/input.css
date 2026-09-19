@@ -9,3 +9,23 @@
    Aqui elas existem como strings literais em Python, e o scanner do
    Tailwind le qualquer arquivo de texto, independente da linguagem. */
 @source "../../main/themes.py";
+
+/* Suaviza qualquer mudanca de cor/opacidade/sombra ao interagir (hover, foco,
+   clique) em elementos clicaveis -- sem isso a troca de estado e instantanea
+   ("seca"). Aplicado por elemento (nao por classe) pra cobrir o app inteiro
+   de uma vez, ja que os botoes/links sao montados com utilitarios Tailwind
+   soltos em cada template, sem uma classe .btn compartilhada. */
+@layer base {
+  a, button, input, select, textarea, [role="button"] {
+    transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Leve "afundada" ao clicar -- da feedback tatil em botoes reais sem
+     mexer em links de navegacao (ficaria estranho em texto puro). */
+  button:not(:disabled):active, input[type="submit"]:not(:disabled):active {
+    transform: scale(0.97);
+  }
+}
