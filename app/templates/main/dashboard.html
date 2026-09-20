@@ -380,6 +380,20 @@
         var mensagensEl = document.getElementById('chat-mensagens');
         var historico = [];
 
+        // Topicos de atalho, tipo um mini-questionario -- poupam quem nao
+        // sabe bem o que perguntar. Mesmos assuntos das regras do bot (ver
+        // app/main/routes.py::_REGRAS_CHAT).
+        var TOPICOS_CHAT = [
+            { rotulo: 'Login e cadastro', pergunta: 'Como faco login ou cadastro?' },
+            { rotulo: 'Comunidades e ministerios', pergunta: 'O que sao comunidades e ministerios?' },
+            { rotulo: 'Escalas e rodizio', pergunta: 'Como funcionam escalas e rodizio?' },
+            { rotulo: 'Convites e papeis', pergunta: 'Como funcionam convites e a hierarquia de papeis?' },
+            { rotulo: 'Disponibilidade e calendario', pergunta: 'Como funcionam disponibilidade e calendario?' },
+            { rotulo: 'Notificacoes', pergunta: 'Como funcionam as notificacoes?' },
+            { rotulo: 'Seguranca dos dados', pergunta: 'Meus dados estao seguros?' },
+            { rotulo: 'Tutorial guiado', pergunta: 'Como funciona o tutorial guiado?' }
+        ];
+
         function renderMensagem(autor, texto) {
             var bolha = document.createElement('div');
             var souUsuario = autor === 'usuario';
@@ -388,6 +402,21 @@
                 : 'mr-auto bg-gray-100 text-gray-800');
             bolha.textContent = texto;
             mensagensEl.appendChild(bolha);
+            mensagensEl.scrollTop = mensagensEl.scrollHeight;
+        }
+
+        function renderTopicosChat() {
+            var grupo = document.createElement('div');
+            grupo.className = 'flex flex-wrap gap-1.5 mr-auto max-w-[95%]';
+            TOPICOS_CHAT.forEach(function (topico) {
+                var chip = document.createElement('button');
+                chip.type = 'button';
+                chip.textContent = topico.rotulo;
+                chip.className = 'text-xs px-2.5 py-1 rounded-full border {{ tema.card_border }} {{ tema.text_secondary }} hover:opacity-70';
+                chip.addEventListener('click', function () { enviarMensagemChat(topico.pergunta); });
+                grupo.appendChild(chip);
+            });
+            mensagensEl.appendChild(grupo);
             mensagensEl.scrollTop = mensagensEl.scrollHeight;
         }
 
@@ -405,13 +434,43 @@
             if (el) el.remove();
         }
 
+        function enviarMensagemChat(texto) {
+            texto = (texto || '').trim();
+            if (!texto) return;
+
+            renderMensagem('usuario', texto);
+            historico.push({ autor: 'usuario', texto: texto });
+            mostrarDigitando();
+
+            fetch('{{ url_for("main.chat") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mensagem: texto, historico: historico })
+            })
+                .then(function (resp) { return resp.json(); })
+                .then(function (dados) {
+                    removerDigitando();
+                    var resposta = dados.resposta || 'Desculpe, nao consegui responder agora.';
+                    renderMensagem('bot', resposta);
+                    historico.push({ autor: 'bot', texto: resposta });
+                })
+                .catch(function () {
+                    removerDigitando();
+                    renderMensagem('bot', 'Ocorreu um erro ao falar com o assistente. Tente novamente.');
+                });
+        }
+
         if (fab && painel) {
             fab.addEventListener('click', function () {
                 painel.classList.toggle('hidden');
                 if (!painel.classList.contains('hidden') && mensagensEl.children.length === 0) {
-                    var boasVindas = 'Oi! Sou o assistente do site. Pode perguntar sobre login, cadastro, foto de perfil ou temas.';
+                    var boasVindas = 'Oi! Sou o assistente do site. Escolha um assunto abaixo ou digite sua '
+                        + 'duvida -- posso ajudar com login, cadastro, comunidades, ministerios, escalas, '
+                        + 'rodizio, convites, disponibilidade, calendario, notificacoes, seguranca e o '
+                        + 'tutorial guiado.';
                     renderMensagem('bot', boasVindas);
                     historico.push({ autor: 'bot', texto: boasVindas });
+                    renderTopicosChat();
                 }
             });
         }
@@ -423,29 +482,8 @@
             form.addEventListener('submit', function (evento) {
                 evento.preventDefault();
                 var texto = input.value.trim();
-                if (!texto) return;
-
-                renderMensagem('usuario', texto);
-                historico.push({ autor: 'usuario', texto: texto });
                 input.value = '';
-                mostrarDigitando();
-
-                fetch('{{ url_for("main.chat") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mensagem: texto, historico: historico })
-                })
-                    .then(function (resp) { return resp.json(); })
-                    .then(function (dados) {
-                        removerDigitando();
-                        var resposta = dados.resposta || 'Desculpe, nao consegui responder agora.';
-                        renderMensagem('bot', resposta);
-                        historico.push({ autor: 'bot', texto: resposta });
-                    })
-                    .catch(function () {
-                        removerDigitando();
-                        renderMensagem('bot', 'Ocorreu um erro ao falar com o assistente. Tente novamente.');
-                    });
+                enviarMensagemChat(texto);
             });
         }
     })();
