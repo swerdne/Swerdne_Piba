@@ -59,6 +59,107 @@ def test_salvar_tema_invalido_nao_altera(logged_in_client, app, db):
         assert user.theme == "indigo"
 
 
+def test_trocar_senha_com_senha_atual_correta(logged_in_client, app, db):
+    response = logged_in_client.post(
+        "/perfil/senha",
+        data={"senha_atual": "senha123", "nova_senha": "novaSenha456", "confirmar_senha": "novaSenha456"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Senha atualizada".encode() in response.data
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="ana@example.com").first()
+        assert user.check_password("novaSenha456")
+        assert not user.check_password("senha123")
+
+
+def test_trocar_senha_com_senha_atual_errada_nao_altera(logged_in_client, app, db):
+    response = logged_in_client.post(
+        "/perfil/senha",
+        data={"senha_atual": "senha-errada", "nova_senha": "novaSenha456", "confirmar_senha": "novaSenha456"},
+        follow_redirects=True,
+    )
+    assert "Senha atual incorreta".encode() in response.data
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="ana@example.com").first()
+        assert user.check_password("senha123")
+
+
+def test_trocar_senha_com_confirmacao_diferente_nao_altera(logged_in_client, app, db):
+    logged_in_client.post(
+        "/perfil/senha",
+        data={"senha_atual": "senha123", "nova_senha": "novaSenha456", "confirmar_senha": "outra-coisa"},
+        follow_redirects=True,
+    )
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="ana@example.com").first()
+        assert user.check_password("senha123")
+
+
+def test_definir_senha_em_conta_so_google_nao_exige_senha_atual(app, db):
+    """Conta criada so via Google (sem password_hash) nao tem senha atual pra
+    conferir -- o POST em /perfil/senha define a primeira senha direto."""
+    with app.app_context():
+        from app.auth.models import User
+        user = User(google_id="google-123", email="so-google@example.com", name="So Google", email_confirmado=True)
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    cliente = app.test_client()
+    with cliente.session_transaction() as sess:
+        sess["_user_id"] = str(user_id)
+        sess["_fresh"] = True
+
+    response = cliente.post(
+        "/perfil/senha",
+        data={"nova_senha": "primeiraSenha1", "confirmar_senha": "primeiraSenha1"},
+        follow_redirects=True,
+    )
+    assert "Senha definida".encode() in response.data
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="so-google@example.com").first()
+        assert user.check_password("primeiraSenha1")
+
+
+def test_salvar_nome(logged_in_client, app, db):
+    response = logged_in_client.post("/perfil/nome", data={"nome": "Ana Souza"}, follow_redirects=True)
+    assert response.status_code == 200
+    assert "Nome atualizado".encode() in response.data
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="ana@example.com").first()
+        assert user.name == "Ana Souza"
+
+
+def test_salvar_nome_vazio_nao_altera(logged_in_client, app, db):
+    logged_in_client.post("/perfil/nome", data={"nome": ""}, follow_redirects=True)
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="ana@example.com").first()
+        assert user.name != ""
+
+
+def test_baixar_dados_devolve_json_com_dados_da_conta(logged_in_client):
+    response = logged_in_client.get("/perfil/dados")
+    assert response.status_code == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+
+    dados = response.get_json()
+    assert dados["email"] == "ana@example.com"
+    assert "password_hash" not in dados
+
+
 def test_upload_foto_rejeita_extensao_invalida(logged_in_client):
     dados = {
         "foto": (io.BytesIO(b"conteudo-falso"), "arquivo.txt"),

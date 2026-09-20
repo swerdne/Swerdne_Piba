@@ -195,6 +195,19 @@
             <div data-tab-panel="config" class="hidden">
                 <h1 class="text-2xl font-semibold {{ tema.text_primary }}">Configuracoes</h1>
 
+                <!-- Nome de exibicao -->
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Nome de exibicao</h2>
+                    <form method="POST" action="{{ url_for('main.salvar_nome') }}" class="flex flex-col sm:flex-row sm:items-end gap-3 max-w-sm">
+                        {{ nome_form.hidden_tag() }}
+                        <div class="flex-1 w-full">
+                            {{ nome_form.nome.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
+                            {{ nome_form.nome(class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                        </div>
+                        {{ nome_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0") }}
+                    </form>
+                </div>
+
                 <!-- Foto de perfil -->
                 <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
                     <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Foto de perfil</h2>
@@ -239,17 +252,54 @@
                     </form>
                 </div>
 
+                <!-- Senha -->
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">
+                        {{ "Alterar senha" if tem_senha else "Definir senha" }}
+                    </h2>
+                    {% if not tem_senha %}
+                    <p class="text-xs {{ tema.text_secondary }} mb-4">
+                        Sua conta entra so pelo Google. Defina uma senha pra tambem poder entrar com e-mail e senha.
+                    </p>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('main.salvar_senha') }}" class="space-y-3 max-w-sm">
+                        {{ senha_form.hidden_tag() }}
+                        {% if tem_senha %}
+                        <div>
+                            {{ senha_form.senha_atual.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
+                            {{ senha_form.senha_atual(autocomplete="current-password", class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                        </div>
+                        {% endif %}
+                        <div>
+                            {{ senha_form.nova_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
+                            {{ senha_form.nova_senha(autocomplete="new-password", class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                        </div>
+                        <div>
+                            {{ senha_form.confirmar_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
+                            {{ senha_form.confirmar_senha(autocomplete="new-password", class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                        </div>
+                        <p class="text-xs {{ tema.text_secondary }}">Minimo de 8 caracteres.</p>
+                        {{ senha_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition") }}
+                    </form>
+                </div>
+
                 <!-- E-mail -->
                 <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium {{ tema.text_primary }}">E-mail</p>
+                    <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
+                </div>
+
+                <!-- Privacidade / dados -->
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <div class="flex items-center justify-between gap-4">
                         <div>
-                            <p class="text-sm font-medium {{ tema.text_primary }}">E-mail</p>
-                            <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
+                            <p class="text-sm font-medium {{ tema.text_primary }}">Meus dados</p>
+                            <p class="text-sm {{ tema.text_secondary }}">Baixe uma copia dos dados da sua conta.</p>
                         </div>
-                        <button type="button"
-                                class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition">
-                            Alterar senha
-                        </button>
+                        <a href="{{ url_for('main.baixar_dados') }}"
+                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                            Baixar meus dados
+                        </a>
                     </div>
                 </div>
             </div>

@@ -1,8 +1,8 @@
 """Formularios Flask-WTF do modulo main."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
-from wtforms import StringField, TextAreaField, SubmitField, RadioField
-from wtforms.validators import DataRequired, Length
+from wtforms import StringField, TextAreaField, SubmitField, RadioField, PasswordField
+from wtforms.validators import DataRequired, Length, EqualTo
 
 from app.main.themes import THEMES
 
@@ -32,6 +32,25 @@ class TemaForm(FlaskForm):
         validators=[DataRequired()],
     )
     submit = SubmitField("Salvar tema")
+
+
+class NomeForm(FlaskForm):
+    nome = StringField("Nome de exibicao", validators=[DataRequired(), Length(max=120)])
+    submit = SubmitField("Salvar nome")
+
+
+class TrocarSenhaForm(FlaskForm):
+    # senha_atual sem DataRequired de proposito -- conta criada so via Google
+    # nao tem senha ainda (ver User.password_hash), entao "definir senha pela
+    # primeira vez" nao tem o que conferir. A rota decide se exige esse campo
+    # (User.password_hash existente) e confere o valor com check_password.
+    senha_atual = PasswordField("Senha atual")
+    nova_senha = PasswordField("Nova senha", validators=[DataRequired(), Length(min=8)])
+    confirmar_senha = PasswordField(
+        "Confirme a nova senha",
+        validators=[DataRequired(), EqualTo("nova_senha", message="As senhas devem coincidir.")],
+    )
+    submit = SubmitField("Salvar senha")
 
 
 class AcaoForm(FlaskForm):

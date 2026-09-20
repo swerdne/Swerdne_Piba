@@ -9,9 +9,9 @@ from flask_login import login_required, current_user
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.main import bp
-from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm
+from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
 
@@ -48,6 +48,8 @@ def dashboard():
 
     foto_form = FotoPerfilForm()
     tema_form = TemaForm(tema=current_user.theme)
+    senha_form = TrocarSenhaForm()
+    nome_form = NomeForm(nome=nome_completo)
 
     notificacoes = (
         Notificacao.query.filter_by(usuario_id=current_user.id)
@@ -69,6 +71,9 @@ def dashboard():
         tema_atual=current_user.theme,
         foto_form=foto_form,
         tema_form=tema_form,
+        senha_form=senha_form,
+        tem_senha=bool(current_user.password_hash),
+        nome_form=nome_form,
         notificacoes=notificacoes,
         notificacoes_nao_lidas=notificacoes_nao_lidas,
     )
@@ -149,13 +154,78 @@ def salvar_tema():
     return redirect(url_for("main.dashboard") + "#config")
 
 
+@bp.route("/perfil/senha", methods=["POST"])
+@login_required
+@limiter.limit("10 per hour", methods=["POST"])
+def salvar_senha():
+    form = TrocarSenhaForm()
+
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel salvar a senha.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    # Conta so-Google (sem password_hash) nao tem senha atual pra conferir --
+    # esse POST esta "definindo" a primeira senha, nao "trocando" uma existente.
+    tinha_senha = bool(current_user.password_hash)
+    if tinha_senha and not current_user.check_password(form.senha_atual.data or ""):
+        flash("Senha atual incorreta.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    current_user.set_password(form.nova_senha.data)
+    db.session.commit()
+
+    flash("Senha atualizada!" if tinha_senha else "Senha definida! Agora voce tambem pode entrar com e-mail e senha.", "success")
+    return redirect(url_for("main.dashboard") + "#config")
+
+
+@bp.route("/perfil/nome", methods=["POST"])
+@login_required
+def salvar_nome():
+    form = NomeForm()
+
+    if not form.validate_on_submit():
+        flash("Informe um nome valido.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    current_user.name = form.nome.data.strip()
+    db.session.commit()
+
+    flash("Nome atualizado!", "success")
+    return redirect(url_for("main.dashboard") + "#config")
+
+
+@bp.route("/perfil/dados")
+@login_required
+def baixar_dados():
+    """Exportacao dos proprios dados da conta em JSON -- reforca a
+    transparencia sobre privacidade (ver regra de seguranca do chatbot).
+    Nunca inclui password_hash (segredo) nem as colunas mortas de
+    confirmacao por token (email_confirmado/token_confirmacao, sem uso
+    ativo -- ver comentario em User, app/auth/models.py)."""
+    dados = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "nome": current_user.name,
+        "usuario": current_user.username,
+        "foto_perfil": current_user.foto_perfil,
+        "tema": current_user.theme,
+        "login_google_vinculado": bool(current_user.google_id),
+        "login_senha_vinculado": bool(current_user.password_hash),
+    }
+    resposta = jsonify(dados)
+    resposta.headers["Content-Disposition"] = "attachment; filename=meus-dados.json"
+    return resposta
+
+
 # --- Chatbot ---------------------------------------------------------------
 
 _REGRAS_CHAT = [
     (re.compile(r"login|entrar|logar", re.I),
      "Voce pode entrar com e-mail e senha, ou pelo botao \"Entrar com o Google\" na tela de login."),
     (re.compile(r"senha", re.I),
-     "A troca de senha ainda nao esta disponivel na interface, mas ja esta no nosso radar."),
+     "Da pra trocar sua senha na aba Configuracoes do Dashboard. Quem entrou so pelo Google "
+     "tambem pode definir uma senha ali, pra passar a entrar com e-mail e senha tambem."),
     (re.compile(r"foto|avatar|imagem de perfil", re.I),
      "Voce envia sua foto de perfil na aba Configuracoes do Dashboard. Aceitamos JPG e PNG de ate 2 MB."),
     (re.compile(r"tema|cor do painel|apar[eê]ncia", re.I),
