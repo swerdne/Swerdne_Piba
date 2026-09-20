@@ -45,6 +45,15 @@ class User(UserMixin, db.Model):
     token_confirmacao = db.Column(db.String(64), unique=True, nullable=True)
     token_confirmacao_expira_em = db.Column(db.DateTime, nullable=True)
 
+    # Redefinicao de senha por link de e-mail ("esqueci minha senha", ver
+    # app/auth/routes.py::esqueci_senha/redefinir_senha) -- token de uso
+    # unico, expira sozinho (checado na hora de validar, nao precisa de job).
+    # Coluna separada de token_confirmacao de proposito: sao fluxos
+    # diferentes (confirmar posse do e-mail vs provar que ainda tem acesso a
+    # ele pra trocar a senha), nao faz sentido reaproveitar a mesma.
+    token_redefinicao_senha = db.Column(db.String(64), unique=True, nullable=True)
+    token_redefinicao_expira_em = db.Column(db.DateTime, nullable=True)
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 

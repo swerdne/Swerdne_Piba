@@ -99,3 +99,88 @@ def test_sessao_atual_reflete_login_de_outra_conta_no_mesmo_cookie_jar(client, a
     assert id_ana != id_bruno
     response = client.get("/auth/sessao-atual")
     assert response.get_json() == {"usuario_id": id_bruno}
+
+
+# --- Redefinicao de senha por e-mail ("esqueci minha senha") ----------------
+
+def test_esqueci_senha_gera_token_para_conta_com_senha(client, app, db):
+    client.post("/auth/register", data=_dados_registro(), follow_redirects=True)
+
+    response = client.post("/auth/esqueci-senha", data={"email": "carla@example.com"}, follow_redirects=True)
+    assert response.status_code == 200
+    assert "enviamos um link".encode() in response.data
+
+    with app.app_context():
+        usuario = User.query.filter_by(email="carla@example.com").first()
+        assert usuario.token_redefinicao_senha is not None
+        assert usuario.token_redefinicao_expira_em is not None
+
+
+def test_esqueci_senha_com_email_inexistente_mostra_mesma_mensagem(client):
+    """Nunca revela se o e-mail tem conta ou nao (anti-enumeration) -- a
+    mensagem e identica ao caso de sucesso."""
+    response = client.post(
+        "/auth/esqueci-senha", data={"email": "ninguem@example.com"}, follow_redirects=True
+    )
+    assert "enviamos um link".encode() in response.data
+
+
+def test_esqueci_senha_conta_so_google_nao_gera_token(app, db):
+    with app.app_context():
+        usuario = User(google_id="google-999", email="so-google2@example.com", name="So Google", email_confirmado=True)
+        db.session.add(usuario)
+        db.session.commit()
+
+    cliente = app.test_client()
+    cliente.post("/auth/esqueci-senha", data={"email": "so-google2@example.com"}, follow_redirects=True)
+
+    with app.app_context():
+        usuario = User.query.filter_by(email="so-google2@example.com").first()
+        assert usuario.token_redefinicao_senha is None
+
+
+def test_redefinir_senha_com_token_valido(client, app, db):
+    client.post("/auth/register", data=_dados_registro(), follow_redirects=True)
+    client.post("/auth/esqueci-senha", data={"email": "carla@example.com"}, follow_redirects=True)
+
+    with app.app_context():
+        token = User.query.filter_by(email="carla@example.com").first().token_redefinicao_senha
+
+    response = client.post(
+        f"/auth/redefinir-senha/{token}",
+        data={"nova_senha": "outraSenha789", "confirmar_senha": "outraSenha789"},
+        follow_redirects=True,
+    )
+    assert "Senha redefinida".encode() in response.data
+
+    with app.app_context():
+        usuario = User.query.filter_by(email="carla@example.com").first()
+        assert usuario.check_password("outraSenha789")
+        # Uso unico -- o token e limpo apos a troca
+        assert usuario.token_redefinicao_senha is None
+
+
+def test_redefinir_senha_com_token_invalido_redireciona(client):
+    response = client.get("/auth/redefinir-senha/token-que-nao-existe", follow_redirects=True)
+    assert "invalido ou ja expirou".encode() in response.data
+
+
+def test_redefinir_senha_token_nao_reutilizavel(client, app, db):
+    client.post("/auth/register", data=_dados_registro(), follow_redirects=True)
+    client.post("/auth/esqueci-senha", data={"email": "carla@example.com"}, follow_redirects=True)
+
+    with app.app_context():
+        token = User.query.filter_by(email="carla@example.com").first().token_redefinicao_senha
+
+    client.post(
+        f"/auth/redefinir-senha/{token}",
+        data={"nova_senha": "outraSenha789", "confirmar_senha": "outraSenha789"},
+        follow_redirects=True,
+    )
+    # Segunda tentativa com o MESMO token (ja consumido) deve falhar
+    response = client.post(
+        f"/auth/redefinir-senha/{token}",
+        data={"nova_senha": "terceiraSenha000", "confirmar_senha": "terceiraSenha000"},
+        follow_redirects=True,
+    )
+    assert "invalido ou ja expirou".encode() in response.data

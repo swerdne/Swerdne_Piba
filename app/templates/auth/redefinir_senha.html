@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Redefinir senha{% endblock %}
+
+{% block head %}
+<style>
+    @keyframes auth-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes auth-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    @keyframes auth-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    .auth-blob { animation: auth-blob-a 15s ease-in-out infinite; will-change: transform; }
+    .auth-blob-2 { animation: auth-blob-b 18s ease-in-out infinite; will-change: transform; }
+    .auth-in { opacity: 0; animation: auth-fade-up .6s ease-out forwards; }
+    .auth-in-1 { animation-delay: .05s; } .auth-in-2 { animation-delay: .12s; }
+    .auth-in-3 { animation-delay: .19s; }
+    .auth-in-0 { animation-delay: 0s; }
+    @media (prefers-reduced-motion: reduce) {
+        .auth-blob, .auth-blob-2 { animation: none; }
+        .auth-in, [class*="auth-in-"] { animation: none; opacity: 1; transform: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="relative min-h-screen flex flex-col items-center justify-center gap-8 px-4 py-10 overflow-hidden bg-gray-950">
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-indigo-600/30 blur-3xl auth-blob"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full bg-violet-600/20 blur-3xl auth-blob-2"></div>
+
+    <div class="relative flex items-center gap-2.5 auth-in auth-in-0">
+        <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="h-8 w-8 object-contain">
+        <span class="text-xl font-bold tracking-tight text-white">Pibachurch</span>
+    </div>
+
+    <div class="relative w-full max-w-md bg-gray-900/80 backdrop-blur border border-gray-800 rounded-2xl shadow-xl shadow-black/40 p-8 auth-in auth-in-1">
+        <h1 class="text-2xl font-bold text-white mb-1 auth-in auth-in-2">Escolha uma nova senha</h1>
+        <p class="text-gray-400 mb-6 auth-in auth-in-2">Minimo de 8 caracteres.</p>
+
+        <form method="POST" novalidate class="space-y-4 auth-in auth-in-3">
+            {{ form.hidden_tag() }}
+
+            <div>
+                {{ form.nova_senha.label(class_="block text-sm font-medium text-gray-300 mb-1") }}
+                {{ form.nova_senha(class_="w-full rounded-lg border bg-gray-800/60 text-white placeholder-gray-500 px-3 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 " ~ ("border-red-500" if form.nova_senha.errors else "border-gray-700")) }}
+                {% for error in form.nova_senha.errors %}
+                  <p class="text-xs text-red-400 mt-1">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                {{ form.confirmar_senha.label(class_="block text-sm font-medium text-gray-300 mb-1") }}
+                {{ form.confirmar_senha(class_="w-full rounded-lg border bg-gray-800/60 text-white placeholder-gray-500 px-3 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 " ~ ("border-red-500" if form.confirmar_senha.errors else "border-gray-700")) }}
+                {% for error in form.confirmar_senha.errors %}
+                  <p class="text-xs text-red-400 mt-1">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            {{ form.submit(class_="w-full bg-indigo-600 text-white rounded-lg py-2.5 font-medium transition duration-200 hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/30 active:scale-[0.98] cursor-pointer") }}
+        </form>
+    </div>
+</div>
+{% endblock %}

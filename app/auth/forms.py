@@ -15,6 +15,20 @@ class LoginForm(FlaskForm):
     submit = SubmitField("Entrar")
 
 
+class EsqueciSenhaForm(FlaskForm):
+    email = StringField("E-mail", validators=[DataRequired(), Email()])
+    submit = SubmitField("Enviar link de redefinicao")
+
+
+class RedefinirSenhaForm(FlaskForm):
+    nova_senha = PasswordField("Nova senha", validators=[DataRequired(), Length(min=8)])
+    confirmar_senha = PasswordField(
+        "Confirme a nova senha",
+        validators=[DataRequired(), EqualTo("nova_senha", message="As senhas devem coincidir.")],
+    )
+    submit = SubmitField("Redefinir senha")
+
+
 class RegisterForm(FlaskForm):
     username = StringField("Usuario", validators=[DataRequired(), Length(min=3, max=80)])
     email = StringField("E-mail", validators=[DataRequired(), Email()])

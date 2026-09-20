@@ -268,6 +268,9 @@
                         <div>
                             {{ senha_form.senha_atual.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
                             {{ senha_form.senha_atual(autocomplete="current-password", class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                            <a href="{{ url_for('auth.esqueci_senha') }}" class="text-xs {{ tema.accent_text }} hover:underline">
+                                Esqueceu a senha atual? Redefinir por e-mail
+                            </a>
                         </div>
                         {% endif %}
                         <div>
@@ -287,6 +290,39 @@
                 <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
                     <p class="text-sm font-medium {{ tema.text_primary }}">E-mail</p>
                     <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
+                </div>
+
+                <!-- Conexao com o Google -->
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-sm font-medium {{ tema.text_primary }}">Login com Google</p>
+                            <p class="text-sm {{ tema.text_secondary }}">
+                                {{ "Sua conta esta conectada ao Google." if eh_conta_google else "Sua conta nao esta conectada ao Google." }}
+                            </p>
+                        </div>
+                        {% if eh_conta_google %}
+                        {% if tem_senha %}
+                        <form method="POST" action="{{ url_for('main.desconectar_google') }}"
+                              data-confirm-excluir="Desconectar sua conta do Google? Voce ainda vai poder entrar com e-mail e senha.">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit"
+                                    class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                                Desconectar
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-xs {{ tema.text_secondary }} max-w-[10rem] text-right">
+                            Defina uma senha antes de desconectar.
+                        </span>
+                        {% endif %}
+                        {% else %}
+                        <a href="{{ url_for('auth.google_login') }}"
+                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                            Conectar
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
 
                 <!-- Privacidade / dados -->

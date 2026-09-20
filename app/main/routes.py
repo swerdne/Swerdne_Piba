@@ -14,6 +14,7 @@ from app.main import bp
 from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
+from app.auth.routes import _notificar_senha_alterada
 
 
 @bp.route("/")
@@ -50,6 +51,7 @@ def dashboard():
     tema_form = TemaForm(tema=current_user.theme)
     senha_form = TrocarSenhaForm()
     nome_form = NomeForm(nome=nome_completo)
+    acao_form = AcaoForm()
 
     notificacoes = (
         Notificacao.query.filter_by(usuario_id=current_user.id)
@@ -74,6 +76,7 @@ def dashboard():
         senha_form=senha_form,
         tem_senha=bool(current_user.password_hash),
         nome_form=nome_form,
+        acao_form=acao_form,
         notificacoes=notificacoes,
         notificacoes_nao_lidas=notificacoes_nao_lidas,
     )
@@ -175,6 +178,7 @@ def salvar_senha():
     current_user.set_password(form.nova_senha.data)
     db.session.commit()
 
+    _notificar_senha_alterada(current_user)
     flash("Senha atualizada!" if tinha_senha else "Senha definida! Agora voce tambem pode entrar com e-mail e senha.", "success")
     return redirect(url_for("main.dashboard") + "#config")
 
@@ -218,6 +222,33 @@ def baixar_dados():
     return resposta
 
 
+@bp.route("/perfil/google/desconectar", methods=["POST"])
+@login_required
+def desconectar_google():
+    form = AcaoForm()
+    if not form.validate_on_submit():
+        flash("Nao foi possivel desconectar sua conta do Google.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    if not current_user.google_id:
+        flash("Sua conta ja nao esta conectada ao Google.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    # Sem senha, desconectar o Google tiraria TODO acesso a conta -- nao ha
+    # mais nenhuma forma de login. A tela ja esconde esse botao nesse caso,
+    # mas confere de novo aqui (defesa em profundidade, POST pode ser
+    # montado a mao fora da tela).
+    if not current_user.password_hash:
+        flash("Defina uma senha antes de desconectar o Google, senao voce perde o acesso a conta.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    current_user.google_id = None
+    db.session.commit()
+
+    flash("Conta do Google desconectada.", "success")
+    return redirect(url_for("main.dashboard") + "#config")
+
+
 # --- Chatbot ---------------------------------------------------------------
 
 _REGRAS_CHAT = [
@@ -225,7 +256,9 @@ _REGRAS_CHAT = [
      "Voce pode entrar com e-mail e senha, ou pelo botao \"Entrar com o Google\" na tela de login."),
     (re.compile(r"senha", re.I),
      "Da pra trocar sua senha na aba Configuracoes do Dashboard. Quem entrou so pelo Google "
-     "tambem pode definir uma senha ali, pra passar a entrar com e-mail e senha tambem."),
+     "tambem pode definir uma senha ali, pra passar a entrar com e-mail e senha tambem. Esqueceu "
+     "a senha? Tem o link \"Esqueci minha senha\" na tela de login, que manda um link por e-mail "
+     "pra redefinir -- e voce recebe um aviso por e-mail toda vez que a senha muda, por seguranca."),
     (re.compile(r"foto|avatar|imagem de perfil", re.I),
      "Voce envia sua foto de perfil na aba Configuracoes do Dashboard. Aceitamos JPG e PNG de ate 2 MB."),
     (re.compile(r"tema|cor do painel|apar[eê]ncia", re.I),

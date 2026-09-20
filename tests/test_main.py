@@ -160,6 +160,52 @@ def test_baixar_dados_devolve_json_com_dados_da_conta(logged_in_client):
     assert "password_hash" not in dados
 
 
+def test_desconectar_google_com_senha_funciona(logged_in_client, app, db):
+    # Sem `with app.app_context()` aninhado de proposito: a fixture `app` ja
+    # mantem um app_context ativo o teste inteiro, e a request abaixo reusa
+    # esse MESMO contexto (mesma sessao/identity map do SQLAlchemy). Um
+    # `with app.app_context()` aninhado aqui criaria uma sessao a parte --
+    # o commit feito nela nao apareceria pro objeto "ana" que a request ja
+    # tem cacheado, e a rota veria google_id desatualizado (None).
+    from app.auth.models import User
+    user = User.query.filter_by(email="ana@example.com").first()
+    user.google_id = "google-ana-123"
+    db.session.commit()
+
+    response = logged_in_client.post("/perfil/google/desconectar", follow_redirects=True)
+    assert "desconectada".encode() in response.data
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="ana@example.com").first()
+        assert user.google_id is None
+
+
+def test_desconectar_google_sem_senha_e_bloqueado(app, db):
+    """Sem senha, desconectar o Google tiraria todo acesso a conta -- a rota
+    tem que recusar mesmo que o POST seja montado a mao (a tela ja esconde
+    esse botao nesse caso)."""
+    with app.app_context():
+        from app.auth.models import User
+        user = User(google_id="google-so-1", email="so-google3@example.com", name="So Google", email_confirmado=True)
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    cliente = app.test_client()
+    with cliente.session_transaction() as sess:
+        sess["_user_id"] = str(user_id)
+        sess["_fresh"] = True
+
+    response = cliente.post("/perfil/google/desconectar", follow_redirects=True)
+    assert "Defina uma senha".encode() in response.data
+
+    with app.app_context():
+        from app.auth.models import User
+        user = User.query.filter_by(email="so-google3@example.com").first()
+        assert user.google_id == "google-so-1"
+
+
 def test_upload_foto_rejeita_extensao_invalida(logged_in_client):
     dados = {
         "foto": (io.BytesIO(b"conteudo-falso"), "arquivo.txt"),

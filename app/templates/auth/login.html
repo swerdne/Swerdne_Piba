@@ -92,6 +92,9 @@
                 <label class="flex items-center gap-2 text-sm text-gray-400">
                     {{ form.remember(class_="rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500") }} {{ form.remember.label.text }}
                 </label>
+                <a href="{{ url_for('auth.esqueci_senha') }}" class="text-sm text-indigo-400 hover:text-indigo-300 hover:underline">
+                    Esqueci minha senha
+                </a>
             </div>
 
             <div class="auth-in auth-in-6">
