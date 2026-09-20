@@ -22,23 +22,9 @@
 
     {% block head %}{% endblock %}
 </head>
-{% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register') %}
+{% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register', 'auth.esqueci_senha', 'auth.redefinir_senha') %}
 <body class="{% if eh_pagina_auth %}bg-gray-950{% else %}bg-gray-50{% endif %} min-h-screen flex flex-col"
       {% if current_user.is_authenticated %}data-user-id="{{ current_user.id }}"{% endif %}>
-    {% if request.endpoint != 'main.dashboard'
-        and not (request.endpoint or '').startswith('escala.')
-        and not (request.endpoint or '').startswith('comunidade.')
-        and not (request.endpoint or '').startswith('ministerio.')
-        and not eh_pagina_auth %}
-    <nav class="bg-white border-b border-gray-200">
-        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-6">
-            <a href="{{ url_for('main.index') }}" class="font-semibold text-gray-800">Inicio</a>
-            <a href="{{ url_for('auth.login') }}" class="text-sm text-gray-600 hover:text-gray-900">Login</a>
-            <a href="{{ url_for('auth.register') }}" class="text-sm text-gray-600 hover:text-gray-900">Cadastro</a>
-        </div>
-    </nav>
-    {% endif %}
-
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="max-w-5xl mx-auto w-full px-4 mt-4 space-y-2 {% if eh_pagina_auth %}relative z-10{% endif %}">
