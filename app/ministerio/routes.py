@@ -123,6 +123,10 @@ def nova(comunidade_id):
             descricao=(form.descricao.data or "").strip() or None,
             imagem=imagem,
         )
+        ministerio.dias_culto = (
+            ",".join(str(d) for d in sorted(form.dias_culto.data)) if form.dias_culto.data else None
+        )
+        db.session.commit()
         flash(f'Ministerio "{ministerio.nome}" criado!', "success")
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
@@ -285,9 +289,17 @@ def editar(ministerio_id):
     ministerio = _ministerio_do_usuario_ou_404(ministerio_id)
     form = MinisterioForm(nome=ministerio.nome, descricao=ministerio.descricao)
 
+    if request.method == "GET":
+        # SelectMultipleField nao entende a coluna CSV crua -- mesmo padrao
+        # de plantao.routes.editar com dias_semana.
+        form.dias_culto.data = ministerio.dias_culto_efetivos
+
     if form.validate_on_submit():
         ministerio.nome = form.nome.data.strip()
         ministerio.descricao = (form.descricao.data or "").strip() or None
+        ministerio.dias_culto = (
+            ",".join(str(d) for d in sorted(form.dias_culto.data)) if form.dias_culto.data else None
+        )
 
         if form.imagem.data:
             logo_antiga = ministerio.imagem

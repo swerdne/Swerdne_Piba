@@ -100,10 +100,15 @@
                     {% for subfield in form.dias_semana %}
                     <label class="flex items-center gap-1.5 text-sm {{ tema.text_primary }}">
                         {{ subfield }} {{ subfield.label.text }}
+                        {% if subfield.data in ministerio.dias_culto_efetivos %}
+                        <i class="fa-solid fa-star text-amber-400 text-[10px]" title="Esse ministerio costuma ter culto nesse dia"></i>
+                        {% endif %}
                     </label>
                     {% endfor %}
                 </div>
-                <p class="text-xs {{ tema.text_secondary }} mt-1">Se nenhum dia for marcado, usa o dia da semana da data de inicio.</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Se nenhum dia for marcado, usa o dia da semana da data de inicio.
+                    {% if ministerio.dias_culto_efetivos %}<i class="fa-solid fa-star text-amber-400 text-[10px]"></i> = dia que o ministerio costuma ter culto.{% endif %}
+                </p>
             </div>
 
             <div data-secao-mes class="hidden">

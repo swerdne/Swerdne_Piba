@@ -56,6 +56,20 @@
                 {% endfor %}
             </div>
 
+            <div>
+                {{ form.dias_culto.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+                <div class="flex flex-wrap gap-x-4 gap-y-2">
+                    {% for subfield in form.dias_culto %}
+                    <label class="flex items-center gap-1.5 text-sm {{ tema.text_primary }}">
+                        {{ subfield }} {{ subfield.label.text }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">
+                    Opcional -- so um lembrete visual na hora de configurar o Rodizio, nao restringe nada.
+                </p>
+            </div>
+
             {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-lg transition") }}
         </form>
     </main>

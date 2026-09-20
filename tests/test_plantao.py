@@ -1405,3 +1405,24 @@ def test_ocorrencia_gerada_aparece_no_relatorio_escalados(logged_in_client, app,
         assert b"Ana" in response.data
 
 
+def test_tela_de_novo_turno_destaca_dias_de_culto_do_ministerio(logged_in_client, app, db):
+    """O selo de estrela nos dias da semana e so um lembrete visual (ver
+    Ministerio.dias_culto_efetivos) -- confere que aparece quando
+    configurado e que some quando nao ha nada configurado."""
+    from app.ministerio.models import Ministerio
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+
+        response = logged_in_client.get(f"/plantao/ministerio/{ministerio.id}/nova")
+        assert "fa-star" not in response.data.decode("utf-8")
+
+        ministerio_obj = db.session.get(Ministerio, ministerio.id)
+        ministerio_obj.dias_culto = "6"
+        db.session.commit()
+
+        response = logged_in_client.get(f"/plantao/ministerio/{ministerio.id}/nova")
+        assert "fa-star" in response.data.decode("utf-8")
+
+

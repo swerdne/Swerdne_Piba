@@ -21,9 +21,27 @@ class Ministerio(db.Model):
     imagem = db.Column(db.String(500), nullable=True)
     criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
+    # Dias da semana que esse ministerio costuma ter culto/evento (CSV de
+    # inteiros 0=segunda..6=domingo, mesma convencao de
+    # app/plantao/models.py::TurnoPlantao.dias_semana). So um lembrete
+    # visual pra quem configura a recorrencia de um Rodizio (ver
+    # dias_culto_efetivos) -- nunca restringe quais dias podem ser
+    # escolhidos la, so destaca os habituais.
+    dias_culto = db.Column(db.String(20), nullable=True)
+
     comunidade = db.relationship(
         "Comunidade", backref=db.backref("ministerios", cascade="all, delete-orphan")
     )
+
+    @property
+    def dias_culto_efetivos(self):
+        """Lista de inteiros (0=segunda..6=domingo) -- vazia se nunca
+        configurado (diferente de TurnoPlantao.dias_semana_efetivos, aqui
+        nao ha uma data-ancora pra cair de volta, entao "nao configurado"
+        e so "nenhum destaque", nao um erro)."""
+        if not self.dias_culto:
+            return []
+        return sorted(int(d) for d in self.dias_culto.split(","))
 
     def __repr__(self):
         return f"<Ministerio {self.nome} da comunidade {self.comunidade_id}>"

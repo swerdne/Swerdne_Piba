@@ -54,6 +54,38 @@ def test_editar_ministerio_atualiza_nome(logged_in_client, app, db):
         assert atualizado.descricao == "Descricao nova"
 
 
+def test_criar_ministerio_com_dias_de_culto_salva_csv(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        logged_in_client.post(
+            f"/ministerio/comunidade/{comunidade.id}/nova",
+            data={"nome": "Louvor", "descricao": "", "dias_culto": ["2", "6"]},
+            follow_redirects=True,
+        )
+        ministerio = Ministerio.query.filter_by(nome="Louvor").first()
+        assert ministerio.dias_culto_efetivos == [2, 6]
+
+
+def test_editar_ministerio_atualiza_dias_de_culto(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+
+        logged_in_client.post(
+            f"/ministerio/{ministerio.id}/editar",
+            data={"nome": ministerio.nome, "descricao": "", "dias_culto": ["6"]},
+            follow_redirects=True,
+        )
+        atualizado = db.session.get(Ministerio, ministerio.id)
+        assert atualizado.dias_culto_efetivos == [6]
+
+
+def test_dias_de_culto_sem_configurar_fica_vazio(app, db):
+    with app.app_context():
+        ministerio = Ministerio(comunidade_id=1, nome="Sem config")
+        assert ministerio.dias_culto_efetivos == []
+
+
 def test_escala_criada_dentro_do_ministerio_aparece_na_area_dele(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
