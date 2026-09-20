@@ -165,11 +165,30 @@ _REGRAS_CHAT = [
     (re.compile(r"google", re.I),
      "O login com Google usa OAuth: voce autoriza o acesso e a gente cria sua conta com seu e-mail e foto automaticamente."),
 
+    # --- Disponibilidade (antes do tutorial, que pegaria "como funciona") -
+    (re.compile(r"disponibilidade|ciclo de (trabalho|folga)|indispon[ií]vel|turno externo", re.I),
+     "Da pra cadastrar um ciclo de disponibilidade pra cada membro (ex.: 4 dias trabalhando / 4 de folga) "
+     "no Diretorio de Membros da Comunidade. E so um aviso na hora de montar a escala -- nunca bloqueia, "
+     "quem decide continua sendo voce."),
+
     # --- Tutorial guiado -----------------------------------------------
     (re.compile(r"tutorial|passo a passo|primeiros passos|como (funciona|usar|come[cç]ar)", re.I),
      "O tutorial guiado aparece sozinho na primeira vez que voce entra numa Comunidade, "
      "destacando os principais botoes da tela. Pra rever quando quiser, clique no icone de "
      "interrogacao (?) no topo da tela da Comunidade."),
+
+    # --- Hierarquia de papeis (antes de "ministerio"/"convit", que pegariam
+    # "lider de ministerio"/"quem e admin" primeiro) ----------------------
+    (re.compile(r"hierarquia|super ?admin|l[ií]der de minist[eé]rio|n[ií]ve(l|is) de acesso|quem pode (editar|gerenciar|excluir)", re.I),
+     "A hierarquia vai do maior pro menor alcance: Super Admin (acesso total, so criado via terminal) > "
+     "Admin da Comunidade (gerencia ministerios, membros e convites) > Lider de Ministerio (gerencia escalas "
+     "e rodizio so do seu ministerio) > Membro (participa e visualiza, sem poder administrativo). Ha ainda o "
+     "Convidado, vinculado so a uma escala especifica, sem precisar de conta."),
+
+    # --- Calendario (antes de "escala", que pegaria "ver o mes das escalas") -
+    (re.compile(r"calend[aá]rio|visao mensal|ver o mes", re.I),
+     "O Ministerio tem uma visao de Calendario com todas as escalas do mes, coloridas por departamento -- "
+     "otimo pra enxergar rodizios e escalas manuais juntos de uma vez."),
 
     # --- Estrutura do sistema (mais especifico antes do generico) ------
     (re.compile(r"rod[ií]zio|plant[aã]o|fila de equipes|turno", re.I),
@@ -204,11 +223,41 @@ _REGRAS_CHAT = [
 
     (re.compile(r"chat|voce e real|\bia\b|intelig[eê]ncia artificial", re.I),
      "Por enquanto sou um assistente simulado (respostas por regras). Em breve vou ser conectado a uma IA de verdade."),
+
+    # --- Seguranca e privacidade dos dados -------------------------------
+    (re.compile(r"seguran[cç]a|privacidade|dados (seguros|protegidos)|vazament|criptograf", re.I),
+     "Levamos seguranca a serio: senhas nunca sao guardadas em texto puro (sao criptografadas), a conexao "
+     "e sempre HTTPS, e ha protecao contra tentativas repetidas de login. Os dados da sua Comunidade so sao "
+     "visiveis pra quem tem papel/convite ativo nela."),
+
+    # --- Atalho de navegacao ----------------------------------------------
+    (re.compile(r"voltar (pro|para o) in[ií]cio|atalho|logo (clic|no topo)", re.I),
+     "O logo pequeno no cabecalho de qualquer tela leva direto pro Dashboard, de qualquer profundidade -- "
+     "complementa a seta \"Voltar\", que so sobe 1 nivel por vez."),
+
+    # --- Marca ------------------------------------------------------------
+    (re.compile(r"pibachurch|swerdne|quem (fez|criou|desenvolveu)", re.I),
+     "O Pibachurch e um sistema de gestao pra igrejas e comunidades -- escalas, ministerios, convites e "
+     "notificacoes automaticas, tudo num so lugar."),
+
+    # --- Pequena conversa ---------------------------------------------------
+    (re.compile(r"\b(obrigad[oa]|valeu|vlw)\b", re.I),
+     "Disponha! Se precisar de mais alguma coisa e so perguntar."),
+    (re.compile(r"\bsair\b|logout|deslogar", re.I),
+     "Pra sair da conta, use o botao \"Sair\" na aba Configuracoes do Dashboard."),
+    (re.compile(r"^(oi|ol[aá]|e a[ií]|bom dia|boa tarde|boa noite)\b", re.I),
+     "Oi! Posso ajudar com login, cadastro, comunidades, ministerios, escalas, rodizio, convites, "
+     "disponibilidade, calendario ou o tutorial guiado. O que voce quer saber?"),
+    (re.compile(r"\bajuda\b|\bmenu\b|o que (voce|vc) (faz|sabe)", re.I),
+     "Posso te explicar: login e cadastro, foto de perfil, temas, comunidades, ministerios, escalas, "
+     "rodizio/plantao, convites e hierarquia de papeis, diretorio de membros, disponibilidade, calendario, "
+     "notificacoes e o tutorial guiado. E so perguntar sobre qualquer um desses assuntos."),
 ]
 
 _RESPOSTA_PADRAO = (
     "Ainda estou aprendendo sobre isso. Tente perguntar sobre login, cadastro, comunidades, "
-    "ministerios, escalas, rodizio, convites ou o tutorial guiado."
+    "ministerios, escalas, rodizio, convites, hierarquia de papeis, disponibilidade, calendario, "
+    "notificacoes, seguranca ou o tutorial guiado."
 )
 
 

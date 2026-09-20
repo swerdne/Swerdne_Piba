@@ -116,3 +116,28 @@ def test_chat_explica_comunidade_e_ministerio(logged_in_client):
 
     r2 = logged_in_client.post("/chat", json={"mensagem": "pra que serve um ministerio?", "historico": []})
     assert "Ministerio" in r2.get_json()["resposta"]
+
+
+def test_chat_explica_hierarquia_de_papeis(logged_in_client):
+    response = logged_in_client.post(
+        "/chat", json={"mensagem": "qual a diferenca entre super admin e lider de ministerio?", "historico": []}
+    )
+    resposta = response.get_json()["resposta"]
+    assert "Super Admin" in resposta
+    assert "Lider de Ministerio" in resposta
+
+
+def test_chat_explica_disponibilidade_e_calendario(logged_in_client):
+    r1 = logged_in_client.post("/chat", json={"mensagem": "como funciona a disponibilidade?", "historico": []})
+    assert "disponibilidade" in r1.get_json()["resposta"].lower()
+
+    r2 = logged_in_client.post("/chat", json={"mensagem": "tem um calendario?", "historico": []})
+    assert "Calendario" in r2.get_json()["resposta"]
+
+
+def test_chat_responde_saudacao_e_agradecimento(logged_in_client):
+    r1 = logged_in_client.post("/chat", json={"mensagem": "oi", "historico": []})
+    assert "Oi!" in r1.get_json()["resposta"]
+
+    r2 = logged_in_client.post("/chat", json={"mensagem": "muito obrigado!", "historico": []})
+    assert "Disponha" in r2.get_json()["resposta"]
