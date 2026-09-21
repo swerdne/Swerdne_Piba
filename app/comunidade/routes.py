@@ -665,7 +665,7 @@ def gerar_link_convite(comunidade_id):
     return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
 
-@bp.route("/entrar/<token>")
+@bp.route("/entrar/<token>", methods=["GET", "POST"])
 def entrar_via_link(token):
     """Publica de proposito (sem @login_required) -- quem ainda nao tem
     conta precisa ver a tela pra saber que precisa entrar/cadastrar antes.
@@ -673,7 +673,12 @@ def entrar_via_link(token):
     "proximo_apos_login" pra voltar pra ca depois de autenticar), mas mais
     simples: nao existe um registro de Convite aqui, so o token generico
     da propria Comunidade, e o papel concedido e sempre "membro" (nunca
-    "admin" -- esse link nao serve pra promover ninguem)."""
+    "admin" -- esse link nao serve pra promover ninguem).
+
+    GET nunca muda estado (so mostra a tela) -- entrar de fato exige POST
+    com CSRF (AcaoForm), senao um GET simples (preview de link no
+    WhatsApp/Telegram, prefetch do navegador, ou um <img src="..."> num
+    site malicioso) poderia inscrever alguem autenticado sem intencao."""
     comunidade = Comunidade.query.filter_by(token_convite_publico=token).first_or_404()
 
     if not current_user.is_authenticated:
@@ -684,22 +689,23 @@ def entrar_via_link(token):
         usuario_id=current_user.id, comunidade_id=comunidade.id
     ).first()
     if papel_existente:
-        # Ja tem papel (as vezes ja e admin) -- o link generico nunca
-        # rebaixa ninguem, so avisa que ja faz parte.
+        # So leitura (ja tem papel, entrar de novo nao muda nada) -- seguro
+        # em GET. O link generico nunca rebaixa ninguem, so avisa.
         flash(f'Voce ja faz parte de "{comunidade.nome}".', "success")
-        eh_admin = papel_existente.papel == "admin"
-    else:
+        destino = (
+            url_for("comunidade.detalhe", comunidade_id=comunidade.id)
+            if papel_existente.papel == "admin" else url_for("main.dashboard")
+        )
+        return redirect(destino)
+
+    form = AcaoForm()
+    if request.method == "POST" and form.validate_on_submit():
         db.session.add(UsuarioComunidade(usuario_id=current_user.id, comunidade_id=comunidade.id, papel="membro"))
         db.session.commit()
         flash(f'Voce entrou em "{comunidade.nome}"!', "success")
-        eh_admin = False
+        return redirect(url_for("main.dashboard"))
 
-    # comunidade.detalhe e uma tela de gestao (so admin, ver
-    # _comunidade_do_usuario_ou_404) -- um "membro" recem-entrado nao
-    # consegue ve-la, entao cai no Dashboard geral em vez de dar 404.
-    if eh_admin:
-        return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
-    return redirect(url_for("main.dashboard"))
+    return render_template("comunidade/entrar.html", comunidade=comunidade, precisa_confirmar=True, acao_form=form)
 
 
 @bp.route("/<int:comunidade_id>/papeis/<int:usuario_comunidade_id>/remover", methods=["POST"])

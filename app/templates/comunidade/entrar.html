@@ -18,6 +18,18 @@
             <i class="fa-solid fa-user-plus {{ tema.accent_text }} text-xl"></i>
         </div>
 
+        {% if precisa_confirmar %}
+        <h1 class="text-lg font-semibold {{ tema.text_primary }}">Entrar em {{ comunidade.nome }}?</h1>
+        <p class="text-sm {{ tema.text_secondary }}">
+            Voce vai entrar como membro de <strong>{{ comunidade.nome }}</strong>.
+        </p>
+        <form method="POST" class="pt-2">
+            {{ acao_form.hidden_tag() }}
+            <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                Entrar
+            </button>
+        </form>
+        {% else %}
         <h1 class="text-lg font-semibold {{ tema.text_primary }}">Voce foi convidado(a)!</h1>
         <p class="text-sm {{ tema.text_secondary }}">
             Entre ou crie uma conta pra fazer parte de <strong>{{ comunidade.nome }}</strong> como membro.
@@ -30,6 +42,7 @@
                 Criar conta
             </a>
         </div>
+        {% endif %}
 
     </div>
 </div>

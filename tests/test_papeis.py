@@ -393,7 +393,11 @@ def test_gerar_link_de_novo_invalida_o_anterior(logged_in_client, app, db):
         assert logged_in_client.get(f"/comunidade/entrar/{token_antigo}", follow_redirects=True).status_code == 404
 
 
-def test_entrar_via_link_logado_vira_membro(logged_in_client, app, db):
+def test_entrar_via_link_get_nao_muda_nada_so_post_confirma(logged_in_client, app, db):
+    """GET nunca muda estado (so mostra a tela de confirmacao) -- entrar de
+    fato exige POST, ver comunidade.routes::entrar_via_link. Sem isso, um
+    preview de link (WhatsApp/Telegram) ou um <img src="..."> em outro site
+    poderia inscrever alguem so por ele visitar o link, sem intencao."""
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
@@ -403,10 +407,15 @@ def test_entrar_via_link_logado_vira_membro(logged_in_client, app, db):
     with sessao_isolada(app):
         bruno_client = app.test_client()
         _registrar(bruno_client, "bruno", "bruno@example.com")
-        response = bruno_client.get(f"/comunidade/entrar/{token}", follow_redirects=True)
-        assert response.status_code == 200
-
         bruno = User.query.filter_by(email="bruno@example.com").first()
+
+        resposta_get = bruno_client.get(f"/comunidade/entrar/{token}")
+        assert resposta_get.status_code == 200
+        assert UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
+
+        resposta_post = bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+        assert resposta_post.status_code == 200
+
         papel = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first()
         assert papel is not None
         assert papel.papel == "membro"
@@ -451,6 +460,15 @@ def test_entrar_via_link_deslogado_pede_login_e_completa_depois(logged_in_client
         assert resposta_cadastro.status_code == 200
 
         carla = User.query.filter_by(email="carla@example.com").first()
+        # Cadastro sozinho nao completa a entrada -- cai na tela de
+        # confirmacao (o redirect pos-login e sempre GET, que nunca muda
+        # estado). Precisa do POST explicito pra realmente entrar.
+        assert UsuarioComunidade.query.filter_by(usuario_id=carla.id, comunidade_id=comunidade_id).first() is None
+        assert "Entrar em".encode() in resposta_cadastro.data
+
+        resposta_confirmar = visitante.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+        assert resposta_confirmar.status_code == 200
+
         papel = UsuarioComunidade.query.filter_by(usuario_id=carla.id, comunidade_id=comunidade_id).first()
         assert papel is not None
         assert papel.papel == "membro"
