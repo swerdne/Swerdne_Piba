@@ -1426,3 +1426,19 @@ def test_tela_de_novo_turno_destaca_dias_de_culto_do_ministerio(logged_in_client
         assert "fa-star" in response.data.decode("utf-8")
 
 
+def test_horario_fim_do_turno_propaga_pras_ocorrencias_geradas(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(
+            ministerio.id, data_inicio=date.today(), unidade_recorrencia="dia", horario=time(19, 0),
+        )
+        turno.horario_fim = time(21, 0)
+        db.session.commit()
+
+        sincronizar_turno(turno, ate_data=date.today() + timedelta(days=1))
+
+        escala = Escala.query.filter_by(plantao_turno_id=turno.id).order_by(Escala.data).first()
+        assert escala.horario_fim == time(21, 0)
+
+

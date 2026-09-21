@@ -51,6 +51,7 @@ def _aplicar_campos_do_form(turno, form):
     turno.nome_funcao = form.nome_funcao.data.strip() or "Responsavel"
     turno.data_inicio = form.data_inicio.data
     turno.horario = form.horario.data
+    turno.horario_fim = form.horario_fim.data
     turno.intervalo_recorrencia = form.intervalo_recorrencia.data
     turno.unidade_recorrencia = form.unidade_recorrencia.data
     turno.dias_semana = (
@@ -123,6 +124,7 @@ def nova(ministerio_id):
         form.departamento.data = escala_origem.departamento
         form.data_inicio.data = escala_origem.data
         form.horario.data = escala_origem.horario
+        form.horario_fim.data = escala_origem.horario_fim
 
     data_referencia = form.data_inicio.data or date.today()
     form.modo_mensal.choices = opcoes_modo_mensal_completas(data_referencia)

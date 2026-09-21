@@ -1,5 +1,6 @@
 """Controller (C do MVC): rotas do modulo escala."""
 import concurrent.futures
+from datetime import time
 
 from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app
 from flask_login import login_required, current_user
@@ -83,6 +84,39 @@ def _escala_visivel_ou_404(escala_id):
     return escala, pode_gerenciar
 
 
+def _avisos_conflito_horario(membro, escala_atual, funcao_atual_id=None):
+    """Lista de avisos (string) se `membro` ja estiver escalado em OUTRA
+    Escala com horario conflitante na mesma data -- nunca bloqueia, so
+    avisa (quem esta montando a escala decide, ex: revezamento rapido entre
+    dois cultos e as vezes intencional). Evento sem horario_fim e tratado
+    como instantaneo (fim = inicio) na comparacao."""
+    if not escala_atual.data:
+        return []
+
+    inicio_atual = escala_atual.horario or time.min
+    fim_atual = escala_atual.horario_fim or inicio_atual
+
+    outras_funcoes = (
+        Funcao.query.join(Escala, Funcao.escala_id == Escala.id)
+        .filter(
+            Funcao.membro_id == membro.id,
+            Funcao.id != (funcao_atual_id or -1),
+            Escala.id != escala_atual.id,
+            Escala.data == escala_atual.data,
+        )
+        .all()
+    )
+
+    avisos = []
+    for outra_funcao in outras_funcoes:
+        outra_escala = outra_funcao.escala
+        inicio_outro = outra_escala.horario or time.min
+        fim_outro = outra_escala.horario_fim or inicio_outro
+        if inicio_atual <= fim_outro and inicio_outro <= fim_atual:
+            avisos.append(f'{membro.nome} ja esta escalado em "{outra_escala.nome}" nesse mesmo horario.')
+    return avisos
+
+
 def _fixar_se_gerada_por_rodizio(escala):
     """Uma edicao manual numa Escala gerada por Turno de Rodizio (ver
     app/plantao/sincronizacao.py) precisa travar essa ocorrencia (plantao_fixado)
@@ -106,6 +140,21 @@ def nova(ministerio_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
     form = EscalaForm()
 
+    if request.method == "GET":
+        # Predefine horario/horario_fim com o ultimo usado nesse Ministerio --
+        # poupa quem cria escalas recorrentes (ex: sempre o mesmo ensaio de
+        # quarta) de digitar o mesmo horario toda vez. So um ponto de
+        # partida, continua editavel.
+        ultima_escala = (
+            Escala.query.filter_by(ministerio_id=ministerio.id)
+            .filter(Escala.horario.isnot(None))
+            .order_by(Escala.criada_em.desc())
+            .first()
+        )
+        if ultima_escala:
+            form.horario.data = ultima_escala.horario
+            form.horario_fim.data = ultima_escala.horario_fim
+
     if form.validate_on_submit():
         escala = criar_escala_com_funcoes_padrao(
             ministerio_id=ministerio.id,
@@ -113,6 +162,7 @@ def nova(ministerio_id):
             departamento=form.departamento.data,
             data=form.data.data,
             horario=form.horario.data,
+            horario_fim=form.horario_fim.data,
             cor_selecionada=form.cor.data or None,
         )
         flash(f'Escala "{escala.nome}" criada!', "success")
@@ -138,11 +188,16 @@ def editar(escala_id):
         data_antiga, horario_antigo = escala.data, escala.horario
 
         mudou_nome = form.nome.data.strip() != escala.nome
-        mudou_data_horario = form.data.data != escala.data or form.horario.data != escala.horario
+        mudou_data_horario = (
+            form.data.data != escala.data
+            or form.horario.data != escala.horario
+            or form.horario_fim.data != escala.horario_fim
+        )
 
         escala.nome = form.nome.data.strip()
         escala.data = form.data.data
         escala.horario = form.horario.data
+        escala.horario_fim = form.horario_fim.data
         escala.cor_selecionada = form.cor.data or None
 
         if mudou_data_horario:
@@ -391,6 +446,8 @@ def adicionar_membro(funcao_id):
         flash("Pessoa invalida para esta comunidade.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
+    avisos_conflito = _avisos_conflito_horario(membro, funcao.escala, funcao_atual_id=funcao.id)
+
     funcao.membro_id = membro.id
     funcao.status = STATUS_PADRAO
     funcao.notificado_em = None
@@ -399,6 +456,8 @@ def adicionar_membro(funcao_id):
     db.session.commit()
 
     flash(f"{membro.nome} adicionado(a) em {funcao.nome}.", "success")
+    for aviso in avisos_conflito:
+        flash(aviso, "warning")
     return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
 
@@ -462,6 +521,8 @@ def adicionar_convidado(funcao_id):
         db.session.add(membro)
         db.session.flush()
 
+    avisos_conflito = _avisos_conflito_horario(membro, funcao.escala, funcao_atual_id=funcao.id)
+
     funcao.membro_id = membro.id
     funcao.status = STATUS_PADRAO
     funcao.notificado_em = None
@@ -470,6 +531,8 @@ def adicionar_convidado(funcao_id):
     db.session.commit()
 
     flash(f"{membro.nome} adicionado(a) como convidado(a) em {funcao.nome}.", "success")
+    for aviso in avisos_conflito:
+        flash(aviso, "warning")
     return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
 

@@ -18,7 +18,8 @@ class EscalaForm(FlaskForm):
         validators=[DataRequired()],
     )
     data = DateField("Data do ensaio/evento", validators=[Optional()])
-    horario = TimeField("Horario do ensaio/evento", validators=[Optional()])
+    horario = TimeField("Horario de inicio", validators=[Optional()])
+    horario_fim = TimeField("Horario de fim", validators=[Optional()])
     cor = SelectField("Cor na lista e no calendario", choices=_CHOICES_COR, validators=[Optional()])
     submit = SubmitField("Criar escala")
 
@@ -26,7 +27,8 @@ class EscalaForm(FlaskForm):
 class EditarEscalaForm(FlaskForm):
     nome = StringField("Nome da escala", validators=[DataRequired(), Length(max=80)])
     data = DateField("Data do ensaio/evento", validators=[Optional()])
-    horario = TimeField("Horario do ensaio/evento", validators=[Optional()])
+    horario = TimeField("Horario de inicio", validators=[Optional()])
+    horario_fim = TimeField("Horario de fim", validators=[Optional()])
     cor = SelectField("Cor na lista e no calendario", choices=_CHOICES_COR, validators=[Optional()])
     submit = SubmitField("Salvar")
 

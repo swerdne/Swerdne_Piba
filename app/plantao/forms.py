@@ -36,6 +36,7 @@ class TurnoPlantaoForm(FlaskForm):
     )
     data_inicio = DateField("Data de inicio do rodizio", validators=[DataRequired()])
     horario = TimeField("Horario de inicio de cada plantao", validators=[Optional()])
+    horario_fim = TimeField("Horario de fim de cada plantao", validators=[Optional()])
 
     # "Repetir a cada [N] [unidade]" -- estilo Google Agenda.
     intervalo_recorrencia = IntegerField(

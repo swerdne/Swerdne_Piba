@@ -38,6 +38,7 @@ def _materializar_periodo(turno, periodo, data_periodo):
         departamento=turno.departamento,
         data=data_periodo,
         horario=turno.horario,
+        horario_fim=turno.horario_fim,
         plantao_turno_id=turno.id,
         plantao_periodo=periodo,
     )
@@ -80,7 +81,11 @@ def _atualizar_periodo_existente(turno, escala, data_periodo):
     funcoes_atuais = list(escala.funcoes)
     ids_atuais = [f.membro_id for f in funcoes_atuais if f.membro_id is not None]
 
-    mudou_data_horario = escala.data != data_periodo or escala.horario != turno.horario
+    mudou_data_horario = (
+        escala.data != data_periodo
+        or escala.horario != turno.horario
+        or escala.horario_fim != turno.horario_fim
+    )
     mudou_nome = escala.nome != turno.nome
     mudou_departamento = escala.departamento != turno.departamento
     mudou_nome_funcao = any(f.nome != turno.nome_funcao for f in funcoes_atuais)
@@ -95,6 +100,7 @@ def _atualizar_periodo_existente(turno, escala, data_periodo):
     escala.departamento = turno.departamento
     escala.data = data_periodo
     escala.horario = turno.horario
+    escala.horario_fim = turno.horario_fim
 
     if mudou_equipe:
         for funcao in funcoes_atuais:

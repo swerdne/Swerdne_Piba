@@ -267,6 +267,10 @@ class TurnoPlantao(db.Model):
     nome_funcao = db.Column(db.String(80), nullable=False, default="Responsavel", server_default="Responsavel")
     data_inicio = db.Column(db.Date, nullable=False)
     horario = db.Column(db.Time, nullable=True)
+    # Opcional -- aplicado em TODA ocorrencia gerada (ver sincronizacao.py),
+    # mesma ideia de Escala.horario_fim: predefine o horario de fim pra quem
+    # usa esse Rodizio recorrentemente, sem precisar editar cada ocorrencia.
+    horario_fim = db.Column(db.Time, nullable=True)
 
     # Recorrencia estilo Google Agenda -- ver docstring do modulo.
     intervalo_recorrencia = db.Column(db.Integer, nullable=False, default=1, server_default="1")

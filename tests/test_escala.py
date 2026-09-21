@@ -1167,3 +1167,91 @@ def test_usuario_sem_vinculo_nao_ve_escala_de_convidado_de_outro(logged_in_clien
         # bruno nunca foi convidado nesta escala -- so registrado na plataforma.
         resposta = outro_logged_in_client.get(f"/escala/{escala_id}")
         assert resposta.status_code == 404
+
+
+# --- Horario de fim e aviso de conflito ------------------------------------
+
+def test_criar_escala_com_horario_de_fim(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        logged_in_client.post(
+            f"/escala/ministerio/{ministerio.id}/nova",
+            data={"nome": "Ensaio", "departamento": "Louvor", "data": "2026-10-04",
+                  "horario": "19:00", "horario_fim": "21:00"},
+            follow_redirects=True,
+        )
+        escala = Escala.query.filter_by(nome="Ensaio", ministerio_id=ministerio.id).first()
+        assert str(escala.horario) == "19:00:00"
+        assert str(escala.horario_fim) == "21:00:00"
+
+
+def test_editar_escala_atualiza_horario_de_fim(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Ensaio")
+        logged_in_client.post(
+            f"/escala/{escala.id}/editar",
+            data={"nome": escala.nome, "data": "2026-10-04", "horario": "19:00", "horario_fim": "20:30", "cor": ""},
+            follow_redirects=True,
+        )
+        atualizada = db.session.get(Escala, escala.id)
+        assert str(atualizada.horario_fim) == "20:30:00"
+
+
+def test_novo_form_de_escala_predefine_ultimo_horario_usado(logged_in_client, app, db):
+    """"Deixar predefinido conforme o uso for recorrente" -- o form de nova
+    escala ja vem com o horario da ultima escala criada nesse Ministerio."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        logged_in_client.post(
+            f"/escala/ministerio/{ministerio.id}/nova",
+            data={"nome": "Primeira", "departamento": "Louvor", "data": "2026-10-04",
+                  "horario": "19:00", "horario_fim": "21:00"},
+            follow_redirects=True,
+        )
+
+        html = logged_in_client.get(f"/escala/ministerio/{ministerio.id}/nova").data.decode("utf-8")
+        assert 'value="19:00"' in html
+        assert 'value="21:00"' in html
+
+
+def test_escalar_em_horario_conflitante_mostra_aviso(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        membro = _criar_membro(logged_in_client, comunidade.id, "Ana")
+
+        escala_a = _criar_escala(logged_in_client, ministerio.id, "Culto A", data="2026-10-04", horario="19:00")
+        logged_in_client.post(
+            f"/escala/{escala_a.id}/editar",
+            data={"nome": escala_a.nome, "data": "2026-10-04", "horario": "19:00", "horario_fim": "21:00", "cor": ""},
+            follow_redirects=True,
+        )
+        _escalar(logged_in_client, _funcao_por_nome(escala_a, "Baixo").id, membro.id)
+
+        escala_b = _criar_escala(logged_in_client, ministerio.id, "Culto B", data="2026-10-04", horario="20:00")
+        resposta = _escalar(logged_in_client, _funcao_por_nome(escala_b, "Baixo").id, membro.id)
+
+        assert "ja esta escalado em".encode() in resposta.data
+        assert "Culto A".encode() in resposta.data
+
+
+def test_escalar_em_horario_sem_conflito_nao_mostra_aviso(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        membro = _criar_membro(logged_in_client, comunidade.id, "Ana")
+
+        escala_a = _criar_escala(logged_in_client, ministerio.id, "Culto A", data="2026-10-04", horario="09:00")
+        logged_in_client.post(
+            f"/escala/{escala_a.id}/editar",
+            data={"nome": escala_a.nome, "data": "2026-10-04", "horario": "09:00", "horario_fim": "10:00", "cor": ""},
+            follow_redirects=True,
+        )
+        _escalar(logged_in_client, _funcao_por_nome(escala_a, "Baixo").id, membro.id)
+
+        escala_b = _criar_escala(logged_in_client, ministerio.id, "Culto B", data="2026-10-04", horario="19:00")
+        resposta = _escalar(logged_in_client, _funcao_por_nome(escala_b, "Baixo").id, membro.id)
+
+        assert "ja esta escalado em".encode() not in resposta.data

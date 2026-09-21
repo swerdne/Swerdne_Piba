@@ -240,6 +240,11 @@ class Escala(db.Model):
     departamento = db.Column(db.String(40), nullable=False)
     data = db.Column(db.Date, nullable=True)
     horario = db.Column(db.Time, nullable=True)
+    # Opcional -- so pra completar o intervalo do evento (usado no calendario
+    # e no aviso de conflito de horario, ver escala.routes._avisos_conflito_horario).
+    # Sem preencher, o evento e tratado como instantaneo (mesmo horario de
+    # inicio e fim) na hora de comparar conflitos.
+    horario_fim = db.Column(db.Time, nullable=True)
     criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     notificado_24h_em = db.Column(db.DateTime, nullable=True)
@@ -354,11 +359,13 @@ class Funcao(db.Model):
         return f"<Funcao {self.nome} da escala {self.escala_id}>"
 
 
-def criar_escala_com_funcoes_padrao(ministerio_id, nome, departamento, data=None, horario=None, cor_selecionada=None):
+def criar_escala_com_funcoes_padrao(
+    ministerio_id, nome, departamento, data=None, horario=None, horario_fim=None, cor_selecionada=None
+):
     """Cria uma escala nova ja com as funcoes padrao do departamento escolhido."""
     escala = Escala(
         ministerio_id=ministerio_id, nome=nome, departamento=departamento, data=data, horario=horario,
-        cor_selecionada=cor_selecionada,
+        horario_fim=horario_fim, cor_selecionada=cor_selecionada,
     )
     db.session.add(escala)
     db.session.flush()  # garante escala.id antes de criar as funcoes
