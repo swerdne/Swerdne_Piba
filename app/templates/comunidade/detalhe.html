@@ -68,6 +68,16 @@
                 <i class="fa-solid fa-calendar-check {{ tema.text_secondary }}"></i>
                 <span class="text-sm {{ tema.text_primary }}">Ver escalados</span>
             </a>
+            <a href="{{ url_for('comunidade.calendario', comunidade_id=comunidade.id) }}"
+               class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 {{ tema.card_bg_hover }} transition">
+                <i class="fa-solid fa-calendar-days {{ tema.text_secondary }}"></i>
+                <span class="text-sm {{ tema.text_primary }}">Calendario</span>
+            </a>
+            <a href="{{ url_for('comunidade.lideres', comunidade_id=comunidade.id) }}"
+               class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 {{ tema.card_bg_hover }} transition">
+                <i class="fa-solid fa-user-tie {{ tema.text_secondary }}"></i>
+                <span class="text-sm {{ tema.text_primary }}">Lideres</span>
+            </a>
         </div>
 
         <div class="flex items-center justify-between">

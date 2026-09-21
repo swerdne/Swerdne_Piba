@@ -531,3 +531,86 @@ def test_marcar_tutorial_visto_impede_iniciar_sozinho_mas_dados_continuam_no_htm
 def test_tutorial_visto_sem_login_redireciona(client):
     response = client.post("/tutorial-comunidade-visto", follow_redirects=False)
     assert response.status_code == 302
+
+
+# --- Calendario da comunidade (junta escalas de todos os Ministerios) -------
+
+def test_calendario_da_comunidade_junta_escalas_de_ministerios_diferentes(logged_in_client, app, db):
+    import datetime as dt
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio_a = _criar_ministerio(logged_in_client, comunidade.id, "Louvor")
+        ministerio_b = _criar_ministerio(logged_in_client, comunidade.id, "Midia")
+
+        hoje = dt.date.today()
+        data_str = hoje.strftime("%Y-%m-%d")
+        _criar_escala(logged_in_client, ministerio_a.id, "Ensaio Louvor", data=data_str, horario="19:00")
+        _criar_escala(logged_in_client, ministerio_b.id, "Ensaio Midia", departamento="Midia",
+                       data=data_str, horario="20:00")
+
+        response = logged_in_client.get(f"/comunidade/{comunidade.id}/calendario")
+        html = response.data.decode("utf-8")
+
+        assert response.status_code == 200
+        assert "Ensaio Louvor" in html
+        assert "Ensaio Midia" in html
+        assert "Louvor" in html and "Midia" in html  # nome do ministerio no titulo do evento
+
+
+def test_calendario_da_comunidade_sem_login_redireciona(client):
+    response = client.get("/comunidade/1/calendario", follow_redirects=False)
+    assert response.status_code == 302
+
+
+def test_calendario_da_comunidade_exige_vinculo(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        comunidade_id = comunidade.id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.get(f"/comunidade/{comunidade_id}/calendario")
+        assert response.status_code == 404
+
+
+# --- Diretorio de lideres ----------------------------------------------------
+
+def test_diretorio_de_lideres_mostra_admin_com_todos_os_ministerios(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        _criar_ministerio(logged_in_client, comunidade.id, "Louvor")
+        _criar_ministerio(logged_in_client, comunidade.id, "Midia")
+
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}/lideres").data.decode("utf-8")
+
+        assert "ana@example.com" in html
+        assert "Admin" in html
+        assert "Louvor" in html
+        assert "Midia" in html
+
+
+def test_diretorio_de_lideres_mostra_lider_so_do_proprio_ministerio(logged_in_client, outro_logged_in_client, app, db):
+    from app.auth.models import User
+    from app.ministerio.models import UsuarioMinisterio
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio_a = _criar_ministerio(logged_in_client, comunidade.id, "Louvor")
+        _criar_ministerio(logged_in_client, comunidade.id, "Midia")
+
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        db.session.add(UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio_a.id, papel="lider"))
+        db.session.commit()
+
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}/lideres").data.decode("utf-8")
+
+        assert "bruno@example.com" in html
+        # Bruno aparece vinculado a Louvor mas nao tem o selo de Admin
+        idx_bruno = html.index("bruno@example.com")
+        bloco_bruno = html[max(0, idx_bruno - 700):idx_bruno + 700]
+        assert "Louvor" in bloco_bruno
+
+
+def test_diretorio_de_lideres_sem_login_redireciona(client):
+    response = client.get("/comunidade/1/lideres", follow_redirects=False)
+    assert response.status_code == 302

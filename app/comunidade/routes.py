@@ -1,6 +1,8 @@
 """Controller (C do MVC): rotas do modulo comunidade."""
+import calendar
 import os
 import uuid
+from datetime import date, timedelta
 
 from flask import render_template, redirect, url_for, flash, request, current_app, abort, session
 from flask_login import login_required, current_user
@@ -430,6 +432,121 @@ def excluir_disponibilidade(comunidade_id, ciclo_id):
     db.session.commit()
     flash(f'Ciclo "{nome}" removido.', "success")
     return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro_id))
+
+
+# Mesma lista de app/ministerio/routes.py::MESES_PT -- duplicada de proposito
+# (nao importada) pra nao criar dependencia de import entre os dois modulos,
+# ver historico de import circular entre comunidade/convites/ministerio.
+_MESES_PT = [
+    "", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]
+
+
+def _navegacao_calendario_comunidade(ano, mes):
+    mes_anterior = mes - 1
+    ano_mes_anterior = ano
+    if mes_anterior < 1:
+        mes_anterior = 12
+        ano_mes_anterior -= 1
+
+    proximo_mes = mes + 1
+    ano_proximo_mes = ano
+    if proximo_mes > 12:
+        proximo_mes = 1
+        ano_proximo_mes += 1
+
+    return (ano_mes_anterior, mes_anterior), (ano_proximo_mes, proximo_mes)
+
+
+@bp.route("/<int:comunidade_id>/calendario")
+@login_required
+def calendario(comunidade_id):
+    """Igual ao calendario de um Ministerio (app/ministerio/routes.py::calendario),
+    so que juntando as escalas de TODOS os Ministerios da Comunidade numa
+    grade so -- pra quem lidera varios ministerios nao precisar ficar
+    trocando de tela pra ver o mes inteiro."""
+    comunidade, eh_dono = _comunidade_visivel_ou_404(comunidade_id)
+    hoje = date.today()
+
+    ano = request.args.get("ano", type=int) or hoje.year
+    mes = request.args.get("mes", type=int) or hoje.month
+    if not (1 <= mes <= 12):
+        mes = hoje.month
+
+    semanas = calendar.Calendar(firstweekday=6).monthdatescalendar(ano, mes)
+    while len(semanas) < 6:
+        ultimo_dia = semanas[-1][-1]
+        semanas.append([ultimo_dia + timedelta(days=i) for i in range(1, 8)])
+
+    escalas_do_mes = [
+        e for ministerio in comunidade.ministerios for e in ministerio.escalas
+        if e.data and e.data.year == ano and e.data.month == mes
+    ]
+    escalas_por_dia = {}
+    for escala in escalas_do_mes:
+        escalas_por_dia.setdefault(escala.data, []).append((escala, escala.cor))
+
+    (ano_anterior, mes_anterior), (ano_proximo, mes_proximo) = _navegacao_calendario_comunidade(ano, mes)
+
+    return render_template(
+        "comunidade/calendario.html",
+        comunidade=comunidade,
+        semanas=semanas,
+        mes=mes,
+        ano=ano,
+        nome_mes=_MESES_PT[mes],
+        mes_ano_texto=f"{_MESES_PT[mes].lower()} de {ano}",
+        escalas_por_dia=escalas_por_dia,
+        legenda=[(e, e.cor) for e in escalas_do_mes],
+        ano_anterior=ano_anterior,
+        mes_anterior=mes_anterior,
+        ano_proximo=ano_proximo,
+        mes_proximo=mes_proximo,
+        hoje=hoje,
+    )
+
+
+@bp.route("/<int:comunidade_id>/lideres")
+@login_required
+def lideres(comunidade_id):
+    """Diretorio de quem lidera algo nesta Comunidade -- contato (e-mail, e
+    telefone se a pessoa tambem estiver no diretorio de Membro com o mesmo
+    e-mail) e quais Ministerios cada um lidera. Admin da Comunidade tem
+    autoridade em cascata sobre TODOS os ministerios (ver
+    _eh_admin_da_comunidade), entao aparece vinculado a todos eles, nao so
+    aos que tem uma linha propria em UsuarioMinisterio."""
+    comunidade, eh_dono = _comunidade_visivel_ou_404(comunidade_id)
+
+    nomes_ministerios = [m.nome for m in comunidade.ministerios]
+
+    por_usuario = {}
+    for papel in UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").all():
+        por_usuario[papel.usuario_id] = {
+            "usuario": papel.usuario, "eh_admin": True, "ministerios": list(nomes_ministerios),
+        }
+
+    for ministerio in comunidade.ministerios:
+        for papel in ministerio.papeis_usuarios:
+            if papel.papel != "lider":
+                continue
+            entrada = por_usuario.setdefault(
+                papel.usuario_id, {"usuario": papel.usuario, "eh_admin": False, "ministerios": []}
+            )
+            if ministerio.nome not in entrada["ministerios"]:
+                entrada["ministerios"].append(ministerio.nome)
+
+    lista_lideres = sorted(
+        por_usuario.values(),
+        key=lambda item: (item["usuario"].name or item["usuario"].username or item["usuario"].email).lower(),
+    )
+    for item in lista_lideres:
+        membro_vinculado = Membro.query.filter_by(
+            comunidade_id=comunidade.id, email=item["usuario"].email
+        ).first()
+        item["telefone"] = membro_vinculado.telefone if membro_vinculado else None
+
+    return render_template("comunidade/lideres.html", comunidade=comunidade, lideres=lista_lideres)
 
 
 @bp.route("/<int:comunidade_id>/escalados")
