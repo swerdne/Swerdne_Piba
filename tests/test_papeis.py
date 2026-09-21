@@ -4,7 +4,7 @@ Ministerio > Membro, concedida sempre via convite por e-mail aceito (exceto
 o admin automatico de quem cria a comunidade).
 """
 from app.auth.models import User
-from app.comunidade.models import UsuarioComunidade
+from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import UsuarioMinisterio
 from app.convites.models import Convite, STATUS_PENDENTE, STATUS_ACEITO, STATUS_RECUSADO
 from tests.conftest import sessao_isolada
@@ -365,3 +365,97 @@ def test_super_admin_acessa_qualquer_comunidade_sem_papel(logged_in_client, outr
             usuario_id=User.query.filter_by(email="bruno@example.com").first().id, comunidade_id=comunidade_id
         ).first() is None
         assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}").status_code == 200
+
+
+# --- Link generico de convite (entrada direta como membro) ----------------------
+
+def test_gerar_link_convite_cria_token(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        assert comunidade.token_convite_publico is None
+
+        logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
+
+        atualizada = db.session.get(Comunidade, comunidade.id)
+        assert atualizada.token_convite_publico is not None
+
+
+def test_gerar_link_de_novo_invalida_o_anterior(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
+        token_antigo = db.session.get(Comunidade, comunidade.id).token_convite_publico
+
+        logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
+        token_novo = db.session.get(Comunidade, comunidade.id).token_convite_publico
+
+        assert token_antigo != token_novo
+        assert logged_in_client.get(f"/comunidade/entrar/{token_antigo}", follow_redirects=True).status_code == 404
+
+
+def test_entrar_via_link_logado_vira_membro(logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+        response = bruno_client.get(f"/comunidade/entrar/{token}", follow_redirects=True)
+        assert response.status_code == 200
+
+        bruno = User.query.filter_by(email="bruno@example.com").first()
+        papel = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first()
+        assert papel is not None
+        assert papel.papel == "membro"
+
+
+def test_entrar_via_link_ja_admin_nao_rebaixa_pra_membro(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade.id).token_convite_publico
+
+        logged_in_client.get(f"/comunidade/entrar/{token}", follow_redirects=True)
+
+        ana = User.query.filter_by(email="ana@example.com").first()
+        papel = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade.id).first()
+        assert papel.papel == "admin"
+
+
+def test_entrar_via_link_deslogado_pede_login_e_completa_depois(logged_in_client, app, db):
+    """logged_in_client (Ana) cria o link; um segundo test_client, sem
+    cookies dela, simula a visita anonima -- mesmo raciocinio de
+    outro_logged_in_client, so que pra uma conta que nem existe ainda.
+    sessao_isolada em volta do visitante pelo mesmo motivo de sempre:
+    Flask-Login/SQLAlchemy cacheiam por app_context, e sem isolar aqui a
+    conta de Ana (que fez a request anterior) vazaria pra essa request."""
+    comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+    comunidade_id = comunidade.id
+    logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+    token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+    with sessao_isolada(app):
+        visitante = app.test_client()
+        resposta_anonima = visitante.get(f"/comunidade/entrar/{token}")
+        assert resposta_anonima.status_code == 200
+        assert "Entrar".encode() in resposta_anonima.data
+
+        resposta_cadastro = visitante.post(
+            "/auth/register",
+            data={"username": "carla", "email": "carla@example.com", "password": "senha123", "confirm": "senha123"},
+            follow_redirects=True,
+        )
+        assert resposta_cadastro.status_code == 200
+
+        carla = User.query.filter_by(email="carla@example.com").first()
+        papel = UsuarioComunidade.query.filter_by(usuario_id=carla.id, comunidade_id=comunidade_id).first()
+        assert papel is not None
+        assert papel.papel == "membro"
+
+
+def test_token_de_link_invalido_devolve_404(client):
+    response = client.get("/comunidade/entrar/token-que-nao-existe")
+    assert response.status_code == 404

@@ -4,6 +4,7 @@ Camada organizacional anterior a Escala Rapida: toda escala e todo membro do
 diretorio pertencem a uma comunidade especifica (ex: uma igreja/ministerio).
 Comunidades sao independentes entre si.
 """
+import secrets
 from datetime import datetime, timezone
 
 from app.extensions import db
@@ -25,6 +26,19 @@ class Comunidade(db.Model):
     # passa a consultar essa tabela, nao mais usuario_id direto.
     usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    # Link generico de entrada (ver comunidade.routes.entrar_via_link) --
+    # alternativa ao convite por e-mail individual (app/convites): qualquer
+    # pessoa com o link vira "membro" desta Comunidade direto, sem precisar
+    # que o admin saiba o e-mail de antemao. Nulo ate o admin gerar o
+    # primeiro link (tela "Papeis e convites"). Regeneravel a qualquer
+    # momento -- gerar um novo invalida o anterior (mesma coluna, valor
+    # sobrescrito), protege contra o link vazado continuar funcionando.
+    token_convite_publico = db.Column(db.String(64), unique=True, nullable=True)
+
+    def gerar_novo_link_convite(self):
+        self.token_convite_publico = secrets.token_urlsafe(32)
+        return self.token_convite_publico
 
     def __repr__(self):
         return f"<Comunidade {self.nome} do usuario {self.usuario_id}>"

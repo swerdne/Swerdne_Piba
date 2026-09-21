@@ -25,6 +25,33 @@
     <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
 
         <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Link de convite</h2>
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4 space-y-3">
+                <p class="text-xs {{ tema.text_secondary }}">
+                    Qualquer pessoa com esse link entra direto como membro, sem precisar convidar por e-mail um por um.
+                    O lider adiciona ela a um Ministerio depois, se for o caso.
+                </p>
+                {% if link_convite %}
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" readonly value="{{ link_convite }}" id="input-link-convite"
+                           class="flex-1 min-w-0 {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-xs {{ tema.text_secondary }} truncate">
+                    <button type="button" data-copiar-link="input-link-convite"
+                            class="border {{ tema.card_border }} {{ tema.text_primary }} text-xs font-semibold px-3 py-2 rounded-lg transition hover:bg-black/5 shrink-0">
+                        <i class="fa-solid fa-copy mr-1"></i>Copiar
+                    </button>
+                </div>
+                {% endif %}
+                <form method="POST" action="{{ url_for('comunidade.gerar_link_convite', comunidade_id=comunidade.id) }}"
+                      {% if link_convite %}onsubmit="return confirm('Gerar um novo link? O link atual vai parar de funcionar.');"{% endif %}>
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                        {{ "Gerar novo link (invalida o atual)" if link_convite else "Gerar link de convite" }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div>
             <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Convidar por e-mail</h2>
             <form method="POST" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
                 {{ form.hidden_tag() }}

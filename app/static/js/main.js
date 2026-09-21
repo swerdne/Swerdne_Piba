@@ -395,3 +395,19 @@ if ("serviceWorker" in navigator) {
         botao.addEventListener("click", iniciar);
     });
 })();
+
+// Botao "Copiar" generico -- usado pelo link de convite da comunidade
+// (comunidade/papeis.html), mas escrito sem nada especifico dele: qualquer
+// botao com data-copiar-link="<id-do-input>" copia o value desse input.
+document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
+    var input = document.getElementById(botao.getAttribute("data-copiar-link"));
+    if (!input) return;
+
+    var textoOriginal = botao.innerHTML;
+    botao.addEventListener("click", function () {
+        navigator.clipboard.writeText(input.value).then(function () {
+            botao.innerHTML = "<i class=\"fa-solid fa-check mr-1\"></i>Copiado!";
+            setTimeout(function () { botao.innerHTML = textoOriginal; }, 2000);
+        });
+    });
+});

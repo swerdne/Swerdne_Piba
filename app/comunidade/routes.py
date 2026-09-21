@@ -2,7 +2,7 @@
 import os
 import uuid
 
-from flask import render_template, redirect, url_for, flash, request, current_app, abort
+from flask import render_template, redirect, url_for, flash, request, current_app, abort, session
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
@@ -511,14 +511,78 @@ def papeis(comunidade_id):
         .all()
     )
 
+    link_convite = (
+        url_for("comunidade.entrar_via_link", token=comunidade.token_convite_publico, _external=True)
+        if comunidade.token_convite_publico else None
+    )
+
     return render_template(
         "comunidade/papeis.html",
         comunidade=comunidade,
         form=form,
         papeis_atuais=papeis_atuais,
         convites_pendentes=convites_pendentes,
+        link_convite=link_convite,
         acao_form=AcaoForm(),
     )
+
+
+@bp.route("/<int:comunidade_id>/papeis/link/gerar", methods=["POST"])
+@login_required
+def gerar_link_convite(comunidade_id):
+    """Gera (ou regenera, invalidando o anterior) o link generico de
+    entrada -- ver Comunidade.gerar_novo_link_convite e
+    entrar_via_link abaixo. Diferente do convite por e-mail (app/convites):
+    qualquer um com o link entra direto como "membro", sem o admin precisar
+    saber o e-mail de antemao."""
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+    comunidade.gerar_novo_link_convite()
+    db.session.commit()
+    flash("Novo link de convite gerado! O link anterior (se existia) parou de funcionar.", "success")
+    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+
+@bp.route("/entrar/<token>")
+def entrar_via_link(token):
+    """Publica de proposito (sem @login_required) -- quem ainda nao tem
+    conta precisa ver a tela pra saber que precisa entrar/cadastrar antes.
+    Mesmo padrao de app/convites/routes.py::ver_convite (session
+    "proximo_apos_login" pra voltar pra ca depois de autenticar), mas mais
+    simples: nao existe um registro de Convite aqui, so o token generico
+    da propria Comunidade, e o papel concedido e sempre "membro" (nunca
+    "admin" -- esse link nao serve pra promover ninguem)."""
+    comunidade = Comunidade.query.filter_by(token_convite_publico=token).first_or_404()
+
+    if not current_user.is_authenticated:
+        session["proximo_apos_login"] = url_for("comunidade.entrar_via_link", token=token)
+        return render_template("comunidade/entrar.html", comunidade=comunidade)
+
+    papel_existente = UsuarioComunidade.query.filter_by(
+        usuario_id=current_user.id, comunidade_id=comunidade.id
+    ).first()
+    if papel_existente:
+        # Ja tem papel (as vezes ja e admin) -- o link generico nunca
+        # rebaixa ninguem, so avisa que ja faz parte.
+        flash(f'Voce ja faz parte de "{comunidade.nome}".', "success")
+        eh_admin = papel_existente.papel == "admin"
+    else:
+        db.session.add(UsuarioComunidade(usuario_id=current_user.id, comunidade_id=comunidade.id, papel="membro"))
+        db.session.commit()
+        flash(f'Voce entrou em "{comunidade.nome}"!', "success")
+        eh_admin = False
+
+    # comunidade.detalhe e uma tela de gestao (so admin, ver
+    # _comunidade_do_usuario_ou_404) -- um "membro" recem-entrado nao
+    # consegue ve-la, entao cai no Dashboard geral em vez de dar 404.
+    if eh_admin:
+        return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
+    return redirect(url_for("main.dashboard"))
 
 
 @bp.route("/<int:comunidade_id>/papeis/<int:usuario_comunidade_id>/remover", methods=["POST"])
