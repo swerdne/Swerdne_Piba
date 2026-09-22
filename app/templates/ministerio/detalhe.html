@@ -102,7 +102,10 @@
                            class="flex items-center gap-3 flex-1 min-w-0 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
                             <span class="w-2.5 h-2.5 rounded-full {{ escala.cor }} shrink-0"></span>
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ escala.nome }}</p>
+                                <p class="text-sm font-medium {{ tema.text_primary }} truncate {{ 'line-through opacity-60' if escala.cancelada }}">
+                                    {{ escala.nome }}
+                                    {% if escala.cancelada %}<span class="text-[10px] uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-1.5 py-0.5 ml-1">Cancelada</span>{% endif %}
+                                </p>
                                 <p class="text-xs {{ tema.text_secondary }}">
                                     {{ escala.departamento }}
                                     {% if escala.data %}

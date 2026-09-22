@@ -609,6 +609,66 @@ def test_excluir_subcabecalho(logged_in_client, app, db):
 
 # --- Exclusao de escalas ------------------------------------------------------
 
+def test_cancelar_escala_marca_cancelada_e_notifica_quem_estava_escalado(logged_in_client, app, db):
+    with app.app_context():
+        from app.notificacoes import Notificacao
+        from app.auth.models import User
+
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        comunidade_id = Ministerio.query.get(escala.ministerio_id).comunidade_id
+        membro = _criar_membro(logged_in_client, comunidade_id, "Ana", email="ana@example.com")
+        _escalar(logged_in_client, _funcao_por_nome(escala, "Baixo").id, membro.id)
+
+        response = logged_in_client.post(f"/escala/{escala.id}/cancelar", data={}, follow_redirects=True)
+        assert response.status_code == 200
+        assert "cancelada".encode() in response.data
+
+        atualizada = db.session.get(Escala, escala.id)
+        assert atualizada.cancelada is True
+        assert atualizada.cancelada_em is not None
+
+        # ana@example.com e o mesmo e-mail da conta logada (logged_in_client) --
+        # a notificacao in-app so e criada se o e-mail do Membro bater com
+        # uma conta (User) existente, ver enviar_notificacao_de_cancelamento.
+        usuario = User.query.filter_by(email="ana@example.com").first()
+        notificacao = Notificacao.query.filter_by(usuario_id=usuario.id, escala_id=escala.id, tipo="cancelamento").first()
+        assert notificacao is not None
+        assert "cancelada" in notificacao.mensagem
+
+
+def test_cancelar_escala_ja_cancelada_mostra_erro(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        logged_in_client.post(f"/escala/{escala.id}/cancelar", data={}, follow_redirects=True)
+
+        response = logged_in_client.post(f"/escala/{escala.id}/cancelar", data={}, follow_redirects=True)
+        assert "ja esta cancelada".encode() in response.data
+
+
+def test_reabrir_escala_desfaz_cancelamento(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        logged_in_client.post(f"/escala/{escala.id}/cancelar", data={}, follow_redirects=True)
+        assert db.session.get(Escala, escala.id).cancelada is True
+
+        response = logged_in_client.post(f"/escala/{escala.id}/reabrir", data={}, follow_redirects=True)
+        assert "reaberta".encode() in response.data
+
+        atualizada = db.session.get(Escala, escala.id)
+        assert atualizada.cancelada is False
+        assert atualizada.cancelada_em is None
+
+
+def test_usuario_nao_consegue_cancelar_escala_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        escala_id = escala.id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.post(f"/escala/{escala_id}/cancelar", data={}, follow_redirects=True)
+        assert response.status_code == 404
+
+
 def test_excluir_escala(logged_in_client, app, db):
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")

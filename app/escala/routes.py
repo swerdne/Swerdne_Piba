@@ -1,6 +1,6 @@
 """Controller (C do MVC): rotas do modulo escala."""
 import concurrent.futures
-from datetime import time
+from datetime import datetime, time, timezone
 
 from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app
 from flask_login import login_required, current_user
@@ -819,6 +819,123 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
         "sms_enviados": sms_enviados,
         "sms_falhas": sms_falhas,
     }
+
+
+def enviar_notificacao_de_cancelamento(escala):
+    """Avisa, um por um, quem ja estava escalado que o evento foi cancelado --
+    chamada por cancelar_escala logo apos marcar Escala.cancelada=True. Mesmo
+    padrao/canais de enviar_notificacao_de_alteracao (email/SMS/sino),
+    so que com a mensagem e o tipo de notificacao diferentes."""
+    escalados = [f for f in escala.funcoes if f.membro_id is not None]
+
+    data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "sem data definida"
+    mensagem = f'A escala "{escala.nome}" ({data_texto}) foi cancelada. Voce nao precisa comparecer.'
+
+    notificacoes_app = 0
+    email_enviados = email_falhas = 0
+    sms_enviados = sms_falhas = 0
+
+    for funcao in escalados:
+        membro = funcao.membro
+
+        if membro.email:
+            usuario_vinculado = User.query.filter_by(email=membro.email).first()
+            if usuario_vinculado:
+                db.session.add(Notificacao(
+                    usuario_id=usuario_vinculado.id,
+                    titulo=f"Escala cancelada: {escala.nome}",
+                    mensagem=mensagem,
+                    escala_id=escala.id,
+                    tipo="cancelamento",
+                ))
+                notificacoes_app += 1
+
+            try:
+                enviar_email(
+                    destinatario=membro.email,
+                    assunto=f"Escala cancelada: {escala.nome}",
+                    corpo=mensagem,
+                )
+                email_enviados += 1
+            except EmailNaoEnviadoError:
+                email_falhas += 1
+
+        if membro.telefone:
+            try:
+                enviar_sms(destinatario=membro.telefone, corpo=mensagem)
+                sms_enviados += 1
+            except SmsNaoEnviadoError:
+                sms_falhas += 1
+
+    db.session.commit()
+
+    return {
+        "notificacoes_app": notificacoes_app,
+        "email_enviados": email_enviados,
+        "email_falhas": email_falhas,
+        "sms_enviados": sms_enviados,
+        "sms_falhas": sms_falhas,
+    }
+
+
+@bp.route("/<int:escala_id>/cancelar", methods=["POST"])
+@login_required
+def cancelar_escala(escala_id):
+    """Diferente de excluir_escala (abaixo): o evento continua existindo,
+    so marcado como cancelado -- fica no historico/calendario com um
+    aviso, em vez de sumir. Trava plantao_fixado igual uma edicao manual
+    (_fixar_se_gerada_por_rodizio) pra o sync do rodizio nao "descancelar"
+    essa ocorrencia especifica no proximo tick."""
+    escala = _escala_do_usuario_ou_404(escala_id)
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id))
+
+    if escala.cancelada:
+        flash(f'"{escala.nome}" ja esta cancelada.', "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id))
+
+    escala.cancelada = True
+    escala.cancelada_em = datetime.now(timezone.utc)
+    _fixar_se_gerada_por_rodizio(escala)
+    db.session.commit()
+
+    resultado = enviar_notificacao_de_cancelamento(escala)
+    partes = []
+    if resultado["notificacoes_app"]:
+        partes.append(f"{resultado['notificacoes_app']} notificacao(oes) no app")
+    if resultado["email_enviados"]:
+        partes.append(f"{resultado['email_enviados']} e-mail(s) enviado(s)")
+    if resultado["sms_enviados"]:
+        partes.append(f"{resultado['sms_enviados']} SMS enviado(s)")
+    aviso = f" Equipe avisada: {', '.join(partes)}." if partes else ""
+
+    flash(f'Escala "{escala.nome}" cancelada.{aviso}', "success")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id))
+
+
+@bp.route("/<int:escala_id>/reabrir", methods=["POST"])
+@login_required
+def reabrir_escala(escala_id):
+    """Desfaz um cancelamento feito por engano -- volta ao normal, sem
+    notificar ninguem automaticamente (diferente de cancelar_escala): quem
+    ja tinha sido avisado do cancelamento precisa ser reconvidado/confirmado
+    na mao, o lider decide como."""
+    escala = _escala_do_usuario_ou_404(escala_id)
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id))
+
+    escala.cancelada = False
+    escala.cancelada_em = None
+    db.session.commit()
+
+    flash(f'Escala "{escala.nome}" reaberta.', "success")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
 
 @bp.route("/<int:escala_id>/notificar", methods=["POST"])

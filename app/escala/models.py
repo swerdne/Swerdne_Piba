@@ -250,6 +250,13 @@ class Escala(db.Model):
     notificado_24h_em = db.Column(db.DateTime, nullable=True)
     notificado_16h_em = db.Column(db.DateTime, nullable=True)
 
+    # Cancelamento (ver escala.routes::cancelar_escala/reabrir_escala) --
+    # diferente de excluir: o evento continua existindo (historico, calendario),
+    # so marcado que nao vai acontecer. Quem estava escalado e avisado
+    # individualmente (email/SMS/sino), um por um, na hora do cancelamento.
+    cancelada = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    cancelada_em = db.Column(db.DateTime, nullable=True)
+
     # Preenchidos quando esta Escala foi gerada automaticamente por um Turno de
     # Rodizio (ver app/plantao/sincronizacao.py) -- None para escalas manuais.
     # plantao_fixado trava essa ocorrencia especifica pra nao ser sobrescrita

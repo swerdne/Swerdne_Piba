@@ -24,7 +24,10 @@
                 <div class="min-w-0">
                     <div class="flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full {{ escala.cor }} shrink-0"></span>
-                        <span class="font-semibold {{ tema.text_primary }} truncate">{{ escala.nome }}</span>
+                        <span class="font-semibold {{ tema.text_primary }} truncate {{ 'line-through opacity-60' if escala.cancelada }}">{{ escala.nome }}</span>
+                        {% if escala.cancelada %}
+                        <span class="text-[10px] uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelada</span>
+                        {% endif %}
                     </div>
                     <p class="text-xs {{ tema.text_secondary }}">
                         {{ escala.departamento }}
@@ -89,6 +92,23 @@
         </div>
 
         {% if eh_dono %}
+        {% if escala.cancelada %}
+        <!-- Aviso de cancelamento -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+            <p class="text-sm text-red-500">
+                <i class="fa-solid fa-ban mr-1.5"></i>
+                Escala cancelada{% if escala.cancelada_em %} em {{ escala.cancelada_em.strftime('%d/%m/%Y as %H:%M') }}{% endif %}.
+                Quem estava escalado ja foi avisado.
+            </p>
+            <form method="POST" action="{{ url_for('escala.reabrir_escala', escala_id=escala.id) }}" class="shrink-0">
+                {{ acao_form.hidden_tag() }}
+                <button type="submit"
+                        class="w-full sm:w-auto border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-4 py-2 rounded-lg transition hover:bg-black/5">
+                    <i class="fa-solid fa-rotate-left mr-2"></i>Reabrir escala
+                </button>
+            </form>
+        </div>
+        {% else %}
         <!-- Acoes -->
         <div class="flex flex-col sm:flex-row gap-3">
             <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1">
@@ -104,12 +124,21 @@
                 <i class="fa-solid fa-arrows-rotate mr-2"></i>Criar turno de rodizio com esta equipe
             </a>
             {% endif %}
+            <form method="POST" action="{{ url_for('escala.cancelar_escala', escala_id=escala.id) }}"
+                  onsubmit="return confirm('Cancelar a escala \'{{ escala.nome }}\'? Quem ja estiver escalado sera avisado automaticamente (e-mail, SMS e no app).');">
+                {{ acao_form.hidden_tag() }}
+                <button type="submit"
+                        class="w-full sm:w-auto border border-red-500/30 text-red-500 hover:bg-red-500/10 text-sm font-semibold px-4 py-3 rounded-xl transition">
+                    <i class="fa-solid fa-ban mr-2"></i>Cancelar
+                </button>
+            </form>
         </div>
         {% if escala.data %}
         <p class="text-xs {{ tema.text_secondary }} -mt-2">
             <i class="fa-solid fa-clock mr-1"></i>
             Alem do botao acima, a equipe escalada e notificada automaticamente 24h e 16h antes do evento.
         </p>
+        {% endif %}
         {% endif %}
         {% endif %}
 
