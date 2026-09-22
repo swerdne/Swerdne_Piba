@@ -25,6 +25,12 @@
 {% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register', 'auth.esqueci_senha', 'auth.redefinir_senha') %}
 <body class="{% if eh_pagina_auth %}bg-gray-950{% else %}bg-gray-50{% endif %} min-h-screen flex flex-col"
       {% if current_user.is_authenticated %}data-user-id="{{ current_user.id }}"{% endif %}>
+    <!-- Barra fina de progresso no topo, tipo YouTube/GitHub -- da feedback
+    visual imediato em QUALQUER navegacao (link ou form), suaviza a
+    sensacao de "troca seca" enquanto a proxima pagina carrega (mais
+    perceptivel quando o banco esta "acordando" apos um tempo sem uso, ver
+    pool_pre_ping em app/config.py). Logica de mostrar/animar em main.js. -->
+    <div id="barra-carregamento" class="{{ tema.accent_bg if tema else 'bg-indigo-600' }}"></div>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="max-w-5xl mx-auto w-full px-4 mt-4 space-y-2 {% if eh_pagina_auth %}relative z-10{% endif %}">

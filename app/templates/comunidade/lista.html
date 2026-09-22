@@ -81,6 +81,13 @@
                         </div>
                         <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
                     </a>
+                    <button type="button"
+                            data-excluir-item="{{ url_for('comunidade.excluir_comunidade', comunidade_id=comunidade.id) }}"
+                            data-excluir-confirmar='Tem certeza que deseja apagar a comunidade "{{ comunidade.nome }}"? Todos os ministerios, escalas, turnos de rodizio e o diretorio de membros dela tambem serao apagados. Essa acao nao pode ser desfeita.'
+                            title="Excluir comunidade" aria-label="Excluir comunidade {{ comunidade.nome }}"
+                            class="{{ tema.text_secondary }} hover:text-red-400 transition p-1 shrink-0">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
                 </div>
                 {% endfor %}
 

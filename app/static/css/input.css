@@ -39,3 +39,22 @@
     transition-duration: 90ms;
   }
 }
+
+/* Barra de progresso no topo (ver base.html + main.js) -- comeca com
+   largura 0 e invisivel; JS anima a largura e a opacidade quando uma
+   navegacao comeca. position:fixed pra ficar por cima do conteudo mesmo
+   com scroll, e nao empurrar o layout (nao ocupa espaco no fluxo). */
+#barra-carregamento {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0%;
+  z-index: 9999;
+  opacity: 0;
+  transition: width 400ms ease-out, opacity 200ms ease-out;
+}
+#barra-carregamento.carregando {
+  opacity: 1;
+}
+

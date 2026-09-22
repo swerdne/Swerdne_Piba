@@ -35,6 +35,58 @@ document.querySelectorAll("form").forEach(function (form) {
     });
 });
 
+// Barra de progresso no topo (ver #barra-carregamento em base.html) --
+// mostra em QUALQUER navegacao real (link ou form) pra suavizar a espera,
+// mais perceptivel quando o banco esta "acordando" (mesmo cold start do
+// Neon comentado acima). Nao tenta "terminar" a barra: a pagina atual vai
+// ser descartada de qualquer forma quando a proxima carregar, entao so
+// precisa aparecer e crescer, nunca precisa esconder sozinha.
+(function () {
+    var barra = document.getElementById("barra-carregamento");
+    if (!barra) return;
+
+    function iniciar() {
+        barra.classList.add("carregando");
+        barra.style.width = "20%";
+        // Cresce aos poucos, cada vez mais devagar -- da a sensacao de
+        // progresso real sem prometer um tempo exato (nao sabemos quanto
+        // vai demorar). Nunca chega a 100% sozinha de proposito: 100%
+        // pareceria "pronto" e a pagina ainda nao trocou.
+        setTimeout(function () { barra.style.width = "45%"; }, 150);
+        setTimeout(function () { barra.style.width = "65%"; }, 500);
+        setTimeout(function () { barra.style.width = "80%"; }, 1500);
+    }
+
+    document.addEventListener("click", function (evento) {
+        var link = evento.target.closest("a[href]");
+        if (!link) return;
+        if (link.target === "_blank" || link.hasAttribute("download")) return;
+        if (evento.defaultPrevented || evento.button !== 0) return;
+        if (evento.metaKey || evento.ctrlKey || evento.shiftKey || evento.altKey) return; // abrir em nova aba/janela
+
+        var href = link.getAttribute("href");
+        if (!href || href.charAt(0) === "#") return;
+        try {
+            var destino = new URL(href, window.location.href);
+            if (destino.origin !== window.location.origin) return; // link externo
+            if (destino.pathname === window.location.pathname && destino.hash) return; // so ancora na mesma pagina
+        } catch (e) {
+            return;
+        }
+
+        iniciar();
+    });
+
+    document.querySelectorAll("form").forEach(function (form) {
+        if (form.hasAttribute("data-selecao-form")) return; // tratado a parte, ver selecao em lote abaixo
+
+        form.addEventListener("submit", function (evento) {
+            if (evento.defaultPrevented) return; // form que se vira sozinho via fetch/AJAX (ex: chat)
+            iniciar();
+        });
+    });
+})();
+
 // Selecao em lote generica (excluir varias comunidades/escalas de uma vez) --
 // funciona em qualquer pagina que tenha, no maximo, UM <form data-selecao-form>
 // com checkboxes [data-selecao-item] (cada um com [data-selecao-url] apontando
@@ -150,6 +202,34 @@ document.querySelectorAll("form").forEach(function (form) {
         processar(0);
     });
 })();
+
+// Botao de excluir 1 item FORA de um form de selecao em lote (ex: cada
+// comunidade na lista, comunidade/lista.html) -- confirma e monta um
+// <form> escondido na hora pra enviar o POST. Nao da pra so colocar um
+// <form> ao redor do botao no HTML porque cada card ja fica dentro do
+// <form data-selecao-form> que envolve a lista inteira (form dentro de
+// form e invalido, o navegador ignora o de dentro).
+document.querySelectorAll("[data-excluir-item]").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+        var mensagem = botao.getAttribute("data-excluir-confirmar") || "Tem certeza?";
+        if (!window.confirm(mensagem)) return;
+
+        var campoCsrf = document.querySelector('input[name="csrf_token"]');
+        var form = document.createElement("form");
+        form.method = "POST";
+        form.action = botao.getAttribute("data-excluir-item");
+        form.style.display = "none";
+        if (campoCsrf) {
+            var campo = document.createElement("input");
+            campo.type = "hidden";
+            campo.name = "csrf_token";
+            campo.value = campoCsrf.value;
+            form.appendChild(campo);
+        }
+        document.body.appendChild(form);
+        form.submit();
+    });
+});
 
 // Registra o service worker (PWA instalavel) -- so assets estaticos entram
 // em cache, ver app/static/js/service-worker.js. Progressive enhancement:

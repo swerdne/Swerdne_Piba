@@ -614,3 +614,16 @@ def test_diretorio_de_lideres_mostra_lider_so_do_proprio_ministerio(logged_in_cl
 def test_diretorio_de_lideres_sem_login_redireciona(client):
     response = client.get("/comunidade/1/lideres", follow_redirects=False)
     assert response.status_code == 302
+
+
+# --- Excluir comunidade so na lista (nao mais dentro da tela da comunidade) -
+
+def test_botao_excluir_fica_na_lista_nao_na_tela_da_comunidade(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+
+        html_lista = logged_in_client.get("/comunidade/").data.decode("utf-8")
+        assert f'data-excluir-item="/comunidade/{comunidade.id}/excluir"' in html_lista
+
+        html_detalhe = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
+        assert f'/comunidade/{comunidade.id}/excluir' not in html_detalhe
