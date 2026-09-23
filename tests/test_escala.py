@@ -1,7 +1,7 @@
 """Testes do modulo escala."""
 from app.comunidade.models import Comunidade
 from app.ministerio.models import Ministerio
-from app.escala.models import Escala, Funcao, Membro
+from app.escala.models import Escala, Funcao, Membro, ItemRepertorio
 from tests.conftest import sessao_isolada
 
 
@@ -542,6 +542,76 @@ def test_excluir_funcao_com_membro_tambem_remove(logged_in_client, app, db):
         assert "Internal Server Error" not in response.data.decode("utf-8")
         db.session.remove()
         assert db.session.get(Funcao, funcao_id) is None
+
+
+# --- Repertorio (musicas do Louvor) ------------------------------------------
+
+
+def test_adicionar_item_repertorio_na_escala_de_louvor(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")
+        response = logged_in_client.post(
+            f"/escala/{escala.id}/repertorio/adicionar",
+            data={"nome_musica": "Reckless Love", "tom": "G", "link": "https://cifraclub.com.br/reckless-love"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert "Reckless Love" in response.data.decode("utf-8")
+        item = ItemRepertorio.query.filter_by(escala_id=escala.id, nome_musica="Reckless Love").first()
+        assert item is not None
+        assert item.tom == "G"
+        assert item.link == "https://cifraclub.com.br/reckless-love"
+
+
+def test_adicionar_item_repertorio_sem_nome_mostra_erro(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")
+        total_antes = ItemRepertorio.query.filter_by(escala_id=escala.id).count()
+        logged_in_client.post(
+            f"/escala/{escala.id}/repertorio/adicionar", data={"nome_musica": ""}, follow_redirects=True
+        )
+        assert ItemRepertorio.query.filter_by(escala_id=escala.id).count() == total_antes
+
+
+def test_repertorio_nao_aparece_pra_escala_fora_do_louvor(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto Kids", departamento="Kids")
+        response = logged_in_client.get(f"/escala/{escala.id}", follow_redirects=True)
+        assert "Repertorio" not in response.data.decode("utf-8")
+
+
+def test_excluir_item_repertorio_remove_do_banco(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")
+        logged_in_client.post(
+            f"/escala/{escala.id}/repertorio/adicionar",
+            data={"nome_musica": "Oceanos", "tom": "", "link": ""},
+            follow_redirects=True,
+        )
+        item = ItemRepertorio.query.filter_by(escala_id=escala.id, nome_musica="Oceanos").first()
+        item_id = item.id
+
+        response = logged_in_client.post(f"/escala/repertorio/{item_id}/excluir", data={}, follow_redirects=True)
+        assert response.status_code == 200
+        db.session.remove()
+        assert db.session.get(ItemRepertorio, item_id) is None
+
+
+def test_usuario_nao_consegue_mexer_no_repertorio_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")
+        escala_id = escala.id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.post(
+            f"/escala/{escala_id}/repertorio/adicionar",
+            data={"nome_musica": "Musica Invasora"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 404
+
+    with sessao_isolada(app):
+        assert ItemRepertorio.query.filter_by(escala_id=escala_id, nome_musica="Musica Invasora").first() is None
 
 
 # --- Subcabecalhos (categorias) ----------------------------------------------

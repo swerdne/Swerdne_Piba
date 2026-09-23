@@ -366,6 +366,69 @@
 
             </div>
         </div>
+
+        {% if escala.departamento == 'Louvor' %}
+        <div class="rounded-xl border {{ tema.card_border }} overflow-hidden">
+            <div class="{{ tema.card_bg }} px-4 py-3 border-b {{ tema.card_border }} flex items-center gap-2">
+                <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>
+                <span class="text-sm font-semibold {{ tema.text_primary }}">Repertorio</span>
+            </div>
+            {% if escala.repertorio %}
+            <ul class="divide-y {{ tema.card_border }}">
+                {% for item in escala.repertorio %}
+                <li class="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <div class="min-w-0">
+                        <p class="text-sm {{ tema.text_primary }} truncate">
+                            {{ item.nome_musica }}
+                            {% if item.tom %}<span class="text-xs {{ tema.text_secondary }}">&middot; Tom {{ item.tom }}</span>{% endif %}
+                        </p>
+                        {% if item.link %}
+                        <a href="{{ item.link }}" target="_blank" rel="noopener" class="text-xs {{ tema.accent_text }} hover:underline truncate block">
+                            <i class="fa-solid fa-link mr-1"></i>{{ item.link }}
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% if eh_dono %}
+                    <form method="POST" action="{{ url_for('escala.excluir_item_repertorio', item_id=item.id) }}"
+                          data-confirm-excluir='Remover "{{ item.nome_musica }}" do repertorio?'>
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" title="Remover musica" class="{{ tema.text_secondary }} hover:text-red-400 transition shrink-0">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-xs {{ tema.text_secondary }} px-4 py-3">Nenhuma musica adicionada ainda.</p>
+            {% endif %}
+            {% if eh_dono %}
+            <form method="POST" action="{{ url_for('escala.adicionar_item_repertorio', escala_id=escala.id) }}"
+                  class="border-t {{ tema.card_border }} px-4 py-3 flex flex-col sm:flex-row gap-2">
+                {{ formulario_novo_item_repertorio.hidden_tag() }}
+                {{ formulario_novo_item_repertorio.nome_musica(
+                    class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
+                    placeholder="Nome da musica"
+                ) }}
+                {{ formulario_novo_item_repertorio.tom(
+                    class_="w-full sm:w-24 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
+                    placeholder="Tom"
+                ) }}
+                {{ formulario_novo_item_repertorio.link(
+                    class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
+                    placeholder="Link (opcional)"
+                ) }}
+                <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                    <i class="fa-solid fa-plus mr-1"></i>Adicionar
+                </button>
+            </form>
+            {% for erro in formulario_novo_item_repertorio.nome_musica.errors %}
+                <p class="text-xs text-red-400 px-4 pb-2">{{ erro }}</p>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
     </main>
 
     <!-- Chat -->

@@ -286,6 +286,9 @@ class Escala(db.Model):
     funcoes = db.relationship(
         "Funcao", backref="escala", order_by="Funcao.ordem", cascade="all, delete-orphan"
     )
+    repertorio = db.relationship(
+        "ItemRepertorio", backref="escala", order_by="ItemRepertorio.ordem", cascade="all, delete-orphan"
+    )
     ministerio = db.relationship(
         "Ministerio", backref=db.backref("escalas", cascade="all, delete-orphan")
     )
@@ -364,6 +367,25 @@ class Funcao(db.Model):
 
     def __repr__(self):
         return f"<Funcao {self.nome} da escala {self.escala_id}>"
+
+
+class ItemRepertorio(db.Model):
+    """Uma musica do repertorio de uma Escala (pensado pro departamento
+    Louvor, mas nao restrito -- ver escala/detalhe.html, so exibido quando
+    escala.departamento == "Louvor"). `ordem` define a sequencia de
+    apresentacao; `link` e opcional (cifra, video de referencia etc.)."""
+
+    __tablename__ = "escala_repertorio"
+
+    id = db.Column(db.Integer, primary_key=True)
+    escala_id = db.Column(db.Integer, db.ForeignKey("escalas.id"), nullable=False)
+    nome_musica = db.Column(db.String(150), nullable=False)
+    tom = db.Column(db.String(10), nullable=True)
+    link = db.Column(db.String(500), nullable=True)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+
+    def __repr__(self):
+        return f"<ItemRepertorio {self.nome_musica!r} da escala {self.escala_id}>"
 
 
 def criar_escala_com_funcoes_padrao(

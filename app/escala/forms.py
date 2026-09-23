@@ -65,3 +65,10 @@ class AcaoForm(FlaskForm):
 class FuncaoForm(FlaskForm):
     nome = StringField("Nome da funcao", validators=[DataRequired(), Length(max=80)])
     submit = SubmitField("Salvar")
+
+
+class ItemRepertorioForm(FlaskForm):
+    nome_musica = StringField("Nome da musica", validators=[DataRequired(), Length(max=150)])
+    tom = StringField("Tom", validators=[Optional(), Length(max=10)])
+    link = StringField("Link (cifra, video...)", validators=[Optional(), Length(max=500)])
+    submit = SubmitField("Adicionar")

@@ -1,7 +1,7 @@
 """Formularios Flask-WTF do modulo ministerio."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileSize
-from wtforms import StringField, TextAreaField, SubmitField, SelectMultipleField
+from wtforms import StringField, TextAreaField, SubmitField, SelectMultipleField, DateField
 from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import ListWidget, CheckboxInput
 
@@ -38,3 +38,21 @@ class MinisterioForm(FlaskForm):
 class AcaoForm(FlaskForm):
     """Form vazio, usado so para validar o token CSRF em acoes simples (excluir)."""
     pass
+
+
+class CriancaForm(FlaskForm):
+    nome = StringField("Nome da crianca", validators=[DataRequired(), Length(max=120)])
+    data_nascimento = DateField("Data de nascimento (opcional)", validators=[Optional()])
+    responsavel_nome = StringField("Nome do responsavel", validators=[DataRequired(), Length(max=120)])
+    responsavel_telefone = StringField("Telefone do responsavel", validators=[Optional(), Length(max=30)])
+    observacoes = TextAreaField(
+        "Observacoes (alergias, necessidades especiais...)", validators=[Optional(), Length(max=1000)]
+    )
+    submit = SubmitField("Cadastrar")
+
+
+class CheckoutForm(FlaskForm):
+    """Confere o codigo de seguranca entregue ao responsavel na entrada
+    antes de liberar a crianca (ver ministerio.routes.fazer_checkout)."""
+    codigo_seguranca = StringField("Codigo de seguranca", validators=[DataRequired(), Length(max=6)])
+    submit = SubmitField("Confirmar saida")

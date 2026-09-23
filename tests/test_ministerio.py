@@ -2,12 +2,21 @@
 from datetime import date, timedelta
 
 from app.escala.models import Escala
-from app.ministerio.models import Ministerio
+from app.ministerio.models import Ministerio, Crianca, CheckInCrianca
 from app.plantao.models import TurnoPlantao
 from app.plantao.sincronizacao import sincronizar_turno
 from tests.conftest import sessao_isolada
 from tests.test_escala import _criar_comunidade, _criar_ministerio, _criar_escala
 from tests.test_plantao import _criar_turno_teste
+
+
+def _cadastrar_crianca(cliente, ministerio_id, nome, responsavel_nome="Responsavel Teste"):
+    cliente.post(
+        f"/ministerio/{ministerio_id}/checkin",
+        data={"nome": nome, "responsavel_nome": responsavel_nome, "responsavel_telefone": ""},
+        follow_redirects=True,
+    )
+    return Crianca.query.filter_by(ministerio_id=ministerio_id, nome=nome).order_by(Crianca.id.desc()).first()
 
 
 def test_ministerio_sem_login_redireciona(client):
@@ -369,4 +378,113 @@ def test_usuario_nao_consegue_criar_ministerio_em_comunidade_de_outra_conta(logg
             data={"nome": "Invasao", "descricao": ""},
             follow_redirects=True,
         )
+        assert response.status_code == 404
+
+
+# --- Check-in de criancas ------------------------------------------------
+
+
+def test_cadastrar_crianca_no_checkin(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
+        crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho", "Maria")
+        assert crianca is not None
+        assert crianca.responsavel_nome == "Maria"
+
+
+def test_fazer_checkin_gera_codigo_e_aparece_em_presentes(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
+        crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho")
+
+        response = logged_in_client.post(
+            f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={}, follow_redirects=True
+        )
+        assert response.status_code == 200
+
+        registro = CheckInCrianca.query.filter_by(crianca_id=crianca.id).first()
+        assert registro is not None
+        assert registro.esta_presente
+        assert len(registro.codigo_seguranca) == 4
+        assert registro.codigo_seguranca in response.data.decode("utf-8")
+
+
+def test_fazer_checkin_ja_presente_mostra_aviso_e_nao_duplica(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
+        crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho")
+        logged_in_client.post(f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={})
+
+        logged_in_client.post(
+            f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={}, follow_redirects=True
+        )
+        assert CheckInCrianca.query.filter_by(crianca_id=crianca.id).count() == 1
+
+
+def test_fazer_checkout_com_codigo_correto_libera_crianca(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
+        crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho")
+        logged_in_client.post(f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={})
+        registro = CheckInCrianca.query.filter_by(crianca_id=crianca.id).first()
+
+        response = logged_in_client.post(
+            f"/ministerio/{ministerio.id}/checkin/{registro.id}/saida",
+            data={"codigo_seguranca": registro.codigo_seguranca},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        db.session.remove()
+        atualizado = db.session.get(CheckInCrianca, registro.id)
+        assert atualizado.hora_saida is not None
+        assert not atualizado.esta_presente
+
+
+def test_fazer_checkout_com_codigo_errado_mantem_presente(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
+        crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho")
+        logged_in_client.post(f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={})
+        registro = CheckInCrianca.query.filter_by(crianca_id=crianca.id).first()
+
+        response = logged_in_client.post(
+            f"/ministerio/{ministerio.id}/checkin/{registro.id}/saida",
+            data={"codigo_seguranca": "0000"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        db.session.remove()
+        assert db.session.get(CheckInCrianca, registro.id).esta_presente
+
+
+def test_excluir_crianca_remove_do_cadastro(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
+        crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho")
+        crianca_id = crianca.id
+
+        response = logged_in_client.post(
+            f"/ministerio/{ministerio.id}/checkin/criancas/{crianca_id}/excluir", data={}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        db.session.remove()
+        assert db.session.get(Crianca, crianca_id) is None
+
+
+def test_usuario_nao_consegue_acessar_checkin_de_ministerio_de_outra_conta(
+    logged_in_client, outro_logged_in_client, app, db
+):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
+        ministerio_id = ministerio.id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.get(f"/ministerio/{ministerio_id}/checkin", follow_redirects=True)
         assert response.status_code == 404

@@ -82,6 +82,69 @@ class UsuarioMinisterio(db.Model):
         return f"<UsuarioMinisterio {self.usuario_id} papel={self.papel} do ministerio {self.ministerio_id}>"
 
 
+class Crianca(db.Model):
+    """Uma crianca cadastrada no check-in de um Ministerio (pensado pro
+    ministerio Kids, mas nao restrito -- qualquer Ministerio pode ter sua
+    propria lista). Cadastrada uma vez pelo lider/voluntario no balcao de
+    check-in; reaproveitada em cada culto (ver CheckInCrianca abaixo)."""
+
+    __tablename__ = "ministerio_criancas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ministerio_id = db.Column(db.Integer, db.ForeignKey("ministerios.id"), nullable=False)
+    nome = db.Column(db.String(120), nullable=False)
+    data_nascimento = db.Column(db.Date, nullable=True)
+    responsavel_nome = db.Column(db.String(120), nullable=False)
+    responsavel_telefone = db.Column(db.String(30), nullable=True)
+    observacoes = db.Column(db.Text, nullable=True)
+    criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    ministerio = db.relationship(
+        "Ministerio", backref=db.backref("criancas", cascade="all, delete-orphan")
+    )
+
+    @property
+    def iniciais(self):
+        partes = self.nome.split()
+        letras = "".join(p[0] for p in partes[:2])
+        return letras.upper() or "?"
+
+    def __repr__(self):
+        return f"<Crianca {self.nome} do ministerio {self.ministerio_id}>"
+
+
+class CheckInCrianca(db.Model):
+    """Uma entrada+saida de uma Crianca no balcao de check-in, num dia
+    especifico. `codigo_seguranca` e gerado na entrada e entregue ao
+    responsavel (escrito/tirado foto) -- na saida, o voluntario confere
+    esse mesmo codigo antes de liberar a crianca (ver
+    ministerio.routes.fazer_checkout)."""
+
+    __tablename__ = "ministerio_checkins"
+
+    id = db.Column(db.Integer, primary_key=True)
+    crianca_id = db.Column(db.Integer, db.ForeignKey("ministerio_criancas.id"), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    hora_entrada = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    hora_saida = db.Column(db.DateTime, nullable=True)
+    codigo_seguranca = db.Column(db.String(6), nullable=False)
+    registrado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    retirado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    crianca = db.relationship(
+        "Crianca", backref=db.backref("checkins", cascade="all, delete-orphan", order_by="CheckInCrianca.hora_entrada.desc()")
+    )
+    registrado_por = db.relationship("User", foreign_keys=[registrado_por_id])
+    retirado_por = db.relationship("User", foreign_keys=[retirado_por_id])
+
+    @property
+    def esta_presente(self):
+        return self.hora_saida is None
+
+    def __repr__(self):
+        return f"<CheckInCrianca {self.crianca_id} em {self.data}>"
+
+
 def criar_ministerio(comunidade_id, nome, descricao=None, imagem=None):
     ministerio = Ministerio(comunidade_id=comunidade_id, nome=nome, descricao=descricao, imagem=imagem)
     db.session.add(ministerio)

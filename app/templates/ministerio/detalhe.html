@@ -27,6 +27,10 @@
             </div>
             <div class="flex items-center gap-3 shrink-0">
                 {% if pode_gerenciar %}
+                <a href="{{ url_for('ministerio.checkin', ministerio_id=ministerio.id) }}"
+                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" title="Check-in de criancas" aria-label="Check-in de criancas">
+                    <i class="fa-solid fa-child-reaching"></i>
+                </a>
                 <a href="{{ url_for('ministerio.papeis', ministerio_id=ministerio.id) }}"
                    class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Papeis e convites">
                     <i class="fa-solid fa-user-group"></i>

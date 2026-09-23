@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Check-in - {{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #checkin-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio %}
+{% block content %}
+<div id="checkin-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            </a>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Check-in - {{ ministerio.nome }}</span>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+
+        <!-- Presentes agora -->
+        <section>
+            <h2 class="text-sm font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-2">
+                <i class="fa-solid fa-person-circle-check mr-1"></i>Presentes agora ({{ presentes|length }})
+            </h2>
+            {% if not presentes %}
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma crianca com check-in em aberto.</p>
+            {% else %}
+            <div class="space-y-2">
+                {% for registro in presentes %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                            {{ registro.crianca.iniciais }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ registro.crianca.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">
+                                Entrada {{ registro.hora_entrada.strftime('%H:%M') }}
+                                &middot; Responsavel: {{ registro.crianca.responsavel_nome }}
+                            </p>
+                        </div>
+                        <span class="text-xs font-mono font-semibold {{ tema.accent_text }} shrink-0">#{{ registro.codigo_seguranca }}</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('ministerio.fazer_checkout', ministerio_id=ministerio.id, checkin_id=registro.id) }}"
+                          class="flex items-center gap-2 mt-2 ml-12">
+                        {{ formularios_checkout[registro.id].hidden_tag() }}
+                        {{ formularios_checkout[registro.id].codigo_seguranca(
+                            placeholder="Codigo informado pelo responsavel", maxlength="6",
+                            class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-1.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                        ) }}
+                        <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition shrink-0">
+                            Confirmar saida
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- Diretorio de criancas cadastradas -->
+        <section>
+            <h2 class="text-sm font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-2">
+                <i class="fa-solid fa-address-book mr-1"></i>Criancas cadastradas
+            </h2>
+            {% if not criancas %}
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma crianca cadastrada ainda.</p>
+            {% else %}
+            <div class="space-y-2">
+                {% for crianca in criancas %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                        {{ crianca.iniciais }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ crianca.nome }}</p>
+                        <p class="text-xs {{ tema.text_secondary }} truncate">
+                            Responsavel: {{ crianca.responsavel_nome }}
+                            {% if crianca.responsavel_telefone %} &middot; {{ crianca.responsavel_telefone }}{% endif %}
+                        </p>
+                        {% if crianca.observacoes %}
+                        <p class="text-xs text-amber-500 truncate" title="{{ crianca.observacoes }}">
+                            <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> {{ crianca.observacoes }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <form method="POST" action="{{ url_for('ministerio.fazer_checkin', ministerio_id=ministerio.id, crianca_id=crianca.id) }}">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                                <i class="fa-solid fa-right-to-bracket mr-1"></i>Check-in
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('ministerio.excluir_crianca', ministerio_id=ministerio.id, crianca_id=crianca.id) }}"
+                              data-confirm-excluir='Remover {{ crianca.nome }} do cadastro?'>
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" title="Remover cadastro" class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- Cadastrar nova crianca -->
+        <section class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-4">
+            <h2 class="text-sm font-semibold {{ tema.text_primary }} mb-3">
+                <i class="fa-solid fa-user-plus mr-1"></i>Cadastrar crianca
+            </h2>
+            <form method="POST" class="space-y-3">
+                {{ form_crianca.hidden_tag() }}
+                <div>
+                    {{ form_crianca.nome(
+                        placeholder="Nome da crianca",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                    {% for erro in form_crianca.nome.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    {{ form_crianca.data_nascimento(
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                    {{ form_crianca.responsavel_telefone(
+                        placeholder="Telefone do responsavel",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                </div>
+                <div>
+                    {{ form_crianca.responsavel_nome(
+                        placeholder="Nome do responsavel",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                    {% for erro in form_crianca.responsavel_nome.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div>
+                    {{ form_crianca.observacoes(
+                        rows="2", placeholder="Alergias, necessidades especiais... (opcional)",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                </div>
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+                    <i class="fa-solid fa-plus mr-1"></i>Cadastrar
+                </button>
+            </form>
+        </section>
+
+    </main>
+
+    <script>
+        document.querySelectorAll('[data-confirm-excluir]').forEach(function (form) {
+            form.addEventListener('submit', function (evento) {
+                if (!window.confirm(form.getAttribute('data-confirm-excluir'))) {
+                    evento.preventDefault();
+                }
+            });
+        });
+    </script>
+</div>
+{% endblock %}

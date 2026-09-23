@@ -16,11 +16,13 @@ from app.escala.forms import (
     FuncaoForm,
     EscalaForm,
     EditarEscalaForm,
+    ItemRepertorioForm,
 )
 from app.escala.models import (
     Escala,
     Funcao,
     Membro,
+    ItemRepertorio,
     DEPARTAMENTOS,
     STATUS_PADRAO,
     STATUS_LABELS,
@@ -322,6 +324,7 @@ def detalhe(escala_id):
         avisos_por_funcao=avisos_por_funcao,
         formulario_nova_funcao=FuncaoForm(),
         formulario_novo_subcabecalho=FuncaoForm(),
+        formulario_novo_item_repertorio=ItemRepertorioForm(),
         acao_form=AcaoForm(),
         status_labels=STATUS_LABELS,
         status_cores=STATUS_CORES,
@@ -417,6 +420,51 @@ def excluir_funcao(funcao_id):
 
     flash(f'Funcao "{nome}" removida de {escala_nome}.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+
+@bp.route("/<int:escala_id>/repertorio/adicionar", methods=["POST"])
+@login_required
+def adicionar_item_repertorio(escala_id):
+    escala = _escala_do_usuario_ou_404(escala_id)
+    form = ItemRepertorioForm()
+
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel adicionar a musica.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id))
+
+    maior_ordem = max([item.ordem for item in escala.repertorio], default=-1)
+    item = ItemRepertorio(
+        escala_id=escala.id,
+        nome_musica=form.nome_musica.data.strip(),
+        tom=(form.tom.data or "").strip() or None,
+        link=(form.link.data or "").strip() or None,
+        ordem=maior_ordem + 1,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    flash(f'"{item.nome_musica}" adicionada ao repertorio.', "success")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id))
+
+
+@bp.route("/repertorio/<int:item_id>/excluir", methods=["POST"])
+@login_required
+def excluir_item_repertorio(item_id):
+    item = ItemRepertorio.query.get_or_404(item_id)
+    escala = _escala_do_usuario_ou_404(item.escala_id)
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id))
+
+    nome = item.nome_musica
+    db.session.delete(item)
+    db.session.commit()
+
+    flash(f'"{nome}" removida do repertorio.', "success")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
 
 @bp.route("/funcao/<int:funcao_id>/adicionar", methods=["POST"])

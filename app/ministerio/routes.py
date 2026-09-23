@@ -1,8 +1,10 @@
 """Controller (C do MVC): rotas do modulo ministerio."""
 import calendar
 import os
+import random
+import string
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from flask import render_template, redirect, url_for, flash, request, current_app, abort
 from flask_login import login_required, current_user
@@ -10,8 +12,15 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.ministerio import bp
-from app.ministerio.forms import MinisterioForm, AcaoForm
-from app.ministerio.models import Ministerio, UsuarioMinisterio, PAPEIS_MINISTERIO, criar_ministerio
+from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm
+from app.ministerio.models import (
+    Ministerio,
+    UsuarioMinisterio,
+    PAPEIS_MINISTERIO,
+    Crianca,
+    CheckInCrianca,
+    criar_ministerio,
+)
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
 from app.convites.routes import _enviar_email_de_convite
@@ -445,3 +454,127 @@ def cancelar_convite(ministerio_id, convite_id):
     db.session.commit()
     flash("Convite cancelado.", "success")
     return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+
+@bp.route("/<int:ministerio_id>/checkin", methods=["GET", "POST"])
+@login_required
+def checkin(ministerio_id):
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    form_crianca = CriancaForm()
+
+    if form_crianca.validate_on_submit():
+        crianca = Crianca(
+            ministerio_id=ministerio.id,
+            nome=form_crianca.nome.data.strip(),
+            data_nascimento=form_crianca.data_nascimento.data,
+            responsavel_nome=form_crianca.responsavel_nome.data.strip(),
+            responsavel_telefone=(form_crianca.responsavel_telefone.data or "").strip() or None,
+            observacoes=(form_crianca.observacoes.data or "").strip() or None,
+        )
+        db.session.add(crianca)
+        db.session.commit()
+        flash(f"{crianca.nome} cadastrado(a).", "success")
+        return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+    criancas = Crianca.query.filter_by(ministerio_id=ministerio.id).order_by(Crianca.nome).all()
+    presentes = (
+        CheckInCrianca.query.join(Crianca)
+        .filter(Crianca.ministerio_id == ministerio.id, CheckInCrianca.hora_saida.is_(None))
+        .order_by(CheckInCrianca.hora_entrada.desc())
+        .all()
+    )
+    formularios_checkout = {registro.id: CheckoutForm() for registro in presentes}
+
+    return render_template(
+        "ministerio/checkin.html",
+        ministerio=ministerio,
+        criancas=criancas,
+        presentes=presentes,
+        form_crianca=form_crianca,
+        formularios_checkout=formularios_checkout,
+        acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/<int:ministerio_id>/checkin/<int:crianca_id>/entrada", methods=["POST"])
+@login_required
+def fazer_checkin(ministerio_id, crianca_id):
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    crianca = Crianca.query.filter_by(id=crianca_id, ministerio_id=ministerio.id).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+    ja_presente = CheckInCrianca.query.filter_by(crianca_id=crianca.id, hora_saida=None).first()
+    if ja_presente:
+        flash(f"{crianca.nome} ja esta com check-in em aberto.", "warning")
+        return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+    codigo = "".join(random.choices(string.digits, k=4))
+    registro = CheckInCrianca(
+        crianca_id=crianca.id,
+        data=date.today(),
+        codigo_seguranca=codigo,
+        registrado_por_id=current_user.id,
+    )
+    db.session.add(registro)
+    db.session.commit()
+
+    flash(
+        f"Check-in de {crianca.nome} feito. Codigo de seguranca: {codigo} -- "
+        "anote ou tire uma foto pra entregar ao responsavel.",
+        "success",
+    )
+    return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+
+@bp.route("/<int:ministerio_id>/checkin/<int:checkin_id>/saida", methods=["POST"])
+@login_required
+def fazer_checkout(ministerio_id, checkin_id):
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    registro = (
+        CheckInCrianca.query.join(Crianca)
+        .filter(CheckInCrianca.id == checkin_id, Crianca.ministerio_id == ministerio.id)
+        .first_or_404()
+    )
+    form = CheckoutForm()
+
+    if not form.validate_on_submit():
+        flash("Informe o codigo de seguranca.", "danger")
+        return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+    if registro.hora_saida is not None:
+        flash(f"{registro.crianca.nome} ja teve saida registrada.", "danger")
+        return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+    if form.codigo_seguranca.data.strip() != registro.codigo_seguranca:
+        flash("Codigo de seguranca nao confere.", "danger")
+        return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+    registro.hora_saida = datetime.now(timezone.utc)
+    registro.retirado_por_id = current_user.id
+    db.session.commit()
+
+    flash(f"Saida de {registro.crianca.nome} confirmada.", "success")
+    return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+
+@bp.route("/<int:ministerio_id>/checkin/criancas/<int:crianca_id>/excluir", methods=["POST"])
+@login_required
+def excluir_crianca(ministerio_id, crianca_id):
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    crianca = Crianca.query.filter_by(id=crianca_id, ministerio_id=ministerio.id).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+    nome = crianca.nome
+    db.session.delete(crianca)
+    db.session.commit()
+
+    flash(f"{nome} removido(a) do cadastro.", "success")
+    return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
