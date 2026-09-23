@@ -243,6 +243,14 @@ def editar(escala_id):
 def detalhe(escala_id):
     escala, eh_dono = _escala_visivel_ou_404(escala_id)
 
+    # De onde a pessoa veio (ex: um calendario) -- so aceita caminho relativo
+    # interno (mesma validacao de comunidade.membros::proximo), pra "Voltar"
+    # levar pra la em vez de sempre cair no Ministerio. Sem isso, entrar numa
+    # escala pelo calendario e depois voltar perdia o lugar de onde veio.
+    voltar = request.args.get("voltar")
+    if not voltar or not voltar.startswith("/") or voltar.startswith("//"):
+        voltar = None
+
     formularios_membro = {}
     formularios_mover = {}
     formularios_status = {}
@@ -328,6 +336,7 @@ def detalhe(escala_id):
         acao_form=AcaoForm(),
         status_labels=STATUS_LABELS,
         status_cores=STATUS_CORES,
+        voltar=voltar,
     )
 
 

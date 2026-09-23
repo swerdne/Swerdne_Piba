@@ -247,7 +247,7 @@
                     {% if legenda %}
                     <div class="mt-4 pt-3 border-t {{ tema.card_border }} space-y-1.5">
                         {% for escala, cor in legenda %}
-                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id, voltar=request.full_path) }}"
                            class="flex items-center gap-1.5 text-[11px] {{ tema.text_secondary }} {{ tema.text_hover }} transition">
                             <span class="w-2 h-2 rounded-full {{ cor }} shrink-0"></span>
                             <span class="truncate">{{ escala.nome }}</span>

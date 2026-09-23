@@ -18,7 +18,7 @@
     <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 min-w-0">
-                <a href="{{ url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                <a href="{{ voltar or url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
                     <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
                 </a>
                 <div class="min-w-0">

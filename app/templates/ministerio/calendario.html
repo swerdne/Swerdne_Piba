@@ -65,14 +65,14 @@
                     A partir de sm: mostra a pilula com o nome, ja que ha largura de sobra. -->
                     <div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
                         {% for escala, cor in eventos[:4] %}
-                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id, voltar=request.full_path) }}"
                            class="w-1.5 h-1.5 rounded-full {{ cor }}"
                            title="{{ escala.nome }}{% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}"></a>
                         {% endfor %}
                     </div>
                     <div class="mt-1 space-y-1 hidden sm:block">
                         {% for escala, cor in eventos[:3] %}
-                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}"
+                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id, voltar=request.full_path) }}"
                            class="flex items-center gap-1 {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} rounded px-1 py-0.5 transition"
                            title="{{ escala.nome }}{% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}">
                             <span class="w-1.5 h-1.5 rounded-full {{ cor }} shrink-0"></span>

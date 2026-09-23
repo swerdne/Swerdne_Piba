@@ -614,6 +614,50 @@ def test_usuario_nao_consegue_mexer_no_repertorio_de_outra_conta(logged_in_clien
         assert ItemRepertorio.query.filter_by(escala_id=escala_id, nome_musica="Musica Invasora").first() is None
 
 
+# --- Navegacao (botao Voltar respeita de onde a pessoa veio) ----------------
+
+
+def test_detalhe_sem_voltar_cai_no_ministerio(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+        assert f'href="/ministerio/{escala.ministerio_id}"' in html
+
+
+def test_detalhe_com_voltar_valido_usa_esse_link(logged_in_client, app, db):
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        html = logged_in_client.get(
+            f"/escala/{escala.id}?voltar=%2Fministerio%2F{escala.ministerio_id}%2Fcalendario"
+        ).data.decode("utf-8")
+        assert f'href="/ministerio/{escala.ministerio_id}/calendario"' in html
+
+
+def test_detalhe_ignora_voltar_pra_site_externo(logged_in_client, app, db):
+    """voltar=//evil.com (ou http://evil.com) nao pode virar um redirect
+    aberto -- so aceita caminho relativo interno, mesma validacao de
+    comunidade.membros::proximo."""
+    with app.app_context():
+        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
+        html = logged_in_client.get(
+            f"/escala/{escala.id}?voltar=%2F%2Fevil.com"
+        ).data.decode("utf-8")
+        assert "evil.com" not in html
+        assert f'href="/ministerio/{escala.ministerio_id}"' in html
+
+
+def test_calendario_do_ministerio_linka_escala_com_voltar_pra_ele_mesmo(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(
+            logged_in_client, ministerio.id, "Culto de Domingo", data="2026-09-26", horario="09:00"
+        )
+
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}/calendario").data.decode("utf-8")
+        assert f"voltar=/ministerio/{ministerio.id}/calendario" in html
+
+
 # --- Subcabecalhos (categorias) ----------------------------------------------
 
 def test_adicionar_subcabecalho(logged_in_client, app, db):
