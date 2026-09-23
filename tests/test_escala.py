@@ -658,6 +658,30 @@ def test_calendario_do_ministerio_linka_escala_com_voltar_pra_ele_mesmo(logged_i
         assert f"voltar=/ministerio/{ministerio.id}/calendario" in html
 
 
+# --- Mini-card de preview ao clicar num evento do calendario -----------------
+
+
+def test_calendario_do_ministerio_embute_preview_com_escalados(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(
+            logged_in_client, ministerio.id, "Culto de Domingo", data="2026-09-26", horario="09:00"
+        )
+        membro = _criar_membro(logged_in_client, comunidade.id, "Fulano")
+        funcao = _funcao_por_nome(escala, "Baixo")
+        _escalar(logged_in_client, funcao.id, membro.id)
+
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}/calendario").data.decode("utf-8")
+        assert f'data-abrir-preview="{escala.id}"' in html
+        assert '"nome": "Culto de Domingo"' in html
+        assert '"funcao": "Baixo"' in html
+        assert '"membro": "Fulano"' in html
+        # botao (nao mais link direto) -- a navegacao acontece via JS, so
+        # depois que a pessoa confirma no mini-card.
+        assert f'href="/escala/{escala.id}?voltar=' not in html
+
+
 # --- Subcabecalhos (categorias) ----------------------------------------------
 
 def test_adicionar_subcabecalho(logged_in_client, app, db):

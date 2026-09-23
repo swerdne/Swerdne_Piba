@@ -25,6 +25,7 @@ from app.escala.models import (
     DEPARTAMENTOS,
     STATUS_LABELS,
     STATUS_CORES,
+    resumo_para_calendario,
 )
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
@@ -528,6 +529,15 @@ def calendario(comunidade_id):
     for escala in escalas_do_mes:
         escalas_por_dia.setdefault(escala.data, []).append((escala, escala.cor))
 
+    # Igual ao de um Ministerio (ver ministerio.routes._dados_calendario),
+    # so que com o nome do ministerio junto -- aqui um mesmo dia pode ter
+    # escalas de ministerios diferentes.
+    previews_calendario = {}
+    for escala in escalas_do_mes:
+        resumo = resumo_para_calendario(escala)
+        resumo["ministerio"] = escala.ministerio.nome
+        previews_calendario[escala.id] = resumo
+
     (ano_anterior, mes_anterior), (ano_proximo, mes_proximo) = _navegacao_calendario_comunidade(ano, mes)
 
     return render_template(
@@ -545,6 +555,7 @@ def calendario(comunidade_id):
         ano_proximo=ano_proximo,
         mes_proximo=mes_proximo,
         hoje=hoje,
+        previews_calendario=previews_calendario,
     )
 
 

@@ -428,3 +428,29 @@ def mensagem_para(escala, funcao, membro):
     modelo = MENSAGENS_POR_DEPARTAMENTO.get(escala.departamento, MENSAGENS_POR_DEPARTAMENTO["_padrao"])
     data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
     return modelo.format(membro=membro.nome, funcao=funcao.nome, escala=escala.nome, data=data_texto)
+
+
+def resumo_para_calendario(escala):
+    """Resumo enxuto de uma Escala pro mini-card de preview ao clicar num
+    evento do calendario (ver ministerio/calendario.html e
+    comunidade/calendario.html) -- so o essencial pra decidir se vale abrir
+    a tela completa, sem precisar navegar pra ver."""
+    escalados = [
+        {
+            "funcao": f.nome,
+            "membro": f.membro.nome,
+            "status": STATUS_LABELS.get(f.status, f.status or ""),
+        }
+        for f in escala.funcoes
+        if not f.eh_subcabecalho and f.membro_id
+    ]
+    return {
+        "nome": escala.nome,
+        "departamento": escala.departamento,
+        "data": escala.data.strftime("%d/%m/%Y") if escala.data else None,
+        "horario": escala.horario.strftime("%H:%M") if escala.horario else None,
+        "horario_fim": escala.horario_fim.strftime("%H:%M") if escala.horario_fim else None,
+        "cancelada": escala.cancelada,
+        "cor": escala.cor,
+        "escalados": escalados,
+    }

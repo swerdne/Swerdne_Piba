@@ -25,38 +25,6 @@
     <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
 
         <div>
-            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
-                Contas vinculadas ({{ contas_vinculadas|length }})
-            </h2>
-            <p class="text-xs {{ tema.text_secondary }} mb-3">
-                Quem entrou pelo link de convite ou aceitou um convite por e-mail -- diferente do diretorio
-                abaixo, que e a lista usada pra escalar (pode ter gente sem conta na plataforma).
-            </p>
-
-            {% if not contas_vinculadas %}
-            <div class="text-center py-12">
-                <i class="fa-solid fa-user-group text-4xl {{ tema.text_secondary }}"></i>
-                <p class="mt-4 {{ tema.text_secondary }}">Ninguem entrou pela comunidade ainda.</p>
-            </div>
-            {% endif %}
-
-            <div class="space-y-2">
-                {% for conta in contas_vinculadas %}
-                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
-                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
-                        {{ (conta.usuario.name or conta.usuario.username or conta.usuario.email)[:2].upper() }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm {{ tema.text_primary }} truncate">{{ conta.usuario.name or conta.usuario.username or conta.usuario.email }}</p>
-                        <p class="text-xs {{ tema.text_secondary }} truncate">{{ conta.usuario.email }}</p>
-                    </div>
-                    <span class="text-[11px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-2 py-1 shrink-0">{{ conta.papel }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-
-        <div>
             <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Adicionar ao diretorio</h2>
             <form method="POST" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
                 {{ form.hidden_tag() }}
@@ -119,6 +87,38 @@
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
+                Contas vinculadas ({{ contas_vinculadas|length }})
+            </h2>
+            <p class="text-xs {{ tema.text_secondary }} mb-3">
+                Quem entrou pelo link de convite ou aceitou um convite por e-mail -- diferente do diretorio
+                acima, que e a lista usada pra escalar (pode ter gente sem conta na plataforma).
+            </p>
+
+            {% if not contas_vinculadas %}
+            <div class="text-center py-12">
+                <i class="fa-solid fa-user-group text-4xl {{ tema.text_secondary }}"></i>
+                <p class="mt-4 {{ tema.text_secondary }}">Ninguem entrou pela comunidade ainda.</p>
+            </div>
+            {% endif %}
+
+            <div class="space-y-2">
+                {% for conta in contas_vinculadas %}
+                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
+                        {{ (conta.usuario.name or conta.usuario.username or conta.usuario.email)[:2].upper() }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm {{ tema.text_primary }} truncate">{{ conta.usuario.name or conta.usuario.username or conta.usuario.email }}</p>
+                        <p class="text-xs {{ tema.text_secondary }} truncate">{{ conta.usuario.email }}</p>
+                    </div>
+                    <span class="text-[11px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-2 py-1 shrink-0">{{ conta.papel }}</span>
                 </div>
                 {% endfor %}
             </div>

@@ -558,6 +558,23 @@ def test_calendario_da_comunidade_junta_escalas_de_ministerios_diferentes(logged
         assert "Louvor" in html and "Midia" in html  # nome do ministerio no titulo do evento
 
 
+def test_calendario_da_comunidade_embute_preview_com_ministerio(logged_in_client, app, db):
+    import datetime as dt
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Louvor")
+        hoje = dt.date.today()
+        escala = _criar_escala(
+            logged_in_client, ministerio.id, "Ensaio Louvor", data=hoje.strftime("%Y-%m-%d"), horario="19:00"
+        )
+
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}/calendario").data.decode("utf-8")
+        assert f'data-abrir-preview="{escala.id}"' in html
+        assert '"ministerio": "Louvor"' in html
+        assert f'href="/escala/{escala.id}?voltar=' not in html
+
+
 def test_calendario_da_comunidade_sem_login_redireciona(client):
     response = client.get("/comunidade/1/calendario", follow_redirects=False)
     assert response.status_code == 302

@@ -21,6 +21,7 @@ from app.ministerio.models import (
     CheckInCrianca,
     criar_ministerio,
 )
+from app.escala.models import resumo_para_calendario
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
 from app.convites.routes import _enviar_email_de_convite
@@ -198,6 +199,7 @@ def _dados_calendario(ministerio, hoje):
         "ano_proximo": ano_proximo,
         "mes_proximo": mes_proximo,
         "hoje": hoje,
+        "previews_calendario": {e.id: resumo_para_calendario(e) for e in escalas_do_mes},
     }
 
 

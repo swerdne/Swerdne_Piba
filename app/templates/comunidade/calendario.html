@@ -68,19 +68,19 @@
                     fica ilegivel. A partir de sm: mostra a pilula com o nome + ministerio. -->
                     <div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
                         {% for escala, cor in eventos[:4] %}
-                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id, voltar=request.full_path) }}"
+                        <button type="button" data-abrir-preview="{{ escala.id }}"
                            class="w-1.5 h-1.5 rounded-full {{ cor }}"
-                           title="{{ escala.nome }} ({{ escala.ministerio.nome }}){% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}"></a>
+                           title="{{ escala.nome }} ({{ escala.ministerio.nome }}){% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}"></button>
                         {% endfor %}
                     </div>
                     <div class="mt-1 space-y-1 hidden sm:block">
                         {% for escala, cor in eventos[:3] %}
-                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id, voltar=request.full_path) }}"
-                           class="flex items-center gap-1 {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} rounded px-1 py-0.5 transition"
+                        <button type="button" data-abrir-preview="{{ escala.id }}"
+                           class="flex items-center gap-1 w-full text-left {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} rounded px-1 py-0.5 transition"
                            title="{{ escala.nome }} ({{ escala.ministerio.nome }}){% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}">
                             <span class="w-1.5 h-1.5 rounded-full {{ cor }} shrink-0"></span>
                             <span class="text-[10px] {{ tema.secondary_text }} truncate">{{ escala.nome }}</span>
-                        </a>
+                        </button>
                         {% endfor %}
                         {% if eventos|length > 3 %}
                         <p class="text-[10px] {{ tema.text_secondary }} px-1">+{{ eventos|length - 3 }} mais</p>
@@ -97,5 +97,103 @@
         {% endif %}
 
     </main>
+
+    <!-- Preview de escala (mini-card ao clicar num evento do calendario) -->
+    <div id="preview-escala-backdrop" data-preview-fechar
+         class="hidden fixed inset-0 bg-black/50 z-40 flex items-end sm:items-center justify-center p-4">
+        <div class="w-full sm:max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl p-5" data-preview-card>
+            <div class="flex items-start justify-between gap-3 mb-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span id="preview-escala-cor" class="w-2.5 h-2.5 rounded-full shrink-0"></span>
+                    <h3 id="preview-escala-nome" class="text-sm font-semibold {{ tema.text_primary }} truncate"></h3>
+                </div>
+                <button type="button" data-preview-fechar aria-label="Fechar"
+                        class="{{ tema.text_secondary }} {{ tema.text_hover }} transition shrink-0">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p id="preview-escala-cancelada" class="hidden text-xs text-red-500 mb-2">
+                <i class="fa-solid fa-ban mr-1"></i>Cancelada
+            </p>
+            <p class="text-xs {{ tema.text_secondary }} mb-3">
+                <span id="preview-escala-ministerio"></span> &middot;
+                <span id="preview-escala-departamento"></span>
+                &middot; <span id="preview-escala-data"></span>
+                <span id="preview-escala-horario"></span>
+            </p>
+            <div id="preview-escala-escalados" class="space-y-1.5 mb-4 max-h-48 overflow-y-auto"></div>
+            <a id="preview-escala-link" href="#"
+               class="block text-center {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+                Ver escala completa
+            </a>
+        </div>
+    </div>
+    <script type="application/json" id="previews-calendario"
+            data-url-base="{{ url_for('escala.detalhe', escala_id=0, voltar=request.full_path) }}">
+        {{ previews_calendario | tojson }}
+    </script>
+    <script>
+        (function () {
+            var dadosEl = document.getElementById('previews-calendario');
+            if (!dadosEl) return;
+            var previews = JSON.parse(dadosEl.textContent);
+            var urlBase = dadosEl.getAttribute('data-url-base');
+
+            var backdrop = document.getElementById('preview-escala-backdrop');
+            var elCor = document.getElementById('preview-escala-cor');
+            var elNome = document.getElementById('preview-escala-nome');
+            var elCancelada = document.getElementById('preview-escala-cancelada');
+            var elMinisterio = document.getElementById('preview-escala-ministerio');
+            var elDepartamento = document.getElementById('preview-escala-departamento');
+            var elData = document.getElementById('preview-escala-data');
+            var elHorario = document.getElementById('preview-escala-horario');
+            var elEscalados = document.getElementById('preview-escala-escalados');
+            var elLink = document.getElementById('preview-escala-link');
+
+            document.querySelectorAll('[data-abrir-preview]').forEach(function (botao) {
+                botao.addEventListener('click', function () {
+                    var id = botao.getAttribute('data-abrir-preview');
+                    var dados = previews[id];
+                    if (!dados) return;
+
+                    elCor.className = 'w-2.5 h-2.5 rounded-full shrink-0 ' + dados.cor;
+                    elNome.textContent = dados.nome;
+                    elNome.classList.toggle('line-through', dados.cancelada);
+                    elNome.classList.toggle('opacity-60', dados.cancelada);
+                    elCancelada.classList.toggle('hidden', !dados.cancelada);
+                    elMinisterio.textContent = dados.ministerio;
+                    elDepartamento.textContent = dados.departamento;
+                    elData.textContent = dados.data || 'sem data definida';
+                    elHorario.textContent = dados.horario
+                        ? ('- ' + dados.horario + (dados.horario_fim ? (' as ' + dados.horario_fim) : ''))
+                        : '';
+
+                    elEscalados.innerHTML = '';
+                    if (!dados.escalados.length) {
+                        var vazio = document.createElement('p');
+                        vazio.className = 'text-xs {{ tema.text_secondary }}';
+                        vazio.textContent = 'Ninguem escalado ainda.';
+                        elEscalados.appendChild(vazio);
+                    } else {
+                        dados.escalados.forEach(function (item) {
+                            var linha = document.createElement('p');
+                            linha.className = 'text-xs {{ tema.text_primary }}';
+                            linha.textContent = item.funcao + ': ' + item.membro;
+                            elEscalados.appendChild(linha);
+                        });
+                    }
+
+                    elLink.href = urlBase.replace('/0?', '/' + id + '?');
+                    backdrop.classList.remove('hidden');
+                });
+            });
+
+            document.querySelectorAll('[data-preview-fechar]').forEach(function (el) {
+                el.addEventListener('click', function () { backdrop.classList.add('hidden'); });
+            });
+            var card = document.querySelector('[data-preview-card]');
+            if (card) card.addEventListener('click', function (evento) { evento.stopPropagation(); });
+        })();
+    </script>
 </div>
 {% endblock %}
