@@ -14,6 +14,8 @@ from app.comunidade import bp
 from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm
 from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, criar_comunidade
 from app.ministerio.models import Ministerio
+from app.auth.models import User
+from app.notificacoes import Notificacao
 from app.escala.models import (
     Escala,
     Funcao,
@@ -49,6 +51,22 @@ def _eh_membro_da_comunidade(comunidade, usuario):
     return UsuarioComunidade.query.filter_by(
         comunidade_id=comunidade.id, usuario_id=usuario.id, papel="membro"
     ).first() is not None
+
+
+def _admins_da_comunidade(comunidade):
+    """Todas as contas com papel=admin nesta Comunidade, incluindo o dono
+    original (Comunidade.usuario_id, que nem sempre tem uma linha propria em
+    UsuarioComunidade -- ver criar_comunidade). Usado pra notificar (sino
+    in-app) quando algo relevante acontece, ex: alguem entra via link."""
+    ids_admin = {
+        row.usuario_id for row in
+        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").all()
+    }
+    if comunidade.usuario_id:
+        ids_admin.add(comunidade.usuario_id)
+    if not ids_admin:
+        return []
+    return User.query.filter(User.id.in_(ids_admin)).all()
 
 
 def _comunidade_do_usuario_ou_404(comunidade_id):
@@ -227,7 +245,19 @@ def detalhe(comunidade_id):
     ministerios = (
         Ministerio.query.filter_by(comunidade_id=comunidade.id).order_by(Ministerio.nome).all()
     )
-    total_membros = Membro.query.filter_by(comunidade_id=comunidade.id).count()
+    # Membro (diretorio de escalacao) e UsuarioComunidade (conta que entrou
+    # via convite/link) sao coisas diferentes -- ver models.py -- mas pra
+    # quem esta contando "quantas pessoas" a comunidade tem, os dois contam.
+    # Deduplicado por e-mail (mesmo criterio ja usado em comunidade.index)
+    # pra nao contar duas vezes quem esta nos dois ao mesmo tempo.
+    membros_diretorio = Membro.query.filter_by(comunidade_id=comunidade.id).all()
+    emails_diretorio = {m.email.lower() for m in membros_diretorio if m.email}
+    contas_vinculadas = UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id).all()
+    contas_extras = sum(
+        1 for uc in contas_vinculadas
+        if not uc.usuario.email or uc.usuario.email.lower() not in emails_diretorio
+    )
+    total_membros = len(membros_diretorio) + contas_extras
 
     return render_template(
         "comunidade/detalhe.html",
@@ -708,6 +738,18 @@ def entrar_via_link(token):
     form = AcaoForm()
     if request.method == "POST" and form.validate_on_submit():
         db.session.add(UsuarioComunidade(usuario_id=current_user.id, comunidade_id=comunidade.id, papel="membro"))
+
+        nome_novo_membro = current_user.name or current_user.username or current_user.email
+        for admin in _admins_da_comunidade(comunidade):
+            if admin.id == current_user.id:
+                continue  # nunca notifica quem acabou de entrar sobre a propria entrada
+            db.session.add(Notificacao(
+                usuario_id=admin.id,
+                titulo=f'{nome_novo_membro} entrou em "{comunidade.nome}"',
+                mensagem=f'{nome_novo_membro} entrou na comunidade pelo link de convite.',
+                tipo="novo_membro",
+            ))
+
         db.session.commit()
         flash(f'Voce entrou em "{comunidade.nome}"!', "success")
         return redirect(url_for("comunidade.escalados", comunidade_id=comunidade.id))

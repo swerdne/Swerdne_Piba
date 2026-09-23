@@ -1,7 +1,7 @@
 """Testes do modulo comunidade."""
 from app.comunidade.models import Comunidade
 from app.escala.models import Membro, CicloDisponibilidade, SegmentoCiclo
-from tests.conftest import sessao_isolada
+from tests.conftest import sessao_isolada, _registrar
 from tests.test_escala import (
     _criar_comunidade,
     _criar_ministerio,
@@ -627,3 +627,83 @@ def test_botao_excluir_fica_na_lista_nao_na_tela_da_comunidade(logged_in_client,
 
         html_detalhe = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
         assert f'/comunidade/{comunidade.id}/excluir' not in html_detalhe
+
+
+# --- Contagem de membros (diretorio + contas vinculadas) --------------------
+
+
+def test_contagem_de_membros_inclui_quem_entrou_via_link(logged_in_client, app, db):
+    """Bug relatado: quem entra via link de convite (UsuarioComunidade) nao
+    contava em "Membros (N)" na tela da comunidade -- so o diretorio de
+    escalacao (Membro) era contado, entao a quantidade nao mudava quando
+    alguem de fato entrava."""
+    from app.auth.models import User
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+        # Quem criou a comunidade ja conta como 1 (vira admin automaticamente).
+        html_antes = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
+        assert "Membros" in html_antes and "(1)" in html_antes
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+        bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+
+    with sessao_isolada(app):
+        html_depois = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
+        assert "(2)" in html_depois
+
+
+def test_contagem_de_membros_nao_duplica_quem_esta_no_diretorio_e_tem_conta(logged_in_client, app, db):
+    """Quem ja esta no diretorio (Membro, por e-mail) e tambem entra via
+    link com o mesmo e-mail conta so 1 vez, nao 2."""
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        _criar_membro(logged_in_client, comunidade_id, "Bruno", email="bruno@example.com")
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+        # Ana (admin) + Bruno (diretorio) = 2, antes de Bruno ter conta.
+        html_antes = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
+        assert "(2)" in html_antes
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+        bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+
+    with sessao_isolada(app):
+        # Mesmo e-mail do diretorio -- continua 2, nao vira 3.
+        html_depois = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
+        assert "(2)" in html_depois
+
+
+# --- Notificacao ao entrar via link ------------------------------------------
+
+
+def test_admin_e_notificado_quando_alguem_entra_via_link(logged_in_client, app, db):
+    from app.notificacoes import Notificacao
+    from app.auth.models import User
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+        bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+
+    with sessao_isolada(app):
+        ana = User.query.filter_by(email="ana@example.com").first()
+        notificacao = Notificacao.query.filter_by(usuario_id=ana.id, tipo="novo_membro").first()
+        assert notificacao is not None
+        assert "bruno" in notificacao.titulo.lower()
