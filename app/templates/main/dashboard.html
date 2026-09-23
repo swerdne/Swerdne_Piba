@@ -43,13 +43,13 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <a href="{{ url_for('comunidade.index') }}"
-                   class="hidden sm:inline-flex items-center gap-2 text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                <a href="{{ url_for('comunidade.index') }}" title="Comunidades" aria-label="Comunidades"
+                   class="inline-flex items-center gap-2 text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M9 20H4v-2a4 4 0 014-4h1m5-6a3 3 0 11-6 0 3 3 0 016 0zm6 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
                     </svg>
-                    Comunidades
+                    <span class="hidden sm:inline">Comunidades</span>
                 </a>
 
                 <div class="w-px h-6 bg-current opacity-10 hidden sm:block"></div>
@@ -166,21 +166,6 @@
                                 class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition">
                             Ver configuracoes
                         </button>
-                    </div>
-                </div>
-
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <h2 class="text-sm font-semibold {{ tema.text_primary }}">Comunidades</h2>
-                            <p class="text-sm {{ tema.text_secondary }} mt-1">
-                                Crie comunidades, gerencie membros e monte escalas para cada uma.
-                            </p>
-                        </div>
-                        <a href="{{ url_for('comunidade.index') }}"
-                           class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition text-center shrink-0">
-                            Abrir Comunidades
-                        </a>
                     </div>
                 </div>
             </div>
