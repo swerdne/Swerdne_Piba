@@ -692,9 +692,16 @@ def entrar_via_link(token):
         # So leitura (ja tem papel, entrar de novo nao muda nada) -- seguro
         # em GET. O link generico nunca rebaixa ninguem, so avisa.
         flash(f'Voce ja faz parte de "{comunidade.nome}".', "success")
+        # main.dashboard nao lista comunidades (e so perfil/notificacoes) --
+        # um "membro" simples tambem nao acessa comunidade.detalhe (admin-only,
+        # ver _comunidade_do_usuario_ou_404), entao o destino que sobra pra
+        # ele ver algo de fato e comunidade.escalados (mesma rota que
+        # comunidade/lista.html usa pras comunidades em que so participa).
+        # Sem isso, quem entra por aqui e nao e admin cai numa tela que nao
+        # mostra nenhum indicio de que a entrada funcionou.
         destino = (
             url_for("comunidade.detalhe", comunidade_id=comunidade.id)
-            if papel_existente.papel == "admin" else url_for("main.dashboard")
+            if papel_existente.papel == "admin" else url_for("comunidade.escalados", comunidade_id=comunidade.id)
         )
         return redirect(destino)
 
@@ -703,7 +710,7 @@ def entrar_via_link(token):
         db.session.add(UsuarioComunidade(usuario_id=current_user.id, comunidade_id=comunidade.id, papel="membro"))
         db.session.commit()
         flash(f'Voce entrou em "{comunidade.nome}"!', "success")
-        return redirect(url_for("main.dashboard"))
+        return redirect(url_for("comunidade.escalados", comunidade_id=comunidade.id))
 
     return render_template("comunidade/entrar.html", comunidade=comunidade, precisa_confirmar=True, acao_form=form)
 

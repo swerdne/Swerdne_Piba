@@ -474,6 +474,32 @@ def test_entrar_via_link_deslogado_pede_login_e_completa_depois(logged_in_client
         assert papel.papel == "membro"
 
 
+def test_entrar_via_link_leva_pra_tela_que_mostra_a_comunidade(logged_in_client, app, db):
+    """Bug relatado: quem entra via link (papel=membro) caia de volta no
+    main.dashboard, que e so perfil/notificacoes -- sem nenhuma lista de
+    comunidades nele, ficava parecendo que a entrada nao tinha funcionado.
+    Um "membro" simples tambem nao acessa comunidade.detalhe (admin-only),
+    entao o redirect precisa cair em comunidade.escalados (mesma rota que
+    comunidade/lista.html usa pras comunidades em que so participa) -- ali
+    o nome da comunidade aparece no cabecalho, confirmando visualmente."""
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+
+        resposta = bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=False)
+        assert resposta.status_code == 302
+        assert resposta.headers["Location"] == f"/comunidade/{comunidade_id}/escalados"
+
+        pagina = bruno_client.get(resposta.headers["Location"])
+        assert "Comunidade Ana".encode() in pagina.data
+
+
 def test_token_de_link_invalido_devolve_404(client):
     response = client.get("/comunidade/entrar/token-que-nao-existe")
     assert response.status_code == 404
