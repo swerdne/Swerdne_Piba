@@ -351,10 +351,21 @@ def membros(comunidade_id):
 
     diretorio = Membro.query.filter_by(comunidade_id=comunidade.id).order_by(Membro.nome).all()
 
+    # Diretorio (Membro, acima) e contas vinculadas (UsuarioComunidade) sao
+    # coisas diferentes -- ver models.py -- mas quem entra em "Membros"
+    # esperando ver quem de fato entrou pela comunidade (convite/link)
+    # precisa ver as duas listas, senao a contagem em comunidade.detalhe nao
+    # bate com ninguem aparecendo aqui.
+    contas_vinculadas = sorted(
+        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id).all(),
+        key=lambda uc: (uc.papel, (uc.usuario.name or uc.usuario.username or uc.usuario.email).lower()),
+    )
+
     return render_template(
         "comunidade/membros.html",
         comunidade=comunidade,
         diretorio=diretorio,
+        contas_vinculadas=contas_vinculadas,
         form=form,
         acao_form=AcaoForm(),
         proximo=proximo,

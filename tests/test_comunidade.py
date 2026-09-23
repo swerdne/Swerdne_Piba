@@ -684,6 +684,28 @@ def test_contagem_de_membros_nao_duplica_quem_esta_no_diretorio_e_tem_conta(logg
         assert "(2)" in html_depois
 
 
+def test_tela_de_membros_mostra_quem_entrou_via_link(logged_in_client, app, db):
+    """Bug relatado: a contagem em comunidade.detalhe soma quem entrou via
+    link, mas a tela "Membros" (comunidade.membros) so listava o diretorio
+    de escalacao (Membro) -- quem entrou sem ser adicionado manualmente ao
+    diretorio nao aparecia em lugar nenhum, so no numero."""
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+        bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+
+    with sessao_isolada(app):
+        html = logged_in_client.get(f"/comunidade/{comunidade_id}/membros").data.decode("utf-8")
+        assert "bruno@example.com" in html
+        assert "membro" in html.lower()
+
+
 # --- Notificacao ao entrar via link ------------------------------------------
 
 
