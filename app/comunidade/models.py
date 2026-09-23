@@ -77,6 +77,35 @@ class UsuarioComunidade(db.Model):
         return f"<UsuarioComunidade {self.usuario_id} papel={self.papel} da comunidade {self.comunidade_id}>"
 
 
+class Evento(db.Model):
+    """Evento pontual da Comunidade (ex: conferencia, congresso, culto
+    especial) -- diferente de Escala (app/escala/models.py), que e
+    ensaio/culto de rotina de um Ministerio especifico, com equipe escalada.
+    Evento e so o registro do acontecimento em si (data, local, descricao),
+    sem funcoes/escalacao; comunidade inteira, nao amarrado a 1 ministerio."""
+
+    __tablename__ = "comunidade_eventos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    comunidade_id = db.Column(db.Integer, db.ForeignKey("comunidades.id"), nullable=False)
+    nome = db.Column(db.String(120), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    data = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=True)
+    horario = db.Column(db.Time, nullable=True)
+    local = db.Column(db.String(200), nullable=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    comunidade = db.relationship(
+        "Comunidade", backref=db.backref(
+            "eventos", cascade="all, delete-orphan", order_by="Evento.data"
+        )
+    )
+
+    def __repr__(self):
+        return f"<Evento {self.nome!r} da comunidade {self.comunidade_id}>"
+
+
 def criar_comunidade(usuario_id, nome, descricao=None, imagem=None):
     comunidade = Comunidade(usuario_id=usuario_id, nome=nome, descricao=descricao, imagem=imagem)
     db.session.add(comunidade)

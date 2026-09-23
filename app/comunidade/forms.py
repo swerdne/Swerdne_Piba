@@ -1,7 +1,7 @@
 """Formularios Flask-WTF do modulo comunidade."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileSize
-from wtforms import StringField, TextAreaField, SubmitField, DateField
+from wtforms import StringField, TextAreaField, SubmitField, DateField, TimeField
 from wtforms.validators import DataRequired, Length, Optional, Email
 
 
@@ -39,3 +39,13 @@ class CicloDisponibilidadeForm(FlaskForm):
 class AcaoForm(FlaskForm):
     """Form vazio, usado so para validar o token CSRF em acoes simples (excluir)."""
     pass
+
+
+class EventoForm(FlaskForm):
+    nome = StringField("Nome do evento", validators=[DataRequired(), Length(max=120)])
+    descricao = TextAreaField("Descricao (opcional)", validators=[Optional(), Length(max=2000)])
+    data = DateField("Data de inicio", validators=[DataRequired()])
+    data_fim = DateField("Data de termino (opcional, se for mais de 1 dia)", validators=[Optional()])
+    horario = TimeField("Horario (opcional)", validators=[Optional()])
+    local = StringField("Local (opcional)", validators=[Optional(), Length(max=200)])
+    submit = SubmitField("Criar evento")

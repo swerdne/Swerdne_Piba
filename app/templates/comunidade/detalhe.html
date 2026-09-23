@@ -70,6 +70,11 @@
                 <i class="fa-solid fa-user-tie {{ tema.text_secondary }}"></i>
                 <span class="text-sm {{ tema.text_primary }}">Lideres</span>
             </a>
+            <a href="{{ url_for('comunidade.eventos', comunidade_id=comunidade.id) }}"
+               class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 {{ tema.card_bg_hover }} transition">
+                <i class="fa-solid fa-star {{ tema.text_secondary }}"></i>
+                <span class="text-sm {{ tema.text_primary }}">Eventos</span>
+            </a>
         </div>
 
         <div class="flex items-center justify-between">

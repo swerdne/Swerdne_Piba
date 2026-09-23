@@ -11,8 +11,8 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.comunidade import bp
-from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm
-from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, criar_comunidade
+from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm
+from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade
 from app.ministerio.models import Ministerio
 from app.auth.models import User
 from app.notificacoes import Notificacao
@@ -599,6 +599,69 @@ def lideres(comunidade_id):
         item["telefone"] = membro_vinculado.telefone if membro_vinculado else None
 
     return render_template("comunidade/lideres.html", comunidade=comunidade, lideres=lista_lideres)
+
+
+@bp.route("/<int:comunidade_id>/eventos", methods=["GET", "POST"])
+@login_required
+def eventos(comunidade_id):
+    """Eventos pontuais da comunidade (conferencia, culto especial etc.) --
+    diferente de Escala, que e ensaio/culto de rotina escalado por
+    Ministerio (ver Evento em models.py). Qualquer vinculado ve a lista;
+    so admin cria/exclui."""
+    comunidade, eh_dono = _comunidade_visivel_ou_404(comunidade_id)
+    form = EventoForm()
+
+    if form.validate_on_submit():
+        if not eh_dono:
+            flash("Apenas administradores podem criar eventos.", "danger")
+            return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
+
+        evento = Evento(
+            comunidade_id=comunidade.id,
+            nome=form.nome.data.strip(),
+            descricao=(form.descricao.data or "").strip() or None,
+            data=form.data.data,
+            data_fim=form.data_fim.data,
+            horario=form.horario.data,
+            local=(form.local.data or "").strip() or None,
+        )
+        db.session.add(evento)
+        db.session.commit()
+        flash(f'Evento "{evento.nome}" criado!', "success")
+        return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
+
+    hoje = date.today()
+    todos_eventos = Evento.query.filter_by(comunidade_id=comunidade.id).order_by(Evento.data).all()
+    proximos = [e for e in todos_eventos if (e.data_fim or e.data) >= hoje]
+    passados = [e for e in reversed(todos_eventos) if (e.data_fim or e.data) < hoje]
+
+    return render_template(
+        "comunidade/eventos.html",
+        comunidade=comunidade,
+        eh_dono=eh_dono,
+        form=form,
+        proximos=proximos,
+        passados=passados,
+        acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/<int:comunidade_id>/eventos/<int:evento_id>/excluir", methods=["POST"])
+@login_required
+def excluir_evento(comunidade_id, evento_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    evento = Evento.query.filter_by(id=evento_id, comunidade_id=comunidade.id).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
+
+    nome = evento.nome
+    db.session.delete(evento)
+    db.session.commit()
+    flash(f'Evento "{nome}" excluido.', "success")
+    return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
 
 @bp.route("/<int:comunidade_id>/escalados")

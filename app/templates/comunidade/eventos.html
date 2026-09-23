@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Eventos - {{ comunidade.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio %}
+{% block content %}
+<div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+
+    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <span class="font-semibold {{ tema.text_primary }} truncate">Eventos - {{ comunidade.nome }}</span>
+        </a>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+
+        {% if eh_dono %}
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
+            <h2 class="text-sm font-semibold {{ tema.text_primary }} mb-3">
+                <i class="fa-solid fa-star mr-1"></i>Novo evento
+            </h2>
+            <form method="POST" class="space-y-3">
+                {{ form.hidden_tag() }}
+                <div>
+                    {{ form.nome(
+                        placeholder="Ex: Congresso de Louvor",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                    {% for erro in form.nome.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                        {{ form.data.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ form.data(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                        {% for erro in form.data.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        {{ form.data_fim.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ form.data_fim(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                    <div>
+                        {{ form.horario.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ form.horario(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                </div>
+                <div>
+                    {{ form.local(
+                        placeholder="Local (opcional)",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                </div>
+                <div>
+                    {{ form.descricao(
+                        rows="2", placeholder="Descricao (opcional)",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                </div>
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+                    <i class="fa-solid fa-plus mr-1"></i>Criar evento
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
+                Proximos eventos ({{ proximos|length }})
+            </h2>
+            {% if not proximos %}
+            <div class="text-center py-12">
+                <i class="fa-solid fa-star text-4xl {{ tema.text_secondary }}"></i>
+                <p class="mt-4 {{ tema.text_secondary }}">Nenhum evento marcado ainda.</p>
+            </div>
+            {% endif %}
+            <div class="space-y-2">
+                {% for evento in proximos %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ evento.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }}">
+                                {{ evento.data.strftime('%d/%m/%Y') }}
+                                {% if evento.data_fim and evento.data_fim != evento.data %} a {{ evento.data_fim.strftime('%d/%m/%Y') }}{% endif %}
+                                {% if evento.horario %} &middot; {{ evento.horario.strftime('%H:%M') }}{% endif %}
+                                {% if evento.local %} &middot; {{ evento.local }}{% endif %}
+                            </p>
+                            {% if evento.descricao %}
+                            <p class="text-xs {{ tema.text_secondary }} mt-1">{{ evento.descricao }}</p>
+                            {% endif %}
+                        </div>
+                        {% if eh_dono %}
+                        <form method="POST" action="{{ url_for('comunidade.excluir_evento', comunidade_id=comunidade.id, evento_id=evento.id) }}"
+                              onsubmit="return confirm('Excluir o evento \'{{ evento.nome }}\'?');" class="shrink-0">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" title="Excluir evento" class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if passados %}
+        <div>
+            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
+                Eventos passados ({{ passados|length }})
+            </h2>
+            <div class="space-y-2">
+                {% for evento in passados %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 opacity-60">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ evento.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }}">
+                                {{ evento.data.strftime('%d/%m/%Y') }}
+                                {% if evento.local %} &middot; {{ evento.local }}{% endif %}
+                            </p>
+                        </div>
+                        {% if eh_dono %}
+                        <form method="POST" action="{{ url_for('comunidade.excluir_evento', comunidade_id=comunidade.id, evento_id=evento.id) }}"
+                              onsubmit="return confirm('Excluir o evento \'{{ evento.nome }}\'?');" class="shrink-0">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" title="Excluir evento" class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+    </main>
+</div>
+{% endblock %}

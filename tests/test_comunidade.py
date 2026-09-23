@@ -746,3 +746,156 @@ def test_admin_e_notificado_quando_alguem_entra_via_link(logged_in_client, app, 
         notificacao = Notificacao.query.filter_by(usuario_id=ana.id, tipo="novo_membro").first()
         assert notificacao is not None
         assert "bruno" in notificacao.titulo.lower()
+
+
+# --- Eventos pontuais da comunidade ------------------------------------------
+
+
+def test_admin_cria_evento(logged_in_client, app, db):
+    from app.comunidade.models import Evento
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade.id}/eventos",
+            data={
+                "nome": "Congresso de Louvor",
+                "data": "2026-12-05",
+                "data_fim": "2026-12-07",
+                "horario": "19:00",
+                "local": "Auditorio principal",
+                "descricao": "3 dias de louvor e ensino",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert "Congresso de Louvor" in response.data.decode("utf-8")
+
+        evento = Evento.query.filter_by(comunidade_id=comunidade.id, nome="Congresso de Louvor").first()
+        assert evento is not None
+        assert evento.local == "Auditorio principal"
+        assert str(evento.data_fim) == "2026-12-07"
+
+
+def test_evento_sem_nome_mostra_erro(logged_in_client, app, db):
+    from app.comunidade.models import Evento
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        logged_in_client.post(
+            f"/comunidade/{comunidade.id}/eventos",
+            data={"nome": "", "data": "2026-12-05"},
+            follow_redirects=True,
+        )
+        assert Evento.query.filter_by(comunidade_id=comunidade.id).count() == 0
+
+
+def test_eventos_separa_proximos_de_passados(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        logged_in_client.post(
+            f"/comunidade/{comunidade.id}/eventos",
+            data={"nome": "Evento Futuro", "data": "2099-01-01"},
+            follow_redirects=True,
+        )
+        logged_in_client.post(
+            f"/comunidade/{comunidade.id}/eventos",
+            data={"nome": "Evento Passado", "data": "2020-01-01"},
+            follow_redirects=True,
+        )
+
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}/eventos").data.decode("utf-8")
+        idx_proximos = html.index("Proximos eventos")
+        idx_passados = html.index("Eventos passados")
+        idx_futuro = html.index("Evento Futuro")
+        idx_passado = html.index("Evento Passado")
+        assert idx_proximos < idx_futuro < idx_passados < idx_passado
+
+
+def test_membro_comum_nao_ve_form_de_criar_evento(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+        bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+
+        html = bruno_client.get(f"/comunidade/{comunidade_id}/eventos").data.decode("utf-8")
+        assert "Novo evento" not in html
+
+
+def test_membro_comum_nao_consegue_criar_evento_via_post_direto(logged_in_client, app, db):
+    from app.comunidade.models import Evento
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
+        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+
+    with sessao_isolada(app):
+        bruno_client = app.test_client()
+        _registrar(bruno_client, "bruno", "bruno@example.com")
+        bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
+
+        bruno_client.post(
+            f"/comunidade/{comunidade_id}/eventos",
+            data={"nome": "Evento Invasor", "data": "2099-01-01"},
+            follow_redirects=True,
+        )
+
+    with sessao_isolada(app):
+        assert Evento.query.filter_by(comunidade_id=comunidade_id, nome="Evento Invasor").first() is None
+
+
+def test_admin_exclui_evento(logged_in_client, app, db):
+    from app.comunidade.models import Evento
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        logged_in_client.post(
+            f"/comunidade/{comunidade.id}/eventos",
+            data={"nome": "Evento Teste", "data": "2099-01-01"},
+            follow_redirects=True,
+        )
+        evento = Evento.query.filter_by(comunidade_id=comunidade.id, nome="Evento Teste").first()
+        evento_id = evento.id
+
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade.id}/eventos/{evento_id}/excluir", data={}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        db.session.remove()
+        assert db.session.get(Evento, evento_id) is None
+
+
+def test_usuario_nao_consegue_excluir_evento_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+    from app.comunidade.models import Evento
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        logged_in_client.post(
+            f"/comunidade/{comunidade_id}/eventos",
+            data={"nome": "Evento Teste", "data": "2099-01-01"},
+            follow_redirects=True,
+        )
+        evento_id = Evento.query.filter_by(comunidade_id=comunidade_id, nome="Evento Teste").first().id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.post(
+            f"/comunidade/{comunidade_id}/eventos/{evento_id}/excluir", data={}, follow_redirects=True
+        )
+        assert response.status_code == 404
+
+    with sessao_isolada(app):
+        assert Evento.query.get(evento_id) is not None
+
+
+def test_eventos_sem_login_redireciona(client):
+    response = client.get("/comunidade/1/eventos", follow_redirects=False)
+    assert response.status_code == 302
