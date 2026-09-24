@@ -47,8 +47,19 @@ class Config:
 
     # Envio de WhatsApp via Twilio (mesma conta do SMS, ver app/whatsapp.py) --
     # numero de WhatsApp habilitado no Twilio (sandbox: "+14155238886"; em
-    # producao, o numero de WhatsApp Business verificado).
+    # producao, o numero de WhatsApp Business verificado). Guardado pra uso
+    # futuro -- o envio de WhatsApp hoje usa a Meta Cloud API (variaveis
+    # abaixo), que tem camada gratuita, sem precisar de conta paga no Twilio.
     TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM")
+
+    # Envio de WhatsApp via Meta Cloud API direto (ver app/whatsapp.py) --
+    # META_WHATSAPP_TOKEN e o token de acesso do app no Meta for Developers,
+    # META_WHATSAPP_PHONE_ID e o id do numero de telefone do WhatsApp
+    # Business configurado la. Camada gratuita generosa (sem custo pra uso
+    # de uma igreja), diferente do Twilio (que exige conta paga pra criar
+    # os Templates de mensagem proativa).
+    META_WHATSAPP_TOKEN = os.environ.get("META_WHATSAPP_TOKEN")
+    META_WHATSAPP_PHONE_ID = os.environ.get("META_WHATSAPP_PHONE_ID")
 
     # Cadastro tradicional: confere se o dominio do e-mail tem registro MX (ou
     # A) antes de aceitar o cadastro (ver app/auth/dominio_email.py). Flag pra
@@ -80,6 +91,8 @@ class TestingConfig(Config):
     TWILIO_AUTH_TOKEN = None
     TWILIO_FROM_NUMBER = None
     TWILIO_WHATSAPP_FROM = None
+    META_WHATSAPP_TOKEN = None
+    META_WHATSAPP_PHONE_ID = None
 
     # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
     VALIDAR_DOMINIO_EMAIL = False

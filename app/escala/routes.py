@@ -36,6 +36,7 @@ from app.escala.models import (
 )
 from app.emailing import enviar_email, EmailNaoEnviadoError
 from app.sms import enviar_sms, SmsNaoEnviadoError
+from app.whatsapp import enviar_whatsapp_template, WhatsappNaoEnviadoError
 from app.whatsapp import enviar_whatsapp, WhatsappNaoEnviadoError
 from app.auth.models import User
 from app.notificacoes import Notificacao
@@ -723,7 +724,11 @@ def _disparar_notificacoes_em_paralelo(tarefas):
                 except SmsNaoEnviadoError:
                     pass
                 try:
-                    enviar_whatsapp(destinatario=tarefa["telefone"], corpo=tarefa["mensagem"])
+                    enviar_whatsapp_template(
+                        destinatario=tarefa["telefone"],
+                        nome_template=tarefa["wa_template"],
+                        parametros=tarefa["wa_parametros"],
+                    )
                     resultado["whatsapp_ok"] = True
                 except WhatsappNaoEnviadoError:
                     pass
@@ -755,6 +760,7 @@ def enviar_notificacoes_da_escala(escala):
     (24h/16h antes do evento) -- ver app/escala/agendador.py.
     """
     escalados = [f for f in escala.funcoes if f.membro_id is not None]
+    data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
 
     tarefas = [
         {
@@ -763,6 +769,8 @@ def enviar_notificacoes_da_escala(escala):
             "telefone": funcao.membro.telefone,
             "mensagem": mensagem_para(escala, funcao, funcao.membro),
             "assunto": f"Voce foi escalado(a): {funcao.nome} - {escala.nome}",
+            "wa_template": "pibachurch_escalado",
+            "wa_parametros": [funcao.membro.nome, funcao.nome, escala.nome, data_texto],
         }
         for funcao in escalados
     ]
@@ -887,7 +895,15 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
                 sms_falhas += 1
 
             try:
-                enviar_whatsapp(destinatario=membro.telefone, corpo=mensagem)
+                enviar_whatsapp_template(
+                    destinatario=membro.telefone,
+                    nome_template="pibachurch_alteracao",
+                    parametros=[
+                        escala.nome,
+                        f"{data_antiga_texto}{horario_antigo_texto}",
+                        f"{data_nova_texto}{horario_novo_texto}",
+                    ],
+                )
                 whatsapp_enviados += 1
             except WhatsappNaoEnviadoError:
                 whatsapp_falhas += 1
@@ -953,7 +969,11 @@ def enviar_notificacao_de_cancelamento(escala):
                 sms_falhas += 1
 
             try:
-                enviar_whatsapp(destinatario=membro.telefone, corpo=mensagem)
+                enviar_whatsapp_template(
+                    destinatario=membro.telefone,
+                    nome_template="pibachurch_cancelamento",
+                    parametros=[escala.nome, data_texto],
+                )
                 whatsapp_enviados += 1
             except WhatsappNaoEnviadoError:
                 whatsapp_falhas += 1
