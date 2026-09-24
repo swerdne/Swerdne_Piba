@@ -36,6 +36,7 @@ from app.escala.models import (
 )
 from app.emailing import enviar_email, EmailNaoEnviadoError
 from app.sms import enviar_sms, SmsNaoEnviadoError
+from app.whatsapp import enviar_whatsapp, WhatsappNaoEnviadoError
 from app.auth.models import User
 from app.notificacoes import Notificacao
 
@@ -227,6 +228,8 @@ def editar(escala_id):
                 partes.append(f"{resultado['email_enviados']} e-mail(s) enviado(s)")
             if resultado["sms_enviados"]:
                 partes.append(f"{resultado['sms_enviados']} SMS enviado(s)")
+            if resultado["whatsapp_enviados"]:
+                partes.append(f"{resultado['whatsapp_enviados']} WhatsApp enviado(s)")
             aviso = f" Equipe avisada da mudanca: {', '.join(partes)}." if partes else ""
             mensagens.append(f"Data/horario atualizados.{aviso}")
         if not mensagens:
@@ -690,21 +693,22 @@ _TIMEOUT_TOTAL_NOTIFICACAO_SEGUNDOS = 20
 
 
 def _disparar_notificacoes_em_paralelo(tarefas):
-    """Dispara e-mail/SMS de cada tarefa ao mesmo tempo (nao uma por vez).
+    """Dispara e-mail/SMS/WhatsApp de cada tarefa ao mesmo tempo (nao uma por vez).
 
     So faz chamada de rede -- nunca toca no ORM/sessao do banco, que nao e
     thread-safe entre threads diferentes. `tarefas` e uma lista de dicts com
     dados ja extraidos (nao objetos do SQLAlchemy), pra cada worker ficar
     isolado de qualquer estado da sessao da request original.
     """
-    resultados = {t["funcao_id"]: {"email_ok": False, "sms_ok": False} for t in tarefas}
+    resultado_vazio = {"email_ok": False, "sms_ok": False, "whatsapp_ok": False}
+    resultados = {t["funcao_id"]: dict(resultado_vazio) for t in tarefas}
     if not tarefas:
         return resultados
 
     app_obj = current_app._get_current_object()
 
     def _enviar_para_uma_tarefa(tarefa):
-        resultado = {"email_ok": False, "sms_ok": False}
+        resultado = dict(resultado_vazio)
         with app_obj.app_context():
             if tarefa["email"]:
                 try:
@@ -717,6 +721,11 @@ def _disparar_notificacoes_em_paralelo(tarefas):
                     enviar_sms(destinatario=tarefa["telefone"], corpo=tarefa["mensagem"])
                     resultado["sms_ok"] = True
                 except SmsNaoEnviadoError:
+                    pass
+                try:
+                    enviar_whatsapp(destinatario=tarefa["telefone"], corpo=tarefa["mensagem"])
+                    resultado["whatsapp_ok"] = True
+                except WhatsappNaoEnviadoError:
                     pass
         return tarefa["funcao_id"], resultado
 
@@ -762,6 +771,7 @@ def enviar_notificacoes_da_escala(escala):
     notificacoes_app = 0
     email_enviados = email_falhas = 0
     sms_enviados = sms_falhas = 0
+    whatsapp_enviados = whatsapp_falhas = 0
     sem_contato = 0
 
     for funcao in escalados:
@@ -795,6 +805,12 @@ def enviar_notificacoes_da_escala(escala):
             else:
                 sms_falhas += 1
 
+            if resultado["whatsapp_ok"]:
+                whatsapp_enviados += 1
+                notificou_algum_canal = True
+            else:
+                whatsapp_falhas += 1
+
         if not membro.email and not membro.telefone:
             sem_contato += 1
 
@@ -810,6 +826,8 @@ def enviar_notificacoes_da_escala(escala):
         "email_falhas": email_falhas,
         "sms_enviados": sms_enviados,
         "sms_falhas": sms_falhas,
+        "whatsapp_enviados": whatsapp_enviados,
+        "whatsapp_falhas": whatsapp_falhas,
         "sem_contato": sem_contato,
     }
 
@@ -836,6 +854,7 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
     notificacoes_app = 0
     email_enviados = email_falhas = 0
     sms_enviados = sms_falhas = 0
+    whatsapp_enviados = whatsapp_falhas = 0
 
     for funcao in escalados:
         membro = funcao.membro
@@ -867,6 +886,12 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
             except SmsNaoEnviadoError:
                 sms_falhas += 1
 
+            try:
+                enviar_whatsapp(destinatario=membro.telefone, corpo=mensagem)
+                whatsapp_enviados += 1
+            except WhatsappNaoEnviadoError:
+                whatsapp_falhas += 1
+
     db.session.commit()
 
     return {
@@ -875,6 +900,8 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
         "email_falhas": email_falhas,
         "sms_enviados": sms_enviados,
         "sms_falhas": sms_falhas,
+        "whatsapp_enviados": whatsapp_enviados,
+        "whatsapp_falhas": whatsapp_falhas,
     }
 
 
@@ -891,6 +918,7 @@ def enviar_notificacao_de_cancelamento(escala):
     notificacoes_app = 0
     email_enviados = email_falhas = 0
     sms_enviados = sms_falhas = 0
+    whatsapp_enviados = whatsapp_falhas = 0
 
     for funcao in escalados:
         membro = funcao.membro
@@ -924,6 +952,12 @@ def enviar_notificacao_de_cancelamento(escala):
             except SmsNaoEnviadoError:
                 sms_falhas += 1
 
+            try:
+                enviar_whatsapp(destinatario=membro.telefone, corpo=mensagem)
+                whatsapp_enviados += 1
+            except WhatsappNaoEnviadoError:
+                whatsapp_falhas += 1
+
     db.session.commit()
 
     return {
@@ -932,6 +966,8 @@ def enviar_notificacao_de_cancelamento(escala):
         "email_falhas": email_falhas,
         "sms_enviados": sms_enviados,
         "sms_falhas": sms_falhas,
+        "whatsapp_enviados": whatsapp_enviados,
+        "whatsapp_falhas": whatsapp_falhas,
     }
 
 
@@ -967,6 +1003,8 @@ def cancelar_escala(escala_id):
         partes.append(f"{resultado['email_enviados']} e-mail(s) enviado(s)")
     if resultado["sms_enviados"]:
         partes.append(f"{resultado['sms_enviados']} SMS enviado(s)")
+    if resultado["whatsapp_enviados"]:
+        partes.append(f"{resultado['whatsapp_enviados']} WhatsApp enviado(s)")
     aviso = f" Equipe avisada: {', '.join(partes)}." if partes else ""
 
     flash(f'Escala "{escala.nome}" cancelada.{aviso}', "success")
@@ -1018,14 +1056,21 @@ def notificar_escala(escala_id):
         partes.append(f"{resultado['email_enviados']} e-mail(s) enviado(s)")
     if resultado["sms_enviados"]:
         partes.append(f"{resultado['sms_enviados']} SMS enviado(s)")
+    if resultado["whatsapp_enviados"]:
+        partes.append(f"{resultado['whatsapp_enviados']} WhatsApp enviado(s)")
     if resultado["email_falhas"]:
         partes.append(f"{resultado['email_falhas']} e-mail(s) falharam")
     if resultado["sms_falhas"]:
         partes.append(f"{resultado['sms_falhas']} SMS falharam")
+    if resultado["whatsapp_falhas"]:
+        partes.append(f"{resultado['whatsapp_falhas']} WhatsApp falharam")
     if resultado["sem_contato"]:
         partes.append(f"{resultado['sem_contato']} sem e-mail/telefone cadastrado")
 
-    houve_sucesso = bool(resultado["notificacoes_app"] or resultado["email_enviados"] or resultado["sms_enviados"])
+    houve_sucesso = bool(
+        resultado["notificacoes_app"] or resultado["email_enviados"]
+        or resultado["sms_enviados"] or resultado["whatsapp_enviados"]
+    )
     flash(", ".join(partes) + "." if partes else "Nada foi enviado.", "success" if houve_sucesso else "danger")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
 

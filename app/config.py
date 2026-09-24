@@ -45,6 +45,11 @@ class Config:
     TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
     TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 
+    # Envio de WhatsApp via Twilio (mesma conta do SMS, ver app/whatsapp.py) --
+    # numero de WhatsApp habilitado no Twilio (sandbox: "+14155238886"; em
+    # producao, o numero de WhatsApp Business verificado).
+    TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM")
+
     # Cadastro tradicional: confere se o dominio do e-mail tem registro MX (ou
     # A) antes de aceitar o cadastro (ver app/auth/dominio_email.py). Flag pra
     # poder desligar sem mexer em codigo (ex.: se a checagem de DNS comecar a
@@ -74,6 +79,7 @@ class TestingConfig(Config):
     TWILIO_ACCOUNT_SID = None
     TWILIO_AUTH_TOKEN = None
     TWILIO_FROM_NUMBER = None
+    TWILIO_WHATSAPP_FROM = None
 
     # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
     VALIDAR_DOMINIO_EMAIL = False

@@ -385,6 +385,7 @@ def test_notificar_sem_twilio_configurado_nao_derruba_o_servidor(logged_in_clien
         assert response.status_code == 200
         assert "Internal Server Error" not in html
         assert "SMS falharam" in html
+        assert "WhatsApp falharam" in html
 
 
 def test_notificar_membro_com_email_e_telefone_tenta_os_dois_canais(logged_in_client, app, db):
@@ -405,6 +406,7 @@ def test_notificar_membro_com_email_e_telefone_tenta_os_dois_canais(logged_in_cl
         assert response.status_code == 200
         assert "e-mail(s) falharam" in html
         assert "SMS falharam" in html
+        assert "WhatsApp falharam" in html
 
 
 def test_notificar_membro_sem_contato_e_contabilizado(logged_in_client, app, db):
