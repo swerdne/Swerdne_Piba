@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Fonte exclusiva da marca "TyBenson" (Poppins, carregada via Google Fonts
+   em base.html) -- gera a classe utilitaria `font-marca`, usada em todo
+   lugar que o nome da marca aparece (dashboard, telas de auth, index). */
+@theme {
+  --font-marca: "Poppins", ui-sans-serif, system-ui, sans-serif;
+}
+
 /* Garante que o Tailwind escaneie os templates Jinja em busca de classes.
    (Deteccao automatica ja cobriria isso, mas ser explicito evita surpresas.) */
 @source "../../templates";

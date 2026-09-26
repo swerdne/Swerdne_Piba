@@ -7,6 +7,12 @@
     app/whatsapp.py) -- confirma que somos donos de pibaswerdne.me. -->
     <meta name="facebook-domain-verification" content="gtbhl8kn8it0k8sgl1npq55rfib2p6" />
     <title>{% block title %}TyBenson{% endblock %}</title>
+    <!-- Fonte da marca "TyBenson" (usada via classe font-marca, ver
+    input.css) -- carregada aqui no base.html pra ficar disponivel em toda
+    pagina que exibe o nome, sem cada template precisar declarar de novo. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
     <!-- PWA: instalavel como app (icone proprio, sem barra de navegador) --
