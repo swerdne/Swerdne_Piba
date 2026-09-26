@@ -340,7 +340,7 @@ _REGRAS_CHAT = [
 
     # --- Marca ------------------------------------------------------------
     (re.compile(r"pibachurch|swerdne|quem (fez|criou|desenvolveu)", re.I),
-     "O Pibachurch e um sistema de gestao pra igrejas e comunidades -- escalas, ministerios, convites e "
+     "O TyBenson e um sistema de gestao pra igrejas e comunidades -- escalas, ministerios, convites e "
      "notificacoes automaticas, tudo num so lugar."),
 
     # --- Pequena conversa ---------------------------------------------------

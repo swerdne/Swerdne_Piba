@@ -33,7 +33,7 @@ def _notificar_senha_alterada(user):
         enviar_email(
             user.email,
             "Sua senha foi alterada",
-            "A senha da sua conta Pibachurch acabou de ser alterada. "
+            "A senha da sua conta TyBenson acabou de ser alterada. "
             "Se foi voce, pode ignorar este e-mail. Se nao foi voce, "
             "redefina sua senha imediatamente pelo link 'Esqueci minha senha' na tela de login.",
         )
@@ -110,7 +110,7 @@ def esqueci_senha():
                 enviar_email(
                     user.email,
                     "Redefinicao de senha",
-                    f"Recebemos um pedido pra redefinir a senha da sua conta Pibachurch.\n\n"
+                    f"Recebemos um pedido pra redefinir a senha da sua conta TyBenson.\n\n"
                     f"Clique no link abaixo pra escolher uma nova senha (valido por 1 hora):\n{link}\n\n"
                     "Se voce nao pediu isso, pode ignorar este e-mail -- sua senha continua a mesma.",
                 )

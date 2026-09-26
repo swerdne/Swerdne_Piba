@@ -1,6 +1,6 @@
 {
-    "name": "Pibachurch",
-    "short_name": "Pibachurch",
+    "name": "TyBenson",
+    "short_name": "TyBenson",
     "description": "Gestao de comunidades, ministerios e escalas.",
     "start_url": "/dashboard",
     "scope": "/",
