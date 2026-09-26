@@ -33,6 +33,37 @@ _FRASES_429 = [
     "Muitas tentativas seguidas. Espera um minuto e tenta outra vez.",
 ]
 
+# Fallback de ultimo recurso pro erro 500: nao estende base.html nem usa o
+# context processor de tema (que consulta o banco via current_user) -- se o
+# banco estiver de fato fora do ar, erro.html tambem falharia ao renderizar,
+# e sem isso o usuario cairia na tela crua e sem estilo padrao do Werkzeug.
+_PAGINA_500_MINIMA = """<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Erro 500 · TyBenson</title>
+<style>
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:#0f172a; color:#e5e7eb; font-family:ui-sans-serif,system-ui,sans-serif; padding:24px; }
+  .caixa { max-width:28rem; text-align:center; }
+  .codigo { font-size:.75rem; font-weight:600; color:#818cf8; text-transform:uppercase; letter-spacing:.05em; }
+  h1 { margin:.5rem 0 0; font-size:1.5rem; font-weight:700; color:#f9fafb; }
+  p { margin-top:.75rem; color:#9ca3af; }
+  a { display:inline-flex; margin-top:2rem; background:#4f46e5; color:#fff; text-decoration:none;
+      font-size:.875rem; font-weight:600; padding:.625rem 1.25rem; border-radius:.5rem; }
+</style>
+</head>
+<body>
+  <div class="caixa">
+    <p class="codigo">Erro 500</p>
+    <h1>Algo deu errado no servidor</h1>
+    <p>Nosso servidor tambem tem dias dificeis. Ja fomos avisados.</p>
+    <a href="/">Voltar para o inicio</a>
+  </div>
+</body>
+</html>"""
+
 
 def registrar_error_handlers(app):
     @app.errorhandler(404)
@@ -60,15 +91,29 @@ def registrar_error_handlers(app):
         # A excecao original pode ter deixado a sessao do banco num estado
         # pendente de rollback -- sem isso, ate o carregamento do usuario
         # logado (current_user, usado pelo tema via context processor) pode
-        # falhar de novo so de tentar renderizar essa propria pagina.
-        db.session.rollback()
-        return render_template(
-            "errors/erro.html",
-            codigo=500,
-            titulo="Algo deu errado no servidor",
-            frases=_FRASES_500,
-            icone="fa-triangle-exclamation",
-        ), 500
+        # falhar de novo so de tentar renderizar essa propria pagina. Se o
+        # banco estiver de fato inacessivel (ex: credencial errada, host
+        # fora do ar), o proprio rollback() pode levantar -- sem o
+        # try/except, isso derruba essa pagina de erro tambem, e o usuario
+        # cai na tela crua e sem estilo do Werkzeug em vez desta aqui.
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            return render_template(
+                "errors/erro.html",
+                codigo=500,
+                titulo="Algo deu errado no servidor",
+                frases=_FRASES_500,
+                icone="fa-triangle-exclamation",
+            ), 500
+        except Exception:
+            # erro.html estende base.html, que consulta o banco via
+            # current_user (context processor de tema) -- se o banco
+            # estiver de fato fora do ar, essa consulta falha de novo e
+            # cai aqui, na versao minima que nao depende de banco nenhum.
+            return _PAGINA_500_MINIMA, 500
 
     @app.errorhandler(429)
     def erro_429(error):

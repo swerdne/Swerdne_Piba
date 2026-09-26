@@ -58,3 +58,30 @@ def test_pagina_500_nao_derruba_a_app_e_mostra_pagina_estilizada(app, client):
     assert response.status_code == 500
     assert "Erro 500".encode() in response.data
     assert "Algo deu errado no servidor".encode() in response.data
+
+
+def test_pagina_500_cai_no_fallback_minimo_se_o_banco_tambem_estiver_fora_do_ar(app, client, monkeypatch):
+    """erro.html estende base.html, que consulta o banco via current_user
+    (context processor de tema) -- se o banco estiver de fato inacessivel,
+    essa propria renderizacao falha. Sem um fallback que nao depende de
+    banco nenhum, o usuario cairia na tela crua e sem estilo do Werkzeug."""
+    import app.errors as errors_module
+
+    def _render_quebrado(*args, **kwargs):
+        raise RuntimeError("banco indisponivel, nem a pagina de erro renderiza")
+
+    monkeypatch.setattr(errors_module, "render_template", _render_quebrado)
+
+    @app.route("/_teste-erro-500-com-banco-fora-do-ar")
+    def _rota_teste_500_fallback():
+        raise RuntimeError("erro proposital")
+
+    app.config["PROPAGATE_EXCEPTIONS"] = False
+    app.testing = False
+    client.testing = False
+
+    response = client.get("/_teste-erro-500-com-banco-fora-do-ar")
+
+    assert response.status_code == 500
+    assert "Algo deu errado no servidor".encode() in response.data
+    assert "Voltar para o inicio".encode() in response.data
