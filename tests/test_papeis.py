@@ -89,6 +89,84 @@ def test_nao_admin_nao_acessa_tela_de_papeis(logged_in_client, outro_logged_in_c
         assert response.status_code == 404
 
 
+# --- Alterar papel (promover membro a admin / rebaixar admin a membro) ----------
+
+def test_admin_promove_membro_a_admin(logged_in_client, app, db):
+    # Setup e acao em sessao_isolada separadas: registrar bruno (um segundo
+    # "login" de fato, via app.test_client()) dentro do MESMO app_context da
+    # acao contaminaria o cache de current_user do Flask-Login (preso a
+    # flask.g, ver sessao_isolada em conftest.py) e a acao seguinte, feita
+    # como ana, seria avaliada com o usuario errado.
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        comunidade_id = comunidade.id
+        bruno = _registrar(app.test_client(), "bruno", "bruno@example.com")
+        db.session.add(UsuarioComunidade(usuario_id=bruno.id, comunidade_id=comunidade_id, papel="membro"))
+        db.session.commit()
+        papel_bruno_id = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first().id
+
+    with sessao_isolada(app):
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade_id}/papeis/{papel_bruno_id}/alterar-papel", follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert "agora e administrador".encode() in response.data
+
+        atualizado = db.session.get(UsuarioComunidade, papel_bruno_id)
+        assert atualizado.papel == "admin"
+
+
+def test_admin_rebaixa_outro_admin_a_membro(logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        comunidade_id = comunidade.id
+        bruno = _registrar(app.test_client(), "bruno", "bruno@example.com")
+        db.session.add(UsuarioComunidade(usuario_id=bruno.id, comunidade_id=comunidade_id, papel="admin"))
+        db.session.commit()
+        papel_bruno_id = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first().id
+
+    with sessao_isolada(app):
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade_id}/papeis/{papel_bruno_id}/alterar-papel", follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert "agora e membro".encode() in response.data
+
+        atualizado = db.session.get(UsuarioComunidade, papel_bruno_id)
+        assert atualizado.papel == "membro"
+
+
+def test_nao_pode_rebaixar_o_ultimo_admin(logged_in_client, app, db):
+    """Sem esse bloqueio, o unico admin poderia se rebaixar (ou rebaixar o
+    unico outro admin) e ninguem mais conseguiria acessar /papeis pra
+    reverter -- ver comentario em alterar_papel."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ana = User.query.filter_by(email="ana@example.com").first()
+        papel_ana = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade.id).first()
+
+        response = logged_in_client.post(
+            f"/comunidade/{comunidade.id}/papeis/{papel_ana.id}/alterar-papel", follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert "ultimo administrador".encode() in response.data
+
+        atualizado = db.session.get(UsuarioComunidade, papel_ana.id)
+        assert atualizado.papel == "admin"
+
+
+def test_nao_admin_nao_pode_alterar_papel(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        comunidade_id = comunidade.id
+        ana = User.query.filter_by(email="ana@example.com").first()
+        papel_ana_id = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade_id).first().id
+
+    with sessao_isolada(app):
+        response = outro_logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/{papel_ana_id}/alterar-papel")
+        assert response.status_code == 404
+
+
 # --- Aceitar/recusar convite -------------------------------------------------
 
 def test_aceitar_convite_de_comunidade_cria_papel_e_da_acesso(logged_in_client, outro_logged_in_client, app, db):

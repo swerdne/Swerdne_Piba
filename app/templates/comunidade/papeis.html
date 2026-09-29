@@ -120,6 +120,19 @@
                         <p class="text-xs {{ tema.text_secondary }} truncate">{{ papel.usuario.email }}</p>
                     </div>
                     <span class="text-[11px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-2 py-1 shrink-0">{{ papel.papel }}</span>
+                    <form method="POST" action="{{ url_for('comunidade.alterar_papel', comunidade_id=comunidade.id, usuario_comunidade_id=papel.id) }}"
+                          onsubmit="return confirm('{{ 'Rebaixar' if papel.papel == 'admin' else 'Promover' }} {{ papel.usuario.name or papel.usuario.email }} {{ 'a membro' if papel.papel == 'admin' else 'a administrador(a)' }}?');">
+                        {{ acao_form.hidden_tag() }}
+                        {% if papel.papel == 'admin' %}
+                        <button type="submit" aria-label="Rebaixar a membro" title="Rebaixar a membro" class="{{ tema.text_secondary }} hover:text-amber-500 transition shrink-0">
+                            <i class="fa-solid fa-arrow-down"></i>
+                        </button>
+                        {% else %}
+                        <button type="submit" aria-label="Promover a administrador" title="Promover a administrador" class="{{ tema.text_secondary }} hover:text-green-500 transition shrink-0">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </button>
+                        {% endif %}
+                    </form>
                     <form method="POST" action="{{ url_for('comunidade.remover_papel', comunidade_id=comunidade.id, usuario_comunidade_id=papel.id) }}"
                           onsubmit="return confirm('Remover {{ papel.usuario.name or papel.usuario.email }} dos papeis desta comunidade?');">
                         {{ acao_form.hidden_tag() }}

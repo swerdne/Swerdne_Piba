@@ -860,6 +860,40 @@ def remover_papel(comunidade_id, usuario_comunidade_id):
     return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
 
+@bp.route("/<int:comunidade_id>/papeis/<int:usuario_comunidade_id>/alterar-papel", methods=["POST"])
+@login_required
+def alterar_papel(comunidade_id, usuario_comunidade_id):
+    """Promove um membro a admin ou rebaixa um admin a membro -- alterna
+    entre os dois unicos valores de PAPEIS_COMUNIDADE. Bloqueia rebaixar o
+    ultimo admin: sem essa checagem, a comunidade ficaria sem ninguem capaz
+    de acessar /papeis (_comunidade_do_usuario_ou_404 exige papel=admin ou
+    ser o dono original) pra reverter o proprio erro."""
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    papel = UsuarioComunidade.query.filter_by(id=usuario_comunidade_id, comunidade_id=comunidade.id).first_or_404()
+    form = AcaoForm()
+
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+    nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
+
+    if papel.papel == "admin":
+        total_admins = UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").count()
+        if total_admins <= 1:
+            flash("Nao e possivel rebaixar o ultimo administrador. Promova outra pessoa antes.", "danger")
+            return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+        papel.papel = "membro"
+        db.session.commit()
+        flash(f"{nome} agora e membro (nao e mais administrador).", "success")
+    else:
+        papel.papel = "admin"
+        db.session.commit()
+        flash(f"{nome} agora e administrador(a) da comunidade.", "success")
+
+    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+
+
 @bp.route("/<int:comunidade_id>/papeis/convite/<int:convite_id>/cancelar", methods=["POST"])
 @login_required
 def cancelar_convite(comunidade_id, convite_id):
