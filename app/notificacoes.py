@@ -5,35 +5,33 @@ Fica fora dos blueprints porque e usado tanto por quem PRODUZ notificacoes
 """
 from datetime import datetime, timezone
 
-from app.extensions import db
+import mongoengine
+from app.db_utils import SequentialIdDocument
 
 
-class Notificacao(db.Model):
-    __tablename__ = "notificacoes"
+class Notificacao(SequentialIdDocument):
+    meta = {"collection": "notificacoes"}
+    _nome_sequencia = "notificacoes"
 
-    id = db.Column(db.Integer, primary_key=True)
-    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver
-    # `usuario` abaixo (property, no lugar do antigo db.relationship).
-    usuario_id = db.Column(db.Integer, nullable=False)
-    titulo = db.Column(db.String(120), nullable=False)
-    mensagem = db.Column(db.Text, nullable=False)
-    lida = db.Column(db.Boolean, nullable=False, default=False)
-    criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    usuario_id = mongoengine.IntField(required=True)
+    titulo = mongoengine.StringField(required=True, max_length=120)
+    mensagem = mongoengine.StringField(required=True)
+    lida = mongoengine.BooleanField(required=True, default=False)
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     # escala_id: pra que serve a notificacao ser agrupavel por Escala no sino
-    # do Dashboard (ver main.routes.dashboard). Nullable porque notificacoes
-    # antigas (antes desse campo existir) nao tem como saber a que escala se
-    # referiam sem parsear o texto -- ficam sem grupo, tipo "geral".
+    # do Dashboard (ver main.routes.dashboard). None pra notificacoes
+    # antigas (antes desse campo existir) que nao tem como saber a que
+    # escala se referiam sem parsear o texto -- ficam sem grupo, tipo "geral".
     # tipo: categoria pra icone/agrupamento na UI -- "escalado", "alteracao",
     # "confirmado", "presente", "troca_solicitada", "troca_aprovada",
-    # "troca_recusada". Nullable pelo mesmo motivo (retrocompatibilidade).
-    # Sem ForeignKey("escalas.id", ondelete="SET NULL") -- Escala agora vive
-    # no MongoDB, sem SET NULL automatico do banco: se a Escala referenciada
-    # for apagada, escala_id fica com um id que nao existe mais, mas
-    # `escala` abaixo ja devolve None nesse caso (mesmo resultado pra quem
-    # le, so o campo cru em si nao fica limpo).
-    escala_id = db.Column(db.Integer, nullable=True)
-    tipo = db.Column(db.String(30), nullable=True)
+    # "troca_recusada". None pelo mesmo motivo (retrocompatibilidade).
+    # Sem cascade/reverse_delete_rule -- se a Escala referenciada for
+    # apagada, escala_id fica com um id que nao existe mais, mas `escala`
+    # abaixo ja devolve None nesse caso (mesmo resultado pra quem le, so o
+    # campo cru em si nao fica limpo).
+    escala_id = mongoengine.IntField()
+    tipo = mongoengine.StringField(max_length=30)
 
     @property
     def usuario(self):

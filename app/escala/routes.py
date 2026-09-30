@@ -146,13 +146,13 @@ def _notificar_lideres_do_ministerio(escala, titulo, mensagem, tipo):
     from app.ministerio.routes import _lideres_do_ministerio
 
     for lider in _lideres_do_ministerio(escala.ministerio):
-        db.session.add(Notificacao(
+        Notificacao(
             usuario_id=lider.id,
             titulo=titulo,
             mensagem=mensagem,
             escala_id=escala.id,
             tipo=tipo,
-        ))
+        ).save()
 
 
 @bp.route("/")
@@ -741,7 +741,6 @@ def atualizar_status(funcao_id):
             if funcao.troca_motivo:
                 mensagem += f" Motivo: {funcao.troca_motivo}"
         _notificar_lideres_do_ministerio(funcao.escala, titulo, mensagem, tipo=status_novo)
-        db.session.commit()
 
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
@@ -789,7 +788,7 @@ def aprovar_troca(funcao_id):
     if membro_antigo_email:
         usuario_antigo = User.objects(email=membro_antigo_email).first()
         if usuario_antigo:
-            db.session.add(Notificacao(
+            Notificacao(
                 usuario_id=usuario_antigo.id,
                 titulo=f"Troca aprovada: {nome_funcao}",
                 mensagem=(
@@ -798,8 +797,7 @@ def aprovar_troca(funcao_id):
                 ),
                 escala_id=escala_id_notif,
                 tipo="troca_aprovada",
-            ))
-            db.session.commit()
+            ).save()
 
     flash(f"Troca aprovada: {novo_membro.nome} assume {nome_funcao}.", "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
@@ -831,14 +829,13 @@ def recusar_troca(funcao_id):
     if membro_email:
         usuario = User.objects(email=membro_email).first()
         if usuario:
-            db.session.add(Notificacao(
+            Notificacao(
                 usuario_id=usuario.id,
                 titulo=f"Troca recusada: {nome_funcao}",
                 mensagem=f"Sua solicitacao de troca em {nome_funcao} ({nome_escala}) foi recusada.",
                 escala_id=escala_id_notif,
                 tipo="troca_recusada",
-            ))
-            db.session.commit()
+            ).save()
 
     flash("Solicitacao de troca recusada.", "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
@@ -953,13 +950,13 @@ def enviar_notificacoes_da_escala(escala):
             # isso e um EXTRA, nao substitui o e-mail.
             usuario_vinculado = User.objects(email=membro.email).first()
             if usuario_vinculado:
-                db.session.add(Notificacao(
+                Notificacao(
                     usuario_id=usuario_vinculado.id,
                     titulo=f"Voce foi escalado(a) para {funcao.nome}",
                     mensagem=f"{escala.nome} ({escala.departamento}) - {funcao.nome}.",
                     escala_id=escala.id,
                     tipo="escalado",
-                ))
+                ).save()
                 notificacoes_app += 1
                 notificou_algum_canal = True
 
@@ -988,8 +985,6 @@ def enviar_notificacoes_da_escala(escala):
         if notificou_algum_canal:
             marcar_notificado(funcao)
             funcao.save()
-
-    db.session.commit()
 
     return {
         "escalados": len(escalados),
@@ -1034,13 +1029,13 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
         if membro.email:
             usuario_vinculado = User.objects(email=membro.email).first()
             if usuario_vinculado:
-                db.session.add(Notificacao(
+                Notificacao(
                     usuario_id=usuario_vinculado.id,
                     titulo=f"Mudanca de data: {escala.nome}",
                     mensagem=mensagem,
                     escala_id=escala.id,
                     tipo="alteracao",
-                ))
+                ).save()
                 notificacoes_app += 1
 
             try:
@@ -1074,8 +1069,6 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
             except WhatsappNaoEnviadoError:
                 whatsapp_falhas += 1
 
-    db.session.commit()
-
     return {
         "notificacoes_app": notificacoes_app,
         "email_enviados": email_enviados,
@@ -1108,13 +1101,13 @@ def enviar_notificacao_de_cancelamento(escala):
         if membro.email:
             usuario_vinculado = User.objects(email=membro.email).first()
             if usuario_vinculado:
-                db.session.add(Notificacao(
+                Notificacao(
                     usuario_id=usuario_vinculado.id,
                     titulo=f"Escala cancelada: {escala.nome}",
                     mensagem=mensagem,
                     escala_id=escala.id,
                     tipo="cancelamento",
-                ))
+                ).save()
                 notificacoes_app += 1
 
             try:
@@ -1143,8 +1136,6 @@ def enviar_notificacao_de_cancelamento(escala):
                 whatsapp_enviados += 1
             except WhatsappNaoEnviadoError:
                 whatsapp_falhas += 1
-
-    db.session.commit()
 
     return {
         "notificacoes_app": notificacoes_app,

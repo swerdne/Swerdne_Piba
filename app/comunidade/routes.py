@@ -837,13 +837,12 @@ def entrar_via_link(token):
         for admin in _admins_da_comunidade(comunidade):
             if admin.id == current_user.id:
                 continue  # nunca notifica quem acabou de entrar sobre a propria entrada
-            db.session.add(Notificacao(
+            Notificacao(
                 usuario_id=admin.id,
                 titulo=f'{nome_novo_membro} entrou em "{comunidade.nome}"',
                 mensagem=f'{nome_novo_membro} entrou na comunidade pelo link de convite.',
                 tipo="novo_membro",
-            ))
-        db.session.commit()
+            ).save()
 
         flash(f'Voce entrou em "{comunidade.nome}"!', "success")
         return redirect(url_for("comunidade.escalados", comunidade_id=comunidade.id))

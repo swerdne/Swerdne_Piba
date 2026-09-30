@@ -86,11 +86,10 @@ def dashboard():
     nome_form = NomeForm(nome=nome_completo)
     acao_form = AcaoForm()
 
-    notificacoes = (
-        Notificacao.query.filter_by(usuario_id=current_user.id)
-        .order_by(Notificacao.criada_em.desc())
+    notificacoes = list(
+        Notificacao.objects(usuario_id=current_user.id)
+        .order_by("-criada_em")
         .limit(20)
-        .all()
     )
     notificacoes_nao_lidas = sum(1 for n in notificacoes if not n.lida)
     grupos_notificacoes = _agrupar_notificacoes(notificacoes)
@@ -122,8 +121,7 @@ def dashboard():
 @bp.route("/notificacoes/marcar-lidas", methods=["POST"])
 @login_required
 def marcar_notificacoes_lidas():
-    Notificacao.query.filter_by(usuario_id=current_user.id, lida=False).update({"lida": True})
-    db.session.commit()
+    Notificacao.objects(usuario_id=current_user.id, lida=False).update(set__lida=True)
     return redirect(url_for("main.dashboard"))
 
 

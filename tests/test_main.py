@@ -61,12 +61,9 @@ def test_dashboard_agrupa_notificacoes_por_escala(logged_in_client, app, db):
         escala_b = Escala(ministerio_id=ministerio.id, nome="Culto B", departamento="Louvor")
         escala_b.save()
 
-        db.session.add_all([
-            Notificacao(usuario_id=ana.id, titulo="Primeira", mensagem="m1", escala_id=escala_a.id, tipo="escalado"),
-            Notificacao(usuario_id=ana.id, titulo="Segunda", mensagem="m2", escala_id=escala_a.id, tipo="confirmado"),
-            Notificacao(usuario_id=ana.id, titulo="Terceira", mensagem="m3", escala_id=escala_b.id, tipo="escalado"),
-        ])
-        db.session.commit()
+        Notificacao(usuario_id=ana.id, titulo="Primeira", mensagem="m1", escala_id=escala_a.id, tipo="escalado").save()
+        Notificacao(usuario_id=ana.id, titulo="Segunda", mensagem="m2", escala_id=escala_a.id, tipo="confirmado").save()
+        Notificacao(usuario_id=ana.id, titulo="Terceira", mensagem="m3", escala_id=escala_b.id, tipo="escalado").save()
 
         resposta = logged_in_client.get("/dashboard")
         html = resposta.data.decode("utf-8")

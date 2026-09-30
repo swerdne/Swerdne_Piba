@@ -32,8 +32,8 @@ def create_app(config_name="default"):
     from .db_utils import conectar_mongo
     conectar_mongo(app)
 
-    # Notificacao nao pertence a nenhum blueprint especifico -- garante que o
-    # model seja registrado no metadata do SQLAlchemy (para migrations).
+    # Notificacao (MongoEngine) nao pertence a nenhum blueprint especifico --
+    # garante que a classe seja importada/registrada cedo.
     from . import notificacoes  # noqa: F401
     login_manager.init_app(app)
     limiter.init_app(app)

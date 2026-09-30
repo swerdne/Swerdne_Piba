@@ -466,7 +466,7 @@ def test_notificar_membro_com_conta_gera_notificacao_no_app(logged_in_client, ou
         assert "e-mail(s) falharam" in html
 
         bruno = User.objects(email="bruno@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id).first()
+        notificacao = Notificacao.objects(usuario_id=bruno.id).first()
         assert notificacao is not None
         assert not notificacao.lida
 
@@ -493,7 +493,7 @@ def test_marcar_notificacoes_como_lidas(logged_in_client, outro_logged_in_client
 
     with sessao_isolada(app):
         bruno = User.objects(email="bruno@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id).first()
+        notificacao = Notificacao.objects(usuario_id=bruno.id).first()
         assert notificacao.lida
 
 
@@ -718,7 +718,7 @@ def test_cancelar_escala_marca_cancelada_e_notifica_quem_estava_escalado(logged_
         # a notificacao in-app so e criada se o e-mail do Membro bater com
         # uma conta (User) existente, ver enviar_notificacao_de_cancelamento.
         usuario = User.objects(email="ana@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=usuario.id, escala_id=escala.id, tipo="cancelamento").first()
+        notificacao = Notificacao.objects(usuario_id=usuario.id, escala_id=escala.id, tipo="cancelamento").first()
         assert notificacao is not None
         assert "cancelada" in notificacao.mensagem
 
@@ -1022,7 +1022,7 @@ def test_editar_escala_avisa_membros_ja_escalados(logged_in_client, app, db):
         assert response.status_code == 200
         assert "Equipe avisada da mudanca" in html
 
-        notificacao = Notificacao.query.filter_by(usuario_id=usuario.id).first()
+        notificacao = Notificacao.objects(usuario_id=usuario.id).first()
         assert notificacao is not None
         assert "mudou de 01/09/2026" in notificacao.mensagem
         assert "08/09/2026" in notificacao.mensagem
@@ -1214,7 +1214,7 @@ def test_adicionar_convidado_dispara_notificacao_no_app(logged_in_client, outro_
 
     with sessao_isolada(app):
         bruno = User.objects(email="bruno@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id).first()
+        notificacao = Notificacao.objects(usuario_id=bruno.id).first()
         assert notificacao is not None
 
 
@@ -1359,7 +1359,7 @@ def test_membro_escalado_solicita_troca_notifica_lider(logged_in_client, outro_l
         assert baixo_final.troca_sugestao_membro_id == carla_id
 
         ana = User.objects(email="ana@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=ana.id, tipo="troca_solicitada").first()
+        notificacao = Notificacao.objects(usuario_id=ana.id, tipo="troca_solicitada").first()
         assert notificacao is not None
         assert notificacao.escala_id == escala_id
         assert "Carla" in notificacao.mensagem
@@ -1382,7 +1382,7 @@ def test_lider_alterar_status_de_outra_pessoa_nao_notifica_ninguem(logged_in_cli
         logged_in_client.post(
             f"/escala/funcao/{baixo.id}/status", data={"status": "confirmado"}, follow_redirects=True
         )
-        assert Notificacao.query.count() == 0
+        assert Notificacao.objects.count() == 0
 
 
 def test_lider_aprova_troca_reatribui_funcao_e_notifica_solicitante(logged_in_client, outro_logged_in_client, app, db):
@@ -1424,7 +1424,7 @@ def test_lider_aprova_troca_reatribui_funcao_e_notifica_solicitante(logged_in_cl
         assert baixo_final.troca_sugestao_membro_id is None
 
         bruno = User.objects(email="bruno@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id, tipo="troca_aprovada").first()
+        notificacao = Notificacao.objects(usuario_id=bruno.id, tipo="troca_aprovada").first()
         assert notificacao is not None
         assert "Carla" in notificacao.mensagem
 
@@ -1463,7 +1463,7 @@ def test_lider_recusa_troca_mantem_membro_e_notifica_solicitante(logged_in_clien
         assert baixo_final.troca_motivo is None
 
         bruno = User.objects(email="bruno@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id, tipo="troca_recusada").first()
+        notificacao = Notificacao.objects(usuario_id=bruno.id, tipo="troca_recusada").first()
         assert notificacao is not None
 
 

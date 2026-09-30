@@ -742,7 +742,7 @@ def test_admin_e_notificado_quando_alguem_entra_via_link(logged_in_client, app, 
 
     with sessao_isolada(app):
         ana = User.objects(email="ana@example.com").first()
-        notificacao = Notificacao.query.filter_by(usuario_id=ana.id, tipo="novo_membro").first()
+        notificacao = Notificacao.objects(usuario_id=ana.id, tipo="novo_membro").first()
         assert notificacao is not None
         assert "bruno" in notificacao.titulo.lower()
 
