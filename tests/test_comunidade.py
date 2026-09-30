@@ -868,7 +868,6 @@ def test_admin_exclui_evento(logged_in_client, app, db):
             f"/comunidade/{comunidade.id}/eventos/{evento_id}/excluir", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        db.session.remove()
         assert Evento.objects(id=evento_id).first() is None
 
 

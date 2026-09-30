@@ -22,7 +22,6 @@ _JANELA = timedelta(minutes=15)
 
 
 def _verificar_e_notificar(app):
-    from app.extensions import db
     from app.escala.models import Escala
     from app.escala.routes import enviar_notificacoes_da_escala
     from app.plantao.sincronizacao import sincronizar_todos_os_turnos_ativos
@@ -30,10 +29,11 @@ def _verificar_e_notificar(app):
     with app.app_context():
         # Todo o corpo (sync + notificacao) roda por conta propria, sem
         # requisicao HTTP nem usuario esperando resposta -- uma falha
-        # transiente aqui (Neon acordando de hibernacao, rede flakeando)
-        # nunca deve propagar sem rollback nem pular o resto do tick em
-        # silencio. Mesmo espirito de "falha de e-mail/SMS nunca derruba a
-        # request" (ver app/emailing.py), aplicado ao scheduler unico.
+        # transiente aqui (rede flakeando, Atlas indisponivel) nunca deve
+        # propagar nem pular o resto do tick em silencio, so logar e seguir
+        # pro proximo tick. Mesmo espirito de "falha de e-mail/SMS nunca
+        # derruba a request" (ver app/emailing.py), aplicado ao scheduler
+        # unico.
         try:
             sincronizar_todos_os_turnos_ativos()
 
@@ -60,7 +60,6 @@ def _verificar_e_notificar(app):
                     escala.save()
         except Exception:
             logger.exception("Tick do agendador falhou -- sync/notificacoes deste ciclo foram pulados.")
-            db.session.rollback()
 
 
 def iniciar_agendador(app):

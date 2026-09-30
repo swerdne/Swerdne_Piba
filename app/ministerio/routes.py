@@ -10,7 +10,6 @@ from flask import render_template, redirect, url_for, flash, request, current_ap
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
-from app.extensions import db
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.ministerio import bp
 from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm

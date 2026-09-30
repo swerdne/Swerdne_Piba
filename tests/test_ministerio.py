@@ -440,7 +440,6 @@ def test_fazer_checkout_com_codigo_correto_libera_crianca(logged_in_client, app,
             follow_redirects=True,
         )
         assert response.status_code == 200
-        db.session.remove()
         atualizado = CheckInCrianca.objects(id=registro.id).first()
         assert atualizado.hora_saida is not None
         assert not atualizado.esta_presente
@@ -460,7 +459,6 @@ def test_fazer_checkout_com_codigo_errado_mantem_presente(logged_in_client, app,
             follow_redirects=True,
         )
         assert response.status_code == 200
-        db.session.remove()
         assert CheckInCrianca.objects(id=registro.id).first().esta_presente
 
 
@@ -475,7 +473,6 @@ def test_excluir_crianca_remove_do_cadastro(logged_in_client, app, db):
             f"/ministerio/{ministerio.id}/checkin/criancas/{crianca_id}/excluir", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        db.session.remove()
         assert Crianca.objects(id=crianca_id).first() is None
 
 

@@ -9,7 +9,7 @@ from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 
-from app.extensions import db, limiter
+from app.extensions import limiter
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.comunidade import bp
 from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm

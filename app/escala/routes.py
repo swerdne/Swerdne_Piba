@@ -6,7 +6,6 @@ from flask import render_template, redirect, url_for, flash, abort, request, jso
 from flask_login import login_required, current_user
 from mongoengine.queryset.visitor import Q as MongoQ
 
-from app.extensions import db
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.escala import bp
 from app.escala.forms import (

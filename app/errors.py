@@ -88,14 +88,15 @@ def registrar_error_handlers(app):
 
     @app.errorhandler(500)
     def erro_500(error):
-        # A excecao original pode ter deixado a sessao do banco num estado
-        # pendente de rollback -- sem isso, ate o carregamento do usuario
-        # logado (current_user, usado pelo tema via context processor) pode
-        # falhar de novo so de tentar renderizar essa propria pagina. Se o
-        # banco estiver de fato inacessivel (ex: credencial errada, host
-        # fora do ar), o proprio rollback() pode levantar -- sem o
-        # try/except, isso derruba essa pagina de erro tambem, e o usuario
-        # cai na tela crua e sem estilo do Werkzeug em vez desta aqui.
+        # A excecao original pode ter deixado a sessao do SQLAlchemy (ainda
+        # usada pelo /healthz e enquanto o Postgres nao e desligado de vez,
+        # ver plano da migracao pra Mongo) num estado pendente de rollback --
+        # limpeza defensiva, mesmo que a maioria das requisicoes hoje em dia
+        # nao toque mais o Postgres (User/Comunidade/Escala/etc. ja sao
+        # MongoEngine). Se o banco estiver de fato inacessivel, o proprio
+        # rollback() pode levantar -- sem o try/except, isso derruba essa
+        # pagina de erro tambem, e o usuario cai na tela crua e sem estilo
+        # do Werkzeug em vez desta aqui.
         try:
             db.session.rollback()
         except Exception:
@@ -109,10 +110,9 @@ def registrar_error_handlers(app):
                 icone="fa-triangle-exclamation",
             ), 500
         except Exception:
-            # erro.html estende base.html, que consulta o banco via
-            # current_user (context processor de tema) -- se o banco
-            # estiver de fato fora do ar, essa consulta falha de novo e
-            # cai aqui, na versao minima que nao depende de banco nenhum.
+            # erro.html estende base.html -- se ALGO falhar ao renderizar
+            # (motivo qualquer, nao mais especificamente o Postgres), cai
+            # aqui, na versao minima que nao depende de nenhum banco.
             return _PAGINA_500_MINIMA, 500
 
     @app.errorhandler(429)
