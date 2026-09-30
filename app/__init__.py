@@ -103,6 +103,23 @@ def create_app(config_name="default"):
         usuario.save()
         click.echo(f"{email} agora e Super Admin.")
 
+    # Corte de producao da migracao pra Mongo (Fase 8, ver plano da
+    # migracao) -- so faz sentido rodar contra um app com DATABASE_URL
+    # (Postgres de origem) E MONGODB_URI (Mongo de destino) configurados ao
+    # mesmo tempo, uma combinacao que nao existe fora desse comando. Ver
+    # app/migracao_dados.py pra detalhes de ordem/idempotencia/seed de counters.
+    @app.cli.command("migrar-dados-mongo")
+    @click.option("--dry-run", is_flag=True, help="Le e valida tudo, mas nao escreve nada no Mongo.")
+    @click.option("--force", is_flag=True, help="Ignora a checagem de collection ja povoada -- sobrescreve por id (Document.save() substitui, nao duplica), cuidado se o app ja escreveu dados novos la depois da 1a migracao.")
+    def migrar_dados_mongo(dry_run, force):
+        from .migracao_dados import executar_migracao, ErroDeMigracao
+
+        try:
+            executar_migracao(dry_run=dry_run, force=force, log=click.echo)
+        except ErroDeMigracao as erro:
+            click.echo(f"ERRO: {erro}", err=True)
+            raise SystemExit(1)
+
     # Disponibiliza `tema`/`temas` em TODOS os templates automaticamente (nao
     # so no dashboard) -- assim comunidade/escala/ministerio tambem respeitam
     # a preferencia de tema do usuario sem cada rota precisar passar isso.
