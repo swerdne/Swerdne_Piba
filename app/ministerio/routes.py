@@ -21,7 +21,7 @@ from app.ministerio.models import (
     CheckInCrianca,
     criar_ministerio,
 )
-from app.escala.models import resumo_para_calendario
+from app.escala.models import resumos_para_calendario_em_lote
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
 from app.convites.routes import _enviar_email_de_convite
@@ -217,8 +217,16 @@ def _dados_calendario(ministerio, hoje):
 
     # Mesma cor ja usada na lista de escalas ao lado (escala.cor, por
     # departamento) -- nao uma paleta separada, pra manter os dois lugares
-    # visualmente consistentes.
-    escalas_do_mes = [e for e in ministerio.escalas if e.data and e.data.year == ano and e.data.month == mes]
+    # visualmente consistentes. Filtro de data direto na consulta (nao em
+    # Python sobre TODAS as escalas do ministerio) -- evita carregar
+    # historico inteiro so pra descartar quase tudo depois.
+    from app.escala.models import Escala
+
+    primeiro_dia_mes = date(ano, mes, 1)
+    ultimo_dia_mes = date(ano, mes, calendar.monthrange(ano, mes)[1])
+    escalas_do_mes = list(Escala.objects(
+        ministerio_id=ministerio.id, data__gte=primeiro_dia_mes, data__lte=ultimo_dia_mes
+    ))
     escalas_por_dia = {}
     for escala in escalas_do_mes:
         escalas_por_dia.setdefault(escala.data, []).append((escala, escala.cor))
@@ -238,7 +246,7 @@ def _dados_calendario(ministerio, hoje):
         "ano_proximo": ano_proximo,
         "mes_proximo": mes_proximo,
         "hoje": hoje,
-        "previews_calendario": {e.id: resumo_para_calendario(e) for e in escalas_do_mes},
+        "previews_calendario": resumos_para_calendario_em_lote(escalas_do_mes),
     }
 
 
@@ -256,15 +264,27 @@ def _escalas_agrupadas_por_turno(ministerio, hoje):
     plantao.detalhe (ver escala/detalhe.html). Sem isso, a escala de origem E
     a capa do turno apareceriam como duas entradas parecidas na mesma lista.
     """
-    escalas_manuais = [e for e in ministerio.escalas if e.plantao_turno_id is None]
+    # 1 unica leitura de ministerio.escalas (nao 2) -- e o turno.escala_origem
+    # de cada turno de rodizio em lote (1 consulta pra todos, nao 1 por
+    # turno+escala, ver Escala.turno_plantao_origem_id).
+    todas_escalas = list(ministerio.escalas)
+    escalas_manuais = [e for e in todas_escalas if e.plantao_turno_id is None]
+    escalas_de_rodizio = [e for e in todas_escalas if e.plantao_turno_id is not None]
+
+    ids_turnos_com_origem = set()
+    ids_turnos = {e.plantao_turno_id for e in escalas_de_rodizio}
+    if ids_turnos:
+        from app.escala.models import Escala
+        ids_turnos_com_origem = {
+            e.turno_plantao_origem_id
+            for e in Escala.objects(turno_plantao_origem_id__in=list(ids_turnos))
+        }
 
     ocorrencias_por_turno = {}
-    for escala in ministerio.escalas:
-        if escala.plantao_turno_id is not None:
-            turno = escala.plantao_turno
-            if turno is not None and turno.escala_origem is not None:
-                continue
-            ocorrencias_por_turno.setdefault(escala.plantao_turno_id, []).append(escala)
+    for escala in escalas_de_rodizio:
+        if escala.plantao_turno_id in ids_turnos_com_origem:
+            continue
+        ocorrencias_por_turno.setdefault(escala.plantao_turno_id, []).append(escala)
 
     capas = []
     qtd_ocorrencias_por_turno = {}
@@ -295,9 +315,18 @@ def detalhe(ministerio_id):
     # de origem vinculada (Escala.turno_plantao_origem_id) ja aparece na lista
     # de Escalas, atraves da propria escala de origem -- sem isso aqui, ele
     # apareceria DE NOVO, agora como card independente nesta secao, dando
-    # impressao de que o rodizio existe solto fora da escala.
+    # impressao de que o rodizio existe solto fora da escala. escala_origem
+    # de todos os turnos em lote (1 consulta, nao 1 por turno).
+    todos_turnos = list(ministerio.turnos_plantao)
+    ids_turnos_com_origem_geral = set()
+    if todos_turnos:
+        from app.escala.models import Escala
+        ids_turnos_com_origem_geral = {
+            e.turno_plantao_origem_id
+            for e in Escala.objects(turno_plantao_origem_id__in=[t.id for t in todos_turnos])
+        }
     turnos_plantao = sorted(
-        (t for t in ministerio.turnos_plantao if t.escala_origem is None),
+        (t for t in todos_turnos if t.id not in ids_turnos_com_origem_geral),
         key=lambda t: t.nome,
     )
 

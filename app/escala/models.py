@@ -483,27 +483,54 @@ def mensagem_para(escala, funcao, membro):
     return modelo.format(membro=membro.nome, funcao=funcao.nome, escala=escala.nome, data=data_texto)
 
 
-def resumo_para_calendario(escala):
-    """Resumo enxuto de uma Escala pro mini-card de preview ao clicar num
-    evento do calendario (ver ministerio/calendario.html e
-    comunidade/calendario.html) -- so o essencial pra decidir se vale abrir
-    a tela completa, sem precisar navegar pra ver."""
-    escalados = [
-        {
-            "funcao": f.nome,
-            "membro": f.membro.nome,
-            "status": STATUS_LABELS.get(f.status, f.status or ""),
-        }
-        for f in escala.funcoes
-        if not f.eh_subcabecalho and f.membro_id
-    ]
-    return {
-        "nome": escala.nome,
-        "departamento": escala.departamento,
-        "data": escala.data.strftime("%d/%m/%Y") if escala.data else None,
-        "horario": escala.horario.strftime("%H:%M") if escala.horario else None,
-        "horario_fim": escala.horario_fim.strftime("%H:%M") if escala.horario_fim else None,
-        "cancelada": escala.cancelada,
-        "cor": escala.cor,
-        "escalados": escalados,
+def resumos_para_calendario_em_lote(escalas):
+    """Versao em lote de resumo_para_calendario -- monta o resumo de VARIAS
+    Escala de uma vez (2 consultas no total: Funcao + Membro), em vez de uma
+    consulta de Funcao por Escala e uma de Membro por Funcao escalada. Usada
+    pelas telas de calendario (ministerio/comunidade), que precisam do
+    resumo de todas as escalas do mes ao mesmo tempo -- sem isso, um mes com
+    N escalas custava N+M consultas (M = total de pessoas escaladas no mes).
+    Devolve um dict {escala.id: resumo}."""
+    escalas = list(escalas)
+    if not escalas:
+        return {}
+
+    funcoes_por_escala = {}
+    for f in Funcao.objects(escala_id__in=[e.id for e in escalas]).order_by("ordem"):
+        funcoes_por_escala.setdefault(f.escala_id, []).append(f)
+
+    ids_membro = {
+        f.membro_id for fs in funcoes_por_escala.values() for f in fs
+        if f.membro_id and not f.eh_subcabecalho
     }
+    membros_por_id = {m.id: m for m in Membro.objects(id__in=ids_membro)} if ids_membro else {}
+
+    resumos = {}
+    for escala in escalas:
+        escalados = [
+            {
+                "funcao": f.nome,
+                "membro": membros_por_id[f.membro_id].nome,
+                "status": STATUS_LABELS.get(f.status, f.status or ""),
+            }
+            for f in funcoes_por_escala.get(escala.id, [])
+            if not f.eh_subcabecalho and f.membro_id and f.membro_id in membros_por_id
+        ]
+        resumos[escala.id] = {
+            "nome": escala.nome,
+            "departamento": escala.departamento,
+            "data": escala.data.strftime("%d/%m/%Y") if escala.data else None,
+            "horario": escala.horario.strftime("%H:%M") if escala.horario else None,
+            "horario_fim": escala.horario_fim.strftime("%H:%M") if escala.horario_fim else None,
+            "cancelada": escala.cancelada,
+            "cor": escala.cor,
+            "escalados": escalados,
+        }
+    return resumos
+
+
+def resumo_para_calendario(escala):
+    """Resumo enxuto de UMA Escala -- ver resumos_para_calendario_em_lote
+    (usada pelas telas de calendario de verdade, que precisam de varias de
+    uma vez). Mantida pra quem precisar do resumo de uma unica escala."""
+    return resumos_para_calendario_em_lote([escala])[escala.id]

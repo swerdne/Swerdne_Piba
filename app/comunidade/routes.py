@@ -26,7 +26,7 @@ from app.escala.models import (
     DEPARTAMENTOS,
     STATUS_LABELS,
     STATUS_CORES,
-    resumo_para_calendario,
+    resumos_para_calendario_em_lote,
 )
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
@@ -524,10 +524,17 @@ def calendario(comunidade_id):
         ultimo_dia = semanas[-1][-1]
         semanas.append([ultimo_dia + timedelta(days=i) for i in range(1, 8)])
 
-    escalas_do_mes = [
-        e for ministerio in comunidade.ministerios for e in ministerio.escalas
-        if e.data and e.data.year == ano and e.data.month == mes
-    ]
+    # Consultas em lote (nao 1 por Ministerio + 1 por Escala + 1 por Membro
+    # escalado) -- filtro de data direto no banco, nao em Python sobre o
+    # historico inteiro de cada ministerio.
+    ministerios_da_comunidade = list(comunidade.ministerios)
+    nomes_por_ministerio = {m.id: m.nome for m in ministerios_da_comunidade}
+    primeiro_dia_mes = date(ano, mes, 1)
+    ultimo_dia_mes = date(ano, mes, calendar.monthrange(ano, mes)[1])
+    escalas_do_mes = list(Escala.objects(
+        ministerio_id__in=list(nomes_por_ministerio.keys()),
+        data__gte=primeiro_dia_mes, data__lte=ultimo_dia_mes,
+    ))
     escalas_por_dia = {}
     for escala in escalas_do_mes:
         escalas_por_dia.setdefault(escala.data, []).append((escala, escala.cor))
@@ -535,11 +542,9 @@ def calendario(comunidade_id):
     # Igual ao de um Ministerio (ver ministerio.routes._dados_calendario),
     # so que com o nome do ministerio junto -- aqui um mesmo dia pode ter
     # escalas de ministerios diferentes.
-    previews_calendario = {}
+    previews_calendario = resumos_para_calendario_em_lote(escalas_do_mes)
     for escala in escalas_do_mes:
-        resumo = resumo_para_calendario(escala)
-        resumo["ministerio"] = escala.ministerio.nome
-        previews_calendario[escala.id] = resumo
+        previews_calendario[escala.id]["ministerio"] = nomes_por_ministerio.get(escala.ministerio_id)
 
     (ano_anterior, mes_anterior), (ano_proximo, mes_proximo) = _navegacao_calendario_comunidade(ano, mes)
 
