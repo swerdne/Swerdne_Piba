@@ -456,6 +456,10 @@ def test_gerar_link_convite_cria_token(logged_in_client, app, db):
 
         atualizada = db.session.get(Comunidade, comunidade.id)
         assert atualizada.token_convite_publico is not None
+        # 8 bytes urlsafe (~11 chars) -- curto o suficiente pra ficar
+        # apresentavel ao compartilhar, mas ainda com entropia alta (64
+        # bits) pra nao virar adivinhavel por forca bruta.
+        assert len(atualizada.token_convite_publico) <= 15
 
 
 def test_gerar_link_de_novo_invalida_o_anterior(logged_in_client, app, db):

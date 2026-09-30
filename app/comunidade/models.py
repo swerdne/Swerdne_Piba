@@ -37,7 +37,12 @@ class Comunidade(db.Model):
     token_convite_publico = db.Column(db.String(64), unique=True, nullable=True)
 
     def gerar_novo_link_convite(self):
-        self.token_convite_publico = secrets.token_urlsafe(32)
+        # 8 bytes (64 bits) em vez dos 32 anteriores -- ainda inviavel de
+        # adivinhar por forca bruta (rota tambem tem rate limit, ver
+        # entrar_via_link), mas gera um token bem mais curto (~11
+        # caracteres em vez de ~43), pra ficar mais apresentavel ao
+        # compartilhar o link por WhatsApp/e-mail.
+        self.token_convite_publico = secrets.token_urlsafe(8)
         return self.token_convite_publico
 
     def __repr__(self):

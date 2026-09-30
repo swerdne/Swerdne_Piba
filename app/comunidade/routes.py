@@ -9,7 +9,7 @@ from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.comunidade import bp
 from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm
 from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade
@@ -781,6 +781,7 @@ def gerar_link_convite(comunidade_id):
 
 
 @bp.route("/entrar/<token>", methods=["GET", "POST"])
+@limiter.limit("30 per minute")
 def entrar_via_link(token):
     """Publica de proposito (sem @login_required) -- quem ainda nao tem
     conta precisa ver a tela pra saber que precisa entrar/cadastrar antes.
