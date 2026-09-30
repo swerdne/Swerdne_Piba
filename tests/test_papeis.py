@@ -325,7 +325,7 @@ def test_admin_da_comunidade_gerencia_qualquer_ministerio_sem_linha_propria(logg
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
 
-        assert UsuarioMinisterio.query.filter_by(ministerio_id=ministerio.id).count() == 0
+        assert UsuarioMinisterio.objects(ministerio_id=ministerio.id).count() == 0
         assert logged_in_client.get(f"/ministerio/{ministerio.id}/papeis").status_code == 200
         assert logged_in_client.get(f"/escala/ministerio/{ministerio.id}/nova").status_code == 200
 

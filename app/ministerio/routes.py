@@ -11,7 +11,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
-from app.db_utils import primeiro_ou_404
+from app.db_utils import delete_cascade, primeiro_ou_404
 from app.ministerio import bp
 from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm
 from app.ministerio.models import (
@@ -46,7 +46,7 @@ def _eh_lider_do_ministerio(ministerio, usuario):
 
     if _eh_admin_da_comunidade(ministerio.comunidade, usuario):
         return True
-    return UsuarioMinisterio.query.filter_by(
+    return UsuarioMinisterio.objects(
         ministerio_id=ministerio.id, usuario_id=usuario.id, papel="lider"
     ).first() is not None
 
@@ -71,7 +71,7 @@ def _lideres_do_ministerio(ministerio):
 
     ids_lider_ministerio = {
         row.usuario_id for row in
-        UsuarioMinisterio.query.filter_by(ministerio_id=ministerio.id, papel="lider").all()
+        UsuarioMinisterio.objects(ministerio_id=ministerio.id, papel="lider")
     }
 
     ids = ids_admin_comunidade | ids_lider_ministerio
@@ -83,7 +83,7 @@ def _lideres_do_ministerio(ministerio):
 def _eh_membro_do_ministerio(ministerio, usuario):
     """Papel=membro em UsuarioMinisterio -- participa do ministerio,
     visualiza as escalas dele (leitura)."""
-    return UsuarioMinisterio.query.filter_by(
+    return UsuarioMinisterio.objects(
         ministerio_id=ministerio.id, usuario_id=usuario.id, papel="membro"
     ).first() is not None
 
@@ -96,7 +96,7 @@ def _ministerio_do_usuario_ou_404(ministerio_id):
     _ministerio_gerenciavel_ou_404 pra essa checagem mais ampla."""
     from app.comunidade.routes import _eh_admin_da_comunidade
 
-    ministerio = Ministerio.query.get_or_404(ministerio_id)
+    ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
     if not _eh_admin_da_comunidade(ministerio.comunidade, current_user):
         abort(404)
     return ministerio
@@ -108,7 +108,7 @@ def _ministerio_gerenciavel_ou_404(ministerio_id):
     ministerio em si -- criar/editar escala ou turno de rodizio,
     adicionar/remover membro de funcao, adicionar convidado, etc. (ver
     app/escala/routes.py, app/plantao/routes.py)."""
-    ministerio = Ministerio.query.get_or_404(ministerio_id)
+    ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
     if not _eh_lider_do_ministerio(ministerio, current_user):
         abort(404)
     return ministerio
@@ -119,7 +119,7 @@ def _ministerio_visivel_ou_404(ministerio_id):
     Retorna (ministerio, pode_gerenciar) -- pode_gerenciar distingue quem so
     visualiza (membro) de quem tambem gerencia conteudo (admin/lider), pro
     template esconder acoes de escrita."""
-    ministerio = Ministerio.query.get_or_404(ministerio_id)
+    ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
     pode_gerenciar = _eh_lider_do_ministerio(ministerio, current_user)
     if not pode_gerenciar and not _eh_membro_do_ministerio(ministerio, current_user):
         abort(404)
@@ -166,7 +166,7 @@ def nova(comunidade_id):
         ministerio.dias_culto = (
             ",".join(str(d) for d in sorted(form.dias_culto.data)) if form.dias_culto.data else None
         )
-        db.session.commit()
+        ministerio.save()
         flash(f'Ministerio "{ministerio.nome}" criado!', "success")
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
@@ -347,11 +347,39 @@ def editar(ministerio_id):
             ministerio.imagem = _salvar_logo(form.imagem.data)
             _remover_logo_antiga(logo_antiga)
 
-        db.session.commit()
+        ministerio.save()
         flash("Ministerio atualizado!", "success")
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
     return render_template("ministerio/editar.html", form=form, ministerio=ministerio)
+
+
+def excluir_ministerio_em_cascata(ministerio):
+    """Apaga um Ministerio e tudo que pende dele -- usado tanto por
+    excluir_ministerio (abaixo) quanto por comunidade.routes.excluir_comunidade
+    (que precisa apagar cada Ministerio da comunidade antes de poder apagar a
+    propria comunidade). Ministerio agora vive no Mongo, mas Escala/
+    TurnoPlantao (ainda em SQLAlchemy nesta fase) precisam ser apagados
+    explicitamente -- sem o cascade automatico que existia antes
+    (cascade="all, delete-orphan" em Ministerio.escalas/turnos_plantao). Cada
+    delete abaixo ainda cascade pro proprio lado SQLAlchemy (Escala ->
+    Funcao/ItemRepertorio, TurnoPlantao -> EquipeTurno -> EquipeMembro).
+    Diferente de plantao.excluir_turno (que preserva historico ao apagar so a
+    regra), aqui o ministerio inteiro some, entao nao ha nada a preservar."""
+    from app.escala.models import Escala
+    from app.plantao.models import TurnoPlantao
+
+    _remover_logo_antiga(ministerio.imagem)
+
+    for escala in Escala.query.filter_by(ministerio_id=ministerio.id).all():
+        db.session.delete(escala)
+    db.session.commit()
+
+    for turno in TurnoPlantao.query.filter_by(ministerio_id=ministerio.id).all():
+        db.session.delete(turno)
+    db.session.commit()
+
+    delete_cascade(ministerio)
 
 
 @bp.route("/<int:ministerio_id>/excluir", methods=["POST"])
@@ -364,17 +392,9 @@ def excluir_ministerio(ministerio_id):
         flash("Acao invalida.", "danger")
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
-    # Cascade (cascade="all, delete-orphan" em Ministerio.escalas e
-    # Ministerio.turnos_plantao) apaga junto todas as Escalas do ministerio
-    # -- manuais e as geradas por rodizio -- e os Turnos de Rodizio. Diferente
-    # de plantao.excluir_turno (que preserva historico ao apagar so a regra),
-    # aqui o ministerio inteiro some, entao nao ha nada a preservar.
-    _remover_logo_antiga(ministerio.imagem)
-
     nome = ministerio.nome
     comunidade_id = ministerio.comunidade_id
-    db.session.delete(ministerio)
-    db.session.commit()
+    excluir_ministerio_em_cascata(ministerio)
 
     flash(f'Ministerio "{nome}" excluido.', "success")
     return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade_id))
@@ -422,10 +442,8 @@ def papeis(ministerio_id):
         flash(f"Convite enviado para {convite.email}.", "success")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
-    papeis_atuais = (
-        UsuarioMinisterio.query.filter_by(ministerio_id=ministerio.id)
-        .order_by(UsuarioMinisterio.papel)
-        .all()
+    papeis_atuais = list(
+        UsuarioMinisterio.objects(ministerio_id=ministerio.id).order_by("papel")
     )
     convites_pendentes = list(
         Convite.objects(escopo_tipo="ministerio", escopo_id=ministerio.id, status="pendente")
@@ -447,7 +465,7 @@ def papeis(ministerio_id):
 @login_required
 def remover_papel(ministerio_id, usuario_ministerio_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
-    papel = UsuarioMinisterio.query.filter_by(id=usuario_ministerio_id, ministerio_id=ministerio.id).first_or_404()
+    papel = primeiro_ou_404(UsuarioMinisterio.objects(id=usuario_ministerio_id, ministerio_id=ministerio.id))
     form = AcaoForm()
 
     if not form.validate_on_submit():
@@ -462,8 +480,7 @@ def remover_papel(ministerio_id, usuario_ministerio_id):
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
-    db.session.delete(papel)
-    db.session.commit()
+    papel.delete()
     flash(f"{nome} removido(a) do ministerio.", "success")
     return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
@@ -501,17 +518,14 @@ def checkin(ministerio_id):
             responsavel_telefone=(form_crianca.responsavel_telefone.data or "").strip() or None,
             observacoes=(form_crianca.observacoes.data or "").strip() or None,
         )
-        db.session.add(crianca)
-        db.session.commit()
+        crianca.save()
         flash(f"{crianca.nome} cadastrado(a).", "success")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
-    criancas = Crianca.query.filter_by(ministerio_id=ministerio.id).order_by(Crianca.nome).all()
-    presentes = (
-        CheckInCrianca.query.join(Crianca)
-        .filter(Crianca.ministerio_id == ministerio.id, CheckInCrianca.hora_saida.is_(None))
-        .order_by(CheckInCrianca.hora_entrada.desc())
-        .all()
+    criancas = list(Crianca.objects(ministerio_id=ministerio.id).order_by("nome"))
+    ids_criancas = [c.id for c in criancas]
+    presentes = list(
+        CheckInCrianca.objects(crianca_id__in=ids_criancas, hora_saida=None).order_by("-hora_entrada")
     )
     formularios_checkout = {registro.id: CheckoutForm() for registro in presentes}
 
@@ -530,14 +544,14 @@ def checkin(ministerio_id):
 @login_required
 def fazer_checkin(ministerio_id, crianca_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
-    crianca = Crianca.query.filter_by(id=crianca_id, ministerio_id=ministerio.id).first_or_404()
+    crianca = primeiro_ou_404(Crianca.objects(id=crianca_id, ministerio_id=ministerio.id))
     form = AcaoForm()
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
-    ja_presente = CheckInCrianca.query.filter_by(crianca_id=crianca.id, hora_saida=None).first()
+    ja_presente = CheckInCrianca.objects(crianca_id=crianca.id, hora_saida=None).first()
     if ja_presente:
         flash(f"{crianca.nome} ja esta com check-in em aberto.", "warning")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
@@ -549,8 +563,7 @@ def fazer_checkin(ministerio_id, crianca_id):
         codigo_seguranca=codigo,
         registrado_por_id=current_user.id,
     )
-    db.session.add(registro)
-    db.session.commit()
+    registro.save()
 
     flash(
         f"Check-in de {crianca.nome} feito. Codigo de seguranca: {codigo} -- "
@@ -564,11 +577,9 @@ def fazer_checkin(ministerio_id, crianca_id):
 @login_required
 def fazer_checkout(ministerio_id, checkin_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
-    registro = (
-        CheckInCrianca.query.join(Crianca)
-        .filter(CheckInCrianca.id == checkin_id, Crianca.ministerio_id == ministerio.id)
-        .first_or_404()
-    )
+    registro = primeiro_ou_404(CheckInCrianca.objects(id=checkin_id))
+    if registro.crianca is None or registro.crianca.ministerio_id != ministerio.id:
+        abort(404)
     form = CheckoutForm()
 
     if not form.validate_on_submit():
@@ -585,7 +596,7 @@ def fazer_checkout(ministerio_id, checkin_id):
 
     registro.hora_saida = datetime.now(timezone.utc)
     registro.retirado_por_id = current_user.id
-    db.session.commit()
+    registro.save()
 
     flash(f"Saida de {registro.crianca.nome} confirmada.", "success")
     return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
@@ -595,7 +606,7 @@ def fazer_checkout(ministerio_id, checkin_id):
 @login_required
 def excluir_crianca(ministerio_id, crianca_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
-    crianca = Crianca.query.filter_by(id=crianca_id, ministerio_id=ministerio.id).first_or_404()
+    crianca = primeiro_ou_404(Crianca.objects(id=crianca_id, ministerio_id=ministerio.id))
     form = AcaoForm()
 
     if not form.validate_on_submit():
@@ -603,8 +614,7 @@ def excluir_crianca(ministerio_id, crianca_id):
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
     nome = crianca.nome
-    db.session.delete(crianca)
-    db.session.commit()
+    delete_cascade(crianca)
 
     flash(f"{nome} removido(a) do cadastro.", "success")
     return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))

@@ -46,11 +46,10 @@ class Comunidade(SequentialIdDocument):
 
     @property
     def ministerios(self):
-        """Ministerio ainda em SQLAlchemy nesta fase da migracao (ver
-        plano) -- substitui o antigo backref `Comunidade.ministerios` do
+        """Substitui o antigo backref `Comunidade.ministerios` do
         SQLAlchemy, usado em varias telas (calendario, lideres)."""
         from app.ministerio.models import Ministerio
-        return Ministerio.query.filter_by(comunidade_id=self.id).all()
+        return list(Ministerio.objects(comunidade_id=self.id))
 
     def cascade_children(self):
         """Ver app/db_utils.py::delete_cascade. So cobre os filhos que ja

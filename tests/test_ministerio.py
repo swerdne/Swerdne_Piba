@@ -16,7 +16,7 @@ def _cadastrar_crianca(cliente, ministerio_id, nome, responsavel_nome="Responsav
         data={"nome": nome, "responsavel_nome": responsavel_nome, "responsavel_telefone": ""},
         follow_redirects=True,
     )
-    return Crianca.query.filter_by(ministerio_id=ministerio_id, nome=nome).order_by(Crianca.id.desc()).first()
+    return Crianca.objects(ministerio_id=ministerio_id, nome=nome).order_by("-id").first()
 
 
 def test_ministerio_sem_login_redireciona(client):
@@ -39,13 +39,13 @@ def test_criar_ministerio_aparece_na_comunidade(logged_in_client, app, db):
 def test_criar_ministerio_sem_nome_mostra_erro(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
-        total_antes = Ministerio.query.count()
+        total_antes = Ministerio.objects.count()
         logged_in_client.post(
             f"/ministerio/comunidade/{comunidade.id}/nova",
             data={"nome": "", "descricao": ""},
             follow_redirects=True,
         )
-        assert Ministerio.query.count() == total_antes
+        assert Ministerio.objects.count() == total_antes
 
 
 def test_editar_ministerio_atualiza_nome(logged_in_client, app, db):
@@ -58,7 +58,7 @@ def test_editar_ministerio_atualiza_nome(logged_in_client, app, db):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        atualizado = db.session.get(Ministerio, ministerio.id)
+        atualizado = Ministerio.objects(id=ministerio.id).first()
         assert atualizado.nome == "Nome Novo"
         assert atualizado.descricao == "Descricao nova"
 
@@ -71,7 +71,7 @@ def test_criar_ministerio_com_dias_de_culto_salva_csv(logged_in_client, app, db)
             data={"nome": "Louvor", "descricao": "", "dias_culto": ["2", "6"]},
             follow_redirects=True,
         )
-        ministerio = Ministerio.query.filter_by(nome="Louvor").first()
+        ministerio = Ministerio.objects(nome="Louvor").first()
         assert ministerio.dias_culto_efetivos == [2, 6]
 
 
@@ -85,7 +85,7 @@ def test_editar_ministerio_atualiza_dias_de_culto(logged_in_client, app, db):
             data={"nome": ministerio.nome, "descricao": "", "dias_culto": ["6"]},
             follow_redirects=True,
         )
-        atualizado = db.session.get(Ministerio, ministerio.id)
+        atualizado = Ministerio.objects(id=ministerio.id).first()
         assert atualizado.dias_culto_efetivos == [6]
 
 
@@ -297,7 +297,7 @@ def test_excluir_ministerio_remove_e_redireciona_para_comunidade(logged_in_clien
             f"/ministerio/{ministerio_id}/excluir", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        assert db.session.get(Ministerio, ministerio_id) is None
+        assert Ministerio.objects(id=ministerio_id).first() is None
         assert "excluido" in response.data.decode("utf-8")
 
 
@@ -333,7 +333,7 @@ def test_usuario_nao_consegue_excluir_ministerio_de_outra_conta(logged_in_client
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert db.session.get(Ministerio, ministerio_id) is not None
+        assert Ministerio.objects(id=ministerio_id).first() is not None
 
 
 # --- Isolamento entre contas -------------------------------------------------
@@ -364,7 +364,7 @@ def test_usuario_nao_consegue_editar_ministerio_de_outra_conta(logged_in_client,
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert db.session.get(Ministerio, ministerio_id).nome == "Ministerio Original"
+        assert Ministerio.objects(id=ministerio_id).first().nome == "Ministerio Original"
 
 
 def test_usuario_nao_consegue_criar_ministerio_em_comunidade_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
@@ -404,7 +404,7 @@ def test_fazer_checkin_gera_codigo_e_aparece_em_presentes(logged_in_client, app,
         )
         assert response.status_code == 200
 
-        registro = CheckInCrianca.query.filter_by(crianca_id=crianca.id).first()
+        registro = CheckInCrianca.objects(crianca_id=crianca.id).first()
         assert registro is not None
         assert registro.esta_presente
         assert len(registro.codigo_seguranca) == 4
@@ -421,7 +421,7 @@ def test_fazer_checkin_ja_presente_mostra_aviso_e_nao_duplica(logged_in_client, 
         logged_in_client.post(
             f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={}, follow_redirects=True
         )
-        assert CheckInCrianca.query.filter_by(crianca_id=crianca.id).count() == 1
+        assert CheckInCrianca.objects(crianca_id=crianca.id).count() == 1
 
 
 def test_fazer_checkout_com_codigo_correto_libera_crianca(logged_in_client, app, db):
@@ -430,7 +430,7 @@ def test_fazer_checkout_com_codigo_correto_libera_crianca(logged_in_client, app,
         ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
         crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho")
         logged_in_client.post(f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={})
-        registro = CheckInCrianca.query.filter_by(crianca_id=crianca.id).first()
+        registro = CheckInCrianca.objects(crianca_id=crianca.id).first()
 
         response = logged_in_client.post(
             f"/ministerio/{ministerio.id}/checkin/{registro.id}/saida",
@@ -439,7 +439,7 @@ def test_fazer_checkout_com_codigo_correto_libera_crianca(logged_in_client, app,
         )
         assert response.status_code == 200
         db.session.remove()
-        atualizado = db.session.get(CheckInCrianca, registro.id)
+        atualizado = CheckInCrianca.objects(id=registro.id).first()
         assert atualizado.hora_saida is not None
         assert not atualizado.esta_presente
 
@@ -450,7 +450,7 @@ def test_fazer_checkout_com_codigo_errado_mantem_presente(logged_in_client, app,
         ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Kids")
         crianca = _cadastrar_crianca(logged_in_client, ministerio.id, "Joaozinho")
         logged_in_client.post(f"/ministerio/{ministerio.id}/checkin/{crianca.id}/entrada", data={})
-        registro = CheckInCrianca.query.filter_by(crianca_id=crianca.id).first()
+        registro = CheckInCrianca.objects(crianca_id=crianca.id).first()
 
         response = logged_in_client.post(
             f"/ministerio/{ministerio.id}/checkin/{registro.id}/saida",
@@ -459,7 +459,7 @@ def test_fazer_checkout_com_codigo_errado_mantem_presente(logged_in_client, app,
         )
         assert response.status_code == 200
         db.session.remove()
-        assert db.session.get(CheckInCrianca, registro.id).esta_presente
+        assert CheckInCrianca.objects(id=registro.id).first().esta_presente
 
 
 def test_excluir_crianca_remove_do_cadastro(logged_in_client, app, db):
@@ -474,7 +474,7 @@ def test_excluir_crianca_remove_do_cadastro(logged_in_client, app, db):
         )
         assert response.status_code == 200
         db.session.remove()
-        assert db.session.get(Crianca, crianca_id) is None
+        assert Crianca.objects(id=crianca_id).first() is None
 
 
 def test_usuario_nao_consegue_acessar_checkin_de_ministerio_de_outra_conta(

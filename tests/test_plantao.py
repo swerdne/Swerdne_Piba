@@ -1418,9 +1418,9 @@ def test_tela_de_novo_turno_destaca_dias_de_culto_do_ministerio(logged_in_client
         response = logged_in_client.get(f"/plantao/ministerio/{ministerio.id}/nova")
         assert "fa-star" not in response.data.decode("utf-8")
 
-        ministerio_obj = db.session.get(Ministerio, ministerio.id)
+        ministerio_obj = Ministerio.objects(id=ministerio.id).first()
         ministerio_obj.dias_culto = "6"
-        db.session.commit()
+        ministerio_obj.save()
 
         response = logged_in_client.get(f"/plantao/ministerio/{ministerio.id}/nova")
         assert "fa-star" in response.data.decode("utf-8")

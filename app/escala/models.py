@@ -238,7 +238,9 @@ class Escala(db.Model):
     __tablename__ = "escalas"
 
     id = db.Column(db.Integer, primary_key=True)
-    ministerio_id = db.Column(db.Integer, db.ForeignKey("ministerios.id"), nullable=False)
+    # Sem ForeignKey("ministerios.id") -- Ministerio agora vive no MongoDB,
+    # ver `ministerio` abaixo (property, no lugar do antigo db.relationship).
+    ministerio_id = db.Column(db.Integer, nullable=False)
     nome = db.Column(db.String(80), nullable=False)
     departamento = db.Column(db.String(40), nullable=False)
     data = db.Column(db.Date, nullable=True)
@@ -292,9 +294,10 @@ class Escala(db.Model):
     repertorio = db.relationship(
         "ItemRepertorio", backref="escala", order_by="ItemRepertorio.ordem", cascade="all, delete-orphan"
     )
-    ministerio = db.relationship(
-        "Ministerio", backref=db.backref("escalas", cascade="all, delete-orphan")
-    )
+    @property
+    def ministerio(self):
+        from app.ministerio.models import Ministerio
+        return Ministerio.objects(id=self.ministerio_id).first()
     # Sem cascade aqui de proposito: excluir o TurnoPlantao nao pode apagar
     # escalas ja ocorridas/fixadas (historico) -- ver plantao.routes.excluir_turno.
     plantao_turno = db.relationship(

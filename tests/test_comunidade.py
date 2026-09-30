@@ -78,7 +78,7 @@ def test_excluir_comunidade_apaga_ministerios_e_diretorio_em_cascata(logged_in_c
         logged_in_client.post(f"/comunidade/{comunidade.id}/excluir", data={}, follow_redirects=True)
 
         from app.ministerio.models import Ministerio
-        assert db.session.get(Ministerio, ministerio_id) is None
+        assert Ministerio.objects(id=ministerio_id).first() is None
         assert db.session.get(Membro, membro_id) is None
 
 
@@ -616,8 +616,7 @@ def test_diretorio_de_lideres_mostra_lider_so_do_proprio_ministerio(logged_in_cl
         _criar_ministerio(logged_in_client, comunidade.id, "Midia")
 
         bruno = User.objects(email="bruno@example.com").first()
-        db.session.add(UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio_a.id, papel="lider"))
-        db.session.commit()
+        UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio_a.id, papel="lider").save()
 
         html = logged_in_client.get(f"/comunidade/{comunidade.id}/lideres").data.decode("utf-8")
 

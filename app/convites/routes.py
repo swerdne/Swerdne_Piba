@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from flask import render_template, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 
-from app.extensions import db
 from app.db_utils import primeiro_ou_404
 from app.convites import bp
 from app.convites.forms import AcaoForm
@@ -85,15 +84,16 @@ def _aplicar_papel(convite, usuario):
             ).save()
         return url_for("comunidade.detalhe", comunidade_id=convite.escopo_id)
 
-    papel_existente = UsuarioMinisterio.query.filter_by(
+    papel_existente = UsuarioMinisterio.objects(
         usuario_id=usuario.id, ministerio_id=convite.escopo_id
     ).first()
     if papel_existente:
         papel_existente.papel = convite.papel
+        papel_existente.save()
     else:
-        db.session.add(UsuarioMinisterio(
+        UsuarioMinisterio(
             usuario_id=usuario.id, ministerio_id=convite.escopo_id, papel=convite.papel
-        ))
+        ).save()
     return url_for("ministerio.detalhe", ministerio_id=convite.escopo_id)
 
 
@@ -115,14 +115,12 @@ def aceitar_convite(token):
         flash("Este convite foi enviado para outro e-mail -- entre com a conta certa pra aceitar.", "danger")
         return redirect(url_for("convites.ver_convite", token=token))
 
-    # _aplicar_papel ja salva a propria escrita (UsuarioComunidade no Mongo
-    # se salva sozinha; UsuarioMinisterio, ainda em SQLAlchemy, precisa do
-    # db.session.commit() abaixo).
+    # _aplicar_papel ja salva a propria escrita (UsuarioComunidade/
+    # UsuarioMinisterio, os dois no Mongo agora).
     destino = _aplicar_papel(convite, current_user)
     convite.status = STATUS_ACEITO
     convite.respondido_em = datetime.now(timezone.utc)
     convite.save()
-    db.session.commit()
 
     flash(f'Convite aceito! Voce agora e "{convite.papel}" em {convite.escopo_nome}.', "success")
     return redirect(destino)

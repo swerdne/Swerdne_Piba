@@ -63,11 +63,9 @@ class Convite(SequentialIdDocument):
 
     @property
     def ministerio(self):
-        """So valido quando escopo_tipo == 'ministerio' -- ver escopo_nome/escopo_obj.
-        Ministerio ainda em SQLAlchemy nesta fase da migracao (ver plano)."""
-        from app.extensions import db
+        """So valido quando escopo_tipo == 'ministerio' -- ver escopo_nome/escopo_obj."""
         from app.ministerio.models import Ministerio
-        return db.session.get(Ministerio, self.escopo_id)
+        return Ministerio.objects(id=self.escopo_id).first()
 
     @property
     def escopo_obj(self):

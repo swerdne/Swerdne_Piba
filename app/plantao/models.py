@@ -257,7 +257,9 @@ class TurnoPlantao(db.Model):
     __tablename__ = "turnos_plantao"
 
     id = db.Column(db.Integer, primary_key=True)
-    ministerio_id = db.Column(db.Integer, db.ForeignKey("ministerios.id"), nullable=False)
+    # Sem ForeignKey("ministerios.id") -- Ministerio agora vive no MongoDB,
+    # ver `ministerio` abaixo (property, no lugar do antigo db.relationship).
+    ministerio_id = db.Column(db.Integer, nullable=False)
     nome = db.Column(db.String(80), nullable=False)
     # Departamento (mesmas chaves de app.escala.models.DEPARTAMENTOS) -- usado
     # so pra herdar a cor no calendario do Ministerio, mesmo esquema da Escala
@@ -284,9 +286,10 @@ class TurnoPlantao(db.Model):
     offset = db.Column(db.Integer, nullable=False, default=0)
     criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    ministerio = db.relationship(
-        "Ministerio", backref=db.backref("turnos_plantao", cascade="all, delete-orphan")
-    )
+    @property
+    def ministerio(self):
+        from app.ministerio.models import Ministerio
+        return Ministerio.objects(id=self.ministerio_id).first()
 
     @property
     def fila_ordenada(self):

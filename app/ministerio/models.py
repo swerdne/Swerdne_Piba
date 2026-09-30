@@ -1,4 +1,4 @@
-"""Model (M do MVC): Ministerio.
+"""Model (M do MVC): Ministerio (MongoDB, ver app/db_utils.py).
 
 Camada organizacional dentro de uma Comunidade: agrupa escalas relacionadas
 (ex: "Ministerio de Louvor", "Equipe de Midia"). Puramente organizacional --
@@ -6,22 +6,21 @@ nao tem ligacao obrigatoria com o campo `departamento` de cada Escala.
 """
 from datetime import datetime, timezone
 
-from app.extensions import db
+import mongoengine
+from app.db_utils import PureDateField, SequentialIdDocument
 
 PAPEIS_MINISTERIO = ("lider", "membro")
 
 
-class Ministerio(db.Model):
-    __tablename__ = "ministerios"
+class Ministerio(SequentialIdDocument):
+    meta = {"collection": "ministerios"}
+    _nome_sequencia = "ministerios"
 
-    id = db.Column(db.Integer, primary_key=True)
-    # Sem ForeignKey("comunidades.id") -- Comunidade agora vive no MongoDB,
-    # ver `comunidade` abaixo (property, no lugar do antigo db.relationship).
-    comunidade_id = db.Column(db.Integer, nullable=False)
-    nome = db.Column(db.String(120), nullable=False)
-    descricao = db.Column(db.Text, nullable=True)
-    imagem = db.Column(db.String(500), nullable=True)
-    criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    comunidade_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=120)
+    descricao = mongoengine.StringField()
+    imagem = mongoengine.StringField(max_length=500)
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     # Dias da semana que esse ministerio costuma ter culto/evento (CSV de
     # inteiros 0=segunda..6=domingo, mesma convencao de
@@ -29,7 +28,7 @@ class Ministerio(db.Model):
     # visual pra quem configura a recorrencia de um Rodizio (ver
     # dias_culto_efetivos) -- nunca restringe quais dias podem ser
     # escolhidos la, so destaca os habituais.
-    dias_culto = db.Column(db.String(20), nullable=True)
+    dias_culto = mongoengine.StringField(max_length=20)
 
     @property
     def comunidade(self):
@@ -46,11 +45,38 @@ class Ministerio(db.Model):
             return []
         return sorted(int(d) for d in self.dias_culto.split(","))
 
+    @property
+    def papeis_usuarios(self):
+        return list(UsuarioMinisterio.objects(ministerio_id=self.id))
+
+    @property
+    def escalas(self):
+        """Escala ainda em SQLAlchemy nesta fase da migracao (ver plano) --
+        substitui o antigo backref `Ministerio.escalas` do SQLAlchemy."""
+        from app.escala.models import Escala
+        return Escala.query.filter_by(ministerio_id=self.id).all()
+
+    @property
+    def turnos_plantao(self):
+        """TurnoPlantao ainda em SQLAlchemy nesta fase da migracao -- ver
+        `escalas` acima, mesmo motivo."""
+        from app.plantao.models import TurnoPlantao
+        return TurnoPlantao.query.filter_by(ministerio_id=self.id).all()
+
+    def cascade_children(self):
+        """Ver app/db_utils.py::delete_cascade. Escala e TurnoPlantao
+        (ainda em SQLAlchemy nesta fase) sao apagados a parte, explicitamente,
+        em ministerio.routes.excluir_ministerio."""
+        return [
+            UsuarioMinisterio.objects(ministerio_id=self.id),
+            Crianca.objects(ministerio_id=self.id),
+        ]
+
     def __repr__(self):
         return f"<Ministerio {self.nome} da comunidade {self.comunidade_id}>"
 
 
-class UsuarioMinisterio(db.Model):
+class UsuarioMinisterio(SequentialIdDocument):
     """Papel de um usuario (conta com login) dentro de um Ministerio --
     'lider' gerencia escalas/turnos/membros daquele ministerio; 'membro'
     participa (visualiza as escalas em que esta inserido). Nao existe papel
@@ -64,53 +90,50 @@ class UsuarioMinisterio(db.Model):
     QUALQUER ministerio dela, mesmo sem uma linha aqui -- ver
     ministerio.routes._eh_lider_do_ministerio."""
 
-    __tablename__ = "usuario_ministerio"
+    meta = {
+        "collection": "usuario_ministerio",
+        "indexes": [{"fields": ["usuario_id", "ministerio_id"], "unique": True}],
+    }
+    _nome_sequencia = "usuario_ministerio"
 
-    id = db.Column(db.Integer, primary_key=True)
-    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver
-    # `usuario` abaixo (property, no lugar do antigo db.relationship).
-    usuario_id = db.Column(db.Integer, nullable=False)
-    ministerio_id = db.Column(db.Integer, db.ForeignKey("ministerios.id"), nullable=False)
-    papel = db.Column(db.String(10), nullable=False)
-    criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    usuario_id = mongoengine.IntField(required=True)
+    ministerio_id = mongoengine.IntField(required=True)
+    papel = mongoengine.StringField(required=True, max_length=10)
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     @property
     def usuario(self):
         from app.auth.models import User
         return User.objects(id=self.usuario_id).first()
 
-    ministerio = db.relationship(
-        "Ministerio", backref=db.backref("papeis_usuarios", cascade="all, delete-orphan")
-    )
-
-    __table_args__ = (
-        db.UniqueConstraint("usuario_id", "ministerio_id", name="uq_usuario_ministerio"),
-    )
+    @property
+    def ministerio(self):
+        return Ministerio.objects(id=self.ministerio_id).first()
 
     def __repr__(self):
         return f"<UsuarioMinisterio {self.usuario_id} papel={self.papel} do ministerio {self.ministerio_id}>"
 
 
-class Crianca(db.Model):
+class Crianca(SequentialIdDocument):
     """Uma crianca cadastrada no check-in de um Ministerio (pensado pro
     ministerio Kids, mas nao restrito -- qualquer Ministerio pode ter sua
     propria lista). Cadastrada uma vez pelo lider/voluntario no balcao de
     check-in; reaproveitada em cada culto (ver CheckInCrianca abaixo)."""
 
-    __tablename__ = "ministerio_criancas"
+    meta = {"collection": "ministerio_criancas"}
+    _nome_sequencia = "ministerio_criancas"
 
-    id = db.Column(db.Integer, primary_key=True)
-    ministerio_id = db.Column(db.Integer, db.ForeignKey("ministerios.id"), nullable=False)
-    nome = db.Column(db.String(120), nullable=False)
-    data_nascimento = db.Column(db.Date, nullable=True)
-    responsavel_nome = db.Column(db.String(120), nullable=False)
-    responsavel_telefone = db.Column(db.String(30), nullable=True)
-    observacoes = db.Column(db.Text, nullable=True)
-    criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    ministerio_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=120)
+    data_nascimento = PureDateField()
+    responsavel_nome = mongoengine.StringField(required=True, max_length=120)
+    responsavel_telefone = mongoengine.StringField(max_length=30)
+    observacoes = mongoengine.StringField()
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
-    ministerio = db.relationship(
-        "Ministerio", backref=db.backref("criancas", cascade="all, delete-orphan")
-    )
+    @property
+    def ministerio(self):
+        return Ministerio.objects(id=self.ministerio_id).first()
 
     @property
     def iniciais(self):
@@ -118,33 +141,38 @@ class Crianca(db.Model):
         letras = "".join(p[0] for p in partes[:2])
         return letras.upper() or "?"
 
+    @property
+    def checkins(self):
+        return CheckInCrianca.objects(crianca_id=self.id).order_by("-hora_entrada")
+
+    def cascade_children(self):
+        return [CheckInCrianca.objects(crianca_id=self.id)]
+
     def __repr__(self):
         return f"<Crianca {self.nome} do ministerio {self.ministerio_id}>"
 
 
-class CheckInCrianca(db.Model):
+class CheckInCrianca(SequentialIdDocument):
     """Uma entrada+saida de uma Crianca no balcao de check-in, num dia
     especifico. `codigo_seguranca` e gerado na entrada e entregue ao
     responsavel (escrito/tirado foto) -- na saida, o voluntario confere
     esse mesmo codigo antes de liberar a crianca (ver
     ministerio.routes.fazer_checkout)."""
 
-    __tablename__ = "ministerio_checkins"
+    meta = {"collection": "ministerio_checkins"}
+    _nome_sequencia = "ministerio_checkins"
 
-    id = db.Column(db.Integer, primary_key=True)
-    crianca_id = db.Column(db.Integer, db.ForeignKey("ministerio_criancas.id"), nullable=False)
-    data = db.Column(db.Date, nullable=False)
-    hora_entrada = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    hora_saida = db.Column(db.DateTime, nullable=True)
-    codigo_seguranca = db.Column(db.String(6), nullable=False)
-    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver as
-    # properties abaixo (no lugar dos antigos db.relationship).
-    registrado_por_id = db.Column(db.Integer, nullable=False)
-    retirado_por_id = db.Column(db.Integer, nullable=True)
+    crianca_id = mongoengine.IntField(required=True)
+    data = PureDateField(required=True)
+    hora_entrada = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    hora_saida = mongoengine.DateTimeField()
+    codigo_seguranca = mongoengine.StringField(required=True, max_length=6)
+    registrado_por_id = mongoengine.IntField(required=True)
+    retirado_por_id = mongoengine.IntField()
 
-    crianca = db.relationship(
-        "Crianca", backref=db.backref("checkins", cascade="all, delete-orphan", order_by="CheckInCrianca.hora_entrada.desc()")
-    )
+    @property
+    def crianca(self):
+        return Crianca.objects(id=self.crianca_id).first()
 
     @property
     def registrado_por(self):
@@ -166,6 +194,5 @@ class CheckInCrianca(db.Model):
 
 def criar_ministerio(comunidade_id, nome, descricao=None, imagem=None):
     ministerio = Ministerio(comunidade_id=comunidade_id, nome=nome, descricao=descricao, imagem=imagem)
-    db.session.add(ministerio)
-    db.session.commit()
+    ministerio.save()
     return ministerio

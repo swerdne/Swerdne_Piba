@@ -244,8 +244,8 @@ PASSOS_TUTORIAL_COMUNIDADE = [
 @login_required
 def detalhe(comunidade_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    ministerios = (
-        Ministerio.query.filter_by(comunidade_id=comunidade.id).order_by(Ministerio.nome).all()
+    ministerios = list(
+        Ministerio.objects(comunidade_id=comunidade.id).order_by("nome")
     )
     # Membro (diretorio de escalacao) e UsuarioComunidade (conta que entrou
     # via convite/link) sao coisas diferentes -- ver models.py -- mas pra
@@ -308,22 +308,22 @@ def excluir_comunidade(comunidade_id):
         flash("Acao invalida.", "danger")
         return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
 
-    # Comunidade agora vive no Mongo, mas Ministerio/Membro (e tudo que
-    # pende deles: Escalas, Turnos de Rodizio, diretorio) ainda estao no
+    # Comunidade e Ministerio agora vivem no Mongo, mas Membro (diretorio) e
+    # tudo que pende de Ministerio (Escala, TurnoPlantao) ainda estao no
     # Postgres nesta fase da migracao -- sem o cascade automatico que
     # existia antes (cascade="all, delete-orphan" em Comunidade.ministerios/
-    # membros), precisa apagar cada lado explicitamente. delete_cascade
-    # cobre o lado Mongo (UsuarioComunidade/Evento); os loops abaixo cobrem
-    # o lado Postgres, na ordem certa (Ministerio primeiro -- ele cascade
-    # pra Escala/Funcao, que referenciam Membro -- so depois Membro, senao
-    # a FK ainda em uso barraria a delecao).
+    # membros), precisa apagar cada lado explicitamente, na ordem certa:
+    # Ministerio primeiro (reaproveita excluir_ministerio_em_cascata, que ja
+    # cuida do proprio Escala/Funcao dele) -- so depois Membro, ja que
+    # Funcao referencia Membro e barraria a delecao enquanto existir.
+    from app.ministerio.routes import excluir_ministerio_em_cascata
+
     _remover_logo_antiga(comunidade.imagem)
 
     nome = comunidade.nome
 
-    for ministerio in Ministerio.query.filter_by(comunidade_id=comunidade.id).all():
-        db.session.delete(ministerio)
-    db.session.commit()
+    for ministerio in Ministerio.objects(comunidade_id=comunidade.id):
+        excluir_ministerio_em_cascata(ministerio)
 
     for membro in Membro.query.filter_by(comunidade_id=comunidade.id).all():
         db.session.delete(membro)
@@ -686,10 +686,13 @@ def escalados(comunidade_id):
     departamento = request.args.get("departamento", "").strip()
     funcao_nome = request.args.get("funcao", "").strip()
 
+    # Ministerio agora vive no Mongo -- sem join possivel com Funcao/Escala
+    # (SQLAlchemy). Busca os ids de ministerio da comunidade primeiro, filtra
+    # Escala por esses ids em vez de juntar direto na tabela.
+    ids_ministerios = [m.id for m in Ministerio.objects(comunidade_id=comunidade.id)]
     consulta = (
         Funcao.query.join(Escala)
-        .join(Ministerio, Escala.ministerio_id == Ministerio.id)
-        .filter(Ministerio.comunidade_id == comunidade.id, Funcao.membro_id.isnot(None))
+        .filter(Escala.ministerio_id.in_(ids_ministerios), Funcao.membro_id.isnot(None))
     )
 
     if data_de:

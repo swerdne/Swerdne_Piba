@@ -21,8 +21,8 @@ def _criar_ministerio(cliente, comunidade_id, nome="Ministerio Teste"):
         follow_redirects=True,
     )
     return (
-        Ministerio.query.filter_by(nome=nome, comunidade_id=comunidade_id)
-        .order_by(Ministerio.id.desc())
+        Ministerio.objects(nome=nome, comunidade_id=comunidade_id)
+        .order_by("-id")
         .first()
     )
 
@@ -707,7 +707,7 @@ def test_cancelar_escala_marca_cancelada_e_notifica_quem_estava_escalado(logged_
         from app.auth.models import User
 
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
-        comunidade_id = Ministerio.query.get(escala.ministerio_id).comunidade_id
+        comunidade_id = Ministerio.objects(id=escala.ministerio_id).first().comunidade_id
         membro = _criar_membro(logged_in_client, comunidade_id, "Ana", email="ana@example.com")
         _escalar(logged_in_client, _funcao_por_nome(escala, "Baixo").id, membro.id)
 
@@ -1344,8 +1344,7 @@ def test_membro_escalado_solicita_troca_notifica_lider(logged_in_client, outro_l
         # escalado comum, sem nenhum dos tres, nao teria acesso; na pratica,
         # quem chega a se auto-escalar ja aceitou convite pro Ministerio).
         bruno = User.objects(email="bruno@example.com").first()
-        db.session.add(UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio.id, papel="membro"))
-        db.session.commit()
+        UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio.id, papel="membro").save()
 
     with sessao_isolada(app):
         resposta = outro_logged_in_client.post(
