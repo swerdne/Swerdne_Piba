@@ -12,7 +12,6 @@ from datetime import date, datetime, time, timedelta
 
 import pytest
 
-from app.extensions import db
 from app.escala.models import Escala, Funcao, Membro
 from app.plantao.models import (
     TurnoPlantao,
@@ -52,8 +51,7 @@ def _criar_turno_teste(ministerio_id, nome="Turno Teste", data_inicio=date(2026,
         termino_tipo=termino_tipo, termino_data=termino_data, termino_ocorrencias=termino_ocorrencias,
         horario=horario, offset=offset, departamento=departamento, nome_funcao=nome_funcao,
     )
-    db.session.add(turno)
-    db.session.commit()
+    turno.save()
     return turno
 
 
@@ -86,11 +84,9 @@ def _adicionar_a_fila(turno, membros):
     posicao = max([e.posicao for e in turno.fila], default=-1) + 1
     for membro in membros:
         equipe = EquipeTurno(turno_id=turno.id, posicao=posicao)
-        db.session.add(equipe)
-        db.session.flush()
-        db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
+        equipe.save()
+        EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id).save()
         posicao += 1
-    db.session.commit()
 
 
 def _adicionar_equipe(turno, membros):
@@ -98,11 +94,9 @@ def _adicionar_equipe(turno, membros):
     pra testar o rodizio revezando GRUPOS inteiros, nao pessoas isoladas."""
     posicao = max([e.posicao for e in turno.fila], default=-1) + 1
     equipe = EquipeTurno(turno_id=turno.id, posicao=posicao)
-    db.session.add(equipe)
-    db.session.flush()
+    equipe.save()
     for membro in membros:
-        db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
-    db.session.commit()
+        EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id).save()
     return equipe
 
 
@@ -588,7 +582,7 @@ def test_editar_turno_reflete_em_periodos_futuros_nao_fixados(logged_in_client, 
         turno.departamento = "Kids"
         turno.nome_funcao = "Recepcionista"
         turno.nome = "Plantao Kids"
-        db.session.commit()
+        turno.save()
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
 
         escala = _escala_do_periodo(turno, 0)
@@ -611,7 +605,7 @@ def test_editar_horario_dispara_notificacao_de_alteracao_e_reseta_timestamps(log
         escala.save()
 
         turno.horario = time(20, 0)
-        db.session.commit()
+        turno.save()
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
 
         escala_atualizada = _escala_do_periodo(turno, 0)
@@ -639,7 +633,7 @@ def test_editar_data_inicio_recria_periodos_futuros_preserva_passado_fixado(logg
 
         nova_data_inicio = date.today() + timedelta(days=10)
         turno.data_inicio = nova_data_inicio
-        db.session.commit()
+        turno.save()
         preparar_para_renumeracao(turno)
 
         # a ocorrencia ja ocorrida continua existindo, so perde o vinculo de periodo
@@ -669,7 +663,7 @@ def test_editar_termino_dispara_renumeracao_e_remove_ocorrencias_alem_do_novo_li
         # encurta o termino de "sem fim" pra "apos 5 ocorrencias"
         turno.termino_tipo = "ocorrencias"
         turno.termino_ocorrencias = 5
-        db.session.commit()
+        turno.save()
         preparar_para_renumeracao(turno)
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=20))
 
@@ -800,7 +794,7 @@ def test_excluir_turno_via_rota_preserva_passado_remove_futuro(logged_in_client,
         assert escala_passada.plantao_periodo is None
 
         assert Escala.objects(id=escala_futura_id).first() is None
-        assert TurnoPlantao.query.get(turno.id) is None
+        assert TurnoPlantao.objects(id=turno.id).first() is None
 
 
 # --- Rotas HTTP -----------------------------------------------------------------
@@ -819,7 +813,7 @@ def test_criar_turno_diario_via_rota_materializa_escalas(logged_in_client, app, 
             follow_redirects=True,
         )
         assert response.status_code == 200
-        turno = TurnoPlantao.query.filter_by(nome="Plantao Manha", ministerio_id=ministerio.id).first()
+        turno = TurnoPlantao.objects(nome="Plantao Manha", ministerio_id=ministerio.id).first()
         assert turno is not None
         assert turno.departamento == "Midia"
         assert turno.unidade_recorrencia == "dia"
@@ -840,7 +834,7 @@ def test_criar_turno_semanal_via_rota_com_dias_semana(logged_in_client, app, db)
             follow_redirects=True,
         )
         assert response.status_code == 200
-        turno = TurnoPlantao.query.filter_by(nome="Plantao Semanal").first()
+        turno = TurnoPlantao.objects(nome="Plantao Semanal").first()
         assert turno is not None
         assert turno.dias_semana_efetivos == [0, 3]
 
@@ -859,7 +853,7 @@ def test_criar_turno_mensal_via_rota_com_modo_mensal(logged_in_client, app, db):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        turno = TurnoPlantao.query.filter_by(nome="Plantao Mensal").first()
+        turno = TurnoPlantao.objects(nome="Plantao Mensal").first()
         assert turno is not None
         assert turno.modo_mensal == "ultimo_dia_semana"
 
@@ -878,7 +872,7 @@ def test_criar_turno_com_termino_por_data_via_rota(logged_in_client, app, db):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        turno = TurnoPlantao.query.filter_by(nome="Plantao Com Fim").first()
+        turno = TurnoPlantao.objects(nome="Plantao Com Fim").first()
         assert turno is not None
         assert turno.termino_tipo == "data"
         assert turno.termino_data == date(2026, 6, 1)
@@ -931,7 +925,7 @@ def test_criar_turno_a_partir_de_escala_semeia_fila_com_os_escalados(logged_in_c
         )
         assert response.status_code == 200
 
-        turno = TurnoPlantao.query.filter_by(nome="Rodizio Louvor", ministerio_id=ministerio.id).first()
+        turno = TurnoPlantao.objects(nome="Rodizio Louvor", ministerio_id=ministerio.id).first()
         assert turno is not None
         assert len(turno.fila) == 1  # UMA equipe, nao duas posicoes
         nomes_da_equipe = [m.membro.nome for m in turno.fila[0].integrantes]
@@ -960,7 +954,7 @@ def test_criar_turno_a_partir_de_escala_vincula_permanentemente(logged_in_client
             follow_redirects=True,
         )
 
-        turno = TurnoPlantao.query.filter_by(nome="Rodizio Vinculado").first()
+        turno = TurnoPlantao.objects(nome="Rodizio Vinculado").first()
         escala_recarregada = Escala.objects(id=escala.id).first()
         assert escala_recarregada.turno_plantao_origem_id == turno.id
         assert turno.escala_origem.id == escala.id
@@ -982,7 +976,7 @@ def test_escala_de_origem_nao_gera_capa_separada_na_lista_do_ministerio(logged_i
             ),
             follow_redirects=True,
         )
-        turno = TurnoPlantao.query.filter_by(nome="Escala Vermelha", ministerio_id=ministerio.id).first()
+        turno = TurnoPlantao.objects(nome="Escala Vermelha", ministerio_id=ministerio.id).first()
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
 
         response = logged_in_client.get(f"/ministerio/{ministerio.id}")
@@ -1008,7 +1002,7 @@ def test_turno_sem_escala_de_origem_continua_aparecendo_na_secao_do_ministerio(l
             data=_payload_turno(nome="Turno Solto", departamento="Louvor"),
             follow_redirects=True,
         )
-        turno = TurnoPlantao.query.filter_by(nome="Turno Solto", ministerio_id=ministerio.id).first()
+        turno = TurnoPlantao.objects(nome="Turno Solto", ministerio_id=ministerio.id).first()
         assert turno.escala_origem is None
 
         html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
@@ -1033,7 +1027,7 @@ def test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem(logged_in_client
             ),
             follow_redirects=True,
         )
-        turno = TurnoPlantao.query.filter_by(nome="Rodizio X").first()
+        turno = TurnoPlantao.objects(nome="Rodizio X").first()
 
         html_escala = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
         assert "Editar rodizio vinculado" in html_escala
@@ -1060,12 +1054,12 @@ def test_excluir_escala_de_origem_faz_turno_voltar_a_gerar_capa(logged_in_client
             ),
             follow_redirects=True,
         )
-        turno = TurnoPlantao.query.filter_by(nome="Rodizio Orfao").first()
+        turno = TurnoPlantao.objects(nome="Rodizio Orfao").first()
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
 
         logged_in_client.post(f"/escala/{escala.id}/excluir", data={}, follow_redirects=True)
 
-        turno_recarregado = db.session.get(TurnoPlantao, turno.id)
+        turno_recarregado = TurnoPlantao.objects(id=turno.id).first()
         assert turno_recarregado.escala_origem is None  # sem cascade, turno sobrevive
 
         response = logged_in_client.get(f"/ministerio/{ministerio.id}")
@@ -1092,7 +1086,7 @@ def test_criar_turno_a_partir_de_escala_ignora_funcao_repetida_e_vazia(logged_in
             follow_redirects=True,
         )
 
-        turno = TurnoPlantao.query.filter_by(nome="Rodizio Ana").first()
+        turno = TurnoPlantao.objects(nome="Rodizio Ana").first()
         assert len(turno.fila) == 1
         assert [m.membro.nome for m in turno.fila[0].integrantes] == ["Ana"]
 
@@ -1150,11 +1144,8 @@ def test_link_para_criar_turno_nao_aparece_em_escala_sem_ninguem_escalado(logged
 
 
 def _equipe_membro_de(turno, membro_id):
-    return (
-        EquipeMembro.query.join(EquipeTurno)
-        .filter(EquipeTurno.turno_id == turno.id, EquipeMembro.membro_id == membro_id)
-        .first()
-    )
+    ids_equipes = [e.id for e in EquipeTurno.objects(turno_id=turno.id)]
+    return EquipeMembro.objects(equipe_turno_id__in=ids_equipes, membro_id=membro_id).first()
 
 
 def test_adicionar_e_remover_membro_da_fila_via_rota(logged_in_client, app, db):
@@ -1178,7 +1169,7 @@ def test_adicionar_e_remover_membro_da_fila_via_rota(logged_in_client, app, db):
             f"/plantao/{turno.id}/fila/{item.id}/remover", data={}, follow_redirects=True
         )
         assert _equipe_membro_de(turno, membro.id) is None
-        assert EquipeTurno.query.filter_by(turno_id=turno.id).count() == 0  # equipe vazia tambem some
+        assert EquipeTurno.objects(turno_id=turno.id).count() == 0  # equipe vazia tambem some
 
 
 def test_adicionar_segundo_membro_na_mesma_equipe_via_rota(logged_in_client, app, db):
@@ -1196,7 +1187,7 @@ def test_adicionar_segundo_membro_na_mesma_equipe_via_rota(logged_in_client, app
             data={"membro_id": cima.id, "equipe_turno_id": "0"},
             follow_redirects=True,
         )
-        equipe = EquipeTurno.query.filter_by(turno_id=turno.id).first()
+        equipe = EquipeTurno.objects(turno_id=turno.id).first()
 
         logged_in_client.post(
             f"/plantao/{turno.id}/fila/adicionar",
@@ -1204,9 +1195,8 @@ def test_adicionar_segundo_membro_na_mesma_equipe_via_rota(logged_in_client, app
             follow_redirects=True,
         )
 
-        db.session.expire_all()
-        assert EquipeTurno.query.filter_by(turno_id=turno.id).count() == 1  # uma unica equipe
-        nomes = sorted(m.nome for m in EquipeTurno.query.get(equipe.id).membros_ordenados)
+        assert EquipeTurno.objects(turno_id=turno.id).count() == 1  # uma unica equipe
+        nomes = sorted(m.nome for m in EquipeTurno.objects(id=equipe.id).first().membros_ordenados)
         assert nomes == ["Cima", "Emilly"]
 
 
@@ -1225,7 +1215,7 @@ def test_editar_turno_via_rota(logged_in_client, app, db):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        turno_atualizado = db.session.get(TurnoPlantao, turno.id)
+        turno_atualizado = TurnoPlantao.objects(id=turno.id).first()
         assert turno_atualizado.nome == "Turno Renomeado"
         assert turno_atualizado.unidade_recorrencia == "semana"
         assert turno_atualizado.dias_semana_efetivos == [1, 4]
@@ -1357,7 +1347,7 @@ def test_usuario_nao_consegue_mexer_na_fila_de_turno_de_outra_conta(logged_in_cl
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert _equipe_membro_de(db.session.get(TurnoPlantao, turno_id), a.id) is not None
+        assert _equipe_membro_de(TurnoPlantao.objects(id=turno_id).first(), a.id) is not None
 
 
 # --- Integracao com calendario/relatorio do resto do sistema --------------------
@@ -1419,7 +1409,7 @@ def test_horario_fim_do_turno_propaga_pras_ocorrencias_geradas(logged_in_client,
             ministerio.id, data_inicio=date.today(), unidade_recorrencia="dia", horario=time(19, 0),
         )
         turno.horario_fim = time(21, 0)
-        db.session.commit()
+        turno.save()
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=1))
 

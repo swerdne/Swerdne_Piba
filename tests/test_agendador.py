@@ -3,10 +3,10 @@
 Nao usar `with app.app_context():` aqui -- o fixture `app` ja mantem um
 contexto aberto, e `_verificar_e_notificar` empurra o seu proprio por dentro.
 
-Escala/Funcao/Membro sao MongoEngine (ver app/db_utils.py) -- sem identity
-map, `Model.objects(...)` sempre busca fresco do banco, entao nao precisa de
-`db.session.expire_all()` (que so afeta a sessao SQLAlchemy) antes de
-reconsultar apos o tick do agendador.
+Escala/Funcao/Membro/TurnoPlantao/EquipeTurno/EquipeMembro sao todos
+MongoEngine (ver app/db_utils.py) -- sem identity map, `Model.objects(...)`
+sempre busca fresco do banco, entao nao precisa de `db.session.expire_all()`
+antes de reconsultar apos o tick do agendador.
 """
 from datetime import datetime, timedelta
 
@@ -105,10 +105,9 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
 
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    # microsegundos zerados -- horario de TurnoPlantao (SQLite) e comparado
-    # contra Escala.horario (Mongo, so guarda precisao de milissegundos) em
-    # sincronizar_turno; um formulario real nunca envia microssegundos, isso
-    # so evita ruido artificial deste fixture de teste.
+    # microsegundos zerados -- um formulario real nunca envia microssegundos,
+    # isso so evita ruido artificial deste fixture de teste (datetime.now()
+    # carrega microssegundos, Mongo so guarda precisao de milissegundos).
     daqui_24h = (datetime.now() + timedelta(hours=24, minutes=2)).replace(microsecond=0)
 
     turno = TurnoPlantao(
@@ -116,15 +115,12 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
         nome_funcao="Responsavel", data_inicio=daqui_24h.date(), horario=daqui_24h.time(),
         unidade_recorrencia="dia", intervalo_recorrencia=1, termino_tipo="nunca",
     )
-    db.session.add(turno)
-    db.session.commit()
+    turno.save()
     membro = Membro(comunidade_id=ministerio.comunidade_id, nome="Fulano", email="fulano@example.com")
     membro.save()
     equipe = EquipeTurno(turno_id=turno.id, posicao=0)
-    db.session.add(equipe)
-    db.session.flush()
-    db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
-    db.session.commit()
+    equipe.save()
+    EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id).save()
 
     _verificar_e_notificar(app)
 
@@ -148,15 +144,12 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
         nome_funcao="Responsavel", data_inicio=daqui_16h.date(), horario=daqui_16h.time(),
         unidade_recorrencia="dia", intervalo_recorrencia=1, termino_tipo="nunca",
     )
-    db.session.add(turno)
-    db.session.commit()
+    turno.save()
     membro = Membro(comunidade_id=ministerio.comunidade_id, nome="Fulano", email="fulano@example.com")
     membro.save()
     equipe = EquipeTurno(turno_id=turno.id, posicao=0)
-    db.session.add(equipe)
-    db.session.flush()
-    db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
-    db.session.commit()
+    equipe.save()
+    EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id).save()
 
     _verificar_e_notificar(app)
     primeira = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em

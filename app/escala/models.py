@@ -320,21 +320,20 @@ class Escala(SequentialIdDocument):
 
     @property
     def plantao_turno(self):
-        """TurnoPlantao ainda em SQLAlchemy nesta fase da migracao. Sem
-        cascade aqui de proposito (igual antes): excluir o TurnoPlantao nao
-        pode apagar escalas ja ocorridas/fixadas (historico) -- ver
-        plantao.routes.excluir_turno."""
+        """Sem cascade aqui de proposito (igual antes): excluir o
+        TurnoPlantao nao pode apagar escalas ja ocorridas/fixadas (historico)
+        -- ver plantao.routes.excluir_turno."""
         if not self.plantao_turno_id:
             return None
         from app.plantao.models import TurnoPlantao
-        return TurnoPlantao.query.get(self.plantao_turno_id)
+        return TurnoPlantao.objects(id=self.plantao_turno_id).first()
 
     @property
     def turno_plantao_origem(self):
         if not self.turno_plantao_origem_id:
             return None
         from app.plantao.models import TurnoPlantao
-        return TurnoPlantao.query.get(self.turno_plantao_origem_id)
+        return TurnoPlantao.objects(id=self.turno_plantao_origem_id).first()
 
     def cascade_children(self):
         return [Funcao.objects(escala_id=self.id), ItemRepertorio.objects(escala_id=self.id)]

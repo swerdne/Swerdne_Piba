@@ -318,7 +318,7 @@ def test_excluir_ministerio_apaga_escalas_e_turnos_de_rodizio_em_cascata(logged_
         logged_in_client.post(f"/ministerio/{ministerio.id}/excluir", data={}, follow_redirects=True)
 
         assert Escala.objects(id=escala_id).first() is None
-        assert db.session.get(TurnoPlantao, turno_id) is None
+        assert TurnoPlantao.objects(id=turno_id).first() is None
         assert Escala.objects(plantao_turno_id=turno_id).count() == 0
 
 

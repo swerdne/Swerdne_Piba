@@ -57,15 +57,12 @@ class Ministerio(SequentialIdDocument):
 
     @property
     def turnos_plantao(self):
-        """TurnoPlantao ainda em SQLAlchemy nesta fase da migracao -- ver
-        `escalas` acima, mesmo motivo."""
         from app.plantao.models import TurnoPlantao
-        return TurnoPlantao.query.filter_by(ministerio_id=self.id).all()
+        return list(TurnoPlantao.objects(ministerio_id=self.id))
 
     def cascade_children(self):
-        """Ver app/db_utils.py::delete_cascade. Escala e TurnoPlantao
-        (ainda em SQLAlchemy nesta fase) sao apagados a parte, explicitamente,
-        em ministerio.routes.excluir_ministerio."""
+        """Ver app/db_utils.py::delete_cascade. Escala e TurnoPlantao sao
+        apagados a parte, explicitamente, em ministerio.routes.excluir_ministerio."""
         return [
             UsuarioMinisterio.objects(ministerio_id=self.id),
             Crianca.objects(ministerio_id=self.id),

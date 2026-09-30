@@ -10,8 +10,7 @@ from datetime import date, datetime
 from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 
-from app.extensions import db
-from app.db_utils import delete_cascade
+from app.db_utils import delete_cascade, primeiro_ou_404
 from app.escala.models import Escala, Membro
 from app.plantao import bp
 from app.plantao.forms import TurnoPlantaoForm, AdicionarMembroFilaForm, AcaoForm
@@ -36,7 +35,7 @@ def _turno_do_usuario_ou_404(turno_id):
     do ministerio dele (ver ministerio.routes._eh_lider_do_ministerio)."""
     from app.ministerio.routes import _eh_lider_do_ministerio
 
-    turno = TurnoPlantao.query.get_or_404(turno_id)
+    turno = primeiro_ou_404(TurnoPlantao.objects(id=turno_id))
     if not _eh_lider_do_ministerio(turno.ministerio, current_user):
         abort(404)
     return turno
@@ -94,11 +93,9 @@ def _semear_fila_a_partir_da_escala(turno, escala):
         return
 
     equipe = EquipeTurno(turno_id=turno.id, posicao=0)
-    db.session.add(equipe)
-    db.session.flush()
+    equipe.save()
     for membro_id in membros_ids:
-        db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro_id))
-    db.session.commit()
+        EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro_id).save()
 
 
 @bp.route("/ministerio/<int:ministerio_id>/nova", methods=["GET", "POST"])
@@ -133,8 +130,7 @@ def nova(ministerio_id):
     if form.validate_on_submit():
         turno = TurnoPlantao(ministerio_id=ministerio.id)
         _aplicar_campos_do_form(turno, form)
-        db.session.add(turno)
-        db.session.commit()
+        turno.save()
 
         if escala_origem:
             _semear_fila_a_partir_da_escala(turno, escala_origem)
@@ -223,7 +219,7 @@ def editar(turno_id):
             valores_antigos[campo] != getattr(turno, campo) for campo in CAMPOS_QUE_AFETAM_NUMERACAO
         )
 
-        db.session.commit()
+        turno.save()
 
         if muda_numeracao:
             # a numeracao de periodo passou a significar outra data -- solta o
@@ -263,8 +259,7 @@ def excluir_turno(turno_id):
 
     ministerio_id = turno.ministerio_id
     nome = turno.nome
-    db.session.delete(turno)
-    db.session.commit()
+    delete_cascade(turno)
 
     flash(f'Turno de rodizio "{nome}" excluido.', "success")
     return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio_id))
@@ -295,18 +290,16 @@ def adicionar_membro_fila(turno_id):
 
     equipe_id = form.equipe_turno_id.data
     if equipe_id:
-        equipe = EquipeTurno.query.filter_by(id=equipe_id, turno_id=turno.id).first()
+        equipe = EquipeTurno.objects(id=equipe_id, turno_id=turno.id).first()
         if equipe is None:
             flash("Equipe invalida.", "danger")
             return redirect(url_for("plantao.detalhe", turno_id=turno.id))
     else:
         maior_posicao = max([e.posicao for e in turno.fila], default=-1)
         equipe = EquipeTurno(turno_id=turno.id, posicao=maior_posicao + 1)
-        db.session.add(equipe)
-        db.session.flush()
+        equipe.save()
 
-    db.session.add(EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id))
-    db.session.commit()
+    EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id).save()
 
     sincronizar_turno(turno)
 
@@ -324,25 +317,20 @@ def remover_membro_fila(turno_id, equipe_membro_id):
         flash("Acao invalida.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
-    item = (
-        EquipeMembro.query.join(EquipeTurno)
-        .filter(EquipeMembro.id == equipe_membro_id, EquipeTurno.turno_id == turno.id)
-        .first_or_404()
-    )
-    nome = item.membro.nome
+    item = primeiro_ou_404(EquipeMembro.objects(id=equipe_membro_id))
     equipe = item.equipe
-    equipe.integrantes.remove(item)  # cascade delete-orphan apaga o EquipeMembro
-    db.session.flush()
+    if equipe is None or equipe.turno_id != turno.id:
+        abort(404)
+    nome = item.membro.nome
+    item.delete()
 
-    if not equipe.integrantes:
-        db.session.delete(equipe)
-        db.session.flush()
+    if not EquipeMembro.objects(equipe_turno_id=equipe.id):
+        equipe.delete()
         # renumera as posicoes restantes pra ficarem contiguas (0..N-1)
-        restante = EquipeTurno.query.filter_by(turno_id=turno.id).order_by(EquipeTurno.posicao).all()
+        restante = list(EquipeTurno.objects(turno_id=turno.id).order_by("posicao"))
         for indice, equipe_restante in enumerate(restante):
             equipe_restante.posicao = indice
-
-    db.session.commit()
+            equipe_restante.save()
 
     sincronizar_turno(turno)
 

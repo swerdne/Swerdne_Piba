@@ -22,7 +22,8 @@ ocorrencias.
 import calendar
 from datetime import date, datetime, timedelta, timezone
 
-from app.extensions import db
+import mongoengine
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument
 
 UNIDADES_RECORRENCIA = ["dia", "semana", "mes", "ano"]
 MODOS_MENSAIS = ["dia_fixo", "enesimo_dia_semana", "ultimo_dia_semana"]
@@ -245,7 +246,7 @@ def periodo_da_data(turno, data):
     return max(0, (meses_passados // passo) - 1)
 
 
-class TurnoPlantao(db.Model):
+class TurnoPlantao(SequentialIdDocument):
     """Um turno de plantao (ex: "Plantao Manha"): pertence a um Ministerio e
     tem uma fila ordenada de membros que se revezam por rodizio.
 
@@ -254,37 +255,35 @@ class TurnoPlantao(db.Model):
     app/plantao/sincronizacao.py::sincronizar_turno.
     """
 
-    __tablename__ = "turnos_plantao"
+    meta = {"collection": "turnos_plantao"}
+    _nome_sequencia = "turnos_plantao"
 
-    id = db.Column(db.Integer, primary_key=True)
-    # Sem ForeignKey("ministerios.id") -- Ministerio agora vive no MongoDB,
-    # ver `ministerio` abaixo (property, no lugar do antigo db.relationship).
-    ministerio_id = db.Column(db.Integer, nullable=False)
-    nome = db.Column(db.String(80), nullable=False)
+    ministerio_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=80)
     # Departamento (mesmas chaves de app.escala.models.DEPARTAMENTOS) -- usado
     # so pra herdar a cor no calendario do Ministerio, mesmo esquema da Escala
     # Rapida (ver Escala.cor). Nao seleciona funcoes padrao, diferente da
     # Escala Rapida: cada periodo gerado tem sempre 1 unica funcao (nome_funcao).
-    departamento = db.Column(db.String(40), nullable=False)
-    nome_funcao = db.Column(db.String(80), nullable=False, default="Responsavel", server_default="Responsavel")
-    data_inicio = db.Column(db.Date, nullable=False)
-    horario = db.Column(db.Time, nullable=True)
+    departamento = mongoengine.StringField(required=True, max_length=40)
+    nome_funcao = mongoengine.StringField(required=True, max_length=80, default="Responsavel")
+    data_inicio = PureDateField(required=True)
+    horario = PureTimeField()
     # Opcional -- aplicado em TODA ocorrencia gerada (ver sincronizacao.py),
     # mesma ideia de Escala.horario_fim: predefine o horario de fim pra quem
     # usa esse Rodizio recorrentemente, sem precisar editar cada ocorrencia.
-    horario_fim = db.Column(db.Time, nullable=True)
+    horario_fim = PureTimeField()
 
     # Recorrencia estilo Google Agenda -- ver docstring do modulo.
-    intervalo_recorrencia = db.Column(db.Integer, nullable=False, default=1, server_default="1")
-    unidade_recorrencia = db.Column(db.String(10), nullable=False)  # dia/semana/mes/ano
-    dias_semana = db.Column(db.String(20), nullable=True)  # CSV "0,3" -- so unidade=semana
-    modo_mensal = db.Column(db.String(20), nullable=True)  # dia_fixo/enesimo_dia_semana/ultimo_dia_semana -- so unidade=mes
-    termino_tipo = db.Column(db.String(15), nullable=False, default="nunca", server_default="nunca")
-    termino_data = db.Column(db.Date, nullable=True)
-    termino_ocorrencias = db.Column(db.Integer, nullable=True)
+    intervalo_recorrencia = mongoengine.IntField(required=True, default=1)
+    unidade_recorrencia = mongoengine.StringField(required=True, max_length=10)  # dia/semana/mes/ano
+    dias_semana = mongoengine.StringField(max_length=20)  # CSV "0,3" -- so unidade=semana
+    modo_mensal = mongoengine.StringField(max_length=20)  # dia_fixo/enesimo_dia_semana/ultimo_dia_semana -- so unidade=mes
+    termino_tipo = mongoengine.StringField(required=True, max_length=15, default="nunca")
+    termino_data = PureDateField()
+    termino_ocorrencias = mongoengine.IntField()
 
-    offset = db.Column(db.Integer, nullable=False, default=0)
-    criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    offset = mongoengine.IntField(required=True, default=0)
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     @property
     def ministerio(self):
@@ -293,19 +292,24 @@ class TurnoPlantao(db.Model):
 
     @property
     def escalas_geradas(self):
-        """Escala ainda em SQLAlchemy nesta fase da migracao -- substitui o
-        antigo backref `TurnoPlantao.escalas_geradas` (declarado do lado de
-        Escala.plantao_turno, sem cascade de proposito: excluir o turno nao
-        pode apagar escalas ja ocorridas/fixadas)."""
+        """Substitui o antigo backref `TurnoPlantao.escalas_geradas`
+        (declarado do lado de Escala.plantao_turno, sem cascade de proposito:
+        excluir o turno nao pode apagar escalas ja ocorridas/fixadas)."""
         from app.escala.models import Escala
         return list(Escala.objects(plantao_turno_id=self.id))
 
     @property
     def escala_origem(self):
         """Substitui o antigo backref `TurnoPlantao.escala_origem`
-        (uselist=False -- no maximo 1, ver Escala.turno_plantao_origem_id)."""
+        (no maximo 1, ver Escala.turno_plantao_origem_id)."""
         from app.escala.models import Escala
         return Escala.objects(turno_plantao_origem_id=self.id).first()
+
+    @property
+    def fila(self):
+        """Substitui o antigo backref `EquipeTurno.turno` -> `fila`
+        (cascade="all, delete-orphan", order_by posicao)."""
+        return list(EquipeTurno.objects(turno_id=self.id).order_by("posicao"))
 
     @property
     def fila_ordenada(self):
@@ -359,11 +363,14 @@ class TurnoPlantao(db.Model):
 
         return base
 
+    def cascade_children(self):
+        return [EquipeTurno.objects(turno_id=self.id)]
+
     def __repr__(self):
         return f"<TurnoPlantao {self.nome} do ministerio {self.ministerio_id}>"
 
 
-class EquipeTurno(db.Model):
+class EquipeTurno(SequentialIdDocument):
     """Uma posicao na fila de rodizio de um turno -- um GRUPO de 1+ pessoas
     (ver EquipeMembro abaixo) que atuam JUNTAS, na mesma ocorrencia, sempre
     que essa posicao e sorteada pela formula do rodizio. Uma fila de rotacao
@@ -371,16 +378,21 @@ class EquipeTurno(db.Model):
     funcionou antes) e so o caso particular onde toda equipe tem exatamente
     1 integrante -- nao ha um modo separado no motor pra isso."""
 
-    __tablename__ = "turno_plantao_equipes"
+    meta = {"collection": "turno_plantao_equipes"}
+    _nome_sequencia = "turno_plantao_equipes"
 
-    id = db.Column(db.Integer, primary_key=True)
-    turno_id = db.Column(db.Integer, db.ForeignKey("turnos_plantao.id"), nullable=False)
-    posicao = db.Column(db.Integer, nullable=False)
+    turno_id = mongoengine.IntField(required=True)
+    posicao = mongoengine.IntField(required=True)
 
-    turno = db.relationship(
-        "TurnoPlantao",
-        backref=db.backref("fila", cascade="all, delete-orphan", order_by="EquipeTurno.posicao"),
-    )
+    @property
+    def turno(self):
+        return TurnoPlantao.objects(id=self.turno_id).first()
+
+    @property
+    def integrantes(self):
+        """Substitui o antigo backref `EquipeMembro.equipe` -> `integrantes`
+        (cascade="all, delete-orphan")."""
+        return list(EquipeMembro.objects(equipe_turno_id=self.id))
 
     @property
     def membros_ordenados(self):
@@ -390,26 +402,27 @@ class EquipeTurno(db.Model):
     def nomes(self):
         return ", ".join(m.nome for m in self.membros_ordenados)
 
+    def cascade_children(self):
+        return [EquipeMembro.objects(equipe_turno_id=self.id)]
+
     def __repr__(self):
         return f"<EquipeTurno pos={self.posicao} do turno {self.turno_id}>"
 
 
-class EquipeMembro(db.Model):
+class EquipeMembro(SequentialIdDocument):
     """Uma pessoa dentro de uma EquipeTurno (ver acima) -- referencia o MESMO
     Membro do diretorio da comunidade (ver app/escala/models.py::Membro), nao
     um cadastro separado."""
 
-    __tablename__ = "turno_plantao_equipe_membros"
+    meta = {"collection": "turno_plantao_equipe_membros"}
+    _nome_sequencia = "turno_plantao_equipe_membros"
 
-    id = db.Column(db.Integer, primary_key=True)
-    equipe_turno_id = db.Column(db.Integer, db.ForeignKey("turno_plantao_equipes.id"), nullable=False)
-    # Sem ForeignKey("escala_membros.id") -- Membro agora vive no MongoDB,
-    # ver `membro` abaixo (property, no lugar do antigo db.relationship).
-    membro_id = db.Column(db.Integer, nullable=False)
+    equipe_turno_id = mongoengine.IntField(required=True)
+    membro_id = mongoengine.IntField(required=True)
 
-    equipe = db.relationship(
-        "EquipeTurno", backref=db.backref("integrantes", cascade="all, delete-orphan")
-    )
+    @property
+    def equipe(self):
+        return EquipeTurno.objects(id=self.equipe_turno_id).first()
 
     @property
     def membro(self):

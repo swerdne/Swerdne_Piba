@@ -184,7 +184,7 @@ def sincronizar_turno(turno, ate_data=None):
 def sincronizar_todos_os_turnos_ativos():
     """Chamada a cada tick do agendador unico (app/escala/agendador.py) --
     rola a janela de geracao de todo turno pra frente com o tempo."""
-    for turno in TurnoPlantao.query.all():
+    for turno in TurnoPlantao.objects:
         sincronizar_turno(turno)
 
 

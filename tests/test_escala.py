@@ -1232,8 +1232,7 @@ def test_adicionar_convidado_marca_plantao_fixado_em_escala_de_rodizio(logged_in
             unidade_recorrencia="dia", intervalo_recorrencia=1,
             termino_tipo="nunca", departamento="Louvor", nome_funcao="Responsavel",
         )
-        db.session.add(turno)
-        db.session.flush()
+        turno.save()
 
         escala = Escala(
             ministerio_id=ministerio.id, nome="Ocorrencia", departamento="Louvor",

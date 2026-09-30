@@ -358,10 +358,8 @@ def excluir_ministerio_em_cascata(ministerio):
     """Apaga um Ministerio e tudo que pende dele -- usado tanto por
     excluir_ministerio (abaixo) quanto por comunidade.routes.excluir_comunidade
     (que precisa apagar cada Ministerio da comunidade antes de poder apagar a
-    propria comunidade). Ministerio e Escala agora vivem no Mongo (delete_cascade
-    cobre Escala -> Funcao/ItemRepertorio); TurnoPlantao ainda em SQLAlchemy
-    nesta fase, apagado explicitamente (cascade pro proprio lado SQLAlchemy:
-    TurnoPlantao -> EquipeTurno -> EquipeMembro). Diferente de
+    propria comunidade). delete_cascade cobre Escala -> Funcao/ItemRepertorio
+    e TurnoPlantao -> EquipeTurno -> EquipeMembro. Diferente de
     plantao.excluir_turno (que preserva historico ao apagar so a regra), aqui
     o ministerio inteiro some, entao nao ha nada a preservar."""
     from app.escala.models import Escala
@@ -372,9 +370,8 @@ def excluir_ministerio_em_cascata(ministerio):
     for escala in Escala.objects(ministerio_id=ministerio.id):
         delete_cascade(escala)
 
-    for turno in TurnoPlantao.query.filter_by(ministerio_id=ministerio.id).all():
-        db.session.delete(turno)
-    db.session.commit()
+    for turno in TurnoPlantao.objects(ministerio_id=ministerio.id):
+        delete_cascade(turno)
 
     delete_cascade(ministerio)
 
