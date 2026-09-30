@@ -11,6 +11,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
+from app.db_utils import primeiro_ou_404
 from app.ministerio import bp
 from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm
 from app.ministerio.models import (
@@ -63,7 +64,7 @@ def _lideres_do_ministerio(ministerio):
     comunidade = ministerio.comunidade
     ids_admin_comunidade = {
         row.usuario_id for row in
-        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").all()
+        UsuarioComunidade.objects(comunidade_id=comunidade.id, papel="admin")
     }
     if comunidade.usuario_id:
         ids_admin_comunidade.add(comunidade.usuario_id)
@@ -426,10 +427,9 @@ def papeis(ministerio_id):
         .order_by(UsuarioMinisterio.papel)
         .all()
     )
-    convites_pendentes = (
-        Convite.query.filter_by(escopo_tipo="ministerio", escopo_id=ministerio.id, status="pendente")
-        .order_by(Convite.criado_em.desc())
-        .all()
+    convites_pendentes = list(
+        Convite.objects(escopo_tipo="ministerio", escopo_id=ministerio.id, status="pendente")
+        .order_by("-criado_em")
     )
 
     return render_template(
@@ -472,17 +472,16 @@ def remover_papel(ministerio_id, usuario_ministerio_id):
 @login_required
 def cancelar_convite(ministerio_id, convite_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
-    convite = Convite.query.filter_by(
+    convite = primeiro_ou_404(Convite.objects(
         id=convite_id, escopo_tipo="ministerio", escopo_id=ministerio.id, status="pendente"
-    ).first_or_404()
+    ))
     form = AcaoForm()
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
-    db.session.delete(convite)
-    db.session.commit()
+    convite.delete()
     flash("Convite cancelado.", "success")
     return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 

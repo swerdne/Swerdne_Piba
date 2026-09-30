@@ -53,8 +53,7 @@ def test_dashboard_agrupa_notificacoes_por_escala(logged_in_client, app, db):
     with app.app_context():
         ana = User.objects(email="ana@example.com").first()
         comunidade = Comunidade(nome="Comunidade Teste", usuario_id=ana.id)
-        db.session.add(comunidade)
-        db.session.flush()
+        comunidade.save()
         ministerio = Ministerio(nome="Ministerio Teste", comunidade_id=comunidade.id)
         db.session.add(ministerio)
         db.session.flush()

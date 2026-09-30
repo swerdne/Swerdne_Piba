@@ -34,8 +34,8 @@ def _convidar_ministerio(cliente, ministerio_id, email, papel):
 
 def _convite_de(email, escopo_tipo, escopo_id):
     return (
-        Convite.query.filter_by(escopo_tipo=escopo_tipo, escopo_id=escopo_id, email=email)
-        .order_by(Convite.id.desc())
+        Convite.objects(escopo_tipo=escopo_tipo, escopo_id=escopo_id, email=email)
+        .order_by("-id")
         .first()
     )
 
@@ -46,7 +46,7 @@ def test_criador_da_comunidade_vira_admin_automaticamente(logged_in_client, app,
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         usuario = User.objects(email="ana@example.com").first()
-        papel = UsuarioComunidade.query.filter_by(usuario_id=usuario.id, comunidade_id=comunidade.id).first()
+        papel = UsuarioComunidade.objects(usuario_id=usuario.id, comunidade_id=comunidade.id).first()
         assert papel is not None
         assert papel.papel == "admin"
 
@@ -101,9 +101,8 @@ def test_admin_promove_membro_a_admin(logged_in_client, app, db):
         comunidade = _criar_comunidade(logged_in_client)
         comunidade_id = comunidade.id
         bruno = _registrar(app.test_client(), "bruno", "bruno@example.com")
-        db.session.add(UsuarioComunidade(usuario_id=bruno.id, comunidade_id=comunidade_id, papel="membro"))
-        db.session.commit()
-        papel_bruno_id = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first().id
+        UsuarioComunidade(usuario_id=bruno.id, comunidade_id=comunidade_id, papel="membro").save()
+        papel_bruno_id = UsuarioComunidade.objects(usuario_id=bruno.id, comunidade_id=comunidade_id).first().id
 
     with sessao_isolada(app):
         response = logged_in_client.post(
@@ -112,7 +111,7 @@ def test_admin_promove_membro_a_admin(logged_in_client, app, db):
         assert response.status_code == 200
         assert "agora e administrador".encode() in response.data
 
-        atualizado = db.session.get(UsuarioComunidade, papel_bruno_id)
+        atualizado = UsuarioComunidade.objects(id=papel_bruno_id).first()
         assert atualizado.papel == "admin"
 
 
@@ -121,9 +120,8 @@ def test_admin_rebaixa_outro_admin_a_membro(logged_in_client, app, db):
         comunidade = _criar_comunidade(logged_in_client)
         comunidade_id = comunidade.id
         bruno = _registrar(app.test_client(), "bruno", "bruno@example.com")
-        db.session.add(UsuarioComunidade(usuario_id=bruno.id, comunidade_id=comunidade_id, papel="admin"))
-        db.session.commit()
-        papel_bruno_id = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first().id
+        UsuarioComunidade(usuario_id=bruno.id, comunidade_id=comunidade_id, papel="admin").save()
+        papel_bruno_id = UsuarioComunidade.objects(usuario_id=bruno.id, comunidade_id=comunidade_id).first().id
 
     with sessao_isolada(app):
         response = logged_in_client.post(
@@ -132,7 +130,7 @@ def test_admin_rebaixa_outro_admin_a_membro(logged_in_client, app, db):
         assert response.status_code == 200
         assert "agora e membro".encode() in response.data
 
-        atualizado = db.session.get(UsuarioComunidade, papel_bruno_id)
+        atualizado = UsuarioComunidade.objects(id=papel_bruno_id).first()
         assert atualizado.papel == "membro"
 
 
@@ -143,7 +141,7 @@ def test_nao_pode_rebaixar_o_ultimo_admin(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ana = User.objects(email="ana@example.com").first()
-        papel_ana = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade.id).first()
+        papel_ana = UsuarioComunidade.objects(usuario_id=ana.id, comunidade_id=comunidade.id).first()
 
         response = logged_in_client.post(
             f"/comunidade/{comunidade.id}/papeis/{papel_ana.id}/alterar-papel", follow_redirects=True
@@ -151,7 +149,7 @@ def test_nao_pode_rebaixar_o_ultimo_admin(logged_in_client, app, db):
         assert response.status_code == 200
         assert "ultimo administrador".encode() in response.data
 
-        atualizado = db.session.get(UsuarioComunidade, papel_ana.id)
+        atualizado = UsuarioComunidade.objects(id=papel_ana.id).first()
         assert atualizado.papel == "admin"
 
 
@@ -160,7 +158,7 @@ def test_nao_admin_nao_pode_alterar_papel(logged_in_client, outro_logged_in_clie
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         ana = User.objects(email="ana@example.com").first()
-        papel_ana_id = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade_id).first().id
+        papel_ana_id = UsuarioComunidade.objects(usuario_id=ana.id, comunidade_id=comunidade_id).first().id
 
     with sessao_isolada(app):
         response = outro_logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/{papel_ana_id}/alterar-papel")
@@ -186,9 +184,9 @@ def test_aceitar_convite_de_comunidade_cria_papel_e_da_acesso(logged_in_client, 
 
     with sessao_isolada(app):
         bruno = User.objects(email="bruno@example.com").first()
-        papel = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first()
+        papel = UsuarioComunidade.objects(usuario_id=bruno.id, comunidade_id=comunidade_id).first()
         assert papel is not None and papel.papel == "admin"
-        assert db.session.get(Convite, _convite_de("bruno@example.com", "comunidade", comunidade_id).id).status == STATUS_ACEITO
+        assert _convite_de("bruno@example.com", "comunidade", comunidade_id).status == STATUS_ACEITO
 
         # agora bruno consegue acessar a tela de gestao da comunidade
         assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}").status_code == 200
@@ -207,7 +205,7 @@ def test_recusar_convite_nao_cria_papel(logged_in_client, outro_logged_in_client
 
     with sessao_isolada(app):
         bruno = User.objects(email="bruno@example.com").first()
-        assert UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
+        assert UsuarioComunidade.objects(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
         convite = _convite_de("bruno@example.com", "comunidade", comunidade_id)
         assert convite.status == STATUS_RECUSADO
         assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}").status_code == 404
@@ -246,7 +244,7 @@ def test_aceitar_convite_ja_respondido_e_rejeitado(logged_in_client, outro_logge
 
     with sessao_isolada(app):
         bruno = User.objects(email="bruno@example.com").first()
-        assert UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
+        assert UsuarioComunidade.objects(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
 
 
 def test_convite_pendente_mostra_tela_de_login_pra_quem_nao_tem_conta(logged_in_client, app, db):
@@ -271,13 +269,13 @@ def test_convite_pendente_mostra_tela_de_login_pra_quem_nao_tem_conta(logged_in_
 def test_papel_super_admin_nao_e_uma_escolha_valida_de_convite(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
-        total_antes = Convite.query.count()
+        total_antes = Convite.objects.count()
         # SelectField com validate_choice (padrao) rejeita valor fora das
         # choices -- "super_admin" nunca esta nas choices (PAPEIS_COMUNIDADE
         # so tem admin/membro), entao o form falha e nenhum convite e criado.
         response = _convidar_comunidade(logged_in_client, comunidade.id, "x@example.com", "super_admin")
         assert response.status_code == 200
-        assert Convite.query.count() == total_antes
+        assert Convite.objects.count() == total_antes
 
 
 def test_admin_da_comunidade_pode_convidar_lider_no_ministerio(logged_in_client, app, db):
@@ -311,12 +309,12 @@ def test_lider_so_pode_convidar_membro_nunca_lider_ou_admin(logged_in_client, ou
         # ...mas NAO consegue conceder "lider" (nem manipulando o POST direto,
         # a escolha nem aparece nas choices do form pra ele) -- defesa em
         # profundidade confirma no servidor, nao so esconde na UI.
-        total_antes = Convite.query.filter_by(escopo_tipo="ministerio", escopo_id=ministerio_id, papel="lider").count()
+        total_antes = Convite.objects(escopo_tipo="ministerio", escopo_id=ministerio_id, papel="lider").count()
         outro_logged_in_client.post(
             f"/ministerio/{ministerio_id}/papeis", data={"email": "daniel@example.com", "papel": "lider"},
             follow_redirects=True,
         )
-        total_depois = Convite.query.filter_by(escopo_tipo="ministerio", escopo_id=ministerio_id, papel="lider").count()
+        total_depois = Convite.objects(escopo_tipo="ministerio", escopo_id=ministerio_id, papel="lider").count()
         assert total_depois == total_antes  # nao criou o convite de lider
 
 
@@ -439,7 +437,7 @@ def test_super_admin_acessa_qualquer_comunidade_sem_papel(logged_in_client, outr
         bruno.save()
 
     with sessao_isolada(app):
-        assert UsuarioComunidade.query.filter_by(
+        assert UsuarioComunidade.objects(
             usuario_id=User.objects(email="bruno@example.com").first().id, comunidade_id=comunidade_id
         ).first() is None
         assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}").status_code == 200
@@ -454,7 +452,7 @@ def test_gerar_link_convite_cria_token(logged_in_client, app, db):
 
         logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
 
-        atualizada = db.session.get(Comunidade, comunidade.id)
+        atualizada = Comunidade.objects(id=comunidade.id).first()
         assert atualizada.token_convite_publico is not None
         # 8 bytes urlsafe (~11 chars) -- curto o suficiente pra ficar
         # apresentavel ao compartilhar, mas ainda com entropia alta (64
@@ -466,10 +464,10 @@ def test_gerar_link_de_novo_invalida_o_anterior(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
-        token_antigo = db.session.get(Comunidade, comunidade.id).token_convite_publico
+        token_antigo = Comunidade.objects(id=comunidade.id).first().token_convite_publico
 
         logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
-        token_novo = db.session.get(Comunidade, comunidade.id).token_convite_publico
+        token_novo = Comunidade.objects(id=comunidade.id).first().token_convite_publico
 
         assert token_antigo != token_novo
         assert logged_in_client.get(f"/comunidade/entrar/{token_antigo}", follow_redirects=True).status_code == 404
@@ -484,7 +482,7 @@ def test_entrar_via_link_get_nao_muda_nada_so_post_confirma(logged_in_client, ap
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
     with sessao_isolada(app):
         bruno_client = app.test_client()
@@ -493,12 +491,12 @@ def test_entrar_via_link_get_nao_muda_nada_so_post_confirma(logged_in_client, ap
 
         resposta_get = bruno_client.get(f"/comunidade/entrar/{token}")
         assert resposta_get.status_code == 200
-        assert UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
+        assert UsuarioComunidade.objects(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
 
         resposta_post = bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
         assert resposta_post.status_code == 200
 
-        papel = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first()
+        papel = UsuarioComunidade.objects(usuario_id=bruno.id, comunidade_id=comunidade_id).first()
         assert papel is not None
         assert papel.papel == "membro"
 
@@ -507,12 +505,12 @@ def test_entrar_via_link_ja_admin_nao_rebaixa_pra_membro(logged_in_client, app, 
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         logged_in_client.post(f"/comunidade/{comunidade.id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade.id).token_convite_publico
+        token = Comunidade.objects(id=comunidade.id).first().token_convite_publico
 
         logged_in_client.get(f"/comunidade/entrar/{token}", follow_redirects=True)
 
         ana = User.objects(email="ana@example.com").first()
-        papel = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade.id).first()
+        papel = UsuarioComunidade.objects(usuario_id=ana.id, comunidade_id=comunidade.id).first()
         assert papel.papel == "admin"
 
 
@@ -526,7 +524,7 @@ def test_entrar_via_link_deslogado_pede_login_e_completa_depois(logged_in_client
     comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
     comunidade_id = comunidade.id
     logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-    token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+    token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
     with sessao_isolada(app):
         visitante = app.test_client()
@@ -545,13 +543,13 @@ def test_entrar_via_link_deslogado_pede_login_e_completa_depois(logged_in_client
         # Cadastro sozinho nao completa a entrada -- cai na tela de
         # confirmacao (o redirect pos-login e sempre GET, que nunca muda
         # estado). Precisa do POST explicito pra realmente entrar.
-        assert UsuarioComunidade.query.filter_by(usuario_id=carla.id, comunidade_id=comunidade_id).first() is None
+        assert UsuarioComunidade.objects(usuario_id=carla.id, comunidade_id=comunidade_id).first() is None
         assert "Entrar em".encode() in resposta_cadastro.data
 
         resposta_confirmar = visitante.post(f"/comunidade/entrar/{token}", follow_redirects=True)
         assert resposta_confirmar.status_code == 200
 
-        papel = UsuarioComunidade.query.filter_by(usuario_id=carla.id, comunidade_id=comunidade_id).first()
+        papel = UsuarioComunidade.objects(usuario_id=carla.id, comunidade_id=comunidade_id).first()
         assert papel is not None
         assert papel.papel == "membro"
 
@@ -568,7 +566,7 @@ def test_entrar_via_link_leva_pra_tela_que_mostra_a_comunidade(logged_in_client,
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
     with sessao_isolada(app):
         bruno_client = app.test_client()

@@ -14,10 +14,81 @@ o Mongo nao tem embutido:
    sessao nenhuma) deixa isso opcional sem duplicar logica de negocio.
 """
 from contextlib import contextmanager
+from datetime import date, datetime, time
 
 import mongoengine
-from flask import current_app
+from flask import abort, current_app
 from pymongo import ReturnDocument
+
+
+def primeiro_ou_404(queryset):
+    """Equivalente ao `.first_or_404()`/`Model.query.get_or_404(id)` que o
+    Flask-SQLAlchemy dava de graca -- MongoEngine nao tem essa conveniencia
+    embutida. Uso: `primeiro_ou_404(Comunidade.objects(id=comunidade_id))`."""
+    documento = queryset.first()
+    if documento is None:
+        abort(404)
+    return documento
+
+_DATA_FICTICIA = date(1970, 1, 1)  # so pra PureTimeField ter uma data pra "pendurar" a hora
+
+
+class PureDateField(mongoengine.DateTimeField):
+    """Campo de data pura (sem hora), equivalente ao db.Date do SQLAlchemy.
+
+    BSON/Mongo so tem um tipo "Date" nativo, que e sempre datetime completo
+    -- sem isso, ler um campo de volta devolveria um `datetime`, nao um
+    `date`, e os dois NUNCA sao considerados iguais em Python (nem
+    comparaveis com <, >), mesmo representando o mesmo dia. Isso quebraria
+    silenciosamente qualquer comparacao com date.today() ou outro campo de
+    data (`escala.data == outra_data`, `data_fim >= data_inicio`, etc.).
+    Aceita tanto `date` quanto `datetime` na escrita; sempre devolve `date`
+    na leitura."""
+
+    def to_python(self, value):
+        value = super().to_python(value)
+        return value.date() if isinstance(value, datetime) else value
+
+    def to_mongo(self, value):
+        if isinstance(value, date) and not isinstance(value, datetime):
+            value = datetime(value.year, value.month, value.day)
+        return super().to_mongo(value)
+
+    def validate(self, value):
+        if isinstance(value, date) and not isinstance(value, datetime):
+            value = datetime(value.year, value.month, value.day)
+        return super().validate(value)
+
+    def prepare_query_value(self, op, value):
+        if isinstance(value, date) and not isinstance(value, datetime):
+            value = datetime(value.year, value.month, value.day)
+        return super().prepare_query_value(op, value)
+
+
+class PureTimeField(mongoengine.DateTimeField):
+    """Campo de hora pura (sem data), equivalente ao db.Time do SQLAlchemy --
+    mesma logica do PureDateField acima, so que "pendurando" a hora numa
+    data ficticia fixa (1970-01-01, nunca exposta) pra caber no unico tipo
+    Date que o Mongo tem. Sempre devolve `time` na leitura."""
+
+    def to_python(self, value):
+        value = super().to_python(value)
+        return value.time() if isinstance(value, datetime) else value
+
+    def to_mongo(self, value):
+        if isinstance(value, time):
+            value = datetime.combine(_DATA_FICTICIA, value)
+        return super().to_mongo(value)
+
+    def validate(self, value):
+        if isinstance(value, time):
+            value = datetime.combine(_DATA_FICTICIA, value)
+        return super().validate(value)
+
+    def prepare_query_value(self, op, value):
+        if isinstance(value, time):
+            value = datetime.combine(_DATA_FICTICIA, value)
+        return super().prepare_query_value(op, value)
 
 
 def conectar_mongo(app):

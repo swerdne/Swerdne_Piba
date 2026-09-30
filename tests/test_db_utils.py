@@ -1,8 +1,10 @@
 """Testes dos utilitarios da migracao pra MongoDB (app/db_utils.py)."""
+from datetime import date, time
+
 import mongoengine
 import pytest
 
-from app.db_utils import SequentialIdDocument, atomic, delete_cascade, next_id
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, atomic, delete_cascade, next_id
 
 
 def test_next_id_incrementa_e_e_isolado_por_sequencia(app):
@@ -98,3 +100,35 @@ def test_atomic_levanta_quando_transacao_ligada_mas_backend_nao_suporta(app):
         with pytest.raises(NotImplementedError):
             with atomic():
                 pass
+
+
+class _ComData(SequentialIdDocument):
+    _nome_sequencia = "com_data_teste"
+    d = PureDateField()
+    h = PureTimeField()
+
+
+def test_pure_date_field_guarda_e_devolve_date_puro(app):
+    """Sem a conversao, isso viraria datetime na leitura -- e date/datetime
+    nunca sao == nem comparaveis entre si em Python, mesmo no mesmo dia."""
+    with app.app_context():
+        doc = _ComData(d=date(2026, 9, 30)).save()
+        recarregado = _ComData.objects(id=doc.id).first()
+        assert type(recarregado.d) is date
+        assert recarregado.d == date(2026, 9, 30)
+
+
+def test_pure_time_field_guarda_e_devolve_time_puro(app):
+    with app.app_context():
+        doc = _ComData(h=time(14, 30)).save()
+        recarregado = _ComData.objects(id=doc.id).first()
+        assert type(recarregado.h) is time
+        assert recarregado.h == time(14, 30)
+
+
+def test_pure_date_field_permite_query_por_data(app):
+    with app.app_context():
+        _ComData(d=date(2026, 9, 30)).save()
+        assert _ComData.objects(d=date(2026, 9, 30)).count() == 1
+        assert _ComData.objects(d__gte=date(2026, 9, 1)).count() == 1
+        assert _ComData.objects(d=date(2026, 9, 29)).count() == 0

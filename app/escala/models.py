@@ -118,14 +118,17 @@ class Membro(db.Model):
     __tablename__ = "escala_membros"
 
     id = db.Column(db.Integer, primary_key=True)
-    comunidade_id = db.Column(db.Integer, db.ForeignKey("comunidades.id"), nullable=False)
+    # Sem ForeignKey("comunidades.id") -- Comunidade agora vive no MongoDB,
+    # ver `comunidade` abaixo (property, no lugar do antigo db.relationship).
+    comunidade_id = db.Column(db.Integer, nullable=False)
     nome = db.Column(db.String(120), nullable=False)
     telefone = db.Column(db.String(30), nullable=True)
     email = db.Column(db.String(120), nullable=True)
 
-    comunidade = db.relationship(
-        "Comunidade", backref=db.backref("membros", cascade="all, delete-orphan")
-    )
+    @property
+    def comunidade(self):
+        from app.comunidade.models import Comunidade
+        return Comunidade.objects(id=self.comunidade_id).first()
 
     @property
     def iniciais(self):

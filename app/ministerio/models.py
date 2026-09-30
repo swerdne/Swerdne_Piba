@@ -15,7 +15,9 @@ class Ministerio(db.Model):
     __tablename__ = "ministerios"
 
     id = db.Column(db.Integer, primary_key=True)
-    comunidade_id = db.Column(db.Integer, db.ForeignKey("comunidades.id"), nullable=False)
+    # Sem ForeignKey("comunidades.id") -- Comunidade agora vive no MongoDB,
+    # ver `comunidade` abaixo (property, no lugar do antigo db.relationship).
+    comunidade_id = db.Column(db.Integer, nullable=False)
     nome = db.Column(db.String(120), nullable=False)
     descricao = db.Column(db.Text, nullable=True)
     imagem = db.Column(db.String(500), nullable=True)
@@ -29,9 +31,10 @@ class Ministerio(db.Model):
     # escolhidos la, so destaca os habituais.
     dias_culto = db.Column(db.String(20), nullable=True)
 
-    comunidade = db.relationship(
-        "Comunidade", backref=db.backref("ministerios", cascade="all, delete-orphan")
-    )
+    @property
+    def comunidade(self):
+        from app.comunidade.models import Comunidade
+        return Comunidade.objects(id=self.comunidade_id).first()
 
     @property
     def dias_culto_efetivos(self):

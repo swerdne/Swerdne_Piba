@@ -1,4 +1,4 @@
-"""Model (M do MVC): Comunidade.
+"""Model (M do MVC): Comunidade (MongoDB, ver app/db_utils.py).
 
 Camada organizacional anterior a Escala Rapida: toda escala e todo membro do
 diretorio pertencem a uma comunidade especifica (ex: uma igreja/ministerio).
@@ -7,27 +7,26 @@ Comunidades sao independentes entre si.
 import secrets
 from datetime import datetime, timezone
 
-from app.extensions import db
+import mongoengine
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, delete_cascade
 
 PAPEIS_COMUNIDADE = ("admin", "membro")
 
 
-class Comunidade(db.Model):
-    __tablename__ = "comunidades"
+class Comunidade(SequentialIdDocument):
+    meta = {"collection": "comunidades"}
+    _nome_sequencia = "comunidades"
 
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(120), nullable=False)
-    descricao = db.Column(db.Text, nullable=True)
-    imagem = db.Column(db.String(500), nullable=True)
+    nome = mongoengine.StringField(required=True, max_length=120)
+    descricao = mongoengine.StringField()
+    imagem = mongoengine.StringField(max_length=500)
     # Criador original -- mantido como metadado historico. Nao e mais a UNICA
     # fonte de autorizacao (ver UsuarioComunidade/comunidade.routes._eh_admin_da_comunidade):
     # o criador ganha automaticamente uma linha papel=admin em UsuarioComunidade
     # ao criar a comunidade (criar_comunidade abaixo), entao toda checagem
     # passa a consultar essa tabela, nao mais usuario_id direto.
-    # Sem ForeignKey("users.id") de proposito -- User agora vive no MongoDB
-    # (ver app/auth/models.py), "users" nao existe mais como tabela aqui.
-    usuario_id = db.Column(db.Integer, nullable=False)
-    criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    usuario_id = mongoengine.IntField(required=True)
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     # Link generico de entrada (ver comunidade.routes.entrar_via_link) --
     # alternativa ao convite por e-mail individual (app/convites): qualquer
@@ -36,22 +35,38 @@ class Comunidade(db.Model):
     # primeiro link (tela "Papeis e convites"). Regeneravel a qualquer
     # momento -- gerar um novo invalida o anterior (mesma coluna, valor
     # sobrescrito), protege contra o link vazado continuar funcionando.
-    token_convite_publico = db.Column(db.String(64), unique=True, nullable=True)
+    token_convite_publico = mongoengine.StringField(unique=True, sparse=True, max_length=64)
 
     def gerar_novo_link_convite(self):
-        # 8 bytes (64 bits) em vez dos 32 anteriores -- ainda inviavel de
-        # adivinhar por forca bruta (rota tambem tem rate limit, ver
-        # entrar_via_link), mas gera um token bem mais curto (~11
-        # caracteres em vez de ~43), pra ficar mais apresentavel ao
-        # compartilhar o link por WhatsApp/e-mail.
+        # 8 bytes (64 bits): ainda inviavel de adivinhar por forca bruta
+        # (rota tambem tem rate limit, ver entrar_via_link), mas curto o
+        # suficiente (~11 caracteres) pra ficar apresentavel ao compartilhar.
         self.token_convite_publico = secrets.token_urlsafe(8)
         return self.token_convite_publico
+
+    @property
+    def ministerios(self):
+        """Ministerio ainda em SQLAlchemy nesta fase da migracao (ver
+        plano) -- substitui o antigo backref `Comunidade.ministerios` do
+        SQLAlchemy, usado em varias telas (calendario, lideres)."""
+        from app.ministerio.models import Ministerio
+        return Ministerio.query.filter_by(comunidade_id=self.id).all()
+
+    def cascade_children(self):
+        """Ver app/db_utils.py::delete_cascade. So cobre os filhos que ja
+        moraram no Mongo (UsuarioComunidade/Evento) -- Ministerio e Membro
+        (ainda em SQLAlchemy nesta fase da migracao) sao apagados a parte,
+        explicitamente, em comunidade.routes.excluir_comunidade."""
+        return [
+            UsuarioComunidade.objects(comunidade_id=self.id),
+            Evento.objects(comunidade_id=self.id),
+        ]
 
     def __repr__(self):
         return f"<Comunidade {self.nome} do usuario {self.usuario_id}>"
 
 
-class UsuarioComunidade(db.Model):
+class UsuarioComunidade(SequentialIdDocument):
     """Papel de um usuario (conta com login) dentro de uma Comunidade --
     'admin' pode gerenciar ministerios/membros/permissoes; 'membro' tem
     visibilidade de leitura (mesmo nivel de hoje via Membro vinculado por
@@ -63,57 +78,52 @@ class UsuarioComunidade(db.Model):
     pessoas escalaveis, nao precisa de conta nem de papel; os dois so se
     cruzam por coincidencia de e-mail, quando faz sentido."""
 
-    __tablename__ = "usuario_comunidade"
+    meta = {
+        "collection": "usuario_comunidade",
+        "indexes": [{"fields": ["usuario_id", "comunidade_id"], "unique": True}],
+    }
+    _nome_sequencia = "usuario_comunidade"
 
-    id = db.Column(db.Integer, primary_key=True)
-    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver `usuario`
-    # abaixo (propriedade que busca la, no lugar do antigo db.relationship).
-    usuario_id = db.Column(db.Integer, nullable=False)
-    comunidade_id = db.Column(db.Integer, db.ForeignKey("comunidades.id"), nullable=False)
-    papel = db.Column(db.String(10), nullable=False)
-    criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    usuario_id = mongoengine.IntField(required=True)
+    comunidade_id = mongoengine.IntField(required=True)
+    papel = mongoengine.StringField(required=True, max_length=10)
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     @property
     def usuario(self):
         from app.auth.models import User
         return User.objects(id=self.usuario_id).first()
 
-    comunidade = db.relationship(
-        "Comunidade", backref=db.backref("papeis_usuarios", cascade="all, delete-orphan")
-    )
-
-    __table_args__ = (
-        db.UniqueConstraint("usuario_id", "comunidade_id", name="uq_usuario_comunidade"),
-    )
+    @property
+    def comunidade(self):
+        return Comunidade.objects(id=self.comunidade_id).first()
 
     def __repr__(self):
         return f"<UsuarioComunidade {self.usuario_id} papel={self.papel} da comunidade {self.comunidade_id}>"
 
 
-class Evento(db.Model):
+class Evento(SequentialIdDocument):
     """Evento pontual da Comunidade (ex: conferencia, congresso, culto
     especial) -- diferente de Escala (app/escala/models.py), que e
     ensaio/culto de rotina de um Ministerio especifico, com equipe escalada.
     Evento e so o registro do acontecimento em si (data, local, descricao),
     sem funcoes/escalacao; comunidade inteira, nao amarrado a 1 ministerio."""
 
-    __tablename__ = "comunidade_eventos"
+    meta = {"collection": "comunidade_eventos", "ordering": ["data"]}
+    _nome_sequencia = "comunidade_eventos"
 
-    id = db.Column(db.Integer, primary_key=True)
-    comunidade_id = db.Column(db.Integer, db.ForeignKey("comunidades.id"), nullable=False)
-    nome = db.Column(db.String(120), nullable=False)
-    descricao = db.Column(db.Text, nullable=True)
-    data = db.Column(db.Date, nullable=False)
-    data_fim = db.Column(db.Date, nullable=True)
-    horario = db.Column(db.Time, nullable=True)
-    local = db.Column(db.String(200), nullable=True)
-    criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    comunidade_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=120)
+    descricao = mongoengine.StringField()
+    data = PureDateField(required=True)
+    data_fim = PureDateField()
+    horario = PureTimeField()
+    local = mongoengine.StringField(max_length=200)
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
-    comunidade = db.relationship(
-        "Comunidade", backref=db.backref(
-            "eventos", cascade="all, delete-orphan", order_by="Evento.data"
-        )
-    )
+    @property
+    def comunidade(self):
+        return Comunidade.objects(id=self.comunidade_id).first()
 
     def __repr__(self):
         return f"<Evento {self.nome!r} da comunidade {self.comunidade_id}>"
@@ -121,9 +131,7 @@ class Evento(db.Model):
 
 def criar_comunidade(usuario_id, nome, descricao=None, imagem=None):
     comunidade = Comunidade(usuario_id=usuario_id, nome=nome, descricao=descricao, imagem=imagem)
-    db.session.add(comunidade)
-    db.session.flush()  # garante comunidade.id antes de criar o papel
+    comunidade.save()
 
-    db.session.add(UsuarioComunidade(usuario_id=usuario_id, comunidade_id=comunidade.id, papel="admin"))
-    db.session.commit()
+    UsuarioComunidade(usuario_id=usuario_id, comunidade_id=comunidade.id, papel="admin").save()
     return comunidade

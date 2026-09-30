@@ -1,4 +1,4 @@
-"""Model (M do MVC): Convite.
+"""Model (M do MVC): Convite (MongoDB, ver app/db_utils.py).
 
 Um Convite concede um PAPEL (ver app/comunidade/models.py::PAPEIS_COMUNIDADE,
 app/ministerio/models.py::PAPEIS_MINISTERIO) num escopo especifico (uma
@@ -16,7 +16,8 @@ Funcao.eh_convidado em app/escala/models.py e app/escala/CLAUDE.md.
 import secrets
 from datetime import datetime, timezone
 
-from app.extensions import db
+import mongoengine
+from app.db_utils import SequentialIdDocument
 
 ESCOPOS = ("comunidade", "ministerio")
 STATUS_PENDENTE = "pendente"
@@ -28,27 +29,26 @@ def _gerar_token():
     return secrets.token_urlsafe(32)
 
 
-class Convite(db.Model):
-    __tablename__ = "convites"
+class Convite(SequentialIdDocument):
+    meta = {"collection": "convites"}
+    _nome_sequencia = "convites"
 
-    id = db.Column(db.Integer, primary_key=True)
     # "comunidade" ou "ministerio" -- ver ESCOPOS. escopo_id aponta pra
-    # Comunidade.id ou Ministerio.id conforme escopo_tipo (nao da pra usar
-    # uma FK real de banco pra 2 tabelas diferentes; a resolucao e feita em
-    # Python via as properties comunidade/ministerio abaixo).
-    escopo_tipo = db.Column(db.String(15), nullable=False)
-    escopo_id = db.Column(db.Integer, nullable=False)
-    papel = db.Column(db.String(10), nullable=False)
+    # Comunidade.id ou Ministerio.id conforme escopo_tipo (referencia
+    # polimorfica -- nao da pra usar um ReferenceField pra 2 collections
+    # diferentes; a resolucao e feita em Python via comunidade/ministerio
+    # abaixo).
+    escopo_tipo = mongoengine.StringField(required=True, max_length=15)
+    escopo_id = mongoengine.IntField(required=True)
+    papel = mongoengine.StringField(required=True, max_length=10)
 
-    email = db.Column(db.String(120), nullable=False)
-    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver
-    # `convidado_por` abaixo (property, no lugar do antigo db.relationship).
-    convidado_por_id = db.Column(db.Integer, nullable=False)
-    token = db.Column(db.String(64), unique=True, nullable=False, default=_gerar_token)
-    status = db.Column(db.String(10), nullable=False, default=STATUS_PENDENTE, server_default=STATUS_PENDENTE)
+    email = mongoengine.StringField(required=True, max_length=120)
+    convidado_por_id = mongoengine.IntField(required=True)
+    token = mongoengine.StringField(unique=True, required=True, default=_gerar_token, max_length=64)
+    status = mongoengine.StringField(default=STATUS_PENDENTE, max_length=10)
 
-    criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    respondido_em = db.Column(db.DateTime, nullable=True)
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    respondido_em = mongoengine.DateTimeField()
 
     @property
     def convidado_por(self):
@@ -59,11 +59,13 @@ class Convite(db.Model):
     def comunidade(self):
         """So valido quando escopo_tipo == 'comunidade' -- ver escopo_nome/escopo_obj."""
         from app.comunidade.models import Comunidade
-        return db.session.get(Comunidade, self.escopo_id)
+        return Comunidade.objects(id=self.escopo_id).first()
 
     @property
     def ministerio(self):
-        """So valido quando escopo_tipo == 'ministerio' -- ver escopo_nome/escopo_obj."""
+        """So valido quando escopo_tipo == 'ministerio' -- ver escopo_nome/escopo_obj.
+        Ministerio ainda em SQLAlchemy nesta fase da migracao (ver plano)."""
+        from app.extensions import db
         from app.ministerio.models import Ministerio
         return db.session.get(Ministerio, self.escopo_id)
 
@@ -93,16 +95,15 @@ def criar_ou_reenviar_convite(escopo_tipo, escopo_id, papel, email, convidado_po
     acumular convites duplicados) -- so cria um novo se nao houver nenhum
     pendente."""
     email = email.strip().lower()
-    convite = Convite.query.filter_by(
+    convite = Convite.objects(
         escopo_tipo=escopo_tipo, escopo_id=escopo_id, email=email, status=STATUS_PENDENTE
     ).first()
 
     if convite is None:
         convite = Convite(escopo_tipo=escopo_tipo, escopo_id=escopo_id, email=email)
-        db.session.add(convite)
 
     convite.papel = papel
     convite.convidado_por_id = convidado_por_id
     convite.token = _gerar_token()
-    db.session.commit()
+    convite.save()
     return convite

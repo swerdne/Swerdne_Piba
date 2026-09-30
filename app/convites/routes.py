@@ -10,6 +10,7 @@ from flask import render_template, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 
 from app.extensions import db
+from app.db_utils import primeiro_ou_404
 from app.convites import bp
 from app.convites.forms import AcaoForm
 from app.convites.models import Convite, STATUS_PENDENTE, STATUS_ACEITO, STATUS_RECUSADO
@@ -44,7 +45,7 @@ def _enviar_email_de_convite(convite):
 def ver_convite(token):
     """Publica de proposito (sem @login_required): quem ainda nao tem conta
     precisa ver a tela pra saber que precisa se cadastrar antes de aceitar."""
-    convite = Convite.query.filter_by(token=token).first_or_404()
+    convite = primeiro_ou_404(Convite.objects(token=token))
 
     if convite.status != STATUS_PENDENTE:
         return render_template("convites/ver.html", convite=convite, pode_responder=False)
@@ -72,15 +73,16 @@ def _aplicar_papel(convite, usuario):
     correspondente ao convite aceito. Atualiza em vez de duplicar se a pessoa
     ja tinha um papel nesse escopo (ex: reconvidada com papel diferente)."""
     if convite.escopo_tipo == "comunidade":
-        papel_existente = UsuarioComunidade.query.filter_by(
+        papel_existente = UsuarioComunidade.objects(
             usuario_id=usuario.id, comunidade_id=convite.escopo_id
         ).first()
         if papel_existente:
             papel_existente.papel = convite.papel
+            papel_existente.save()
         else:
-            db.session.add(UsuarioComunidade(
+            UsuarioComunidade(
                 usuario_id=usuario.id, comunidade_id=convite.escopo_id, papel=convite.papel
-            ))
+            ).save()
         return url_for("comunidade.detalhe", comunidade_id=convite.escopo_id)
 
     papel_existente = UsuarioMinisterio.query.filter_by(
@@ -98,7 +100,7 @@ def _aplicar_papel(convite, usuario):
 @bp.route("/<token>/aceitar", methods=["POST"])
 @login_required
 def aceitar_convite(token):
-    convite = Convite.query.filter_by(token=token).first_or_404()
+    convite = primeiro_ou_404(Convite.objects(token=token))
     form = AcaoForm()
 
     if not form.validate_on_submit():
@@ -113,9 +115,13 @@ def aceitar_convite(token):
         flash("Este convite foi enviado para outro e-mail -- entre com a conta certa pra aceitar.", "danger")
         return redirect(url_for("convites.ver_convite", token=token))
 
+    # _aplicar_papel ja salva a propria escrita (UsuarioComunidade no Mongo
+    # se salva sozinha; UsuarioMinisterio, ainda em SQLAlchemy, precisa do
+    # db.session.commit() abaixo).
     destino = _aplicar_papel(convite, current_user)
     convite.status = STATUS_ACEITO
     convite.respondido_em = datetime.now(timezone.utc)
+    convite.save()
     db.session.commit()
 
     flash(f'Convite aceito! Voce agora e "{convite.papel}" em {convite.escopo_nome}.', "success")
@@ -125,7 +131,7 @@ def aceitar_convite(token):
 @bp.route("/<token>/recusar", methods=["POST"])
 @login_required
 def recusar_convite(token):
-    convite = Convite.query.filter_by(token=token).first_or_404()
+    convite = primeiro_ou_404(Convite.objects(token=token))
     form = AcaoForm()
 
     if not form.validate_on_submit():
@@ -142,7 +148,7 @@ def recusar_convite(token):
 
     convite.status = STATUS_RECUSADO
     convite.respondido_em = datetime.now(timezone.utc)
-    db.session.commit()
+    convite.save()
 
     flash("Convite recusado.", "success")
     return redirect(url_for("main.dashboard"))

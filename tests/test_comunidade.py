@@ -34,9 +34,9 @@ def test_criar_comunidade_aparece_na_lista(logged_in_client, app, db):
 
 def test_criar_comunidade_sem_nome_mostra_erro(logged_in_client, app, db):
     with app.app_context():
-        total_antes = Comunidade.query.count()
+        total_antes = Comunidade.objects.count()
         logged_in_client.post("/comunidade/nova", data={"nome": "", "descricao": ""}, follow_redirects=True)
-        assert Comunidade.query.count() == total_antes
+        assert Comunidade.objects.count() == total_antes
 
 
 def test_editar_comunidade_atualiza_nome(logged_in_client, app, db):
@@ -48,7 +48,7 @@ def test_editar_comunidade_atualiza_nome(logged_in_client, app, db):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        atualizada = db.session.get(Comunidade, comunidade.id)
+        atualizada = Comunidade.objects(id=comunidade.id).first()
         assert atualizada.nome == "Nome Novo"
         assert atualizada.descricao == "Descricao nova"
 
@@ -62,7 +62,7 @@ def test_excluir_comunidade_remove_e_redireciona_para_lista(logged_in_client, ap
             f"/comunidade/{comunidade_id}/excluir", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        assert db.session.get(Comunidade, comunidade_id) is None
+        assert Comunidade.objects(id=comunidade_id).first() is None
         assert "excluida" in response.data.decode("utf-8")
 
 
@@ -94,7 +94,7 @@ def test_usuario_nao_consegue_excluir_comunidade_de_outra_conta(logged_in_client
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert db.session.get(Comunidade, comunidade_id) is not None
+        assert Comunidade.objects(id=comunidade_id).first() is not None
 
 
 # --- Exclusao em lote (JS chama a rota individual de cada item, um por vez) --
@@ -142,7 +142,7 @@ def test_usuario_nao_consegue_editar_comunidade_de_outra_conta(logged_in_client,
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert db.session.get(Comunidade, comunidade_id).nome == "Comunidade Ana"
+        assert Comunidade.objects(id=comunidade_id).first().nome == "Comunidade Ana"
 
 
 def test_lista_tem_logo_que_volta_direto_pro_inicio(logged_in_client, app, db):
@@ -660,7 +660,7 @@ def test_contagem_de_membros_inclui_quem_entrou_via_link(logged_in_client, app, 
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
         # Quem criou a comunidade ja conta como 1 (vira admin automaticamente).
         html_antes = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
@@ -684,7 +684,7 @@ def test_contagem_de_membros_nao_duplica_quem_esta_no_diretorio_e_tem_conta(logg
         comunidade_id = comunidade.id
         _criar_membro(logged_in_client, comunidade_id, "Bruno", email="bruno@example.com")
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
         # Ana (admin) + Bruno (diretorio) = 2, antes de Bruno ter conta.
         html_antes = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
@@ -710,7 +710,7 @@ def test_tela_de_membros_mostra_quem_entrou_via_link(logged_in_client, app, db):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
     with sessao_isolada(app):
         bruno_client = app.test_client()
@@ -734,7 +734,7 @@ def test_admin_e_notificado_quando_alguem_entra_via_link(logged_in_client, app, 
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
     with sessao_isolada(app):
         bruno_client = app.test_client()
@@ -771,7 +771,7 @@ def test_admin_cria_evento(logged_in_client, app, db):
         assert response.status_code == 200
         assert "Congresso de Louvor" in response.data.decode("utf-8")
 
-        evento = Evento.query.filter_by(comunidade_id=comunidade.id, nome="Congresso de Louvor").first()
+        evento = Evento.objects(comunidade_id=comunidade.id, nome="Congresso de Louvor").first()
         assert evento is not None
         assert evento.local == "Auditorio principal"
         assert str(evento.data_fim) == "2026-12-07"
@@ -787,7 +787,7 @@ def test_evento_sem_nome_mostra_erro(logged_in_client, app, db):
             data={"nome": "", "data": "2026-12-05"},
             follow_redirects=True,
         )
-        assert Evento.query.filter_by(comunidade_id=comunidade.id).count() == 0
+        assert Evento.objects(comunidade_id=comunidade.id).count() == 0
 
 
 def test_eventos_separa_proximos_de_passados(logged_in_client, app, db):
@@ -817,7 +817,7 @@ def test_membro_comum_nao_ve_form_de_criar_evento(logged_in_client, outro_logged
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
     with sessao_isolada(app):
         bruno_client = app.test_client()
@@ -835,7 +835,7 @@ def test_membro_comum_nao_consegue_criar_evento_via_post_direto(logged_in_client
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
         logged_in_client.post(f"/comunidade/{comunidade_id}/papeis/link/gerar", follow_redirects=True)
-        token = db.session.get(Comunidade, comunidade_id).token_convite_publico
+        token = Comunidade.objects(id=comunidade_id).first().token_convite_publico
 
     with sessao_isolada(app):
         bruno_client = app.test_client()
@@ -849,7 +849,7 @@ def test_membro_comum_nao_consegue_criar_evento_via_post_direto(logged_in_client
         )
 
     with sessao_isolada(app):
-        assert Evento.query.filter_by(comunidade_id=comunidade_id, nome="Evento Invasor").first() is None
+        assert Evento.objects(comunidade_id=comunidade_id, nome="Evento Invasor").first() is None
 
 
 def test_admin_exclui_evento(logged_in_client, app, db):
@@ -862,7 +862,7 @@ def test_admin_exclui_evento(logged_in_client, app, db):
             data={"nome": "Evento Teste", "data": "2099-01-01"},
             follow_redirects=True,
         )
-        evento = Evento.query.filter_by(comunidade_id=comunidade.id, nome="Evento Teste").first()
+        evento = Evento.objects(comunidade_id=comunidade.id, nome="Evento Teste").first()
         evento_id = evento.id
 
         response = logged_in_client.post(
@@ -870,7 +870,7 @@ def test_admin_exclui_evento(logged_in_client, app, db):
         )
         assert response.status_code == 200
         db.session.remove()
-        assert db.session.get(Evento, evento_id) is None
+        assert Evento.objects(id=evento_id).first() is None
 
 
 def test_usuario_nao_consegue_excluir_evento_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
@@ -884,7 +884,7 @@ def test_usuario_nao_consegue_excluir_evento_de_outra_conta(logged_in_client, ou
             data={"nome": "Evento Teste", "data": "2099-01-01"},
             follow_redirects=True,
         )
-        evento_id = Evento.query.filter_by(comunidade_id=comunidade_id, nome="Evento Teste").first().id
+        evento_id = Evento.objects(comunidade_id=comunidade_id, nome="Evento Teste").first().id
 
     with sessao_isolada(app):
         response = outro_logged_in_client.post(
@@ -893,7 +893,7 @@ def test_usuario_nao_consegue_excluir_evento_de_outra_conta(logged_in_client, ou
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert Evento.query.get(evento_id) is not None
+        assert Evento.objects(id=evento_id).first() is not None
 
 
 def test_eventos_sem_login_redireciona(client):

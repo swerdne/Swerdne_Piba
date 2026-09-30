@@ -11,7 +11,7 @@ def _criar_comunidade(cliente, nome="Comunidade Teste"):
         data={"nome": nome, "descricao": ""},
         follow_redirects=True,
     )
-    return Comunidade.query.filter_by(nome=nome).order_by(Comunidade.id.desc()).first()
+    return Comunidade.objects(nome=nome).order_by("-id").first()
 
 
 def _criar_ministerio(cliente, comunidade_id, nome="Ministerio Teste"):

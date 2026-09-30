@@ -10,6 +10,7 @@ from flask_wtf.csrf import generate_csrf
 from werkzeug.utils import secure_filename
 
 from app.extensions import db, limiter
+from app.db_utils import delete_cascade, primeiro_ou_404
 from app.comunidade import bp
 from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm
 from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade
@@ -41,7 +42,7 @@ def _eh_admin_da_comunidade(comunidade, usuario):
         return True
     if comunidade.usuario_id == usuario.id:
         return True
-    return UsuarioComunidade.query.filter_by(
+    return UsuarioComunidade.objects(
         comunidade_id=comunidade.id, usuario_id=usuario.id, papel="admin"
     ).first() is not None
 
@@ -49,7 +50,7 @@ def _eh_admin_da_comunidade(comunidade, usuario):
 def _eh_membro_da_comunidade(comunidade, usuario):
     """Papel=membro em UsuarioComunidade -- visibilidade de leitura, mesmo
     nivel do vinculo por e-mail com o diretorio (ver _comunidade_visivel_ou_404)."""
-    return UsuarioComunidade.query.filter_by(
+    return UsuarioComunidade.objects(
         comunidade_id=comunidade.id, usuario_id=usuario.id, papel="membro"
     ).first() is not None
 
@@ -61,7 +62,7 @@ def _admins_da_comunidade(comunidade):
     in-app) quando algo relevante acontece, ex: alguem entra via link."""
     ids_admin = {
         row.usuario_id for row in
-        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").all()
+        UsuarioComunidade.objects(comunidade_id=comunidade.id, papel="admin")
     }
     if comunidade.usuario_id:
         ids_admin.add(comunidade.usuario_id)
@@ -76,7 +77,7 @@ def _comunidade_do_usuario_ou_404(comunidade_id):
     Sem essa checagem, qualquer pessoa logada poderia mexer numa comunidade de
     outra conta so adivinhando o id na URL.
     """
-    comunidade = Comunidade.query.get_or_404(comunidade_id)
+    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
     if not _eh_admin_da_comunidade(comunidade, current_user):
         abort(404)
     return comunidade
@@ -88,7 +89,7 @@ def _comunidade_visivel_ou_404(comunidade_id):
     usado para ligar notificacoes in-app (ver
     app/escala/routes.py::enviar_notificacoes_da_escala).
     """
-    comunidade = Comunidade.query.get_or_404(comunidade_id)
+    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
     eh_dono = _eh_admin_da_comunidade(comunidade, current_user)
     eh_membro_vinculado = eh_dono or _eh_membro_da_comunidade(comunidade, current_user) or Membro.query.filter_by(
         comunidade_id=comunidade.id, email=current_user.email
@@ -151,28 +152,28 @@ def _ler_segmentos_do_form():
 @login_required
 def index():
     if current_user.eh_super_admin:
-        comunidades_dono = Comunidade.query.order_by(Comunidade.nome).all()
+        comunidades_dono = list(Comunidade.objects.order_by("nome"))
     else:
         ids_admin = [
             row.comunidade_id for row in
-            UsuarioComunidade.query.filter_by(usuario_id=current_user.id, papel="admin").all()
+            UsuarioComunidade.objects(usuario_id=current_user.id, papel="admin")
         ]
         comunidades_dono = (
-            Comunidade.query.filter(Comunidade.id.in_(ids_admin)).order_by(Comunidade.nome).all()
+            list(Comunidade.objects(id__in=ids_admin).order_by("nome"))
             if ids_admin else []
         )
 
     comunidades_membro_ids = {
-        cid for (cid,) in
+        row.comunidade_id for row in
         db.session.query(Membro.comunidade_id).filter(Membro.email == current_user.email).distinct().all()
     }
     ids_papel_membro = {
         row.comunidade_id for row in
-        UsuarioComunidade.query.filter_by(usuario_id=current_user.id, papel="membro").all()
+        UsuarioComunidade.objects(usuario_id=current_user.id, papel="membro")
     }
     ids_dono = {c.id for c in comunidades_dono}
     ids_membro = (comunidades_membro_ids | ids_papel_membro) - ids_dono
-    comunidades_participa = Comunidade.query.filter(Comunidade.id.in_(ids_membro)).order_by(Comunidade.nome).all() if ids_membro else []
+    comunidades_participa = list(Comunidade.objects(id__in=ids_membro).order_by("nome")) if ids_membro else []
 
     return render_template(
         "comunidade/lista.html",
@@ -253,7 +254,7 @@ def detalhe(comunidade_id):
     # pra nao contar duas vezes quem esta nos dois ao mesmo tempo.
     membros_diretorio = Membro.query.filter_by(comunidade_id=comunidade.id).all()
     emails_diretorio = {m.email.lower() for m in membros_diretorio if m.email}
-    contas_vinculadas = UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id).all()
+    contas_vinculadas = list(UsuarioComunidade.objects(comunidade_id=comunidade.id))
     contas_extras = sum(
         1 for uc in contas_vinculadas
         if not uc.usuario.email or uc.usuario.email.lower() not in emails_diretorio
@@ -290,7 +291,7 @@ def editar(comunidade_id):
             comunidade.imagem = _salvar_logo(form.imagem.data)
             _remover_logo_antiga(logo_antiga)
 
-        db.session.commit()
+        comunidade.save()
         flash("Comunidade atualizada!", "success")
         return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
 
@@ -307,15 +308,28 @@ def excluir_comunidade(comunidade_id):
         flash("Acao invalida.", "danger")
         return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
 
-    # Cascade (cascade="all, delete-orphan" em Comunidade.ministerios e
-    # Comunidade.membros) apaga junto todos os Ministerios (e as Escalas e
-    # Turnos de Rodizio deles, mesmo mecanismo de ministerio.excluir_ministerio)
-    # e todo o diretorio de Membros da comunidade.
+    # Comunidade agora vive no Mongo, mas Ministerio/Membro (e tudo que
+    # pende deles: Escalas, Turnos de Rodizio, diretorio) ainda estao no
+    # Postgres nesta fase da migracao -- sem o cascade automatico que
+    # existia antes (cascade="all, delete-orphan" em Comunidade.ministerios/
+    # membros), precisa apagar cada lado explicitamente. delete_cascade
+    # cobre o lado Mongo (UsuarioComunidade/Evento); os loops abaixo cobrem
+    # o lado Postgres, na ordem certa (Ministerio primeiro -- ele cascade
+    # pra Escala/Funcao, que referenciam Membro -- so depois Membro, senao
+    # a FK ainda em uso barraria a delecao).
     _remover_logo_antiga(comunidade.imagem)
 
     nome = comunidade.nome
-    db.session.delete(comunidade)
+
+    for ministerio in Ministerio.query.filter_by(comunidade_id=comunidade.id).all():
+        db.session.delete(ministerio)
     db.session.commit()
+
+    for membro in Membro.query.filter_by(comunidade_id=comunidade.id).all():
+        db.session.delete(membro)
+    db.session.commit()
+
+    delete_cascade(comunidade)
 
     flash(f'Comunidade "{nome}" excluida.', "success")
     return redirect(url_for("comunidade.index"))
@@ -358,7 +372,7 @@ def membros(comunidade_id):
     # precisa ver as duas listas, senao a contagem em comunidade.detalhe nao
     # bate com ninguem aparecendo aqui.
     contas_vinculadas = sorted(
-        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id).all(),
+        UsuarioComunidade.objects(comunidade_id=comunidade.id),
         key=lambda uc: (uc.papel, (uc.usuario.name or uc.usuario.username or uc.usuario.email).lower()),
     )
 
@@ -573,7 +587,7 @@ def lideres(comunidade_id):
     nomes_ministerios = [m.nome for m in comunidade.ministerios]
 
     por_usuario = {}
-    for papel in UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").all():
+    for papel in UsuarioComunidade.objects(comunidade_id=comunidade.id, papel="admin"):
         por_usuario[papel.usuario_id] = {
             "usuario": papel.usuario, "eh_admin": True, "ministerios": list(nomes_ministerios),
         }
@@ -625,13 +639,12 @@ def eventos(comunidade_id):
             horario=form.horario.data,
             local=(form.local.data or "").strip() or None,
         )
-        db.session.add(evento)
-        db.session.commit()
+        evento.save()
         flash(f'Evento "{evento.nome}" criado!', "success")
         return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
     hoje = date.today()
-    todos_eventos = Evento.query.filter_by(comunidade_id=comunidade.id).order_by(Evento.data).all()
+    todos_eventos = list(Evento.objects(comunidade_id=comunidade.id).order_by("data"))
     proximos = [e for e in todos_eventos if (e.data_fim or e.data) >= hoje]
     passados = [e for e in reversed(todos_eventos) if (e.data_fim or e.data) < hoje]
 
@@ -650,7 +663,7 @@ def eventos(comunidade_id):
 @login_required
 def excluir_evento(comunidade_id, evento_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    evento = Evento.query.filter_by(id=evento_id, comunidade_id=comunidade.id).first_or_404()
+    evento = primeiro_ou_404(Evento.objects(id=evento_id, comunidade_id=comunidade.id))
     form = AcaoForm()
 
     if not form.validate_on_submit():
@@ -658,8 +671,7 @@ def excluir_evento(comunidade_id, evento_id):
         return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
     nome = evento.nome
-    db.session.delete(evento)
-    db.session.commit()
+    evento.delete()
     flash(f'Evento "{nome}" excluido.', "success")
     return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
@@ -732,15 +744,12 @@ def papeis(comunidade_id):
         flash(f"Convite enviado para {convite.email}.", "success")
         return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
-    papeis_atuais = (
-        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id)
-        .order_by(UsuarioComunidade.papel)
-        .all()
+    papeis_atuais = list(
+        UsuarioComunidade.objects(comunidade_id=comunidade.id).order_by("papel")
     )
-    convites_pendentes = (
-        Convite.query.filter_by(escopo_tipo="comunidade", escopo_id=comunidade.id, status="pendente")
-        .order_by(Convite.criado_em.desc())
-        .all()
+    convites_pendentes = list(
+        Convite.objects(escopo_tipo="comunidade", escopo_id=comunidade.id, status="pendente")
+        .order_by("-criado_em")
     )
 
     link_convite = (
@@ -775,7 +784,7 @@ def gerar_link_convite(comunidade_id):
         return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
     comunidade.gerar_novo_link_convite()
-    db.session.commit()
+    comunidade.save()
     flash("Novo link de convite gerado! O link anterior (se existia) parou de funcionar.", "success")
     return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
@@ -795,13 +804,13 @@ def entrar_via_link(token):
     com CSRF (AcaoForm), senao um GET simples (preview de link no
     WhatsApp/Telegram, prefetch do navegador, ou um <img src="..."> num
     site malicioso) poderia inscrever alguem autenticado sem intencao."""
-    comunidade = Comunidade.query.filter_by(token_convite_publico=token).first_or_404()
+    comunidade = primeiro_ou_404(Comunidade.objects(token_convite_publico=token))
 
     if not current_user.is_authenticated:
         session["proximo_apos_login"] = url_for("comunidade.entrar_via_link", token=token)
         return render_template("comunidade/entrar.html", comunidade=comunidade)
 
-    papel_existente = UsuarioComunidade.query.filter_by(
+    papel_existente = UsuarioComunidade.objects(
         usuario_id=current_user.id, comunidade_id=comunidade.id
     ).first()
     if papel_existente:
@@ -823,7 +832,7 @@ def entrar_via_link(token):
 
     form = AcaoForm()
     if request.method == "POST" and form.validate_on_submit():
-        db.session.add(UsuarioComunidade(usuario_id=current_user.id, comunidade_id=comunidade.id, papel="membro"))
+        UsuarioComunidade(usuario_id=current_user.id, comunidade_id=comunidade.id, papel="membro").save()
 
         nome_novo_membro = current_user.name or current_user.username or current_user.email
         for admin in _admins_da_comunidade(comunidade):
@@ -835,8 +844,8 @@ def entrar_via_link(token):
                 mensagem=f'{nome_novo_membro} entrou na comunidade pelo link de convite.',
                 tipo="novo_membro",
             ))
-
         db.session.commit()
+
         flash(f'Voce entrou em "{comunidade.nome}"!', "success")
         return redirect(url_for("comunidade.escalados", comunidade_id=comunidade.id))
 
@@ -847,7 +856,7 @@ def entrar_via_link(token):
 @login_required
 def remover_papel(comunidade_id, usuario_comunidade_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    papel = UsuarioComunidade.query.filter_by(id=usuario_comunidade_id, comunidade_id=comunidade.id).first_or_404()
+    papel = primeiro_ou_404(UsuarioComunidade.objects(id=usuario_comunidade_id, comunidade_id=comunidade.id))
     form = AcaoForm()
 
     if not form.validate_on_submit():
@@ -855,8 +864,7 @@ def remover_papel(comunidade_id, usuario_comunidade_id):
         return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
-    db.session.delete(papel)
-    db.session.commit()
+    papel.delete()
     flash(f"{nome} removido(a) dos administradores/membros da comunidade.", "success")
     return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
@@ -870,7 +878,7 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
     de acessar /papeis (_comunidade_do_usuario_ou_404 exige papel=admin ou
     ser o dono original) pra reverter o proprio erro."""
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    papel = UsuarioComunidade.query.filter_by(id=usuario_comunidade_id, comunidade_id=comunidade.id).first_or_404()
+    papel = primeiro_ou_404(UsuarioComunidade.objects(id=usuario_comunidade_id, comunidade_id=comunidade.id))
     form = AcaoForm()
 
     if not form.validate_on_submit():
@@ -880,16 +888,16 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
 
     if papel.papel == "admin":
-        total_admins = UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").count()
+        total_admins = UsuarioComunidade.objects(comunidade_id=comunidade.id, papel="admin").count()
         if total_admins <= 1:
             flash("Nao e possivel rebaixar o ultimo administrador. Promova outra pessoa antes.", "danger")
             return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
         papel.papel = "membro"
-        db.session.commit()
+        papel.save()
         flash(f"{nome} agora e membro (nao e mais administrador).", "success")
     else:
         papel.papel = "admin"
-        db.session.commit()
+        papel.save()
         flash(f"{nome} agora e administrador(a) da comunidade.", "success")
 
     return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
@@ -899,17 +907,16 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
 @login_required
 def cancelar_convite(comunidade_id, convite_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    convite = Convite.query.filter_by(
+    convite = primeiro_ou_404(Convite.objects(
         id=convite_id, escopo_tipo="comunidade", escopo_id=comunidade.id, status="pendente"
-    ).first_or_404()
+    ))
     form = AcaoForm()
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
         return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
-    db.session.delete(convite)
-    db.session.commit()
+    convite.delete()
     flash("Convite cancelado.", "success")
     return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
