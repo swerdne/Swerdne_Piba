@@ -343,6 +343,9 @@
                         {% else %}
                             {% set form = formularios_membro[funcao.id] %}
                             <div class="flex flex-wrap items-center gap-2 w-full">
+                                <input type="text" placeholder="Buscar pessoa..." autocomplete="off"
+                                       class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"
+                                       data-busca-diretorio>
                                 {{ form.membro_id(
                                     data_atribuicao_item=funcao.id,
                                     data_atribuicao_url=url_for('escala.adicionar_membro', funcao_id=funcao.id),
@@ -602,6 +605,21 @@
             });
         }
     })();
+
+    // Filtra as opcoes do <select> "Selecione a pessoa" (diretorio ja
+    // carregado no HTML -- filtro so no client, sem ida ao servidor)
+    // conforme a pessoa digita. O placeholder (value=0) fica sempre visivel.
+    document.querySelectorAll('[data-busca-diretorio]').forEach(function (input) {
+        var select = input.nextElementSibling;
+        if (!select || select.tagName !== 'SELECT') return;
+        input.addEventListener('input', function () {
+            var termo = input.value.trim().toLowerCase();
+            Array.from(select.options).forEach(function (opcao) {
+                if (!opcao.value || opcao.value === '0') return;
+                opcao.hidden = termo.length > 0 && opcao.text.toLowerCase().indexOf(termo) === -1;
+            });
+        });
+    });
 
     document.querySelectorAll('[data-editar-funcao]').forEach(function (btn) {
         btn.addEventListener('click', function () {
