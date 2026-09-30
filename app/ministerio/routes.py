@@ -50,6 +50,35 @@ def _eh_lider_do_ministerio(ministerio, usuario):
     ).first() is not None
 
 
+def _lideres_do_ministerio(ministerio):
+    """Todas as contas com autoridade de lider sobre este Ministerio --
+    dono original da Comunidade, quem tem papel=admin nela, e quem tem
+    papel=lider no proprio Ministerio. Usado pra notificar (ver
+    escala.routes::_notificar_lideres_do_ministerio); mesma logica de
+    autoridade de _eh_lider_do_ministerio, so que devolvendo a lista em vez
+    de checar uma conta especifica."""
+    from app.auth.models import User
+    from app.comunidade.models import UsuarioComunidade
+
+    comunidade = ministerio.comunidade
+    ids_admin_comunidade = {
+        row.usuario_id for row in
+        UsuarioComunidade.query.filter_by(comunidade_id=comunidade.id, papel="admin").all()
+    }
+    if comunidade.usuario_id:
+        ids_admin_comunidade.add(comunidade.usuario_id)
+
+    ids_lider_ministerio = {
+        row.usuario_id for row in
+        UsuarioMinisterio.query.filter_by(ministerio_id=ministerio.id, papel="lider").all()
+    }
+
+    ids = ids_admin_comunidade | ids_lider_ministerio
+    if not ids:
+        return []
+    return list(User.objects(id__in=ids))
+
+
 def _eh_membro_do_ministerio(ministerio, usuario):
     """Papel=membro em UsuarioMinisterio -- participa do ministerio,
     visualiza as escalas dele (leitura)."""

@@ -1,6 +1,6 @@
 """Formularios Flask-WTF do modulo escala."""
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, SubmitField, DateField, TimeField
+from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField
 from wtforms.validators import DataRequired, Length, Optional
 
 from app.escala.models import DEPARTAMENTOS, CORES_DISPONIVEIS
@@ -55,6 +55,22 @@ class StatusForm(FlaskForm):
         ],
         validators=[DataRequired()],
     )
+    # Preenchidos so quando status == "troca_solicitada" (ver
+    # escala.routes::atualizar_status) -- Optional() nos dois porque sugerir
+    # substituto e explicar o motivo sao opcionais pra quem pede a troca.
+    troca_motivo = TextAreaField("Motivo (opcional)", validators=[Optional(), Length(max=500)])
+    troca_sugestao_membro_id = SelectField(
+        "Sugerir substituto (opcional)", coerce=int, validators=[Optional()]
+    )
+
+
+class TrocaAprovarForm(FlaskForm):
+    """Usado pelo lider/admin pra aprovar uma solicitacao de troca (ver
+    escala.routes::aprovar_troca) -- escolhe quem assume a funcao. Vem
+    pre-preenchido com a sugestao de quem pediu a troca, se houver, mas o
+    lider pode trocar por qualquer outra pessoa do diretorio."""
+    membro_id = SelectField("Quem assume a funcao", coerce=int, validators=[DataRequired()])
+    submit = SubmitField("Aprovar troca")
 
 
 class AcaoForm(FlaskForm):

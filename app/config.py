@@ -47,17 +47,11 @@ class Config:
 
     # Envio de WhatsApp via Twilio (mesma conta do SMS, ver app/whatsapp.py) --
     # numero de WhatsApp habilitado no Twilio (sandbox: "+14155238886"; em
-    # producao, o numero de WhatsApp Business verificado). Guardado pra uso
-    # futuro -- o envio de WhatsApp hoje usa a Meta Cloud API (variaveis
-    # abaixo), que tem camada gratuita, sem precisar de conta paga no Twilio.
+    # producao, o numero de WhatsApp Business verificado).
     TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM")
 
     # Envio de WhatsApp via Meta Cloud API direto (ver app/whatsapp.py) --
-    # META_WHATSAPP_TOKEN e o token de acesso do app no Meta for Developers,
-    # META_WHATSAPP_PHONE_ID e o id do numero de telefone do WhatsApp
-    # Business configurado la. Camada gratuita generosa (sem custo pra uso
-    # de uma igreja), diferente do Twilio (que exige conta paga pra criar
-    # os Templates de mensagem proativa).
+    # em uso hoje (camada gratuita, sem precisar de conta paga).
     META_WHATSAPP_TOKEN = os.environ.get("META_WHATSAPP_TOKEN")
     META_WHATSAPP_PHONE_ID = os.environ.get("META_WHATSAPP_PHONE_ID")
 
@@ -112,17 +106,17 @@ class TestingConfig(Config):
     # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
     VALIDAR_DOMINIO_EMAIL = False
 
+    # Desliga o rate limiting (app/extensions.py::limiter) nos testes -- a
+    # suite registra/loga dezenas de contas via _registrar_e_confirmar
+    # (tests/conftest.py) e estouraria qualquer limite pensado pra uso real.
+    RATELIMIT_ENABLED = False
+
     # mongomock: sem rede, sem custo, isolado por conexao -- mesmo papel que
     # o sqlite:///:memory: acima, so que pro Mongo (ver app/db_utils.py).
     # Nao suporta sessao/transacao (mongoengine.get_connection().start_session()
     # levanta NotImplementedError), daí desligar MONGO_TRANSACTIONS_ENABLED.
     MONGO_USE_MOCK = True
     MONGO_TRANSACTIONS_ENABLED = False
-
-    # Desliga o rate limiting (app/extensions.py::limiter) nos testes -- a
-    # suite registra/loga dezenas de contas via _registrar_e_confirmar
-    # (tests/conftest.py) e estouraria qualquer limite pensado pra uso real.
-    RATELIMIT_ENABLED = False
 
 
 class ProductionConfig(Config):
@@ -158,9 +152,18 @@ class ProductionConfig(Config):
 
     # Reciclagem de conexao (equivalente ao conn_max_age do Django) e SSL
     # obrigatorio -- so fazem sentido pra Postgres, nao pra SQLite.
+    # pool_pre_ping: o Neon free-tier hiberna o compute do Postgres apos
+    # so alguns MINUTOS de inatividade (bem mais rapido que os 600s do
+    # pool_recycle acima) -- sem isso, uma conexao do pool que ficou parada
+    # tempo suficiente falha com "server closed the connection unexpectedly"
+    # na primeira query da proxima requisicao, ao inves de reconectar. Com
+    # pre_ping, o SQLAlchemy testa a conexao (SELECT 1 barato) antes de
+    # entregar ela pro request e descarta/reconecta se estiver morta --
+    # candidato forte pra instabilidade sem padrao aparente ("site caindo").
     if _database_url and _database_url.startswith("postgresql://"):
         SQLALCHEMY_ENGINE_OPTIONS = {
             "pool_recycle": 600,
+            "pool_pre_ping": True,
             "connect_args": {"sslmode": "require"},
         }
 

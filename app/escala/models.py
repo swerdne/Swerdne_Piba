@@ -359,7 +359,17 @@ class Funcao(db.Model):
     # escala.routes._escala_visivel_ou_404).
     eh_convidado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
-    membro = db.relationship("Membro")
+    # Solicitacao de troca (ver escala.routes::atualizar_status/aprovar_troca/
+    # recusar_troca) -- preenchidos quando status vira "troca_solicitada",
+    # limpos quando o lider aprova ou recusa. troca_sugestao_membro_id e quem
+    # a PROPRIA pessoa escalada sugeriu como substituto (opcional -- se nao
+    # sugerir ninguem, o lider escolhe na hora de aprovar); pode ser qualquer
+    # Membro do diretorio, nao precisa ja estar escalado nesta escala.
+    troca_motivo = db.Column(db.Text, nullable=True)
+    troca_sugestao_membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=True)
+
+    membro = db.relationship("Membro", foreign_keys=[membro_id])
+    troca_sugestao_membro = db.relationship("Membro", foreign_keys=[troca_sugestao_membro_id])
 
     @property
     def eh_subcabecalho(self):

@@ -4,7 +4,7 @@ from datetime import datetime, time, timezone
 
 from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app
 from flask_login import login_required, current_user
-from sqlalchemy import or_
+from mongoengine.queryset.visitor import Q as MongoQ
 
 from app.extensions import db
 from app.escala import bp
@@ -16,6 +16,7 @@ from app.escala.forms import (
     FuncaoForm,
     EscalaForm,
     EditarEscalaForm,
+    TrocaAprovarForm,
     ItemRepertorioForm,
 )
 from app.escala.models import (
@@ -37,7 +38,6 @@ from app.escala.models import (
 from app.emailing import enviar_email, EmailNaoEnviadoError
 from app.sms import enviar_sms, SmsNaoEnviadoError
 from app.whatsapp import enviar_whatsapp_template, WhatsappNaoEnviadoError
-from app.whatsapp import enviar_whatsapp, WhatsappNaoEnviadoError
 from app.auth.models import User
 from app.notificacoes import Notificacao
 
@@ -127,6 +127,26 @@ def _fixar_se_gerada_por_rodizio(escala):
     para o proximo sync nao sobrescrever a mudanca manual com a formula pura."""
     if escala.plantao_turno_id is not None:
         escala.plantao_fixado = True
+
+
+def _notificar_lideres_do_ministerio(escala, titulo, mensagem, tipo):
+    """Notifica (sino in-app) todo lider/admin com autoridade sobre o
+    Ministerio dessa Escala (ver ministerio.routes._lideres_do_ministerio).
+
+    So chamada quando o PROPRIO escalado muda seu status (ver
+    atualizar_status) -- se quem mudou o status e o lider/admin, a mudanca ja
+    e obra dele mesmo, notifica-lo seria ruido.
+    """
+    from app.ministerio.routes import _lideres_do_ministerio
+
+    for lider in _lideres_do_ministerio(escala.ministerio):
+        db.session.add(Notificacao(
+            usuario_id=lider.id,
+            titulo=titulo,
+            mensagem=mensagem,
+            escala_id=escala.id,
+            tipo=tipo,
+        ))
 
 
 @bp.route("/")
@@ -247,44 +267,44 @@ def editar(escala_id):
 def detalhe(escala_id):
     escala, eh_dono = _escala_visivel_ou_404(escala_id)
 
-    # De onde a pessoa veio (ex: um calendario) -- so aceita caminho relativo
-    # interno (mesma validacao de comunidade.membros::proximo), pra "Voltar"
-    # levar pra la em vez de sempre cair no Ministerio. Sem isso, entrar numa
-    # escala pelo calendario e depois voltar perdia o lugar de onde veio.
-    voltar = request.args.get("voltar")
-    if not voltar or not voltar.startswith("/") or voltar.startswith("//"):
-        voltar = None
-
     formularios_membro = {}
     formularios_mover = {}
     formularios_status = {}
     formularios_editar_funcao = {}
+    formularios_aprovar_troca = {}
     avisos_por_funcao = {}
     diretorio_vazio = False
+
+    diretorio_geral = Membro.query.filter_by(
+        comunidade_id=escala.ministerio.comunidade_id
+    ).order_by(Membro.nome).all()
+    # Placeholder em 0 -- "nao sugerir ninguem", nunca um Membro.id real (ver
+    # StatusForm.troca_sugestao_membro_id).
+    _choices_sugestao = [(0, "Ninguem em especial")] + [(m.id, m.nome) for m in diretorio_geral]
+
+    # So um AVISO (nunca bloqueia) de que a pessoa provavelmente esta
+    # indisponivel na data da escala, segundo os ciclos que ela tiver
+    # cadastrados (ver CicloDisponibilidade) -- sem data definida na escala
+    # nao ha o que comparar, entao fica vazio de proposito.
+    avisos_por_membro = {}
+    if escala.data:
+        for m in diretorio_geral:
+            avisos = avisos_disponibilidade(m, escala.data)
+            if avisos:
+                avisos_por_membro[m.id] = avisos
+
+    def _rotulo_com_aviso(membro):
+        avisos = avisos_por_membro.get(membro.id)
+        if not avisos:
+            return membro.nome
+        return f"{membro.nome} (indisponivel: {', '.join(avisos)})"
 
     if eh_dono:
         # Convidado so le a grade (ver template) -- monta os forms de escrita
         # so pra quem pode escrever, poupa consultas desnecessarias pro convidado.
-        diretorio = Membro.query.filter_by(comunidade_id=escala.ministerio.comunidade_id).order_by(Membro.nome).all()
+        diretorio = diretorio_geral
         diretorio_vazio = not diretorio
         destinos_possiveis = [f for f in escala.funcoes if not f.eh_subcabecalho]
-
-        # So um AVISO (nunca bloqueia) de que a pessoa provavelmente esta
-        # indisponivel na data da escala, segundo os ciclos que ela tiver
-        # cadastrados (ver CicloDisponibilidade) -- sem data definida na escala
-        # nao ha o que comparar, entao fica vazio de proposito.
-        avisos_por_membro = {}
-        if escala.data:
-            for m in diretorio:
-                avisos = avisos_disponibilidade(m, escala.data)
-                if avisos:
-                    avisos_por_membro[m.id] = avisos
-
-        def _rotulo_com_aviso(membro):
-            avisos = avisos_por_membro.get(membro.id)
-            if not avisos:
-                return membro.nome
-            return f"{membro.nome} (indisponivel: {', '.join(avisos)})"
 
         for funcao in escala.funcoes:
             formularios_editar_funcao[funcao.id] = FuncaoForm(nome=funcao.nome)
@@ -311,7 +331,16 @@ def detalhe(escala_id):
                     (f.id, f.nome) for f in destinos_possiveis if f.id != funcao.id
                 ]
                 formularios_mover[funcao.id] = mover_form
-                formularios_status[funcao.id] = StatusForm(status=funcao.status or STATUS_PADRAO)
+                status_form = StatusForm(status=funcao.status or STATUS_PADRAO)
+                status_form.troca_sugestao_membro_id.choices = _choices_sugestao
+                formularios_status[funcao.id] = status_form
+
+                if funcao.status == "troca_solicitada":
+                    aprovar_form = TrocaAprovarForm(membro_id=funcao.troca_sugestao_membro_id or 0)
+                    aprovar_form.membro_id.choices = [(0, "Selecione quem assume")] + [
+                        (m.id, m.nome) for m in diretorio
+                    ]
+                    formularios_aprovar_troca[funcao.id] = aprovar_form
     else:
         # Nao gerencia a escala, mas pode marcar o PROPRIO status (ver
         # escala.routes.atualizar_status) -- so monta o form pra funcao(oes)
@@ -322,7 +351,9 @@ def detalhe(escala_id):
                 not funcao.eh_subcabecalho and funcao.membro_id and funcao.membro.email
                 and funcao.membro.email.lower() == email_logado
             ):
-                formularios_status[funcao.id] = StatusForm(status=funcao.status or STATUS_PADRAO)
+                status_form = StatusForm(status=funcao.status or STATUS_PADRAO)
+                status_form.troca_sugestao_membro_id.choices = _choices_sugestao
+                formularios_status[funcao.id] = status_form
 
     return render_template(
         "escala/detalhe.html",
@@ -333,6 +364,7 @@ def detalhe(escala_id):
         formularios_mover=formularios_mover,
         formularios_status=formularios_status,
         formularios_editar_funcao=formularios_editar_funcao,
+        formularios_aprovar_troca=formularios_aprovar_troca,
         avisos_por_funcao=avisos_por_funcao,
         formulario_nova_funcao=FuncaoForm(),
         formulario_novo_subcabecalho=FuncaoForm(),
@@ -340,7 +372,6 @@ def detalhe(escala_id):
         acao_form=AcaoForm(),
         status_labels=STATUS_LABELS,
         status_cores=STATUS_CORES,
-        voltar=voltar,
     )
 
 
@@ -534,14 +565,12 @@ def buscar_usuario(funcao_id):
     if len(termo) < 2:
         return jsonify([])
 
-    padrao = f"%{termo}%"
-    usuarios = (
-        User.query.filter(
-            or_(User.name.ilike(padrao), User.username.ilike(padrao), User.email.ilike(padrao))
+    usuarios = list(
+        User.objects(
+            MongoQ(name__icontains=termo) | MongoQ(username__icontains=termo) | MongoQ(email__icontains=termo)
         )
-        .order_by(User.name)
+        .order_by("name")
         .limit(8)
-        .all()
     )
 
     return jsonify([
@@ -567,7 +596,7 @@ def adicionar_convidado(funcao_id):
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
     usuario_id = request.form.get("usuario_id", type=int)
-    usuario = User.query.get(usuario_id) if usuario_id else None
+    usuario = User.objects(id=usuario_id).first() if usuario_id else None
     if usuario is None:
         flash("Selecione um usuario valido na busca.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
@@ -673,13 +702,145 @@ def atualizar_status(funcao_id):
         flash("Essa funcao nao tem ninguem escalado.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
+    comunidade_id = funcao.escala.ministerio.comunidade_id
     form = StatusForm()
+    form.troca_sugestao_membro_id.choices = [(0, "Ninguem em especial")] + [
+        (m.id, m.nome)
+        for m in Membro.query.filter_by(comunidade_id=comunidade_id).order_by(Membro.nome).all()
+    ]
+
     if not form.validate_on_submit():
         flash("Status invalido.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
-    funcao.status = form.status.data
+    status_anterior = funcao.status
+    status_novo = form.status.data
+    funcao.status = status_novo
+
+    if status_novo == "troca_solicitada":
+        funcao.troca_motivo = (form.troca_motivo.data or "").strip() or None
+        funcao.troca_sugestao_membro_id = form.troca_sugestao_membro_id.data or None
+    else:
+        funcao.troca_motivo = None
+        funcao.troca_sugestao_membro_id = None
+
     db.session.commit()
+
+    # So notifica lider/admin quando quem mudou foi o PROPRIO escalado (ver
+    # _notificar_lideres_do_ministerio) -- se um lider mudou o status de
+    # outra pessoa, a mudanca ja e obra dele mesmo.
+    if eh_proprio_escalado and status_novo != status_anterior:
+        rotulo = STATUS_LABELS.get(status_novo, status_novo)
+        titulo = f"{funcao.membro.nome}: {rotulo} em {funcao.nome}"
+        mensagem = f"{titulo} ({funcao.escala.nome})."
+        if status_novo == "troca_solicitada":
+            if funcao.troca_sugestao_membro_id:
+                sugestao = Membro.query.get(funcao.troca_sugestao_membro_id)
+                if sugestao:
+                    mensagem += f" Sugestao de substituto: {sugestao.nome}."
+            if funcao.troca_motivo:
+                mensagem += f" Motivo: {funcao.troca_motivo}"
+        _notificar_lideres_do_ministerio(funcao.escala, titulo, mensagem, tipo=status_novo)
+        db.session.commit()
+
+    return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+
+@bp.route("/funcao/<int:funcao_id>/troca/aprovar", methods=["POST"])
+@login_required
+def aprovar_troca(funcao_id):
+    """Lider/admin aprova a solicitacao de troca: reatribui a funcao pra
+    quem foi escolhido no formulario (pre-preenchido com a sugestao de quem
+    pediu, se houver -- ver detalhe() e forms.TrocaAprovarForm)."""
+    funcao = _funcao_do_usuario_ou_404(funcao_id)
+    escala_id = funcao.escala_id
+
+    if funcao.status != "troca_solicitada":
+        flash("Essa funcao nao tem uma troca pendente.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+    comunidade_id = funcao.escala.ministerio.comunidade_id
+    diretorio = Membro.query.filter_by(comunidade_id=comunidade_id).order_by(Membro.nome).all()
+
+    form = TrocaAprovarForm()
+    form.membro_id.choices = [(0, "Selecione quem assume")] + [(m.id, m.nome) for m in diretorio]
+
+    if not form.validate_on_submit() or not form.membro_id.data:
+        flash("Selecione quem assume a funcao para aprovar a troca.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+    novo_membro = Membro.query.filter_by(id=form.membro_id.data, comunidade_id=comunidade_id).first()
+    if novo_membro is None:
+        flash("Pessoa invalida para esta comunidade.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+    membro_antigo_email = funcao.membro.email if funcao.membro else None
+    nome_funcao, nome_escala, escala_id_notif = funcao.nome, funcao.escala.nome, funcao.escala_id
+
+    funcao.membro_id = novo_membro.id
+    funcao.status = STATUS_PADRAO
+    funcao.notificado_em = None
+    funcao.eh_convidado = False
+    funcao.troca_motivo = None
+    funcao.troca_sugestao_membro_id = None
+    _fixar_se_gerada_por_rodizio(funcao.escala)
+    db.session.commit()
+
+    if membro_antigo_email:
+        usuario_antigo = User.objects(email=membro_antigo_email).first()
+        if usuario_antigo:
+            db.session.add(Notificacao(
+                usuario_id=usuario_antigo.id,
+                titulo=f"Troca aprovada: {nome_funcao}",
+                mensagem=(
+                    f"Sua troca em {nome_funcao} ({nome_escala}) foi aprovada. "
+                    f"{novo_membro.nome} assume a partir de agora."
+                ),
+                escala_id=escala_id_notif,
+                tipo="troca_aprovada",
+            ))
+            db.session.commit()
+
+    flash(f"Troca aprovada: {novo_membro.nome} assume {nome_funcao}.", "success")
+    return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+
+@bp.route("/funcao/<int:funcao_id>/troca/recusar", methods=["POST"])
+@login_required
+def recusar_troca(funcao_id):
+    funcao = _funcao_do_usuario_ou_404(funcao_id)
+    escala_id = funcao.escala_id
+
+    if funcao.status != "troca_solicitada":
+        flash("Essa funcao nao tem uma troca pendente.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+    form = AcaoForm()
+    if not form.validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+    membro_email = funcao.membro.email if funcao.membro else None
+    nome_funcao, nome_escala, escala_id_notif = funcao.nome, funcao.escala.nome, funcao.escala_id
+
+    funcao.status = STATUS_PADRAO
+    funcao.troca_motivo = None
+    funcao.troca_sugestao_membro_id = None
+    db.session.commit()
+
+    if membro_email:
+        usuario = User.objects(email=membro_email).first()
+        if usuario:
+            db.session.add(Notificacao(
+                usuario_id=usuario.id,
+                titulo=f"Troca recusada: {nome_funcao}",
+                mensagem=f"Sua solicitacao de troca em {nome_funcao} ({nome_escala}) foi recusada.",
+                escala_id=escala_id_notif,
+                tipo="troca_recusada",
+            ))
+            db.session.commit()
+
+    flash("Solicitacao de troca recusada.", "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
 
@@ -694,7 +855,7 @@ _TIMEOUT_TOTAL_NOTIFICACAO_SEGUNDOS = 20
 
 
 def _disparar_notificacoes_em_paralelo(tarefas):
-    """Dispara e-mail/SMS/WhatsApp de cada tarefa ao mesmo tempo (nao uma por vez).
+    """Dispara e-mail/SMS de cada tarefa ao mesmo tempo (nao uma por vez).
 
     So faz chamada de rede -- nunca toca no ORM/sessao do banco, que nao e
     thread-safe entre threads diferentes. `tarefas` e uma lista de dicts com
@@ -790,12 +951,14 @@ def enviar_notificacoes_da_escala(escala):
         if membro.email:
             # Se a pessoa tem conta no site, tambem aparece no sino dela ao logar --
             # isso e um EXTRA, nao substitui o e-mail.
-            usuario_vinculado = User.query.filter_by(email=membro.email).first()
+            usuario_vinculado = User.objects(email=membro.email).first()
             if usuario_vinculado:
                 db.session.add(Notificacao(
                     usuario_id=usuario_vinculado.id,
                     titulo=f"Voce foi escalado(a) para {funcao.nome}",
                     mensagem=f"{escala.nome} ({escala.departamento}) - {funcao.nome}.",
+                    escala_id=escala.id,
+                    tipo="escalado",
                 ))
                 notificacoes_app += 1
                 notificou_algum_canal = True
@@ -868,12 +1031,14 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
         membro = funcao.membro
 
         if membro.email:
-            usuario_vinculado = User.query.filter_by(email=membro.email).first()
+            usuario_vinculado = User.objects(email=membro.email).first()
             if usuario_vinculado:
                 db.session.add(Notificacao(
                     usuario_id=usuario_vinculado.id,
                     titulo=f"Mudanca de data: {escala.nome}",
                     mensagem=mensagem,
+                    escala_id=escala.id,
+                    tipo="alteracao",
                 ))
                 notificacoes_app += 1
 
@@ -940,7 +1105,7 @@ def enviar_notificacao_de_cancelamento(escala):
         membro = funcao.membro
 
         if membro.email:
-            usuario_vinculado = User.query.filter_by(email=membro.email).first()
+            usuario_vinculado = User.objects(email=membro.email).first()
             if usuario_vinculado:
                 db.session.add(Notificacao(
                     usuario_id=usuario_vinculado.id,

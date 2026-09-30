@@ -64,12 +64,18 @@ class UsuarioMinisterio(db.Model):
     __tablename__ = "usuario_ministerio"
 
     id = db.Column(db.Integer, primary_key=True)
-    usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver
+    # `usuario` abaixo (property, no lugar do antigo db.relationship).
+    usuario_id = db.Column(db.Integer, nullable=False)
     ministerio_id = db.Column(db.Integer, db.ForeignKey("ministerios.id"), nullable=False)
     papel = db.Column(db.String(10), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    usuario = db.relationship("User")
+    @property
+    def usuario(self):
+        from app.auth.models import User
+        return User.objects(id=self.usuario_id).first()
+
     ministerio = db.relationship(
         "Ministerio", backref=db.backref("papeis_usuarios", cascade="all, delete-orphan")
     )
@@ -128,14 +134,24 @@ class CheckInCrianca(db.Model):
     hora_entrada = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     hora_saida = db.Column(db.DateTime, nullable=True)
     codigo_seguranca = db.Column(db.String(6), nullable=False)
-    registrado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    retirado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver as
+    # properties abaixo (no lugar dos antigos db.relationship).
+    registrado_por_id = db.Column(db.Integer, nullable=False)
+    retirado_por_id = db.Column(db.Integer, nullable=True)
 
     crianca = db.relationship(
         "Crianca", backref=db.backref("checkins", cascade="all, delete-orphan", order_by="CheckInCrianca.hora_entrada.desc()")
     )
-    registrado_por = db.relationship("User", foreign_keys=[registrado_por_id])
-    retirado_por = db.relationship("User", foreign_keys=[retirado_por_id])
+
+    @property
+    def registrado_por(self):
+        from app.auth.models import User
+        return User.objects(id=self.registrado_por_id).first()
+
+    @property
+    def retirado_por(self):
+        from app.auth.models import User
+        return User.objects(id=self.retirado_por_id).first() if self.retirado_por_id else None
 
     @property
     def esta_presente(self):

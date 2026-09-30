@@ -40,11 +40,11 @@ class RegisterForm(FlaskForm):
     submit = SubmitField("Cadastrar")
 
     def validate_username(self, field):
-        if User.query.filter_by(username=field.data).first():
+        if User.objects(username=field.data).first():
             raise ValidationError("Este nome de usuario ja esta em uso.")
 
     def validate_email(self, field):
-        if User.query.filter_by(email=field.data).first():
+        if User.objects(email=field.data).first():
             raise ValidationError(
                 "Este e-mail ja esta cadastrado. Faca login ou use 'Entrar com o Google'."
             )

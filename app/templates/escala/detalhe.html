@@ -18,7 +18,7 @@
     <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 min-w-0">
-                <a href="{{ voltar or url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
+                <a href="{{ url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
                     <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
                 </a>
                 <div class="min-w-0">
@@ -235,9 +235,55 @@
                                 {{ formularios_status[funcao.id].hidden_tag() }}
                                 {{ formularios_status[funcao.id].status(
                                     class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                                    onchange="this.form.submit()"
+                                    data_status_select=funcao.id
                                 ) }}
+                                <div class="hidden mt-2 space-y-1.5 w-full sm:w-56" data-troca-campos="{{ funcao.id }}">
+                                    {{ formularios_status[funcao.id].troca_sugestao_membro_id(
+                                        id=("troca_sugestao_" ~ funcao.id),
+                                        class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                                    ) }}
+                                    {{ formularios_status[funcao.id].troca_motivo(
+                                        id=("troca_motivo_" ~ funcao.id),
+                                        rows="2",
+                                        placeholder="Motivo (opcional)",
+                                        class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1.5 " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                                    ) }}
+                                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition w-full">
+                                        Confirmar solicitacao de troca
+                                    </button>
+                                </div>
                             </form>
+
+                            {% if funcao.status == "troca_solicitada" and funcao.id in formularios_aprovar_troca %}
+                            <div class="w-full mt-1 p-2.5 rounded-lg border border-red-500/40 bg-red-500/10">
+                                <p class="text-xs font-semibold text-red-300">
+                                    <i class="fa-solid fa-rotate mr-1"></i>{{ pessoa.nome }} pediu troca
+                                </p>
+                                {% if funcao.troca_motivo %}
+                                <p class="text-xs {{ tema.text_secondary }} mt-1">Motivo: {{ funcao.troca_motivo }}</p>
+                                {% endif %}
+                                {% if funcao.troca_sugestao_membro %}
+                                <p class="text-xs {{ tema.text_secondary }} mt-1">Sugestao: {{ funcao.troca_sugestao_membro.nome }}</p>
+                                {% endif %}
+                                <div class="flex flex-wrap items-center gap-2 mt-2">
+                                    <form method="POST" action="{{ url_for('escala.aprovar_troca', funcao_id=funcao.id) }}" class="flex items-center gap-1.5">
+                                        {{ formularios_aprovar_troca[funcao.id].hidden_tag() }}
+                                        {{ formularios_aprovar_troca[funcao.id].membro_id(
+                                            class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                                        ) }}
+                                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
+                                            Aprovar
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('escala.recusar_troca', funcao_id=funcao.id) }}">
+                                        {{ acao_form.hidden_tag() }}
+                                        <button type="submit" class="border border-red-500/50 text-red-300 hover:bg-red-500/10 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
+                                            Recusar
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            {% endif %}
 
                             {% if escala.funcoes|length > 1 %}
                             <form method="POST" action="{{ url_for('escala.mover_membro', funcao_id=funcao.id) }}" class="flex items-center gap-1 shrink-0">
@@ -264,8 +310,23 @@
                                 {{ formularios_status[funcao.id].hidden_tag() }}
                                 {{ formularios_status[funcao.id].status(
                                     class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                                    onchange="this.form.submit()"
+                                    data_status_select=funcao.id
                                 ) }}
+                                <div class="hidden mt-2 space-y-1.5 w-full sm:w-56" data-troca-campos="{{ funcao.id }}">
+                                    {{ formularios_status[funcao.id].troca_sugestao_membro_id(
+                                        id=("troca_sugestao_" ~ funcao.id),
+                                        class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                                    ) }}
+                                    {{ formularios_status[funcao.id].troca_motivo(
+                                        id=("troca_motivo_" ~ funcao.id),
+                                        rows="2",
+                                        placeholder="Motivo (opcional)",
+                                        class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1.5 " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                                    ) }}
+                                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition w-full">
+                                        Confirmar solicitacao de troca
+                                    </button>
+                                </div>
                             </form>
                             {% endif %}
                         </div>
@@ -281,18 +342,13 @@
                             </a>
                         {% else %}
                             {% set form = formularios_membro[funcao.id] %}
-                            <form method="POST" action="{{ url_for('escala.adicionar_membro', funcao_id=funcao.id) }}"
-                                  class="flex flex-wrap items-center gap-2 w-full">
-                                {{ form.hidden_tag() }}
-                                {{ form.membro_id(class_="flex-1 min-w-0 " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
-                                <button type="submit"
-                                        class="ml-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-3 py-2 rounded-lg transition shrink-0">
-                                    <i class="fa-solid fa-plus"></i>
-                                </button>
-                            </form>
-                            {% for erro in form.membro_id.errors %}
-                                <p class="text-xs text-red-400 mt-1 w-full">{{ erro }}</p>
-                            {% endfor %}
+                            <div class="flex flex-wrap items-center gap-2 w-full">
+                                {{ form.membro_id(
+                                    data_atribuicao_item=funcao.id,
+                                    data_atribuicao_url=url_for('escala.adicionar_membro', funcao_id=funcao.id),
+                                    class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                                ) }}
+                            </div>
                             <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id, proximo=request.path) }}"
                                class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
                                 <i class="fa-solid fa-user-plus"></i>
@@ -429,6 +485,18 @@
             {% endif %}
         </div>
         {% endif %}
+
+        {% if eh_dono %}
+        <div id="atribuicao-barra" class="hidden sticky bottom-4 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 shadow-lg">
+            <span class="text-sm {{ tema.text_primary }}">
+                <span id="atribuicao-contagem">0</span> pessoa(s) selecionada(s) pra escalar
+            </span>
+            <button type="button" id="atribuicao-confirmar"
+                    class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
+                <i class="fa-solid fa-check mr-1"></i><span id="atribuicao-confirmar-texto">Confirmar atribuicoes</span>
+            </button>
+        </div>
+        {% endif %}
     </main>
 
     <!-- Chat -->
@@ -460,6 +528,81 @@
 </div>
 
 <script>
+    // Atribuicao em lote: escolhe a pessoa de varias funcoes vazias sem
+    // recarregar a cada uma -- so no final, ao clicar "Confirmar
+    // atribuicoes", que dispara um fetch sequencial pra rota INDIVIDUAL de
+    // cada funcao (ja testada/rapida), uma de cada vez, e recarrega so uma
+    // vez no fim. Mesmo motivo/padrao da exclusao em lote (ver main.js):
+    // uma unica requisicao gigante arriscaria estourar o timeout do
+    // servidor no meio do caminho.
+    (function () {
+        var itens = document.querySelectorAll('[data-atribuicao-item]');
+        if (!itens.length) return;
+
+        var barra = document.getElementById('atribuicao-barra');
+        var contagemEl = document.getElementById('atribuicao-contagem');
+        var botaoConfirmar = document.getElementById('atribuicao-confirmar');
+        var textoConfirmar = document.getElementById('atribuicao-confirmar-texto');
+        var csrfInput = document.querySelector('input[name="csrf_token"]');
+        var csrf = csrfInput ? csrfInput.value : '';
+
+        function atualizarContagem() {
+            var marcados = 0;
+            itens.forEach(function (select) { if (select.value && select.value !== '0') marcados++; });
+            if (contagemEl) contagemEl.textContent = marcados;
+            if (barra) barra.classList.toggle('hidden', marcados === 0);
+        }
+
+        itens.forEach(function (select) { select.addEventListener('change', atualizarContagem); });
+
+        function atribuirUm(url, membroId) {
+            return fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'csrf_token=' + encodeURIComponent(csrf) + '&membro_id=' + encodeURIComponent(membroId),
+            }).then(function (resposta) { return resposta.ok; }).catch(function () { return false; });
+        }
+
+        if (botaoConfirmar) {
+            botaoConfirmar.addEventListener('click', function () {
+                var selecionados = [];
+                itens.forEach(function (select) {
+                    if (select.value && select.value !== '0') {
+                        selecionados.push({
+                            url: select.getAttribute('data-atribuicao-url'),
+                            membroId: select.value,
+                        });
+                    }
+                });
+                if (!selecionados.length) return;
+
+                var total = selecionados.length;
+                var falhas = 0;
+                botaoConfirmar.disabled = true;
+
+                function processar(indice) {
+                    if (indice >= total) {
+                        if (falhas > 0) {
+                            window.alert(
+                                falhas + ' de ' + total + ' nao puderam ser escaladas agora. ' +
+                                'O que deu certo ja foi salvo -- confira a lista e tente de novo com o restante.'
+                            );
+                        }
+                        window.location.reload();
+                        return;
+                    }
+                    if (textoConfirmar) textoConfirmar.textContent = 'Escalando ' + (indice + 1) + ' de ' + total + '...';
+                    atribuirUm(selecionados[indice].url, selecionados[indice].membroId).then(function (ok) {
+                        if (!ok) falhas++;
+                        processar(indice + 1);
+                    });
+                }
+                processar(0);
+            });
+        }
+    })();
+
     document.querySelectorAll('[data-editar-funcao]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var id = btn.getAttribute('data-editar-funcao');
@@ -470,6 +613,23 @@
             if (form && !form.classList.contains('hidden')) {
                 var input = form.querySelector('input[type="text"]');
                 if (input) input.focus();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-status-select]').forEach(function (select) {
+        select.addEventListener('change', function () {
+            var id = select.getAttribute('data-status-select');
+            var campos = document.querySelector('[data-troca-campos="' + id + '"]');
+            if (select.value === 'troca_solicitada') {
+                if (campos) {
+                    campos.classList.remove('hidden');
+                    var motivo = campos.querySelector('textarea');
+                    if (motivo) motivo.focus();
+                }
+            } else {
+                if (campos) campos.classList.add('hidden');
+                select.form.submit();
             }
         });
     });

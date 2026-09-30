@@ -37,7 +37,7 @@ def _escalar_membro(escala, nome_funcao, nome_membro="Fulano", email="fulano@exa
 def test_notifica_automaticamente_dentro_da_janela_de_24h(logged_in_client, app, db):
     from app.auth.models import User
 
-    usuario = User.query.filter_by(username="ana").first()
+    usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     daqui_24h = datetime.now() + timedelta(hours=24, minutes=2)
 
@@ -59,7 +59,7 @@ def test_notifica_automaticamente_dentro_da_janela_de_24h(logged_in_client, app,
 def test_nao_notifica_fora_da_janela(logged_in_client, app, db):
     from app.auth.models import User
 
-    usuario = User.query.filter_by(username="ana").first()
+    usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     daqui_3_dias = datetime.now() + timedelta(days=3)
 
@@ -80,7 +80,7 @@ def test_nao_notifica_fora_da_janela(logged_in_client, app, db):
 def test_nao_notifica_duas_vezes_para_a_mesma_janela(logged_in_client, app, db):
     from app.auth.models import User
 
-    usuario = User.query.filter_by(username="ana").first()
+    usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     daqui_16h = datetime.now() + timedelta(hours=16)
 
@@ -110,7 +110,7 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
     from app.escala.models import Membro
     from app.plantao.models import TurnoPlantao, EquipeTurno, EquipeMembro
 
-    usuario = User.query.filter_by(username="ana").first()
+    usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     daqui_24h = datetime.now() + timedelta(hours=24, minutes=2)
 
@@ -143,7 +143,7 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     from app.escala.models import Membro
     from app.plantao.models import TurnoPlantao, EquipeTurno, EquipeMembro
 
-    usuario = User.query.filter_by(username="ana").first()
+    usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     daqui_16h = datetime.now() + timedelta(hours=16)
 
@@ -177,7 +177,7 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
 def test_escala_sem_data_e_ignorada_pelo_agendador(logged_in_client, app, db):
     from app.auth.models import User
 
-    usuario = User.query.filter_by(username="ana").first()
+    usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     escala = criar_escala_com_funcoes_padrao(
         ministerio_id=ministerio.id, nome="Sem Data", departamento="Louvor", data=None, horario=None,

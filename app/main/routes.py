@@ -17,6 +17,39 @@ from app.notificacoes import Notificacao
 from app.auth.routes import _notificar_senha_alterada
 
 
+# Icone por tipo de notificacao no sino do Dashboard -- fallback pra
+# notificacoes antigas (tipo=None, de antes desse campo existir).
+_ICONE_POR_TIPO = {
+    "escalado": "fa-user-plus",
+    "alteracao": "fa-clock-rotate-left",
+    "confirmado": "fa-circle-check",
+    "presente": "fa-clipboard-check",
+    "nao_notificado": "fa-circle-question",
+    "troca_solicitada": "fa-rotate",
+    "troca_aprovada": "fa-check-double",
+    "troca_recusada": "fa-circle-xmark",
+}
+_ICONE_PADRAO = "fa-bell"
+
+
+def _agrupar_notificacoes(notificacoes):
+    """Agrupa notificacoes (ja ordenadas por mais recente primeiro) por
+    Escala, preservando a ordem geral de recencia -- a posicao de cada grupo
+    e ditada pela notificacao mais recente dele (a 1a do grupo que aparece
+    na lista). Notificacoes sem escala_id (antigas, de antes desse campo
+    existir, ou algo geral no futuro) formam grupo de 1 item cada, nunca se
+    misturam entre si nem com uma Escala."""
+    grupos_por_chave = {}
+    ordem = []
+    for n in notificacoes:
+        chave = ("escala", n.escala_id) if n.escala_id else ("solo", n.id)
+        if chave not in grupos_por_chave:
+            grupos_por_chave[chave] = {"escala": n.escala, "itens": []}
+            ordem.append(chave)
+        grupos_por_chave[chave]["itens"].append(n)
+    return [grupos_por_chave[chave] for chave in ordem]
+
+
 @bp.route("/")
 def index():
     return redirect(url_for("main.dashboard"))
@@ -60,6 +93,7 @@ def dashboard():
         .all()
     )
     notificacoes_nao_lidas = sum(1 for n in notificacoes if not n.lida)
+    grupos_notificacoes = _agrupar_notificacoes(notificacoes)
 
     return render_template(
         "main/dashboard.html",
@@ -79,6 +113,9 @@ def dashboard():
         acao_form=acao_form,
         notificacoes=notificacoes,
         notificacoes_nao_lidas=notificacoes_nao_lidas,
+        grupos_notificacoes=grupos_notificacoes,
+        icone_por_tipo=_ICONE_POR_TIPO,
+        icone_padrao=_ICONE_PADRAO,
     )
 
 
@@ -102,7 +139,7 @@ def tutorial_comunidade_visto():
         return jsonify({"ok": False}), 400
 
     current_user.tutorial_comunidade_visto = True
-    db.session.commit()
+    current_user.save()
     return jsonify({"ok": True})
 
 
@@ -135,7 +172,7 @@ def salvar_foto_perfil():
                 pass
 
     current_user.foto_perfil = f"/static/uploads/avatars/{nome_arquivo}"
-    db.session.commit()
+    current_user.save()
 
     flash("Foto de perfil atualizada!", "success")
     return redirect(url_for("main.dashboard") + "#config")
@@ -151,7 +188,7 @@ def salvar_tema():
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.theme = form.tema.data
-    db.session.commit()
+    current_user.save()
 
     flash("Tema atualizado!", "success")
     return redirect(url_for("main.dashboard") + "#config")
@@ -176,7 +213,7 @@ def salvar_senha():
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.set_password(form.nova_senha.data)
-    db.session.commit()
+    current_user.save()
 
     _notificar_senha_alterada(current_user)
     flash("Senha atualizada!" if tinha_senha else "Senha definida! Agora voce tambem pode entrar com e-mail e senha.", "success")
@@ -193,7 +230,7 @@ def salvar_nome():
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.name = form.nome.data.strip()
-    db.session.commit()
+    current_user.save()
 
     flash("Nome atualizado!", "success")
     return redirect(url_for("main.dashboard") + "#config")
@@ -243,7 +280,7 @@ def desconectar_google():
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.google_id = None
-    db.session.commit()
+    current_user.save()
 
     flash("Conta do Google desconectada.", "success")
     return redirect(url_for("main.dashboard") + "#config")

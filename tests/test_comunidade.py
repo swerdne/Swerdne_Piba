@@ -615,7 +615,7 @@ def test_diretorio_de_lideres_mostra_lider_so_do_proprio_ministerio(logged_in_cl
         ministerio_a = _criar_ministerio(logged_in_client, comunidade.id, "Louvor")
         _criar_ministerio(logged_in_client, comunidade.id, "Midia")
 
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         db.session.add(UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio_a.id, papel="lider"))
         db.session.commit()
 
@@ -742,7 +742,7 @@ def test_admin_e_notificado_quando_alguem_entra_via_link(logged_in_client, app, 
         bruno_client.post(f"/comunidade/entrar/{token}", follow_redirects=True)
 
     with sessao_isolada(app):
-        ana = User.query.filter_by(email="ana@example.com").first()
+        ana = User.objects(email="ana@example.com").first()
         notificacao = Notificacao.query.filter_by(usuario_id=ana.id, tipo="novo_membro").first()
         assert notificacao is not None
         assert "bruno" in notificacao.titulo.lower()

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
-from app.extensions import db, oauth, limiter
+from app.extensions import oauth, limiter
 from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm, EsqueciSenhaForm, RedefinirSenhaForm
 from app.auth.models import User
@@ -64,7 +64,7 @@ MOCK_GOOGLE_USER = {
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user = User.objects(email=form.email.data).first()
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             return _redirecionar_apos_login()
@@ -81,8 +81,7 @@ def register():
         # igual ao Google (que tambem nao passa por esse fluxo).
         user = User(username=form.username.data, email=form.email.data, email_confirmado=True)
         user.set_password(form.password.data)
-        db.session.add(user)
-        db.session.commit()
+        user.save()
 
         login_user(user)
         return _redirecionar_apos_login()
@@ -94,7 +93,7 @@ def register():
 def esqueci_senha():
     form = EsqueciSenhaForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user = User.objects(email=form.email.data).first()
         # So gera token se a conta existe E tem senha (conta so-Google nao
         # tem senha pra redefinir por aqui -- ela define a primeira senha
         # direto na aba Configuracoes, ja logada). A mensagem de sucesso e
@@ -103,7 +102,7 @@ def esqueci_senha():
         if user and user.password_hash:
             user.token_redefinicao_senha = secrets.token_urlsafe(32)
             user.token_redefinicao_expira_em = datetime.utcnow() + _VALIDADE_TOKEN_REDEFINICAO
-            db.session.commit()
+            user.save()
 
             link = url_for("auth.redefinir_senha", token=user.token_redefinicao_senha, _external=True)
             try:
@@ -125,7 +124,7 @@ def esqueci_senha():
 @bp.route("/redefinir-senha/<token>", methods=["GET", "POST"])
 @limiter.limit("10 per hour", methods=["POST"])
 def redefinir_senha(token):
-    user = User.query.filter_by(token_redefinicao_senha=token).first()
+    user = User.objects(token_redefinicao_senha=token).first()
     token_valido = bool(
         user and user.token_redefinicao_expira_em and user.token_redefinicao_expira_em >= datetime.utcnow()
     )
@@ -141,7 +140,7 @@ def redefinir_senha(token):
         # apos ja ter sido usado pra trocar a senha.
         user.token_redefinicao_senha = None
         user.token_redefinicao_expira_em = None
-        db.session.commit()
+        user.save()
 
         _notificar_senha_alterada(user)
         flash("Senha redefinida! Faca login com a nova senha.", "success")
@@ -214,14 +213,13 @@ def google_callback():
     name = info.get("name")
     foto_perfil = info.get("picture")
 
-    user = User.query.filter_by(google_id=google_id).first()
+    user = User.objects(google_id=google_id).first()
     if user is None:
         # Se ja existe uma conta tradicional com o mesmo e-mail, vincula o Google a ela
-        user = User.query.filter_by(email=email).first()
+        user = User.objects(email=email).first()
         if user is None:
             # O Google ja validou a posse do e-mail -- nao precisa do fluxo de confirmacao.
             user = User(google_id=google_id, email=email, name=name, foto_perfil=foto_perfil, email_confirmado=True)
-            db.session.add(user)
         else:
             user.google_id = google_id
             user.name = user.name or name
@@ -231,7 +229,7 @@ def google_callback():
         user.name = name or user.name
         user.foto_perfil = foto_perfil
 
-    db.session.commit()
+    user.save()
 
     login_user(user)
     flash("Login com Google realizado com sucesso!", "success")

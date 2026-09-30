@@ -24,7 +24,9 @@ class Comunidade(db.Model):
     # o criador ganha automaticamente uma linha papel=admin em UsuarioComunidade
     # ao criar a comunidade (criar_comunidade abaixo), entao toda checagem
     # passa a consultar essa tabela, nao mais usuario_id direto.
-    usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    # Sem ForeignKey("users.id") de proposito -- User agora vive no MongoDB
+    # (ver app/auth/models.py), "users" nao existe mais como tabela aqui.
+    usuario_id = db.Column(db.Integer, nullable=False)
     criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Link generico de entrada (ver comunidade.routes.entrar_via_link) --
@@ -64,12 +66,18 @@ class UsuarioComunidade(db.Model):
     __tablename__ = "usuario_comunidade"
 
     id = db.Column(db.Integer, primary_key=True)
-    usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver `usuario`
+    # abaixo (propriedade que busca la, no lugar do antigo db.relationship).
+    usuario_id = db.Column(db.Integer, nullable=False)
     comunidade_id = db.Column(db.Integer, db.ForeignKey("comunidades.id"), nullable=False)
     papel = db.Column(db.String(10), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    usuario = db.relationship("User")
+    @property
+    def usuario(self):
+        from app.auth.models import User
+        return User.objects(id=self.usuario_id).first()
+
     comunidade = db.relationship(
         "Comunidade", backref=db.backref("papeis_usuarios", cascade="all, delete-orphan")
     )

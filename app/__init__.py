@@ -95,12 +95,12 @@ def create_app(config_name="default"):
     def criar_super_admin(email):
         from .auth.models import User
 
-        usuario = User.query.filter_by(email=email).first()
+        usuario = User.objects(email=email).first()
         if usuario is None:
             click.echo(f"Nenhuma conta encontrada com o e-mail {email}. Peca pra pessoa se cadastrar primeiro.")
             return
         usuario.eh_super_admin = True
-        db.session.commit()
+        usuario.save()
         click.echo(f"{email} agora e Super Admin.")
 
     # Disponibiliza `tema`/`temas` em TODOS os templates automaticamente (nao

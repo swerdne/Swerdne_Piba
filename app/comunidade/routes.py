@@ -67,7 +67,7 @@ def _admins_da_comunidade(comunidade):
         ids_admin.add(comunidade.usuario_id)
     if not ids_admin:
         return []
-    return User.query.filter(User.id.in_(ids_admin)).all()
+    return list(User.objects(id__in=ids_admin))
 
 
 def _comunidade_do_usuario_ou_404(comunidade_id):

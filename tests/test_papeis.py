@@ -17,7 +17,7 @@ def _registrar(cliente, username, email):
         data={"username": username, "email": email, "password": "senha123", "confirm": "senha123"},
         follow_redirects=True,
     )
-    return User.query.filter_by(email=email).first()
+    return User.objects(email=email).first()
 
 
 def _convidar_comunidade(cliente, comunidade_id, email, papel):
@@ -45,7 +45,7 @@ def _convite_de(email, escopo_tipo, escopo_id):
 def test_criador_da_comunidade_vira_admin_automaticamente(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
-        usuario = User.query.filter_by(email="ana@example.com").first()
+        usuario = User.objects(email="ana@example.com").first()
         papel = UsuarioComunidade.query.filter_by(usuario_id=usuario.id, comunidade_id=comunidade.id).first()
         assert papel is not None
         assert papel.papel == "admin"
@@ -142,7 +142,7 @@ def test_nao_pode_rebaixar_o_ultimo_admin(logged_in_client, app, db):
     reverter -- ver comentario em alterar_papel."""
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
-        ana = User.query.filter_by(email="ana@example.com").first()
+        ana = User.objects(email="ana@example.com").first()
         papel_ana = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade.id).first()
 
         response = logged_in_client.post(
@@ -159,7 +159,7 @@ def test_nao_admin_nao_pode_alterar_papel(logged_in_client, outro_logged_in_clie
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
-        ana = User.query.filter_by(email="ana@example.com").first()
+        ana = User.objects(email="ana@example.com").first()
         papel_ana_id = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade_id).first().id
 
     with sessao_isolada(app):
@@ -185,7 +185,7 @@ def test_aceitar_convite_de_comunidade_cria_papel_e_da_acesso(logged_in_client, 
         assert aceitar.status_code == 200
 
     with sessao_isolada(app):
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         papel = UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first()
         assert papel is not None and papel.papel == "admin"
         assert db.session.get(Convite, _convite_de("bruno@example.com", "comunidade", comunidade_id).id).status == STATUS_ACEITO
@@ -206,7 +206,7 @@ def test_recusar_convite_nao_cria_papel(logged_in_client, outro_logged_in_client
         assert response.status_code == 200
 
     with sessao_isolada(app):
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         assert UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
         convite = _convite_de("bruno@example.com", "comunidade", comunidade_id)
         assert convite.status == STATUS_RECUSADO
@@ -245,7 +245,7 @@ def test_aceitar_convite_ja_respondido_e_rejeitado(logged_in_client, outro_logge
         assert "ja foi respondido" in response.data.decode("utf-8")
 
     with sessao_isolada(app):
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         assert UsuarioComunidade.query.filter_by(usuario_id=bruno.id, comunidade_id=comunidade_id).first() is None
 
 
@@ -418,7 +418,7 @@ def test_bootstrap_super_admin_via_cli(logged_in_client, app, db):
         resultado = runner.invoke(args=["criar-super-admin", "ana@example.com"])
         assert "Super Admin" in resultado.output
 
-        usuario = User.query.filter_by(email="ana@example.com").first()
+        usuario = User.objects(email="ana@example.com").first()
         assert usuario.eh_super_admin is True
 
 
@@ -434,13 +434,13 @@ def test_super_admin_acessa_qualquer_comunidade_sem_papel(logged_in_client, outr
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
         comunidade_id = comunidade.id
 
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         bruno.eh_super_admin = True
-        db.session.commit()
+        bruno.save()
 
     with sessao_isolada(app):
         assert UsuarioComunidade.query.filter_by(
-            usuario_id=User.query.filter_by(email="bruno@example.com").first().id, comunidade_id=comunidade_id
+            usuario_id=User.objects(email="bruno@example.com").first().id, comunidade_id=comunidade_id
         ).first() is None
         assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}").status_code == 200
 
@@ -489,7 +489,7 @@ def test_entrar_via_link_get_nao_muda_nada_so_post_confirma(logged_in_client, ap
     with sessao_isolada(app):
         bruno_client = app.test_client()
         _registrar(bruno_client, "bruno", "bruno@example.com")
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
 
         resposta_get = bruno_client.get(f"/comunidade/entrar/{token}")
         assert resposta_get.status_code == 200
@@ -511,7 +511,7 @@ def test_entrar_via_link_ja_admin_nao_rebaixa_pra_membro(logged_in_client, app, 
 
         logged_in_client.get(f"/comunidade/entrar/{token}", follow_redirects=True)
 
-        ana = User.query.filter_by(email="ana@example.com").first()
+        ana = User.objects(email="ana@example.com").first()
         papel = UsuarioComunidade.query.filter_by(usuario_id=ana.id, comunidade_id=comunidade.id).first()
         assert papel.papel == "admin"
 
@@ -541,7 +541,7 @@ def test_entrar_via_link_deslogado_pede_login_e_completa_depois(logged_in_client
         )
         assert resposta_cadastro.status_code == 200
 
-        carla = User.query.filter_by(email="carla@example.com").first()
+        carla = User.objects(email="carla@example.com").first()
         # Cadastro sozinho nao completa a entrada -- cai na tela de
         # confirmacao (o redirect pos-login e sempre GET, que nunca muda
         # estado). Precisa do POST explicito pra realmente entrar.

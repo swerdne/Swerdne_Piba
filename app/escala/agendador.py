@@ -28,29 +28,39 @@ def _verificar_e_notificar(app):
     from app.plantao.sincronizacao import sincronizar_todos_os_turnos_ativos
 
     with app.app_context():
-        sincronizar_todos_os_turnos_ativos()
+        # Todo o corpo (sync + notificacao) roda por conta propria, sem
+        # requisicao HTTP nem usuario esperando resposta -- uma falha
+        # transiente aqui (Neon acordando de hibernacao, rede flakeando)
+        # nunca deve propagar sem rollback nem pular o resto do tick em
+        # silencio. Mesmo espirito de "falha de e-mail/SMS nunca derruba a
+        # request" (ver app/emailing.py), aplicado ao scheduler unico.
+        try:
+            sincronizar_todos_os_turnos_ativos()
 
-        agora = datetime.now()
-        escalas = Escala.query.filter(Escala.data.isnot(None)).all()
+            agora = datetime.now()
+            escalas = Escala.query.filter(Escala.data.isnot(None)).all()
 
-        for escala in escalas:
-            data_hora = escala.data_hora
-            if data_hora is None:
-                continue
+            for escala in escalas:
+                data_hora = escala.data_hora
+                if data_hora is None:
+                    continue
 
-            faltam = data_hora - agora
+                faltam = data_hora - agora
 
-            if escala.notificado_24h_em is None and abs(faltam - timedelta(hours=24)) <= _JANELA:
-                logger.info("Notificacao automatica (24h antes): escala %s", escala.id)
-                enviar_notificacoes_da_escala(escala)
-                escala.notificado_24h_em = agora
-                db.session.commit()
+                if escala.notificado_24h_em is None and abs(faltam - timedelta(hours=24)) <= _JANELA:
+                    logger.info("Notificacao automatica (24h antes): escala %s", escala.id)
+                    enviar_notificacoes_da_escala(escala)
+                    escala.notificado_24h_em = agora
+                    db.session.commit()
 
-            if escala.notificado_16h_em is None and abs(faltam - timedelta(hours=16)) <= _JANELA:
-                logger.info("Notificacao automatica (16h antes): escala %s", escala.id)
-                enviar_notificacoes_da_escala(escala)
-                escala.notificado_16h_em = agora
-                db.session.commit()
+                if escala.notificado_16h_em is None and abs(faltam - timedelta(hours=16)) <= _JANELA:
+                    logger.info("Notificacao automatica (16h antes): escala %s", escala.id)
+                    enviar_notificacoes_da_escala(escala)
+                    escala.notificado_16h_em = agora
+                    db.session.commit()
+        except Exception:
+            logger.exception("Tick do agendador falhou -- sync/notificacoes deste ciclo foram pulados.")
+            db.session.rollback()
 
 
 def iniciar_agendador(app):

@@ -40,13 +40,52 @@ def test_marca_tybenson_by_swerdne_aparece_so_no_dashboard(logged_in_client):
     assert "PIBA Swerdne" not in html_dashboard
 
 
+def test_dashboard_agrupa_notificacoes_por_escala(logged_in_client, app, db):
+    """Notificacoes com a mesma escala_id devem aparecer juntas, sob um
+    cabecalho com o nome da escala (ver main.routes._agrupar_notificacoes) --
+    nao mais uma lista plana."""
+    from app.notificacoes import Notificacao
+    from app.auth.models import User
+    from app.comunidade.models import Comunidade
+    from app.ministerio.models import Ministerio
+    from app.escala.models import Escala
+
+    with app.app_context():
+        ana = User.objects(email="ana@example.com").first()
+        comunidade = Comunidade(nome="Comunidade Teste", usuario_id=ana.id)
+        db.session.add(comunidade)
+        db.session.flush()
+        ministerio = Ministerio(nome="Ministerio Teste", comunidade_id=comunidade.id)
+        db.session.add(ministerio)
+        db.session.flush()
+        escala_a = Escala(ministerio_id=ministerio.id, nome="Culto A", departamento="Louvor")
+        escala_b = Escala(ministerio_id=ministerio.id, nome="Culto B", departamento="Louvor")
+        db.session.add_all([escala_a, escala_b])
+        db.session.flush()
+
+        db.session.add_all([
+            Notificacao(usuario_id=ana.id, titulo="Primeira", mensagem="m1", escala_id=escala_a.id, tipo="escalado"),
+            Notificacao(usuario_id=ana.id, titulo="Segunda", mensagem="m2", escala_id=escala_a.id, tipo="confirmado"),
+            Notificacao(usuario_id=ana.id, titulo="Terceira", mensagem="m3", escala_id=escala_b.id, tipo="escalado"),
+        ])
+        db.session.commit()
+
+        resposta = logged_in_client.get("/dashboard")
+        html = resposta.data.decode("utf-8")
+
+        assert resposta.status_code == 200
+        assert html.count("Culto A") == 1
+        assert html.count("Culto B") == 1
+        assert "Primeira" in html and "Segunda" in html and "Terceira" in html
+
+
 def test_salvar_tema(logged_in_client, app, db):
     response = logged_in_client.post("/perfil/tema", data={"tema": "escuro"}, follow_redirects=True)
     assert response.status_code == 200
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.theme == "escuro"
 
 
@@ -55,7 +94,7 @@ def test_salvar_tema_invalido_nao_altera(logged_in_client, app, db):
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.theme == "indigo"
 
 
@@ -70,7 +109,7 @@ def test_trocar_senha_com_senha_atual_correta(logged_in_client, app, db):
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.check_password("novaSenha456")
         assert not user.check_password("senha123")
 
@@ -85,7 +124,7 @@ def test_trocar_senha_com_senha_atual_errada_nao_altera(logged_in_client, app, d
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.check_password("senha123")
 
 
@@ -98,7 +137,7 @@ def test_trocar_senha_com_confirmacao_diferente_nao_altera(logged_in_client, app
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.check_password("senha123")
 
 
@@ -108,8 +147,7 @@ def test_definir_senha_em_conta_so_google_nao_exige_senha_atual(app, db):
     with app.app_context():
         from app.auth.models import User
         user = User(google_id="google-123", email="so-google@example.com", name="So Google", email_confirmado=True)
-        db.session.add(user)
-        db.session.commit()
+        user.save()
         user_id = user.id
 
     cliente = app.test_client()
@@ -126,7 +164,7 @@ def test_definir_senha_em_conta_so_google_nao_exige_senha_atual(app, db):
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="so-google@example.com").first()
+        user = User.objects(email="so-google@example.com").first()
         assert user.check_password("primeiraSenha1")
 
 
@@ -137,7 +175,7 @@ def test_salvar_nome(logged_in_client, app, db):
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.name == "Ana Souza"
 
 
@@ -146,7 +184,7 @@ def test_salvar_nome_vazio_nao_altera(logged_in_client, app, db):
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.name != ""
 
 
@@ -161,23 +199,27 @@ def test_baixar_dados_devolve_json_com_dados_da_conta(logged_in_client):
 
 
 def test_desconectar_google_com_senha_funciona(logged_in_client, app, db):
-    # Sem `with app.app_context()` aninhado de proposito: a fixture `app` ja
-    # mantem um app_context ativo o teste inteiro, e a request abaixo reusa
-    # esse MESMO contexto (mesma sessao/identity map do SQLAlchemy). Um
-    # `with app.app_context()` aninhado aqui criaria uma sessao a parte --
-    # o commit feito nela nao apareceria pro objeto "ana" que a request ja
-    # tem cacheado, e a rota veria google_id desatualizado (None).
-    from app.auth.models import User
-    user = User.query.filter_by(email="ana@example.com").first()
-    user.google_id = "google-ana-123"
-    db.session.commit()
+    # sessao_isolada (nao so p/ simular 2 contas, ver conftest.py) tambem e
+    # necessaria aqui: sem identity map (diferente do SQLAlchemy), o
+    # objeto que a rota ve como current_user (cacheado por Flask-Login no
+    # app_context, ver docstring de sessao_isolada) e uma instancia Python
+    # DIFERENTE da que este teste busca e salva -- sem forcar um app_context
+    # novo antes do POST, a rota enxergaria o valor antigo em memoria.
+    from tests.conftest import sessao_isolada
 
-    response = logged_in_client.post("/perfil/google/desconectar", follow_redirects=True)
-    assert "desconectada".encode() in response.data
+    with sessao_isolada(app):
+        from app.auth.models import User
+        user = User.objects(email="ana@example.com").first()
+        user.google_id = "google-ana-123"
+        user.save()
+
+    with sessao_isolada(app):
+        response = logged_in_client.post("/perfil/google/desconectar", follow_redirects=True)
+        assert "desconectada".encode() in response.data
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.google_id is None
 
 
@@ -188,8 +230,7 @@ def test_desconectar_google_sem_senha_e_bloqueado(app, db):
     with app.app_context():
         from app.auth.models import User
         user = User(google_id="google-so-1", email="so-google3@example.com", name="So Google", email_confirmado=True)
-        db.session.add(user)
-        db.session.commit()
+        user.save()
         user_id = user.id
 
     cliente = app.test_client()
@@ -202,7 +243,7 @@ def test_desconectar_google_sem_senha_e_bloqueado(app, db):
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="so-google3@example.com").first()
+        user = User.objects(email="so-google3@example.com").first()
         assert user.google_id == "google-so-1"
 
 
@@ -231,7 +272,7 @@ def test_upload_foto_valida_salva_avatar(logged_in_client, app, db):
 
     with app.app_context():
         from app.auth.models import User
-        user = User.query.filter_by(email="ana@example.com").first()
+        user = User.objects(email="ana@example.com").first()
         assert user.foto_perfil.startswith("/static/uploads/avatars/user_")
 
 

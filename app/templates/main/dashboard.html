@@ -43,13 +43,13 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <a href="{{ url_for('comunidade.index') }}" title="Comunidades" aria-label="Comunidades"
-                   class="inline-flex items-center gap-2 text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                <a href="{{ url_for('comunidade.index') }}"
+                   class="hidden sm:inline-flex items-center gap-2 text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M9 20H4v-2a4 4 0 014-4h1m5-6a3 3 0 11-6 0 3 3 0 016 0zm6 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
                     </svg>
-                    <span class="hidden sm:inline">Comunidades</span>
+                    Comunidades
                 </a>
 
                 <div class="w-px h-6 bg-current opacity-10 hidden sm:block"></div>
@@ -81,10 +81,29 @@
                             {% endif %}
                         </div>
                         <div class="max-h-80 overflow-y-auto divide-y {{ tema.card_border }}">
-                            {% for n in notificacoes %}
-                            <div class="px-4 py-3 {{ '' if n.lida else tema.accent_soft_bg }}">
-                                <p class="text-sm font-medium {{ tema.text_primary }}">{{ n.titulo }}</p>
-                                <p class="text-xs {{ tema.text_secondary }} mt-0.5">{{ n.mensagem }}</p>
+                            {% for grupo in grupos_notificacoes %}
+                            <div class="px-4 py-3">
+                                {% if grupo.escala %}
+                                <div class="flex items-center gap-1.5 mb-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full {{ grupo.escala.cor }} shrink-0"></span>
+                                    <a href="{{ url_for('escala.detalhe', escala_id=grupo.escala.id) }}"
+                                       class="text-[11px] font-semibold uppercase tracking-wide {{ tema.accent_text }} hover:underline truncate">
+                                        {{ grupo.escala.nome }}
+                                    </a>
+                                </div>
+                                {% endif %}
+                                <div class="space-y-2">
+                                    {% for n in grupo.itens %}
+                                    <div class="flex items-start gap-2 {{ '' if n.lida else tema.accent_soft_bg }} rounded-lg {{ 'p-1.5' if not n.lida else '' }}">
+                                        <i class="fa-solid {{ icone_por_tipo.get(n.tipo, icone_padrao) }} {{ tema.text_secondary }} text-xs mt-0.5 shrink-0"></i>
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-medium {{ tema.text_primary }}">{{ n.titulo }}</p>
+                                            <p class="text-xs {{ tema.text_secondary }} mt-0.5">{{ n.mensagem }}</p>
+                                            <p class="text-[10px] {{ tema.text_secondary }} opacity-70 mt-0.5">{{ n.criada_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
                             </div>
                             {% else %}
                             <p class="px-4 py-6 text-sm {{ tema.text_secondary }} text-center">Nenhuma notificacao ainda.</p>
@@ -157,11 +176,30 @@
                         </div>
                     </div>
 
-                    <div class="mt-6">
+                    <div class="flex flex-wrap gap-3 mt-6">
                         <button type="button" data-tab-jump="config"
                                 class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition">
                             Editar perfil
                         </button>
+                        <button type="button" data-tab-jump="config"
+                                class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition">
+                            Ver configuracoes
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <h2 class="text-sm font-semibold {{ tema.text_primary }}">Comunidades</h2>
+                            <p class="text-sm {{ tema.text_secondary }} mt-1">
+                                Crie comunidades, gerencie membros e monte escalas para cada uma.
+                            </p>
+                        </div>
+                        <a href="{{ url_for('comunidade.index') }}"
+                           class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition text-center shrink-0">
+                            Abrir Comunidades
+                        </a>
                     </div>
                 </div>
             </div>

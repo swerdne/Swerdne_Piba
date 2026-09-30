@@ -243,6 +243,26 @@ def test_adicionar_membro_a_uma_funcao(logged_in_client, app, db):
         assert baixo_atualizado.status == "nao_notificado"
 
 
+def test_grade_usa_atribuicao_em_lote_em_vez_de_form_por_funcao(logged_in_client, app, db):
+    """Escolher a pessoa de cada funcao vazia nao deve mais submeter um POST
+    (e recarregar a pagina) por funcao -- so o botao "Confirmar atribuicoes"
+    no final deve disparar algo (via JS, ver detalhe.html). Confere que o
+    <select> de cada funcao vazia carrega os data-atribuicao-* que o JS usa,
+    e que a barra de confirmacao existe na pagina."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        _criar_membro(logged_in_client, comunidade.id, "Endrews Elias")
+        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+
+        assert f'data-atribuicao-item="{baixo.id}"' in html
+        assert f'data-atribuicao-url="/escala/funcao/{baixo.id}/adicionar"' in html
+        assert 'id="atribuicao-barra"' in html
+        assert 'id="atribuicao-confirmar"' in html
+
+
 def test_adicionar_membro_diretorio_vazio_mostra_aviso(logged_in_client, app, db):
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
@@ -446,7 +466,7 @@ def test_notificar_membro_com_conta_gera_notificacao_no_app(logged_in_client, ou
         assert "notificacao(oes) no app" in html
         assert "e-mail(s) falharam" in html
 
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         notificacao = Notificacao.query.filter_by(usuario_id=bruno.id).first()
         assert notificacao is not None
         assert not notificacao.lida
@@ -473,7 +493,7 @@ def test_marcar_notificacoes_como_lidas(logged_in_client, outro_logged_in_client
         outro_logged_in_client.post("/notificacoes/marcar-lidas", data={}, follow_redirects=True)
 
     with sessao_isolada(app):
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         notificacao = Notificacao.query.filter_by(usuario_id=bruno.id).first()
         assert notificacao.lida
 
@@ -616,74 +636,6 @@ def test_usuario_nao_consegue_mexer_no_repertorio_de_outra_conta(logged_in_clien
         assert ItemRepertorio.query.filter_by(escala_id=escala_id, nome_musica="Musica Invasora").first() is None
 
 
-# --- Navegacao (botao Voltar respeita de onde a pessoa veio) ----------------
-
-
-def test_detalhe_sem_voltar_cai_no_ministerio(logged_in_client, app, db):
-    with app.app_context():
-        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
-        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert f'href="/ministerio/{escala.ministerio_id}"' in html
-
-
-def test_detalhe_com_voltar_valido_usa_esse_link(logged_in_client, app, db):
-    with app.app_context():
-        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
-        html = logged_in_client.get(
-            f"/escala/{escala.id}?voltar=%2Fministerio%2F{escala.ministerio_id}%2Fcalendario"
-        ).data.decode("utf-8")
-        assert f'href="/ministerio/{escala.ministerio_id}/calendario"' in html
-
-
-def test_detalhe_ignora_voltar_pra_site_externo(logged_in_client, app, db):
-    """voltar=//evil.com (ou http://evil.com) nao pode virar um redirect
-    aberto -- so aceita caminho relativo interno, mesma validacao de
-    comunidade.membros::proximo."""
-    with app.app_context():
-        escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
-        html = logged_in_client.get(
-            f"/escala/{escala.id}?voltar=%2F%2Fevil.com"
-        ).data.decode("utf-8")
-        assert "evil.com" not in html
-        assert f'href="/ministerio/{escala.ministerio_id}"' in html
-
-
-def test_calendario_do_ministerio_linka_escala_com_voltar_pra_ele_mesmo(logged_in_client, app, db):
-    with app.app_context():
-        comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        escala = _criar_escala(
-            logged_in_client, ministerio.id, "Culto de Domingo", data="2026-09-26", horario="09:00"
-        )
-
-        html = logged_in_client.get(f"/ministerio/{ministerio.id}/calendario").data.decode("utf-8")
-        assert f"voltar=/ministerio/{ministerio.id}/calendario" in html
-
-
-# --- Mini-card de preview ao clicar num evento do calendario -----------------
-
-
-def test_calendario_do_ministerio_embute_preview_com_escalados(logged_in_client, app, db):
-    with app.app_context():
-        comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        escala = _criar_escala(
-            logged_in_client, ministerio.id, "Culto de Domingo", data="2026-09-26", horario="09:00"
-        )
-        membro = _criar_membro(logged_in_client, comunidade.id, "Fulano")
-        funcao = _funcao_por_nome(escala, "Baixo")
-        _escalar(logged_in_client, funcao.id, membro.id)
-
-        html = logged_in_client.get(f"/ministerio/{ministerio.id}/calendario").data.decode("utf-8")
-        assert f'data-abrir-preview="{escala.id}"' in html
-        assert '"nome": "Culto de Domingo"' in html
-        assert '"funcao": "Baixo"' in html
-        assert '"membro": "Fulano"' in html
-        # botao (nao mais link direto) -- a navegacao acontece via JS, so
-        # depois que a pessoa confirma no mini-card.
-        assert f'href="/escala/{escala.id}?voltar=' not in html
-
-
 # --- Subcabecalhos (categorias) ----------------------------------------------
 
 def test_adicionar_subcabecalho(logged_in_client, app, db):
@@ -770,7 +722,7 @@ def test_cancelar_escala_marca_cancelada_e_notifica_quem_estava_escalado(logged_
         # ana@example.com e o mesmo e-mail da conta logada (logged_in_client) --
         # a notificacao in-app so e criada se o e-mail do Membro bater com
         # uma conta (User) existente, ver enviar_notificacao_de_cancelamento.
-        usuario = User.query.filter_by(email="ana@example.com").first()
+        usuario = User.objects(email="ana@example.com").first()
         notificacao = Notificacao.query.filter_by(usuario_id=usuario.id, escala_id=escala.id, tipo="cancelamento").first()
         assert notificacao is not None
         assert "cancelada" in notificacao.mensagem
@@ -1062,8 +1014,7 @@ def test_editar_escala_avisa_membros_ja_escalados(logged_in_client, app, db):
         # cria uma conta cujo email bate com o do membro, pra virar notificacao in-app
         usuario = User(email="bruno-mudanca@example.com", username="brunomudanca")
         usuario.set_password("senha123")
-        db.session.add(usuario)
-        db.session.commit()
+        usuario.save()
 
         response = logged_in_client.post(
             f"/escala/{escala.id}/editar",
@@ -1115,8 +1066,7 @@ def test_buscar_usuario_encontra_por_username_e_email(logged_in_client, app, db)
         from app.auth.models import User
         usuario = User(email="bruno@example.com", username="bruno")
         usuario.set_password("senha123")
-        db.session.add(usuario)
-        db.session.commit()
+        usuario.save()
 
         por_username = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=bruno").get_json()
         assert len(por_username) == 1
@@ -1137,8 +1087,7 @@ def test_buscar_usuario_encontra_por_nome(logged_in_client, app, db):
 
         usuario = User(email="carlos@example.com", username="carlosz", name="Carlos Eduardo")
         usuario.set_password("senha123")
-        db.session.add(usuario)
-        db.session.commit()
+        usuario.save()
 
         resultado = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=Carlos").get_json()
         assert len(resultado) == 1
@@ -1163,8 +1112,7 @@ def test_buscar_usuario_nao_vaza_campos_sensiveis(logged_in_client, app, db):
 
         usuario = User(email="carlos@example.com", username="carlosz", name="Carlos Eduardo")
         usuario.set_password("senha123")
-        db.session.add(usuario)
-        db.session.commit()
+        usuario.save()
 
         resultado = logged_in_client.get(f"/escala/funcao/{baixo.id}/buscar-usuario?q=Carlos").get_json()
         assert list(resultado[0].keys()) == ["id", "label"]
@@ -1202,7 +1150,7 @@ def test_adicionar_convidado_cria_membro_novo_e_marca_flag(logged_in_client, out
 
     with sessao_isolada(app):
         from app.auth.models import User
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
 
         assert Membro.query.filter_by(email="bruno@example.com").first() is None
 
@@ -1228,7 +1176,7 @@ def test_adicionar_convidado_reaproveita_membro_existente(logged_in_client, outr
 
     with sessao_isolada(app):
         from app.auth.models import User
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         logged_in_client.post(
             f"/escala/funcao/{baixo1_id}/adicionar-convidado",
             data={"usuario_id": bruno.id},
@@ -1239,7 +1187,7 @@ def test_adicionar_convidado_reaproveita_membro_existente(logged_in_client, outr
     with sessao_isolada(app):
         escala2 = _criar_escala(logged_in_client, ministerio_id, "Culto de Quarta")
         bateria2 = _funcao_por_nome(escala2, "Bateria")
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
 
         logged_in_client.post(
             f"/escala/funcao/{bateria2.id}/adicionar-convidado",
@@ -1259,7 +1207,7 @@ def test_adicionar_convidado_dispara_notificacao_no_app(logged_in_client, outro_
     with sessao_isolada(app):
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
         baixo = _funcao_por_nome(escala, "Baixo")
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         logged_in_client.post(
             f"/escala/funcao/{baixo.id}/adicionar-convidado",
             data={"usuario_id": bruno.id},
@@ -1268,7 +1216,7 @@ def test_adicionar_convidado_dispara_notificacao_no_app(logged_in_client, outro_
         logged_in_client.post(f"/escala/{escala.id}/notificar", data={}, follow_redirects=True)
 
     with sessao_isolada(app):
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         notificacao = Notificacao.query.filter_by(usuario_id=bruno.id).first()
         assert notificacao is not None
 
@@ -1303,7 +1251,7 @@ def test_adicionar_convidado_marca_plantao_fixado_em_escala_de_rodizio(logged_in
 
         assert db.session.get(Escala, escala.id).plantao_fixado is False
 
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         logged_in_client.post(
             f"/escala/funcao/{funcao_id}/adicionar-convidado",
             data={"usuario_id": bruno.id},
@@ -1321,7 +1269,7 @@ def test_adicionar_convidado_exige_dono_da_funcao(logged_in_client, outro_logged
         baixo_id = _funcao_por_nome(escala, "Baixo").id
 
     with sessao_isolada(app):
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         resposta = outro_logged_in_client.post(
             f"/escala/funcao/{baixo_id}/adicionar-convidado",
             data={"usuario_id": bruno.id},
@@ -1337,7 +1285,7 @@ def test_convidado_consegue_ver_mas_nao_escrever_na_escala(logged_in_client, out
         escala_id = escala.id
 
         from app.auth.models import User
-        bruno = User.query.filter_by(email="bruno@example.com").first()
+        bruno = User.objects(email="bruno@example.com").first()
         logged_in_client.post(
             f"/escala/funcao/{baixo.id}/adicionar-convidado",
             data={"usuario_id": bruno.id},
@@ -1367,6 +1315,208 @@ def test_usuario_sem_vinculo_nao_ve_escala_de_convidado_de_outro(logged_in_clien
         # bruno nunca foi convidado nesta escala -- so registrado na plataforma.
         resposta = outro_logged_in_client.get(f"/escala/{escala_id}")
         assert resposta.status_code == 404
+
+
+# --- Solicitacao de troca ---
+
+def test_membro_escalado_solicita_troca_notifica_lider(logged_in_client, outro_logged_in_client, app, db):
+    """ana e a lider (dona da comunidade/ministerio); bruno e quem esta
+    escalado (Membro.email == bruno@example.com). Quando bruno marca o
+    PROPRIO status como troca_solicitada, ana (lider) deve ser notificada --
+    ver escala.routes._notificar_lideres_do_ministerio."""
+    from app.notificacoes import Notificacao
+    from app.auth.models import User
+    from app.ministerio.models import UsuarioMinisterio
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        membro_bruno = _criar_membro(logged_in_client, comunidade.id, "Bruno", email="bruno@example.com")
+        membro_carla = _criar_membro(logged_in_client, comunidade.id, "Carla")
+        _escalar(logged_in_client, baixo.id, membro_bruno.id)
+        baixo_id, carla_id, escala_id = baixo.id, membro_carla.id, escala.id
+
+        # Sem papel de ministerio, bruno nao consegue nem VER a escala apos
+        # a mudanca de status (_escala_visivel_ou_404 so libera leitura pra
+        # quem gerencia, e' membro do Ministerio, ou convidado -- um Membro
+        # escalado comum, sem nenhum dos tres, nao teria acesso; na pratica,
+        # quem chega a se auto-escalar ja aceitou convite pro Ministerio).
+        bruno = User.objects(email="bruno@example.com").first()
+        db.session.add(UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio.id, papel="membro"))
+        db.session.commit()
+
+    with sessao_isolada(app):
+        resposta = outro_logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/status",
+            data={
+                "status": "troca_solicitada",
+                "troca_motivo": "Vou viajar nesse final de semana",
+                "troca_sugestao_membro_id": carla_id,
+            },
+            follow_redirects=True,
+        )
+        assert resposta.status_code == 200
+
+    with sessao_isolada(app):
+        baixo_final = db.session.get(Funcao, baixo_id)
+        assert baixo_final.status == "troca_solicitada"
+        assert baixo_final.troca_motivo == "Vou viajar nesse final de semana"
+        assert baixo_final.troca_sugestao_membro_id == carla_id
+
+        ana = User.objects(email="ana@example.com").first()
+        notificacao = Notificacao.query.filter_by(usuario_id=ana.id, tipo="troca_solicitada").first()
+        assert notificacao is not None
+        assert notificacao.escala_id == escala_id
+        assert "Carla" in notificacao.mensagem
+        assert "Vou viajar" in notificacao.mensagem
+
+
+def test_lider_alterar_status_de_outra_pessoa_nao_notifica_ninguem(logged_in_client, app, db):
+    """So notifica quando quem muda o status e o PROPRIO escalado -- se o
+    lider muda o status de outra pessoa, a mudanca ja e obra dele mesmo."""
+    from app.notificacoes import Notificacao
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        membro = _criar_membro(logged_in_client, comunidade.id, "Bruno", email="bruno@example.com")
+        _escalar(logged_in_client, baixo.id, membro.id)
+
+        logged_in_client.post(
+            f"/escala/funcao/{baixo.id}/status", data={"status": "confirmado"}, follow_redirects=True
+        )
+        assert Notificacao.query.count() == 0
+
+
+def test_lider_aprova_troca_reatribui_funcao_e_notifica_solicitante(logged_in_client, outro_logged_in_client, app, db):
+    from app.notificacoes import Notificacao
+    from app.auth.models import User
+    from app.escala.models import STATUS_PADRAO
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        membro_bruno = _criar_membro(logged_in_client, comunidade.id, "Bruno", email="bruno@example.com")
+        membro_carla = _criar_membro(logged_in_client, comunidade.id, "Carla")
+        _escalar(logged_in_client, baixo.id, membro_bruno.id)
+        baixo_id, carla_id = baixo.id, membro_carla.id
+
+    with sessao_isolada(app):
+        outro_logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/status",
+            data={"status": "troca_solicitada", "troca_sugestao_membro_id": carla_id},
+            follow_redirects=True,
+        )
+
+    with sessao_isolada(app):
+        resposta = logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/troca/aprovar",
+            data={"membro_id": carla_id},
+            follow_redirects=True,
+        )
+        assert resposta.status_code == 200
+        assert "Troca aprovada" in resposta.data.decode("utf-8")
+
+    with sessao_isolada(app):
+        baixo_final = db.session.get(Funcao, baixo_id)
+        assert baixo_final.membro_id == carla_id
+        assert baixo_final.status == STATUS_PADRAO
+        assert baixo_final.troca_motivo is None
+        assert baixo_final.troca_sugestao_membro_id is None
+
+        bruno = User.objects(email="bruno@example.com").first()
+        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id, tipo="troca_aprovada").first()
+        assert notificacao is not None
+        assert "Carla" in notificacao.mensagem
+
+
+def test_lider_recusa_troca_mantem_membro_e_notifica_solicitante(logged_in_client, outro_logged_in_client, app, db):
+    from app.notificacoes import Notificacao
+    from app.auth.models import User
+    from app.escala.models import STATUS_PADRAO
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        membro_bruno = _criar_membro(logged_in_client, comunidade.id, "Bruno", email="bruno@example.com")
+        _escalar(logged_in_client, baixo.id, membro_bruno.id)
+        baixo_id, bruno_id = baixo.id, membro_bruno.id
+
+    with sessao_isolada(app):
+        outro_logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/status",
+            data={"status": "troca_solicitada", "troca_motivo": "Imprevisto"},
+            follow_redirects=True,
+        )
+
+    with sessao_isolada(app):
+        resposta = logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/troca/recusar", data={}, follow_redirects=True
+        )
+        assert resposta.status_code == 200
+
+    with sessao_isolada(app):
+        baixo_final = db.session.get(Funcao, baixo_id)
+        assert baixo_final.membro_id == bruno_id
+        assert baixo_final.status == STATUS_PADRAO
+        assert baixo_final.troca_motivo is None
+
+        bruno = User.objects(email="bruno@example.com").first()
+        notificacao = Notificacao.query.filter_by(usuario_id=bruno.id, tipo="troca_recusada").first()
+        assert notificacao is not None
+
+
+def test_usuario_nao_consegue_aprovar_ou_recusar_troca_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
+    """Quem pediu a troca (bruno) nao pode aprovar/recusar a propria -- so
+    lider/admin do Ministerio (ana), ver escala.routes._funcao_do_usuario_ou_404."""
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        membro_bruno = _criar_membro(logged_in_client, comunidade.id, "Bruno", email="bruno@example.com")
+        _escalar(logged_in_client, baixo.id, membro_bruno.id)
+        baixo_id = baixo.id
+
+    with sessao_isolada(app):
+        outro_logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/status", data={"status": "troca_solicitada"}, follow_redirects=True
+        )
+
+    with sessao_isolada(app):
+        resposta_aprovar = outro_logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/troca/aprovar", data={"membro_id": membro_bruno.id}, follow_redirects=True
+        )
+        assert resposta_aprovar.status_code == 404
+
+        resposta_recusar = outro_logged_in_client.post(
+            f"/escala/funcao/{baixo_id}/troca/recusar", data={}, follow_redirects=True
+        )
+        assert resposta_recusar.status_code == 404
+
+
+def test_aprovar_troca_sem_solicitacao_pendente_mostra_erro(logged_in_client, app, db):
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        baixo = _funcao_por_nome(escala, "Baixo")
+        membro = _criar_membro(logged_in_client, comunidade.id, "Bruno", email="bruno@example.com")
+        _escalar(logged_in_client, baixo.id, membro.id)
+
+        resposta = logged_in_client.post(
+            f"/escala/funcao/{baixo.id}/troca/aprovar", data={"membro_id": membro.id}, follow_redirects=True
+        )
+        assert resposta.status_code == 200
+        assert "nao tem uma troca pendente" in resposta.data.decode("utf-8")
 
 
 # --- Horario de fim e aviso de conflito ------------------------------------

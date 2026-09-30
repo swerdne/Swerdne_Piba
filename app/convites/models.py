@@ -41,14 +41,19 @@ class Convite(db.Model):
     papel = db.Column(db.String(10), nullable=False)
 
     email = db.Column(db.String(120), nullable=False)
-    convidado_por_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    # Sem ForeignKey("users.id") -- User agora vive no MongoDB, ver
+    # `convidado_por` abaixo (property, no lugar do antigo db.relationship).
+    convidado_por_id = db.Column(db.Integer, nullable=False)
     token = db.Column(db.String(64), unique=True, nullable=False, default=_gerar_token)
     status = db.Column(db.String(10), nullable=False, default=STATUS_PENDENTE, server_default=STATUS_PENDENTE)
 
     criado_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     respondido_em = db.Column(db.DateTime, nullable=True)
 
-    convidado_por = db.relationship("User")
+    @property
+    def convidado_por(self):
+        from app.auth.models import User
+        return User.objects(id=self.convidado_por_id).first()
 
     @property
     def comunidade(self):
@@ -76,7 +81,7 @@ class Convite(db.Model):
         """Se ja existe uma conta (User) com o e-mail do convite -- usado na
         tela de aceite pra decidir se manda logar ou criar conta."""
         from app.auth.models import User
-        return User.query.filter(db.func.lower(User.email) == self.email.lower()).first()
+        return User.objects(email__iexact=self.email).first()
 
     def __repr__(self):
         return f"<Convite {self.email} papel={self.papel} {self.escopo_tipo}={self.escopo_id} status={self.status}>"

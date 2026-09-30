@@ -30,7 +30,7 @@ def test_registro_loga_direto(client, app, db):
     assert client.get("/auth/sessao-atual").get_json()["usuario_id"] is not None
 
     with app.app_context():
-        usuario = User.query.filter_by(email="carla@example.com").first()
+        usuario = User.objects(email="carla@example.com").first()
         assert usuario is not None
         assert usuario.email_confirmado is True
 
@@ -61,7 +61,7 @@ def test_cadastro_recusa_dominio_sem_mx(client, app, monkeypatch):
 
     assert "nao conseguimos confirmar" in html.lower()
     with app.app_context():
-        assert User.query.filter_by(email="carla@dominio-que-nao-existe-de-verdade.invalido").first() is None
+        assert User.objects(email="carla@dominio-que-nao-existe-de-verdade.invalido").first() is None
 
 
 # --- Deteccao de troca de sessao entre abas (ver static/js/main.js) ---------
@@ -74,7 +74,7 @@ def test_sessao_atual_sem_login_devolve_usuario_nulo(client):
 
 def test_sessao_atual_logado_devolve_id_do_usuario(logged_in_client, app, db):
     with app.app_context():
-        usuario = User.query.filter_by(email="ana@example.com").first()
+        usuario = User.objects(email="ana@example.com").first()
         response = logged_in_client.get("/auth/sessao-atual")
         assert response.status_code == 200
         assert response.get_json() == {"usuario_id": usuario.id}
@@ -90,11 +90,11 @@ def test_sessao_atual_reflete_login_de_outra_conta_no_mesmo_cookie_jar(client, a
 
     _registrar(client, "ana", "ana@example.com")
     with app.app_context():
-        id_ana = User.query.filter_by(email="ana@example.com").first().id
+        id_ana = User.objects(email="ana@example.com").first().id
 
     _registrar(client, "bruno", "bruno@example.com")
     with app.app_context():
-        id_bruno = User.query.filter_by(email="bruno@example.com").first().id
+        id_bruno = User.objects(email="bruno@example.com").first().id
 
     assert id_ana != id_bruno
     response = client.get("/auth/sessao-atual")
@@ -111,7 +111,7 @@ def test_esqueci_senha_gera_token_para_conta_com_senha(client, app, db):
     assert "enviamos um link".encode() in response.data
 
     with app.app_context():
-        usuario = User.query.filter_by(email="carla@example.com").first()
+        usuario = User.objects(email="carla@example.com").first()
         assert usuario.token_redefinicao_senha is not None
         assert usuario.token_redefinicao_expira_em is not None
 
@@ -128,14 +128,13 @@ def test_esqueci_senha_com_email_inexistente_mostra_mesma_mensagem(client):
 def test_esqueci_senha_conta_so_google_nao_gera_token(app, db):
     with app.app_context():
         usuario = User(google_id="google-999", email="so-google2@example.com", name="So Google", email_confirmado=True)
-        db.session.add(usuario)
-        db.session.commit()
+        usuario.save()
 
     cliente = app.test_client()
     cliente.post("/auth/esqueci-senha", data={"email": "so-google2@example.com"}, follow_redirects=True)
 
     with app.app_context():
-        usuario = User.query.filter_by(email="so-google2@example.com").first()
+        usuario = User.objects(email="so-google2@example.com").first()
         assert usuario.token_redefinicao_senha is None
 
 
@@ -144,7 +143,7 @@ def test_redefinir_senha_com_token_valido(client, app, db):
     client.post("/auth/esqueci-senha", data={"email": "carla@example.com"}, follow_redirects=True)
 
     with app.app_context():
-        token = User.query.filter_by(email="carla@example.com").first().token_redefinicao_senha
+        token = User.objects(email="carla@example.com").first().token_redefinicao_senha
 
     response = client.post(
         f"/auth/redefinir-senha/{token}",
@@ -154,7 +153,7 @@ def test_redefinir_senha_com_token_valido(client, app, db):
     assert "Senha redefinida".encode() in response.data
 
     with app.app_context():
-        usuario = User.query.filter_by(email="carla@example.com").first()
+        usuario = User.objects(email="carla@example.com").first()
         assert usuario.check_password("outraSenha789")
         # Uso unico -- o token e limpo apos a troca
         assert usuario.token_redefinicao_senha is None
@@ -170,7 +169,7 @@ def test_redefinir_senha_token_nao_reutilizavel(client, app, db):
     client.post("/auth/esqueci-senha", data={"email": "carla@example.com"}, follow_redirects=True)
 
     with app.app_context():
-        token = User.query.filter_by(email="carla@example.com").first().token_redefinicao_senha
+        token = User.objects(email="carla@example.com").first().token_redefinicao_senha
 
     client.post(
         f"/auth/redefinir-senha/{token}",
