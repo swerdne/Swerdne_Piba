@@ -26,6 +26,12 @@ def create_app(config_name="default"):
     db.init_app(app)
     migrate.init_app(app, db)
 
+    # Mongo (migracao em andamento, ver app/db_utils.py) -- convive com o
+    # Postgres/SQLAlchemy acima enquanto os modulos vao sendo portados um a
+    # um; nao faz nada em producao/dev ate MONGODB_URI ser configurada.
+    from .db_utils import conectar_mongo
+    conectar_mongo(app)
+
     # Notificacao nao pertence a nenhum blueprint especifico -- garante que o
     # model seja registrado no metadata do SQLAlchemy (para migrations).
     from . import notificacoes  # noqa: F401

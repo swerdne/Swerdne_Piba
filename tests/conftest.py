@@ -1,5 +1,6 @@
 """Fixtures compartilhadas do Pytest."""
 import contextlib
+import mongoengine
 import pytest
 from app import create_app
 from app.extensions import db as _db
@@ -32,6 +33,7 @@ def app():
         yield app
         _db.session.remove()
         _db.drop_all()
+        mongoengine.disconnect_all()
 
 
 @pytest.fixture

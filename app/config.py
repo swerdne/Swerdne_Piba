@@ -67,10 +67,25 @@ class Config:
     # dar problema em producao).
     VALIDAR_DOMINIO_EMAIL = os.environ.get("VALIDAR_DOMINIO_EMAIL", "true").lower() == "true"
 
+    # Migracao gradual pra MongoDB (ver app/db_utils.py e o plano da
+    # migracao) -- convive com o Postgres/SQLAlchemy enquanto os modulos vao
+    # sendo portados um a um. MONGO_USE_MOCK troca a conexao real por
+    # mongomock (sem rede, sem custo, dados descartados ao desconectar);
+    # MONGO_TRANSACTIONS_ENABLED existe porque o mongomock nao suporta
+    # sessao/transacao nenhuma (NotImplementedError), entao os testes
+    # precisam rodar com atomic() virando no-op.
+    MONGODB_URI = os.environ.get("MONGODB_URI")
+    MONGO_USE_MOCK = False
+    MONGO_TRANSACTIONS_ENABLED = True
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///dev.db")
+    # Sem MONGODB_URI no .env local, cai num Mongo local (precisa estar
+    # rodando via `mongod`/Docker) -- so importa depois que algum modulo
+    # comecar a de fato ser lido/escrito no Mongo (fase 1 em diante).
+    MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/tybenson_dev")
 
 
 class TestingConfig(Config):
@@ -96,6 +111,13 @@ class TestingConfig(Config):
 
     # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
     VALIDAR_DOMINIO_EMAIL = False
+
+    # mongomock: sem rede, sem custo, isolado por conexao -- mesmo papel que
+    # o sqlite:///:memory: acima, so que pro Mongo (ver app/db_utils.py).
+    # Nao suporta sessao/transacao (mongoengine.get_connection().start_session()
+    # levanta NotImplementedError), daí desligar MONGO_TRANSACTIONS_ENABLED.
+    MONGO_USE_MOCK = True
+    MONGO_TRANSACTIONS_ENABLED = False
 
     # Desliga o rate limiting (app/extensions.py::limiter) nos testes -- a
     # suite registra/loga dezenas de contas via _registrar_e_confirmar
