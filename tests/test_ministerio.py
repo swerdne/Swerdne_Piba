@@ -229,7 +229,7 @@ def test_ocorrencias_do_mesmo_turno_aparecem_como_1_card_agrupado(logged_in_clie
         # todos no futuro (nao "ja ocorridos"), independente da hora do teste.
         turno = _criar_turno_teste(ministerio.id, nome="Turno Louvor", data_inicio=date.today() + timedelta(days=1))
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
-        ocorrencias = Escala.query.filter_by(plantao_turno_id=turno.id).order_by(Escala.plantao_periodo).all()
+        ocorrencias = list(Escala.objects(plantao_turno_id=turno.id).order_by("plantao_periodo"))
         assert len(ocorrencias) == 3  # 3 ocorrencias diarias no intervalo
 
         _criar_escala(logged_in_client, ministerio.id, "Culto Manual")
@@ -265,9 +265,11 @@ def test_capa_do_turno_mostra_a_proxima_ocorrencia_nao_a_mais_antiga(logged_in_c
         html = response.data.decode("utf-8")
         # a capa (unico link pro turno) deve estar associada a proxima
         # ocorrencia futura, nao a primeira (mais antiga) ocorrencia gerada
-        proxima = Escala.query.filter(
-            Escala.plantao_turno_id == turno.id, Escala.data >= date.today()
-        ).order_by(Escala.data).first()
+        proxima = (
+            Escala.objects(plantao_turno_id=turno.id, data__gte=date.today())
+            .order_by("data")
+            .first()
+        )
         assert proxima is not None
         assert proxima.data.strftime("%d/%m/%Y") in html
 
@@ -311,13 +313,13 @@ def test_excluir_ministerio_apaga_escalas_e_turnos_de_rodizio_em_cascata(logged_
 
         escala_id = escala.id
         turno_id = turno.id
-        assert Escala.query.filter_by(plantao_turno_id=turno_id).count() > 0
+        assert Escala.objects(plantao_turno_id=turno_id).count() > 0
 
         logged_in_client.post(f"/ministerio/{ministerio.id}/excluir", data={}, follow_redirects=True)
 
-        assert db.session.get(Escala, escala_id) is None
+        assert Escala.objects(id=escala_id).first() is None
         assert db.session.get(TurnoPlantao, turno_id) is None
-        assert Escala.query.filter_by(plantao_turno_id=turno_id).count() == 0
+        assert Escala.objects(plantao_turno_id=turno_id).count() == 0
 
 
 def test_usuario_nao_consegue_excluir_ministerio_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):

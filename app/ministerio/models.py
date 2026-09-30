@@ -51,10 +51,9 @@ class Ministerio(SequentialIdDocument):
 
     @property
     def escalas(self):
-        """Escala ainda em SQLAlchemy nesta fase da migracao (ver plano) --
-        substitui o antigo backref `Ministerio.escalas` do SQLAlchemy."""
+        """Substitui o antigo backref `Ministerio.escalas` do SQLAlchemy."""
         from app.escala.models import Escala
-        return Escala.query.filter_by(ministerio_id=self.id).all()
+        return list(Escala.objects(ministerio_id=self.id))
 
     @property
     def turnos_plantao(self):

@@ -292,6 +292,22 @@ class TurnoPlantao(db.Model):
         return Ministerio.objects(id=self.ministerio_id).first()
 
     @property
+    def escalas_geradas(self):
+        """Escala ainda em SQLAlchemy nesta fase da migracao -- substitui o
+        antigo backref `TurnoPlantao.escalas_geradas` (declarado do lado de
+        Escala.plantao_turno, sem cascade de proposito: excluir o turno nao
+        pode apagar escalas ja ocorridas/fixadas)."""
+        from app.escala.models import Escala
+        return list(Escala.objects(plantao_turno_id=self.id))
+
+    @property
+    def escala_origem(self):
+        """Substitui o antigo backref `TurnoPlantao.escala_origem`
+        (uselist=False -- no maximo 1, ver Escala.turno_plantao_origem_id)."""
+        from app.escala.models import Escala
+        return Escala.objects(turno_plantao_origem_id=self.id).first()
+
+    @property
     def fila_ordenada(self):
         """Lista ordenada de EquipeTurno (cada posicao da fila e um GRUPO de
         1+ pessoas que atuam juntas na mesma ocorrencia -- uma fila de
@@ -387,12 +403,18 @@ class EquipeMembro(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     equipe_turno_id = db.Column(db.Integer, db.ForeignKey("turno_plantao_equipes.id"), nullable=False)
-    membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=False)
+    # Sem ForeignKey("escala_membros.id") -- Membro agora vive no MongoDB,
+    # ver `membro` abaixo (property, no lugar do antigo db.relationship).
+    membro_id = db.Column(db.Integer, nullable=False)
 
     equipe = db.relationship(
         "EquipeTurno", backref=db.backref("integrantes", cascade="all, delete-orphan")
     )
-    membro = db.relationship("Membro")
+
+    @property
+    def membro(self):
+        from app.escala.models import Membro
+        return Membro.objects(id=self.membro_id).first()
 
     def __repr__(self):
         return f"<EquipeMembro {self.membro_id} da equipe {self.equipe_turno_id}>"

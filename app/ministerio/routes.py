@@ -358,22 +358,19 @@ def excluir_ministerio_em_cascata(ministerio):
     """Apaga um Ministerio e tudo que pende dele -- usado tanto por
     excluir_ministerio (abaixo) quanto por comunidade.routes.excluir_comunidade
     (que precisa apagar cada Ministerio da comunidade antes de poder apagar a
-    propria comunidade). Ministerio agora vive no Mongo, mas Escala/
-    TurnoPlantao (ainda em SQLAlchemy nesta fase) precisam ser apagados
-    explicitamente -- sem o cascade automatico que existia antes
-    (cascade="all, delete-orphan" em Ministerio.escalas/turnos_plantao). Cada
-    delete abaixo ainda cascade pro proprio lado SQLAlchemy (Escala ->
-    Funcao/ItemRepertorio, TurnoPlantao -> EquipeTurno -> EquipeMembro).
-    Diferente de plantao.excluir_turno (que preserva historico ao apagar so a
-    regra), aqui o ministerio inteiro some, entao nao ha nada a preservar."""
+    propria comunidade). Ministerio e Escala agora vivem no Mongo (delete_cascade
+    cobre Escala -> Funcao/ItemRepertorio); TurnoPlantao ainda em SQLAlchemy
+    nesta fase, apagado explicitamente (cascade pro proprio lado SQLAlchemy:
+    TurnoPlantao -> EquipeTurno -> EquipeMembro). Diferente de
+    plantao.excluir_turno (que preserva historico ao apagar so a regra), aqui
+    o ministerio inteiro some, entao nao ha nada a preservar."""
     from app.escala.models import Escala
     from app.plantao.models import TurnoPlantao
 
     _remover_logo_antiga(ministerio.imagem)
 
-    for escala in Escala.query.filter_by(ministerio_id=ministerio.id).all():
-        db.session.delete(escala)
-    db.session.commit()
+    for escala in Escala.objects(ministerio_id=ministerio.id):
+        delete_cascade(escala)
 
     for turno in TurnoPlantao.query.filter_by(ministerio_id=ministerio.id).all():
         db.session.delete(turno)

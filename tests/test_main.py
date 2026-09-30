@@ -57,9 +57,9 @@ def test_dashboard_agrupa_notificacoes_por_escala(logged_in_client, app, db):
         ministerio = Ministerio(nome="Ministerio Teste", comunidade_id=comunidade.id)
         ministerio.save()
         escala_a = Escala(ministerio_id=ministerio.id, nome="Culto A", departamento="Louvor")
+        escala_a.save()
         escala_b = Escala(ministerio_id=ministerio.id, nome="Culto B", departamento="Louvor")
-        db.session.add_all([escala_a, escala_b])
-        db.session.flush()
+        escala_b.save()
 
         db.session.add_all([
             Notificacao(usuario_id=ana.id, titulo="Primeira", mensagem="m1", escala_id=escala_a.id, tipo="escalado"),

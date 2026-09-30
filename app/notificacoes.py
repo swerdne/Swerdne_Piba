@@ -27,7 +27,12 @@ class Notificacao(db.Model):
     # tipo: categoria pra icone/agrupamento na UI -- "escalado", "alteracao",
     # "confirmado", "presente", "troca_solicitada", "troca_aprovada",
     # "troca_recusada". Nullable pelo mesmo motivo (retrocompatibilidade).
-    escala_id = db.Column(db.Integer, db.ForeignKey("escalas.id", ondelete="SET NULL"), nullable=True)
+    # Sem ForeignKey("escalas.id", ondelete="SET NULL") -- Escala agora vive
+    # no MongoDB, sem SET NULL automatico do banco: se a Escala referenciada
+    # for apagada, escala_id fica com um id que nao existe mais, mas
+    # `escala` abaixo ja devolve None nesse caso (mesmo resultado pra quem
+    # le, so o campo cru em si nao fica limpo).
+    escala_id = db.Column(db.Integer, nullable=True)
     tipo = db.Column(db.String(30), nullable=True)
 
     @property
@@ -35,7 +40,12 @@ class Notificacao(db.Model):
         from app.auth.models import User
         return User.objects(id=self.usuario_id).first()
 
-    escala = db.relationship("Escala")
+    @property
+    def escala(self):
+        if not self.escala_id:
+            return None
+        from app.escala.models import Escala
+        return Escala.objects(id=self.escala_id).first()
 
     def __repr__(self):
         return f"<Notificacao {self.titulo!r} para usuario {self.usuario_id}>"

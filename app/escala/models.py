@@ -1,4 +1,4 @@
-"""Models (M do MVC): Escala Rapida.
+"""Models (M do MVC): Escala Rapida (MongoDB, ver app/db_utils.py).
 
 Cada Escala e um EVENTO especifico (nome, departamento, data e horario),
 pertencente a um usuario. Departamentos sao independentes entre si (uma
@@ -6,7 +6,8 @@ escala de Louvor nao tem nenhuma ligacao com uma de Midia ou Kids).
 """
 from datetime import datetime, timezone
 
-from app.extensions import db
+import mongoengine
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, delete_cascade
 
 STATUS_PADRAO = "nao_notificado"
 
@@ -107,7 +108,7 @@ MENSAGENS_POR_DEPARTAMENTO = {
 }
 
 
-class Membro(db.Model):
+class Membro(SequentialIdDocument):
     """Pessoa do diretorio de uma comunidade, reaproveitavel entre escalas/funcoes.
 
     Cadastrada uma vez em "Gerenciar membros" da comunidade; escalar uma funcao
@@ -115,15 +116,13 @@ class Membro(db.Model):
     nova a cada escalacao).
     """
 
-    __tablename__ = "escala_membros"
+    meta = {"collection": "escala_membros"}
+    _nome_sequencia = "escala_membros"
 
-    id = db.Column(db.Integer, primary_key=True)
-    # Sem ForeignKey("comunidades.id") -- Comunidade agora vive no MongoDB,
-    # ver `comunidade` abaixo (property, no lugar do antigo db.relationship).
-    comunidade_id = db.Column(db.Integer, nullable=False)
-    nome = db.Column(db.String(120), nullable=False)
-    telefone = db.Column(db.String(30), nullable=True)
-    email = db.Column(db.String(120), nullable=True)
+    comunidade_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=120)
+    telefone = mongoengine.StringField(max_length=30)
+    email = mongoengine.StringField(max_length=120)
 
     @property
     def comunidade(self):
@@ -131,16 +130,23 @@ class Membro(db.Model):
         return Comunidade.objects(id=self.comunidade_id).first()
 
     @property
+    def ciclos_disponibilidade(self):
+        return list(CicloDisponibilidade.objects(membro_id=self.id))
+
+    @property
     def iniciais(self):
         partes = self.nome.split()
         letras = "".join(p[0] for p in partes[:2])
         return letras.upper() or "?"
 
+    def cascade_children(self):
+        return [CicloDisponibilidade.objects(membro_id=self.id)]
+
     def __repr__(self):
         return f"<Membro {self.nome}>"
 
 
-class CicloDisponibilidade(db.Model):
+class CicloDisponibilidade(SequentialIdDocument):
     """Ciclo recorrente que descreve quando um Membro costuma estar
     indisponivel pra servir -- pensado pra turno de trabalho externo (fora
     da igreja) que roda em ciclo (ex: 4 dias trabalho / 4 dias folga, ou 4
@@ -157,16 +163,23 @@ class CicloDisponibilidade(db.Model):
     vinculo) -- todos sao checados, nao ha exclusividade forcada.
     """
 
-    __tablename__ = "escala_ciclos_disponibilidade"
+    meta = {"collection": "escala_ciclos_disponibilidade"}
+    _nome_sequencia = "escala_ciclos_disponibilidade"
 
-    id = db.Column(db.Integer, primary_key=True)
-    membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=False)
-    nome = db.Column(db.String(80), nullable=False)
-    data_inicio = db.Column(db.Date, nullable=False)
+    membro_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=80)
+    data_inicio = PureDateField(required=True)
 
-    membro = db.relationship(
-        "Membro", backref=db.backref("ciclos_disponibilidade", cascade="all, delete-orphan")
-    )
+    @property
+    def membro(self):
+        return Membro.objects(id=self.membro_id).first()
+
+    @property
+    def segmentos(self):
+        return list(SegmentoCiclo.objects(ciclo_id=self.id).order_by("ordem"))
+
+    def cascade_children(self):
+        return [SegmentoCiclo.objects(ciclo_id=self.id)]
 
     def segmento_na_data(self, data):
         """Devolve o SegmentoCiclo (ja cadastrado, ver segmentos abaixo) em
@@ -192,26 +205,23 @@ class CicloDisponibilidade(db.Model):
         return f"<CicloDisponibilidade {self.nome!r} do membro {self.membro_id}>"
 
 
-class SegmentoCiclo(db.Model):
+class SegmentoCiclo(SequentialIdDocument):
     """Um pedaco do ciclo (ex.: 'Trabalho', 4 dias, indisponivel=True --
     ou 'Folga', 4 dias, indisponivel=False). A ordem determina a sequencia
     em que os pedacos se repetem a partir de CicloDisponibilidade.data_inicio."""
 
-    __tablename__ = "escala_ciclo_segmentos"
+    meta = {"collection": "escala_ciclo_segmentos"}
+    _nome_sequencia = "escala_ciclo_segmentos"
 
-    id = db.Column(db.Integer, primary_key=True)
-    ciclo_id = db.Column(db.Integer, db.ForeignKey("escala_ciclos_disponibilidade.id"), nullable=False)
-    ordem = db.Column(db.Integer, nullable=False)
-    nome = db.Column(db.String(40), nullable=False)
-    duracao_dias = db.Column(db.Integer, nullable=False)
-    indisponivel = db.Column(db.Boolean, nullable=False, default=True)
+    ciclo_id = mongoengine.IntField(required=True)
+    ordem = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=40)
+    duracao_dias = mongoengine.IntField(required=True)
+    indisponivel = mongoengine.BooleanField(default=True)
 
-    ciclo = db.relationship(
-        "CicloDisponibilidade",
-        backref=db.backref(
-            "segmentos", cascade="all, delete-orphan", order_by="SegmentoCiclo.ordem"
-        ),
-    )
+    @property
+    def ciclo(self):
+        return CicloDisponibilidade.objects(id=self.ciclo_id).first()
 
     def __repr__(self):
         return f"<SegmentoCiclo {self.nome!r} ({self.duracao_dias}d)>"
@@ -232,35 +242,33 @@ def avisos_disponibilidade(membro, data):
     return avisos
 
 
-class Escala(db.Model):
+class Escala(SequentialIdDocument):
     """Um evento de escala (ensaio/culto): nome, departamento, data e horario."""
 
-    __tablename__ = "escalas"
+    meta = {"collection": "escalas"}
+    _nome_sequencia = "escalas"
 
-    id = db.Column(db.Integer, primary_key=True)
-    # Sem ForeignKey("ministerios.id") -- Ministerio agora vive no MongoDB,
-    # ver `ministerio` abaixo (property, no lugar do antigo db.relationship).
-    ministerio_id = db.Column(db.Integer, nullable=False)
-    nome = db.Column(db.String(80), nullable=False)
-    departamento = db.Column(db.String(40), nullable=False)
-    data = db.Column(db.Date, nullable=True)
-    horario = db.Column(db.Time, nullable=True)
+    ministerio_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=80)
+    departamento = mongoengine.StringField(required=True, max_length=40)
+    data = PureDateField()
+    horario = PureTimeField()
     # Opcional -- so pra completar o intervalo do evento (usado no calendario
     # e no aviso de conflito de horario, ver escala.routes._avisos_conflito_horario).
     # Sem preencher, o evento e tratado como instantaneo (mesmo horario de
     # inicio e fim) na hora de comparar conflitos.
-    horario_fim = db.Column(db.Time, nullable=True)
-    criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    horario_fim = PureTimeField()
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
-    notificado_24h_em = db.Column(db.DateTime, nullable=True)
-    notificado_16h_em = db.Column(db.DateTime, nullable=True)
+    notificado_24h_em = mongoengine.DateTimeField()
+    notificado_16h_em = mongoengine.DateTimeField()
 
     # Cancelamento (ver escala.routes::cancelar_escala/reabrir_escala) --
     # diferente de excluir: o evento continua existindo (historico, calendario),
     # so marcado que nao vai acontecer. Quem estava escalado e avisado
     # individualmente (email/SMS/sino), um por um, na hora do cancelamento.
-    cancelada = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
-    cancelada_em = db.Column(db.DateTime, nullable=True)
+    cancelada = mongoengine.BooleanField(default=False)
+    cancelada_em = mongoengine.DateTimeField()
 
     # Preenchidos quando esta Escala foi gerada automaticamente por um Turno de
     # Rodizio (ver app/plantao/sincronizacao.py) -- None para escalas manuais.
@@ -269,48 +277,67 @@ class Escala(db.Model):
     # vira NULL quando o turno muda data_inicio/recorrencia (a numeracao dos
     # periodos deixa de valer pra essa linha, mas ela continua existindo como
     # historico) -- ver app/plantao/CLAUDE.md.
-    plantao_turno_id = db.Column(db.Integer, db.ForeignKey("turnos_plantao.id"), nullable=True)
-    plantao_periodo = db.Column(db.Integer, nullable=True)
-    plantao_fixado = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
+    # Sem ForeignKey("turnos_plantao.id") -- TurnoPlantao ainda em SQLAlchemy
+    # nesta fase, ver `plantao_turno` abaixo (property).
+    plantao_turno_id = mongoengine.IntField()
+    plantao_periodo = mongoengine.IntField()
+    plantao_fixado = mongoengine.BooleanField(default=False)
 
     # Preenchido quando esta Escala foi a ORIGEM usada para "Criar turno de
     # rodizio com esta equipe" (ver plantao.routes.nova) -- direcao OPOSTA de
     # plantao_turno_id (que marca "esta Escala FOI GERADA por aquele turno").
-    # Uma Escala manual pode ser origem de no maximo 1 TurnoPlantao (por isso
-    # uselist=False no backref). So existe pra turnos criados a partir de uma
-    # escala existente -- turnos criados sem escala_id (caminho nao alcancavel
-    # por nenhum link da UI, ver app/plantao/CLAUDE.md) nunca preenchem isso.
-    turno_plantao_origem_id = db.Column(db.Integer, db.ForeignKey("turnos_plantao.id"), nullable=True)
+    # Uma Escala manual pode ser origem de no maximo 1 TurnoPlantao. So existe
+    # pra turnos criados a partir de uma escala existente -- turnos criados
+    # sem escala_id (caminho nao alcancavel por nenhum link da UI, ver
+    # app/plantao/CLAUDE.md) nunca preenchem isso.
+    turno_plantao_origem_id = mongoengine.IntField()
 
     # Cor escolhida manualmente pra esta Escala (chave de CORES_DISPONIVEIS,
-    # abaixo) -- sobrepoe a cor padrao do departamento (DEPARTAMENTO_CORES)
+    # acima) -- sobrepoe a cor padrao do departamento (DEPARTAMENTO_CORES)
     # tanto na lista de Escalas quanto no calendario do Ministerio. None =
     # usa a cor do departamento (comportamento de sempre).
-    cor_selecionada = db.Column(db.String(20), nullable=True)
+    cor_selecionada = mongoengine.StringField(max_length=20)
 
-    funcoes = db.relationship(
-        "Funcao", backref="escala", order_by="Funcao.ordem", cascade="all, delete-orphan"
-    )
-    repertorio = db.relationship(
-        "ItemRepertorio", backref="escala", order_by="ItemRepertorio.ordem", cascade="all, delete-orphan"
-    )
+    # uq_escala_plantao_turno_periodo do Postgres (unique(plantao_turno_id,
+    # plantao_periodo)) nao foi recriada aqui -- e uma invariante mantida
+    # pelo proprio codigo de sincronizacao (app/plantao/sincronizacao.py),
+    # nao uma restricao validada contra entrada de usuario, e indice composto
+    # unico+esparso no Mongo tem semantica diferente o suficiente do Postgres
+    # (multiplos None colidindo) pra nao valer o risco de replicar errado.
+
     @property
     def ministerio(self):
         from app.ministerio.models import Ministerio
         return Ministerio.objects(id=self.ministerio_id).first()
-    # Sem cascade aqui de proposito: excluir o TurnoPlantao nao pode apagar
-    # escalas ja ocorridas/fixadas (historico) -- ver plantao.routes.excluir_turno.
-    plantao_turno = db.relationship(
-        "TurnoPlantao", foreign_keys=[plantao_turno_id], backref=db.backref("escalas_geradas")
-    )
-    turno_plantao_origem = db.relationship(
-        "TurnoPlantao", foreign_keys=[turno_plantao_origem_id],
-        backref=db.backref("escala_origem", uselist=False),
-    )
 
-    __table_args__ = (
-        db.UniqueConstraint("plantao_turno_id", "plantao_periodo", name="uq_escala_plantao_turno_periodo"),
-    )
+    @property
+    def funcoes(self):
+        return list(Funcao.objects(escala_id=self.id).order_by("ordem"))
+
+    @property
+    def repertorio(self):
+        return list(ItemRepertorio.objects(escala_id=self.id).order_by("ordem"))
+
+    @property
+    def plantao_turno(self):
+        """TurnoPlantao ainda em SQLAlchemy nesta fase da migracao. Sem
+        cascade aqui de proposito (igual antes): excluir o TurnoPlantao nao
+        pode apagar escalas ja ocorridas/fixadas (historico) -- ver
+        plantao.routes.excluir_turno."""
+        if not self.plantao_turno_id:
+            return None
+        from app.plantao.models import TurnoPlantao
+        return TurnoPlantao.query.get(self.plantao_turno_id)
+
+    @property
+    def turno_plantao_origem(self):
+        if not self.turno_plantao_origem_id:
+            return None
+        from app.plantao.models import TurnoPlantao
+        return TurnoPlantao.query.get(self.turno_plantao_origem_id)
+
+    def cascade_children(self):
+        return [Funcao.objects(escala_id=self.id), ItemRepertorio.objects(escala_id=self.id)]
 
     @property
     def cor(self):
@@ -334,7 +361,7 @@ TIPO_FUNCAO = "funcao"
 TIPO_SUBCABECALHO = "subcabecalho"
 
 
-class Funcao(db.Model):
+class Funcao(SequentialIdDocument):
     """Uma linha da grade de uma escala.
 
     Normalmente um instrumento/funcao com no maximo 1 membro (tipo=funcao),
@@ -344,17 +371,17 @@ class Funcao(db.Model):
     A ordem das linhas (funcao ou subcabecalho) e definida por `ordem`.
     """
 
-    __tablename__ = "escala_funcoes"
+    meta = {"collection": "escala_funcoes"}
+    _nome_sequencia = "escala_funcoes"
 
-    id = db.Column(db.Integer, primary_key=True)
-    escala_id = db.Column(db.Integer, db.ForeignKey("escalas.id"), nullable=False)
-    nome = db.Column(db.String(80), nullable=False)
-    ordem = db.Column(db.Integer, nullable=False, default=0)
-    tipo = db.Column(db.String(20), nullable=False, default=TIPO_FUNCAO, server_default=TIPO_FUNCAO)
+    escala_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=80)
+    ordem = mongoengine.IntField(default=0)
+    tipo = mongoengine.StringField(default=TIPO_FUNCAO, max_length=20)
 
-    membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=True)
-    status = db.Column(db.String(20), nullable=True)
-    notificado_em = db.Column(db.DateTime, nullable=True)
+    membro_id = mongoengine.IntField()
+    status = mongoengine.StringField(max_length=20)
+    notificado_em = mongoengine.DateTimeField()
 
     # Marca uma atribuicao pontual: o Membro por tras dela foi encontrado/criado
     # a partir de uma conta (User) ja existente na plataforma, buscada na hora
@@ -363,7 +390,7 @@ class Funcao(db.Model):
     # de Membro normalmente) -- so controla o selo visual "Convidado" e concede
     # ao dono dessa conta visibilidade de LEITURA desta Escala especifica (ver
     # escala.routes._escala_visivel_ou_404).
-    eh_convidado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    eh_convidado = mongoengine.BooleanField(default=False)
 
     # Solicitacao de troca (ver escala.routes::atualizar_status/aprovar_troca/
     # recusar_troca) -- preenchidos quando status vira "troca_solicitada",
@@ -371,11 +398,20 @@ class Funcao(db.Model):
     # a PROPRIA pessoa escalada sugeriu como substituto (opcional -- se nao
     # sugerir ninguem, o lider escolhe na hora de aprovar); pode ser qualquer
     # Membro do diretorio, nao precisa ja estar escalado nesta escala.
-    troca_motivo = db.Column(db.Text, nullable=True)
-    troca_sugestao_membro_id = db.Column(db.Integer, db.ForeignKey("escala_membros.id"), nullable=True)
+    troca_motivo = mongoengine.StringField()
+    troca_sugestao_membro_id = mongoengine.IntField()
 
-    membro = db.relationship("Membro", foreign_keys=[membro_id])
-    troca_sugestao_membro = db.relationship("Membro", foreign_keys=[troca_sugestao_membro_id])
+    @property
+    def escala(self):
+        return Escala.objects(id=self.escala_id).first()
+
+    @property
+    def membro(self):
+        return Membro.objects(id=self.membro_id).first() if self.membro_id else None
+
+    @property
+    def troca_sugestao_membro(self):
+        return Membro.objects(id=self.troca_sugestao_membro_id).first() if self.troca_sugestao_membro_id else None
 
     @property
     def eh_subcabecalho(self):
@@ -385,20 +421,24 @@ class Funcao(db.Model):
         return f"<Funcao {self.nome} da escala {self.escala_id}>"
 
 
-class ItemRepertorio(db.Model):
+class ItemRepertorio(SequentialIdDocument):
     """Uma musica do repertorio de uma Escala (pensado pro departamento
     Louvor, mas nao restrito -- ver escala/detalhe.html, so exibido quando
     escala.departamento == "Louvor"). `ordem` define a sequencia de
     apresentacao; `link` e opcional (cifra, video de referencia etc.)."""
 
-    __tablename__ = "escala_repertorio"
+    meta = {"collection": "escala_repertorio"}
+    _nome_sequencia = "escala_repertorio"
 
-    id = db.Column(db.Integer, primary_key=True)
-    escala_id = db.Column(db.Integer, db.ForeignKey("escalas.id"), nullable=False)
-    nome_musica = db.Column(db.String(150), nullable=False)
-    tom = db.Column(db.String(10), nullable=True)
-    link = db.Column(db.String(500), nullable=True)
-    ordem = db.Column(db.Integer, nullable=False, default=0)
+    escala_id = mongoengine.IntField(required=True)
+    nome_musica = mongoengine.StringField(required=True, max_length=150)
+    tom = mongoengine.StringField(max_length=10)
+    link = mongoengine.StringField(max_length=500)
+    ordem = mongoengine.IntField(default=0)
+
+    @property
+    def escala(self):
+        return Escala.objects(id=self.escala_id).first()
 
     def __repr__(self):
         return f"<ItemRepertorio {self.nome_musica!r} da escala {self.escala_id}>"
@@ -412,14 +452,12 @@ def criar_escala_com_funcoes_padrao(
         ministerio_id=ministerio_id, nome=nome, departamento=departamento, data=data, horario=horario,
         horario_fim=horario_fim, cor_selecionada=cor_selecionada,
     )
-    db.session.add(escala)
-    db.session.flush()  # garante escala.id antes de criar as funcoes
+    escala.save()
 
     funcoes_padrao = DEPARTAMENTOS.get(departamento, [])
     for ordem, nome_funcao in enumerate(funcoes_padrao):
-        db.session.add(Funcao(escala_id=escala.id, nome=nome_funcao, ordem=ordem))
+        Funcao(escala_id=escala.id, nome=nome_funcao, ordem=ordem).save()
 
-    db.session.commit()
     return escala
 
 

@@ -73,8 +73,7 @@ def _payload_turno(**overrides):
 
 def _criar_membro_teste(comunidade_id, nome):
     membro = Membro(comunidade_id=comunidade_id, nome=nome)
-    db.session.add(membro)
-    db.session.commit()
+    membro.save()
     return membro
 
 
@@ -108,7 +107,7 @@ def _adicionar_equipe(turno, membros):
 
 
 def _escala_do_periodo(turno, periodo):
-    return Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=periodo).first()
+    return Escala.objects(plantao_turno_id=turno.id, plantao_periodo=periodo).first()
 
 
 def _membro_materializado(turno, periodo):
@@ -399,7 +398,7 @@ def test_sincronizar_turno_cria_ocorrencias(logged_in_client, app, db):
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=5))
 
-        escalas = Escala.query.filter_by(plantao_turno_id=turno.id).order_by(Escala.plantao_periodo).all()
+        escalas = list(Escala.objects(plantao_turno_id=turno.id).order_by("plantao_periodo"))
         assert len(escalas) == 6  # periodo 0..5 (hoje + 5 dias)
         assert escalas[0].departamento == "Midia"
         assert escalas[0].funcoes[0].nome == "Plantonista"
@@ -447,7 +446,7 @@ def test_sincronizar_turno_com_fila_vazia_materializa_sem_membro(logged_in_clien
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
 
-        escalas = Escala.query.filter_by(plantao_turno_id=turno.id).all()
+        escalas = list(Escala.objects(plantao_turno_id=turno.id))
         assert len(escalas) == 3
         assert all(e.funcoes[0].membro_id is None for e in escalas)
 
@@ -467,15 +466,18 @@ def test_sincronizar_turno_e_idempotente(logged_in_client, app, db):
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
         escala = _escala_do_periodo(turno, 0)
         escala.notificado_24h_em = datetime.now()
-        escala.funcoes[0].notificado_em = datetime.now()
-        db.session.commit()
-        marcado_em = escala.notificado_24h_em
+        escala.save()
+        funcao = escala.funcoes[0]
+        funcao.notificado_em = datetime.now()
+        funcao.save()
+        # Mongo so guarda precisao de milissegundos -- recarrega pra comparar
+        # com o mesmo arredondamento que escala_recarregada tera mais abaixo.
+        marcado_em = Escala.objects(id=escala.id).first().notificado_24h_em
 
         # roda de novo sem mudar nada na config do turno
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
-        db.session.expire_all()
 
-        total = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=0).count()
+        total = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).count()
         assert total == 1  # nao duplicou
         escala_recarregada = _escala_do_periodo(turno, 0)
         assert escala_recarregada.notificado_24h_em == marcado_em  # nao resetou
@@ -495,12 +497,13 @@ def test_sincronizar_turno_preserva_ocorrencia_fixada(logged_in_client, app, db)
         assert escala.funcoes[0].membro.nome == "Ana"
 
         # fixa manualmente com um membro divergente da formula
-        escala.funcoes[0].membro_id = b.id
+        funcao = escala.funcoes[0]
+        funcao.membro_id = b.id
+        funcao.save()
         escala.plantao_fixado = True
-        db.session.commit()
+        escala.save()
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
-        db.session.expire_all()
 
         assert _escala_do_periodo(turno, 0).funcoes[0].membro.nome == "Bruno"  # nao foi sobrescrita
 
@@ -525,7 +528,6 @@ def test_sincronizar_turno_nunca_toca_periodo_ja_ocorrido(logged_in_client, app,
         # adiciona Bruno na fila (mudaria a formula do periodo 0 se fosse recalculado)
         _adicionar_a_fila(turno, [b])
         sincronizar_turno(turno)
-        db.session.expire_all()
 
         # periodo 0 (horario ja passou) continua com Ana -- historico intocavel
         assert _escala_do_periodo(turno, 0).funcoes[0].membro.nome == "Ana"
@@ -549,7 +551,7 @@ def test_sincronizar_turno_funciona_quando_ate_data_nao_e_ocorrencia_exata_seman
         ate_data = date.today() + timedelta(days=47)  # dificilmente cai numa ocorrencia seg/qui
         sincronizar_turno(turno, ate_data=ate_data)  # nao pode levantar excecao
 
-        escalas = Escala.query.filter_by(plantao_turno_id=turno.id).all()
+        escalas = list(Escala.objects(plantao_turno_id=turno.id))
         assert len(escalas) > 0
         assert all(e.data <= ate_data for e in escalas)
 
@@ -568,7 +570,7 @@ def test_sincronizar_turno_funciona_quando_ate_data_nao_e_ocorrencia_exata_mensa
         ate_data = date.today() + timedelta(days=200)
         sincronizar_turno(turno, ate_data=ate_data)  # nao pode levantar excecao
 
-        escalas = Escala.query.filter_by(plantao_turno_id=turno.id).all()
+        escalas = list(Escala.objects(plantao_turno_id=turno.id))
         assert all(e.data <= ate_data for e in escalas)
 
 
@@ -588,7 +590,6 @@ def test_editar_turno_reflete_em_periodos_futuros_nao_fixados(logged_in_client, 
         turno.nome = "Plantao Kids"
         db.session.commit()
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
-        db.session.expire_all()
 
         escala = _escala_do_periodo(turno, 0)
         assert escala.departamento == "Kids"
@@ -607,12 +608,11 @@ def test_editar_horario_dispara_notificacao_de_alteracao_e_reseta_timestamps(log
 
         escala = _escala_do_periodo(turno, 0)
         escala.notificado_24h_em = datetime.now()
-        db.session.commit()
+        escala.save()
 
         turno.horario = time(20, 0)
         db.session.commit()
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
-        db.session.expire_all()
 
         escala_atualizada = _escala_do_periodo(turno, 0)
         assert escala_atualizada.horario == time(20, 0)
@@ -641,16 +641,15 @@ def test_editar_data_inicio_recria_periodos_futuros_preserva_passado_fixado(logg
         turno.data_inicio = nova_data_inicio
         db.session.commit()
         preparar_para_renumeracao(turno)
-        db.session.expire_all()
 
         # a ocorrencia ja ocorrida continua existindo, so perde o vinculo de periodo
-        escala_passada = db.session.get(Escala, escala_passada_id)
+        escala_passada = Escala.objects(id=escala_passada_id).first()
         assert escala_passada is not None
         assert escala_passada.plantao_turno_id == turno.id
         assert escala_passada.plantao_periodo is None
 
         # a futura nao-fixada foi removida (era so previsao com numeracao antiga)
-        assert db.session.get(Escala, escala_futura_id) is None
+        assert Escala.objects(id=escala_futura_id).first() is None
 
         # sync com a nova config nao colide com a unique constraint
         sincronizar_turno(turno, ate_data=nova_data_inicio + timedelta(days=2))
@@ -665,7 +664,7 @@ def test_editar_termino_dispara_renumeracao_e_remove_ocorrencias_alem_do_novo_li
         a = _criar_membro_teste(comunidade.id, "Ana")
         _adicionar_a_fila(turno, [a])
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=20))
-        assert Escala.query.filter_by(plantao_turno_id=turno.id).count() == 20
+        assert Escala.objects(plantao_turno_id=turno.id).count() == 20
 
         # encurta o termino de "sem fim" pra "apos 5 ocorrencias"
         turno.termino_tipo = "ocorrencias"
@@ -674,7 +673,7 @@ def test_editar_termino_dispara_renumeracao_e_remove_ocorrencias_alem_do_novo_li
         preparar_para_renumeracao(turno)
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=20))
 
-        restantes = Escala.query.filter_by(plantao_turno_id=turno.id).order_by(Escala.plantao_periodo).all()
+        restantes = list(Escala.objects(plantao_turno_id=turno.id).order_by("plantao_periodo"))
         assert len(restantes) == 5
         assert all(e.plantao_periodo < 5 for e in restantes)
 
@@ -697,7 +696,6 @@ def test_adicionar_membro_na_fila_reajusta_so_o_futuro(logged_in_client, app, db
         b = _criar_membro_teste(comunidade.id, "Bruno")
         _adicionar_a_fila(turno, [b])
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
-        db.session.expire_all()
 
         assert _escala_do_periodo(turno, 0).funcoes[0].membro.nome == "Ana"  # passado intocado
         assert _escala_do_periodo(turno, 1).funcoes[0].membro.nome == "Bruno"  # futuro reajustado
@@ -730,7 +728,6 @@ def test_remover_pessoa_de_ocorrencia_gerada_deixa_vaga_aberta_e_fixa(logged_in_
         )
         assert response.status_code == 200
 
-        db.session.expire_all()
         escala_atualizada = _escala_do_periodo(turno, 0)
         assert escala_atualizada.funcoes[0].membro_id is None  # vaga aberta
         assert escala_atualizada.plantao_fixado is True  # sync nao restaura Ana
@@ -751,7 +748,6 @@ def test_remover_uma_pessoa_de_equipe_multipla_mantem_resto_do_grupo(logged_in_c
 
         logged_in_client.post(f"/escala/funcao/{funcao_cima.id}/remover", data={}, follow_redirects=True)
 
-        db.session.expire_all()
         escala_atualizada = _escala_do_periodo(turno, 0)
         nomes_restantes = sorted(f.membro.nome for f in escala_atualizada.funcoes if f.membro_id)
         assert nomes_restantes == ["Emilly"]  # Cima saiu, Emilly continua
@@ -773,7 +769,6 @@ def test_sync_nao_restaura_pessoa_removida_manualmente(logged_in_client, app, db
 
         # sync roda de novo (ex: tick do agendador) -- nao deve reatribuir Ana
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
-        db.session.expire_all()
 
         assert _escala_do_periodo(turno, 0).funcoes[0].membro_id is None
 
@@ -799,12 +794,12 @@ def test_excluir_turno_via_rota_preserva_passado_remove_futuro(logged_in_client,
         response = logged_in_client.post(f"/plantao/{turno.id}/excluir", data={}, follow_redirects=True)
         assert response.status_code == 200
 
-        escala_passada = db.session.get(Escala, escala_passada_id)
+        escala_passada = Escala.objects(id=escala_passada_id).first()
         assert escala_passada is not None
         assert escala_passada.plantao_turno_id is None
         assert escala_passada.plantao_periodo is None
 
-        assert db.session.get(Escala, escala_futura_id) is None
+        assert Escala.objects(id=escala_futura_id).first() is None
         assert TurnoPlantao.query.get(turno.id) is None
 
 
@@ -828,7 +823,7 @@ def test_criar_turno_diario_via_rota_materializa_escalas(logged_in_client, app, 
         assert turno is not None
         assert turno.departamento == "Midia"
         assert turno.unidade_recorrencia == "dia"
-        assert Escala.query.filter_by(plantao_turno_id=turno.id).count() > 0
+        assert Escala.objects(plantao_turno_id=turno.id).count() > 0
 
 
 def test_criar_turno_semanal_via_rota_com_dias_semana(logged_in_client, app, db):
@@ -944,7 +939,7 @@ def test_criar_turno_a_partir_de_escala_semeia_fila_com_os_escalados(logged_in_c
 
         # ja materializou ocorrencias usando essa fila (sem precisar montar
         # a fila manualmente na tela seguinte) -- Ana e Bruno na MESMA Escala
-        primeira = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=0).first()
+        primeira = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first()
         assert sorted(f.membro.nome for f in primeira.funcoes if f.membro_id) == ["Ana", "Bruno"]
 
 
@@ -966,8 +961,7 @@ def test_criar_turno_a_partir_de_escala_vincula_permanentemente(logged_in_client
         )
 
         turno = TurnoPlantao.query.filter_by(nome="Rodizio Vinculado").first()
-        db.session.expire_all()
-        escala_recarregada = db.session.get(Escala, escala.id)
+        escala_recarregada = Escala.objects(id=escala.id).first()
         assert escala_recarregada.turno_plantao_origem_id == turno.id
         assert turno.escala_origem.id == escala.id
 
@@ -1071,7 +1065,6 @@ def test_excluir_escala_de_origem_faz_turno_voltar_a_gerar_capa(logged_in_client
 
         logged_in_client.post(f"/escala/{escala.id}/excluir", data={}, follow_redirects=True)
 
-        db.session.expire_all()
         turno_recarregado = db.session.get(TurnoPlantao, turno.id)
         assert turno_recarregado.escala_origem is None  # sem cascade, turno sobrevive
 
@@ -1178,7 +1171,7 @@ def test_adicionar_e_remover_membro_da_fila_via_rota(logged_in_client, app, db):
         )
         assert response.status_code == 200
         assert _equipe_membro_de(turno, membro.id) is not None
-        assert Escala.query.filter_by(plantao_turno_id=turno.id).count() > 0
+        assert Escala.objects(plantao_turno_id=turno.id).count() > 0
 
         item = _equipe_membro_de(turno, membro.id)
         logged_in_client.post(
@@ -1255,10 +1248,8 @@ def test_detalhe_do_turno_mostra_ocorrencias_passadas_e_futuras(logged_in_client
             data=data_passada, horario=turno.horario,
             plantao_turno_id=turno.id, plantao_periodo=-1,
         )
-        db.session.add(escala_passada)
-        db.session.flush()
-        db.session.add(Funcao(escala_id=escala_passada.id, nome=turno.nome_funcao, ordem=0))
-        db.session.commit()
+        escala_passada.save()
+        Funcao(escala_id=escala_passada.id, nome=turno.nome_funcao, ordem=0).save()
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
 
@@ -1266,9 +1257,7 @@ def test_detalhe_do_turno_mostra_ocorrencias_passadas_e_futuras(logged_in_client
         html = response.data.decode("utf-8")
         assert response.status_code == 200
 
-        futura = Escala.query.filter(
-            Escala.plantao_turno_id == turno.id, Escala.data >= date.today()
-        ).first()
+        futura = Escala.objects(plantao_turno_id=turno.id, data__gte=date.today()).first()
         assert futura is not None
         assert data_passada.strftime("%d/%m") in html
         assert futura.data.strftime("%d/%m") in html
@@ -1292,10 +1281,8 @@ def test_detalhe_do_turno_mostra_divisor_entre_passado_e_futuro(logged_in_client
             data=data_passada, horario=turno.horario,
             plantao_turno_id=turno.id, plantao_periodo=-1,
         )
-        db.session.add(escala_passada)
-        db.session.flush()
-        db.session.add(Funcao(escala_id=escala_passada.id, nome=turno.nome_funcao, ordem=0))
-        db.session.commit()
+        escala_passada.save()
+        Funcao(escala_id=escala_passada.id, nome=turno.nome_funcao, ordem=0).save()
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=3))
 
@@ -1325,9 +1312,7 @@ def test_detalhe_do_turno_nao_corta_ocorrencias_futuras_alem_de_20(logged_in_cli
         _adicionar_a_fila(turno, [_criar_membro_teste(comunidade.id, "Ana")])
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=40))
-        total_futuras = Escala.query.filter(
-            Escala.plantao_turno_id == turno.id, Escala.data >= date.today()
-        ).count()
+        total_futuras = Escala.objects(plantao_turno_id=turno.id, data__gte=date.today()).count()
         assert total_futuras > OCORRENCIAS_EXIBIDAS  # mais de 20 -- o cenario do bug
 
         html = logged_in_client.get(f"/plantao/{turno.id}").data.decode("utf-8")
@@ -1438,7 +1423,7 @@ def test_horario_fim_do_turno_propaga_pras_ocorrencias_geradas(logged_in_client,
 
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=1))
 
-        escala = Escala.query.filter_by(plantao_turno_id=turno.id).order_by(Escala.data).first()
+        escala = Escala.objects(plantao_turno_id=turno.id).order_by("data").first()
         assert escala.horario_fim == time(21, 0)
 
 

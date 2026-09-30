@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 from mongoengine.queryset.visitor import Q as MongoQ
 
 from app.extensions import db
+from app.db_utils import delete_cascade, primeiro_ou_404
 from app.escala import bp
 from app.escala.forms import (
     SelecionarMembroForm,
@@ -52,7 +53,7 @@ def _escala_do_usuario_ou_404(escala_id):
     """
     from app.ministerio.routes import _eh_lider_do_ministerio
 
-    escala = Escala.query.get_or_404(escala_id)
+    escala = primeiro_ou_404(Escala.objects(id=escala_id))
     if not _eh_lider_do_ministerio(escala.ministerio, current_user):
         abort(404)
     return escala
@@ -61,7 +62,7 @@ def _escala_do_usuario_ou_404(escala_id):
 def _funcao_do_usuario_ou_404(funcao_id):
     from app.ministerio.routes import _eh_lider_do_ministerio
 
-    funcao = Funcao.query.get_or_404(funcao_id)
+    funcao = primeiro_ou_404(Funcao.objects(id=funcao_id))
     if not _eh_lider_do_ministerio(funcao.escala.ministerio, current_user):
         abort(404)
     return funcao
@@ -76,7 +77,7 @@ def _escala_visivel_ou_404(escala_id):
     (escala, pode_gerenciar)."""
     from app.ministerio.routes import _eh_lider_do_ministerio, _eh_membro_do_ministerio
 
-    escala = Escala.query.get_or_404(escala_id)
+    escala = primeiro_ou_404(Escala.objects(id=escala_id))
     pode_gerenciar = _eh_lider_do_ministerio(escala.ministerio, current_user)
     eh_membro = pode_gerenciar or _eh_membro_do_ministerio(escala.ministerio, current_user)
     eh_convidado_vinculado = any(
@@ -100,16 +101,15 @@ def _avisos_conflito_horario(membro, escala_atual, funcao_atual_id=None):
     inicio_atual = escala_atual.horario or time.min
     fim_atual = escala_atual.horario_fim or inicio_atual
 
-    outras_funcoes = (
-        Funcao.query.join(Escala, Funcao.escala_id == Escala.id)
-        .filter(
-            Funcao.membro_id == membro.id,
-            Funcao.id != (funcao_atual_id or -1),
-            Escala.id != escala_atual.id,
-            Escala.data == escala_atual.data,
-        )
-        .all()
-    )
+    # Sem join possivel (Funcao/Escala os dois no Mongo agora): busca as
+    # outras Escalas na mesma data primeiro, depois as Funcoes desse membro
+    # nelas.
+    ids_outras_escalas = [
+        e.id for e in Escala.objects(data=escala_atual.data, id__ne=escala_atual.id)
+    ]
+    outras_funcoes = list(Funcao.objects(
+        membro_id=membro.id, escala_id__in=ids_outras_escalas, id__ne=(funcao_atual_id or -1)
+    ))
 
     avisos = []
     for outra_funcao in outras_funcoes:
@@ -124,9 +124,15 @@ def _avisos_conflito_horario(membro, escala_atual, funcao_atual_id=None):
 def _fixar_se_gerada_por_rodizio(escala):
     """Uma edicao manual numa Escala gerada por Turno de Rodizio (ver
     app/plantao/sincronizacao.py) precisa travar essa ocorrencia (plantao_fixado)
-    para o proximo sync nao sobrescrever a mudanca manual com a formula pura."""
+    para o proximo sync nao sobrescrever a mudanca manual com a formula pura.
+
+    Salva na hora (nao so muta o objeto em memoria) -- `escala` property do
+    MongoEngine nao tem identity map, cada acesso a `funcao.escala` busca uma
+    instancia NOVA, entao um `db.session.commit()` la no chamador nao
+    persistiria essa mudanca."""
     if escala.plantao_turno_id is not None:
         escala.plantao_fixado = True
+        escala.save()
 
 
 def _notificar_lideres_do_ministerio(escala, titulo, mensagem, tipo):
@@ -170,9 +176,8 @@ def nova(ministerio_id):
         # quarta) de digitar o mesmo horario toda vez. So um ponto de
         # partida, continua editavel.
         ultima_escala = (
-            Escala.query.filter_by(ministerio_id=ministerio.id)
-            .filter(Escala.horario.isnot(None))
-            .order_by(Escala.criada_em.desc())
+            Escala.objects(ministerio_id=ministerio.id, horario__ne=None)
+            .order_by("-criada_em")
             .first()
         )
         if ultima_escala:
@@ -235,7 +240,7 @@ def editar(escala_id):
             # Escala especifica pra o proximo sync do turno nao sobrescrever.
             _fixar_se_gerada_por_rodizio(escala)
 
-        db.session.commit()
+        escala.save()
 
         mensagens = []
         if mudou_nome:
@@ -275,9 +280,9 @@ def detalhe(escala_id):
     avisos_por_funcao = {}
     diretorio_vazio = False
 
-    diretorio_geral = Membro.query.filter_by(
+    diretorio_geral = list(Membro.objects(
         comunidade_id=escala.ministerio.comunidade_id
-    ).order_by(Membro.nome).all()
+    ).order_by("nome"))
     # Placeholder em 0 -- "nao sugerir ninguem", nunca um Membro.id real (ver
     # StatusForm.troca_sugestao_membro_id).
     _choices_sugestao = [(0, "Ninguem em especial")] + [(m.id, m.nome) for m in diretorio_geral]
@@ -393,8 +398,7 @@ def adicionar_funcao(escala_id):
 
     maior_ordem = max([f.ordem for f in escala.funcoes], default=-1)
     nova_funcao = Funcao(escala_id=escala.id, nome=form.nome.data.strip(), ordem=maior_ordem + 1)
-    db.session.add(nova_funcao)
-    db.session.commit()
+    nova_funcao.save()
 
     flash(f'Funcao "{nova_funcao.nome}" adicionada em {escala.nome}.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
@@ -420,8 +424,7 @@ def adicionar_subcabecalho(escala_id):
     novo_subcabecalho = Funcao(
         escala_id=escala.id, nome=form.nome.data.strip(), ordem=maior_ordem + 1, tipo=TIPO_SUBCABECALHO
     )
-    db.session.add(novo_subcabecalho)
-    db.session.commit()
+    novo_subcabecalho.save()
 
     flash(f'Categoria "{novo_subcabecalho.nome}" adicionada em {escala.nome}.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
@@ -440,7 +443,7 @@ def editar_funcao(funcao_id):
 
     nome_antigo = funcao.nome
     funcao.nome = form.nome.data.strip()
-    db.session.commit()
+    funcao.save()
 
     flash(f'"{nome_antigo}" renomeada para "{funcao.nome}".', "success")
     return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
@@ -459,8 +462,7 @@ def excluir_funcao(funcao_id):
 
     nome = funcao.nome
     escala_nome = funcao.escala.nome
-    db.session.delete(funcao)
-    db.session.commit()
+    funcao.delete()
 
     flash(f'Funcao "{nome}" removida de {escala_nome}.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
@@ -485,8 +487,7 @@ def adicionar_item_repertorio(escala_id):
         link=(form.link.data or "").strip() or None,
         ordem=maior_ordem + 1,
     )
-    db.session.add(item)
-    db.session.commit()
+    item.save()
 
     flash(f'"{item.nome_musica}" adicionada ao repertorio.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
@@ -495,7 +496,7 @@ def adicionar_item_repertorio(escala_id):
 @bp.route("/repertorio/<int:item_id>/excluir", methods=["POST"])
 @login_required
 def excluir_item_repertorio(item_id):
-    item = ItemRepertorio.query.get_or_404(item_id)
+    item = primeiro_ou_404(ItemRepertorio.objects(id=item_id))
     escala = _escala_do_usuario_ou_404(item.escala_id)
     form = AcaoForm()
 
@@ -504,8 +505,7 @@ def excluir_item_repertorio(item_id):
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     nome = item.nome_musica
-    db.session.delete(item)
-    db.session.commit()
+    item.delete()
 
     flash(f'"{nome}" removida do repertorio.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
@@ -516,7 +516,7 @@ def excluir_item_repertorio(item_id):
 def adicionar_membro(funcao_id):
     funcao = _funcao_do_usuario_ou_404(funcao_id)
     comunidade_id = funcao.escala.ministerio.comunidade_id
-    diretorio = Membro.query.filter_by(comunidade_id=comunidade_id).order_by(Membro.nome).all()
+    diretorio = list(Membro.objects(comunidade_id=comunidade_id).order_by("nome"))
 
     if not diretorio:
         flash(
@@ -533,7 +533,7 @@ def adicionar_membro(funcao_id):
         flash(erros[0] if erros else "Nao foi possivel adicionar o membro.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
-    membro = Membro.query.filter_by(id=form.membro_id.data, comunidade_id=comunidade_id).first()
+    membro = Membro.objects(id=form.membro_id.data, comunidade_id=comunidade_id).first()
     if membro is None:
         flash("Pessoa invalida para esta comunidade.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
@@ -545,7 +545,7 @@ def adicionar_membro(funcao_id):
     funcao.notificado_em = None
     funcao.eh_convidado = False
     _fixar_se_gerada_por_rodizio(funcao.escala)
-    db.session.commit()
+    funcao.save()
 
     flash(f"{membro.nome} adicionado(a) em {funcao.nome}.", "success")
     for aviso in avisos_conflito:
@@ -601,15 +601,14 @@ def adicionar_convidado(funcao_id):
         flash("Selecione um usuario valido na busca.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
-    membro = Membro.query.filter_by(comunidade_id=comunidade_id, email=usuario.email).first()
+    membro = Membro.objects(comunidade_id=comunidade_id, email=usuario.email).first()
     if membro is None:
         membro = Membro(
             comunidade_id=comunidade_id,
             nome=usuario.name or usuario.username or usuario.email,
             email=usuario.email,
         )
-        db.session.add(membro)
-        db.session.flush()
+        membro.save()
 
     avisos_conflito = _avisos_conflito_horario(membro, funcao.escala, funcao_atual_id=funcao.id)
 
@@ -618,7 +617,7 @@ def adicionar_convidado(funcao_id):
     funcao.notificado_em = None
     funcao.eh_convidado = True
     _fixar_se_gerada_por_rodizio(funcao.escala)
-    db.session.commit()
+    funcao.save()
 
     flash(f"{membro.nome} adicionado(a) como convidado(a) em {funcao.nome}.", "success")
     for aviso in avisos_conflito:
@@ -643,7 +642,7 @@ def remover_membro(funcao_id):
     funcao.notificado_em = None
     funcao.eh_convidado = False
     _fixar_se_gerada_por_rodizio(funcao.escala)
-    db.session.commit()
+    funcao.save()
 
     if nome_removido:
         flash(f"{nome_removido} removido(a) de {funcao.nome}.", "success")
@@ -674,7 +673,8 @@ def mover_membro(funcao_id):
     trocar_atribuicao(origem, destino)
     _fixar_se_gerada_por_rodizio(origem.escala)
     _fixar_se_gerada_por_rodizio(destino.escala)
-    db.session.commit()
+    origem.save()
+    destino.save()
 
     flash(f"{origem.nome} e {destino.nome} atualizados.", "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
@@ -689,7 +689,7 @@ def atualizar_status(funcao_id):
     # e-mail), sem precisar ser lider/admin -- "marcar ausencia -> o proprio
     # membro escalado, ou lider/admin" (ver app/convites/CLAUDE.md). Qualquer
     # outra pessoa continua exigindo _funcao_do_usuario_ou_404 (lider/admin).
-    funcao_bruta = Funcao.query.get_or_404(funcao_id)
+    funcao_bruta = primeiro_ou_404(Funcao.objects(id=funcao_id))
     eh_proprio_escalado = (
         funcao_bruta.membro_id is not None
         and funcao_bruta.membro.email
@@ -706,7 +706,7 @@ def atualizar_status(funcao_id):
     form = StatusForm()
     form.troca_sugestao_membro_id.choices = [(0, "Ninguem em especial")] + [
         (m.id, m.nome)
-        for m in Membro.query.filter_by(comunidade_id=comunidade_id).order_by(Membro.nome).all()
+        for m in Membro.objects(comunidade_id=comunidade_id).order_by("nome")
     ]
 
     if not form.validate_on_submit():
@@ -724,7 +724,7 @@ def atualizar_status(funcao_id):
         funcao.troca_motivo = None
         funcao.troca_sugestao_membro_id = None
 
-    db.session.commit()
+    funcao.save()
 
     # So notifica lider/admin quando quem mudou foi o PROPRIO escalado (ver
     # _notificar_lideres_do_ministerio) -- se um lider mudou o status de
@@ -735,7 +735,7 @@ def atualizar_status(funcao_id):
         mensagem = f"{titulo} ({funcao.escala.nome})."
         if status_novo == "troca_solicitada":
             if funcao.troca_sugestao_membro_id:
-                sugestao = Membro.query.get(funcao.troca_sugestao_membro_id)
+                sugestao = Membro.objects(id=funcao.troca_sugestao_membro_id).first()
                 if sugestao:
                     mensagem += f" Sugestao de substituto: {sugestao.nome}."
             if funcao.troca_motivo:
@@ -760,7 +760,7 @@ def aprovar_troca(funcao_id):
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     comunidade_id = funcao.escala.ministerio.comunidade_id
-    diretorio = Membro.query.filter_by(comunidade_id=comunidade_id).order_by(Membro.nome).all()
+    diretorio = list(Membro.objects(comunidade_id=comunidade_id).order_by("nome"))
 
     form = TrocaAprovarForm()
     form.membro_id.choices = [(0, "Selecione quem assume")] + [(m.id, m.nome) for m in diretorio]
@@ -769,7 +769,7 @@ def aprovar_troca(funcao_id):
         flash("Selecione quem assume a funcao para aprovar a troca.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
-    novo_membro = Membro.query.filter_by(id=form.membro_id.data, comunidade_id=comunidade_id).first()
+    novo_membro = Membro.objects(id=form.membro_id.data, comunidade_id=comunidade_id).first()
     if novo_membro is None:
         flash("Pessoa invalida para esta comunidade.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
@@ -784,7 +784,7 @@ def aprovar_troca(funcao_id):
     funcao.troca_motivo = None
     funcao.troca_sugestao_membro_id = None
     _fixar_se_gerada_por_rodizio(funcao.escala)
-    db.session.commit()
+    funcao.save()
 
     if membro_antigo_email:
         usuario_antigo = User.objects(email=membro_antigo_email).first()
@@ -826,7 +826,7 @@ def recusar_troca(funcao_id):
     funcao.status = STATUS_PADRAO
     funcao.troca_motivo = None
     funcao.troca_sugestao_membro_id = None
-    db.session.commit()
+    funcao.save()
 
     if membro_email:
         usuario = User.objects(email=membro_email).first()
@@ -987,6 +987,7 @@ def enviar_notificacoes_da_escala(escala):
 
         if notificou_algum_canal:
             marcar_notificado(funcao)
+            funcao.save()
 
     db.session.commit()
 
@@ -1178,7 +1179,7 @@ def cancelar_escala(escala_id):
     escala.cancelada = True
     escala.cancelada_em = datetime.now(timezone.utc)
     _fixar_se_gerada_por_rodizio(escala)
-    db.session.commit()
+    escala.save()
 
     resultado = enviar_notificacao_de_cancelamento(escala)
     partes = []
@@ -1212,7 +1213,7 @@ def reabrir_escala(escala_id):
 
     escala.cancelada = False
     escala.cancelada_em = None
-    db.session.commit()
+    escala.save()
 
     flash(f'Escala "{escala.nome}" reaberta.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
@@ -1272,8 +1273,7 @@ def excluir_escala(escala_id):
 
     nome = escala.nome
     ministerio_id = escala.ministerio_id
-    db.session.delete(escala)
-    db.session.commit()
+    delete_cascade(escala)
 
     flash(f'Escala "{nome}" excluida.', "success")
     return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio_id))

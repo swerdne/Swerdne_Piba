@@ -79,7 +79,7 @@ def test_excluir_comunidade_apaga_ministerios_e_diretorio_em_cascata(logged_in_c
 
         from app.ministerio.models import Ministerio
         assert Ministerio.objects(id=ministerio_id).first() is None
-        assert db.session.get(Membro, membro_id) is None
+        assert Membro.objects(id=membro_id).first() is None
 
 
 def test_usuario_nao_consegue_excluir_comunidade_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
@@ -210,7 +210,7 @@ def test_excluir_membro_do_diretorio(logged_in_client, app, db):
             f"/comunidade/{comunidade.id}/membros/{membro.id}/excluir", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        assert db.session.get(Membro, membro.id) is None
+        assert Membro.objects(id=membro.id).first() is None
 
 
 def test_excluir_membro_escalado_e_bloqueado(logged_in_client, app, db):
@@ -227,7 +227,7 @@ def test_excluir_membro_escalado_e_bloqueado(logged_in_client, app, db):
         )
         assert response.status_code == 200
         assert "antes de excluir do diretorio" in response.data.decode("utf-8")
-        assert db.session.get(Membro, membro.id) is not None
+        assert Membro.objects(id=membro.id).first() is not None
 
 
 # --- Ciclo de disponibilidade --------------------------------------------------
@@ -247,8 +247,8 @@ def _criar_ciclo(cliente, comunidade_id, membro_id, nome, data_inicio, segmentos
         follow_redirects=True,
     )
     return (
-        CicloDisponibilidade.query.filter_by(membro_id=membro_id, nome=nome)
-        .order_by(CicloDisponibilidade.id.desc())
+        CicloDisponibilidade.objects(membro_id=membro_id, nome=nome)
+        .order_by("-id")
         .first()
     )
 
@@ -286,7 +286,7 @@ def test_ciclo_sem_segmento_valido_mostra_erro(logged_in_client, app, db):
         )
         assert response.status_code == 200
         assert "Adicione pelo menos um segmento" in response.data.decode("utf-8")
-        assert CicloDisponibilidade.query.filter_by(membro_id=membro.id).count() == 0
+        assert CicloDisponibilidade.objects(membro_id=membro.id).count() == 0
 
 
 def test_excluir_ciclo_disponibilidade(logged_in_client, app, db):
@@ -303,9 +303,9 @@ def test_excluir_ciclo_disponibilidade(logged_in_client, app, db):
             f"/comunidade/{comunidade.id}/disponibilidade/{ciclo_id}/excluir", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        assert db.session.get(CicloDisponibilidade, ciclo_id) is None
+        assert CicloDisponibilidade.objects(id=ciclo_id).first() is None
         # segmentos somem junto (cascade)
-        assert SegmentoCiclo.query.filter_by(ciclo_id=ciclo_id).count() == 0
+        assert SegmentoCiclo.objects(ciclo_id=ciclo_id).count() == 0
 
 
 def test_usuario_nao_consegue_ver_ou_excluir_disponibilidade_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):

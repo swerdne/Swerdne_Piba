@@ -3,10 +3,10 @@
 Nao usar `with app.app_context():` aqui -- o fixture `app` ja mantem um
 contexto aberto, e `_verificar_e_notificar` empurra o seu proprio por dentro.
 
-Apos chamar `_verificar_e_notificar`, sempre `db.session.expire_all()` antes
-de reconsultar: como o objeto `escala` ja esta no identity map da sessao de
-teste (foi criado nela), `db.session.get()` devolveria a copia em cache sem
-refletir o commit feito pela sessao aninhada do agendador.
+Escala/Funcao/Membro sao MongoEngine (ver app/db_utils.py) -- sem identity
+map, `Model.objects(...)` sempre busca fresco do banco, entao nao precisa de
+`db.session.expire_all()` (que so afeta a sessao SQLAlchemy) antes de
+reconsultar apos o tick do agendador.
 """
 from datetime import datetime, timedelta
 
@@ -22,15 +22,12 @@ def _criar_ministerio_teste(usuario_id):
 
 
 def _escalar_membro(escala, nome_funcao, nome_membro="Fulano", email="fulano@example.com"):
-    from app.extensions import db
-
-    funcao = Funcao.query.filter_by(escala_id=escala.id, nome=nome_funcao).first()
+    funcao = Funcao.objects(escala_id=escala.id, nome=nome_funcao).first()
     membro = Membro(comunidade_id=escala.ministerio.comunidade_id, nome=nome_membro, telefone="", email=email)
-    db.session.add(membro)
-    db.session.flush()
+    membro.save()
     funcao.membro_id = membro.id
     funcao.status = "nao_notificado"
-    db.session.commit()
+    funcao.save()
     return funcao
 
 
@@ -49,9 +46,8 @@ def test_notifica_automaticamente_dentro_da_janela_de_24h(logged_in_client, app,
     assert escala.notificado_24h_em is None
 
     _verificar_e_notificar(app)
-    db.session.expire_all()
 
-    escala_atualizada = db.session.get(Escala, escala.id)
+    escala_atualizada = Escala.objects(id=escala.id).first()
     assert escala_atualizada.notificado_24h_em is not None
     assert escala_atualizada.notificado_16h_em is None
 
@@ -70,9 +66,8 @@ def test_nao_notifica_fora_da_janela(logged_in_client, app, db):
     _escalar_membro(escala, "Baixo")
 
     _verificar_e_notificar(app)
-    db.session.expire_all()
 
-    escala_atualizada = db.session.get(Escala, escala.id)
+    escala_atualizada = Escala.objects(id=escala.id).first()
     assert escala_atualizada.notificado_24h_em is None
     assert escala_atualizada.notificado_16h_em is None
 
@@ -91,13 +86,11 @@ def test_nao_notifica_duas_vezes_para_a_mesma_janela(logged_in_client, app, db):
     _escalar_membro(escala, "Baixo")
 
     _verificar_e_notificar(app)
-    db.session.expire_all()
-    primeira_marcacao = db.session.get(Escala, escala.id).notificado_16h_em
+    primeira_marcacao = Escala.objects(id=escala.id).first().notificado_16h_em
     assert primeira_marcacao is not None
 
     _verificar_e_notificar(app)
-    db.session.expire_all()
-    segunda_marcacao = db.session.get(Escala, escala.id).notificado_16h_em
+    segunda_marcacao = Escala.objects(id=escala.id).first().notificado_16h_em
     assert segunda_marcacao == primeira_marcacao
 
 
@@ -112,7 +105,11 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
 
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    daqui_24h = datetime.now() + timedelta(hours=24, minutes=2)
+    # microsegundos zerados -- horario de TurnoPlantao (SQLite) e comparado
+    # contra Escala.horario (Mongo, so guarda precisao de milissegundos) em
+    # sincronizar_turno; um formulario real nunca envia microssegundos, isso
+    # so evita ruido artificial deste fixture de teste.
+    daqui_24h = (datetime.now() + timedelta(hours=24, minutes=2)).replace(microsecond=0)
 
     turno = TurnoPlantao(
         ministerio_id=ministerio.id, nome="Plantao Recepcao", departamento="Louvor",
@@ -122,8 +119,7 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
     db.session.add(turno)
     db.session.commit()
     membro = Membro(comunidade_id=ministerio.comunidade_id, nome="Fulano", email="fulano@example.com")
-    db.session.add(membro)
-    db.session.flush()
+    membro.save()
     equipe = EquipeTurno(turno_id=turno.id, posicao=0)
     db.session.add(equipe)
     db.session.flush()
@@ -131,9 +127,8 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
     db.session.commit()
 
     _verificar_e_notificar(app)
-    db.session.expire_all()
 
-    escala_gerada = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=0).first()
+    escala_gerada = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first()
     assert escala_gerada is not None
     assert escala_gerada.notificado_24h_em is not None
 
@@ -145,7 +140,8 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
 
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    daqui_16h = datetime.now() + timedelta(hours=16)
+    # ver comentario equivalente acima (microsegundos zerados de proposito)
+    daqui_16h = (datetime.now() + timedelta(hours=16)).replace(microsecond=0)
 
     turno = TurnoPlantao(
         ministerio_id=ministerio.id, nome="Plantao Recepcao", departamento="Louvor",
@@ -155,8 +151,7 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     db.session.add(turno)
     db.session.commit()
     membro = Membro(comunidade_id=ministerio.comunidade_id, nome="Fulano", email="fulano@example.com")
-    db.session.add(membro)
-    db.session.flush()
+    membro.save()
     equipe = EquipeTurno(turno_id=turno.id, posicao=0)
     db.session.add(equipe)
     db.session.flush()
@@ -164,13 +159,11 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     db.session.commit()
 
     _verificar_e_notificar(app)
-    db.session.expire_all()
-    primeira = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em
+    primeira = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em
     assert primeira is not None
 
     _verificar_e_notificar(app)
-    db.session.expire_all()
-    segunda = Escala.query.filter_by(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em
+    segunda = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em
     assert segunda == primeira
 
 
@@ -186,7 +179,6 @@ def test_escala_sem_data_e_ignorada_pelo_agendador(logged_in_client, app, db):
 
     # nao deve levantar excecao mesmo com escalas sem data no banco
     _verificar_e_notificar(app)
-    db.session.expire_all()
 
-    escala_atualizada = db.session.get(Escala, escala.id)
+    escala_atualizada = Escala.objects(id=escala.id).first()
     assert escala_atualizada.notificado_24h_em is None

@@ -371,12 +371,10 @@ def test_membro_escalado_marca_o_proprio_status(logged_in_client, outro_logged_i
         # conta, e escalado na funcao, pra "marcar o proprio status" ter
         # alguem de verdade pra marcar.
         from app.escala.models import Membro
-        from app.extensions import db as _db
         membro_bruno = Membro(comunidade_id=comunidade.id, nome="Bruno", email="bruno@example.com")
-        _db.session.add(membro_bruno)
-        _db.session.commit()
+        membro_bruno.save()
         baixo.membro_id = membro_bruno.id
-        _db.session.commit()
+        baixo.save()
 
         _convidar_ministerio(logged_in_client, ministerio.id, "bruno@example.com", "membro")
         token = _convite_de("bruno@example.com", "ministerio", ministerio.id).token
@@ -392,7 +390,7 @@ def test_membro_escalado_marca_o_proprio_status(logged_in_client, outro_logged_i
 
     with sessao_isolada(app):
         from app.escala.models import Funcao
-        assert db.session.get(Funcao, funcao_id).status == "presente"
+        assert Funcao.objects(id=funcao_id).first().status == "presente"
 
 
 def test_nao_membro_nao_ve_ministerio_nem_escala(logged_in_client, outro_logged_in_client, app, db):

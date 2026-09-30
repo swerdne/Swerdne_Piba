@@ -2,7 +2,7 @@
 import calendar
 import os
 import uuid
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from flask import render_template, redirect, url_for, flash, request, current_app, abort, session
 from flask_login import login_required, current_user
@@ -91,7 +91,7 @@ def _comunidade_visivel_ou_404(comunidade_id):
     """
     comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
     eh_dono = _eh_admin_da_comunidade(comunidade, current_user)
-    eh_membro_vinculado = eh_dono or _eh_membro_da_comunidade(comunidade, current_user) or Membro.query.filter_by(
+    eh_membro_vinculado = eh_dono or _eh_membro_da_comunidade(comunidade, current_user) or Membro.objects(
         comunidade_id=comunidade.id, email=current_user.email
     ).first() is not None
     if not eh_membro_vinculado:
@@ -163,10 +163,7 @@ def index():
             if ids_admin else []
         )
 
-    comunidades_membro_ids = {
-        row.comunidade_id for row in
-        db.session.query(Membro.comunidade_id).filter(Membro.email == current_user.email).distinct().all()
-    }
+    comunidades_membro_ids = set(Membro.objects(email=current_user.email).distinct("comunidade_id"))
     ids_papel_membro = {
         row.comunidade_id for row in
         UsuarioComunidade.objects(usuario_id=current_user.id, papel="membro")
@@ -252,7 +249,7 @@ def detalhe(comunidade_id):
     # quem esta contando "quantas pessoas" a comunidade tem, os dois contam.
     # Deduplicado por e-mail (mesmo criterio ja usado em comunidade.index)
     # pra nao contar duas vezes quem esta nos dois ao mesmo tempo.
-    membros_diretorio = Membro.query.filter_by(comunidade_id=comunidade.id).all()
+    membros_diretorio = list(Membro.objects(comunidade_id=comunidade.id))
     emails_diretorio = {m.email.lower() for m in membros_diretorio if m.email}
     contas_vinculadas = list(UsuarioComunidade.objects(comunidade_id=comunidade.id))
     contas_extras = sum(
@@ -308,14 +305,13 @@ def excluir_comunidade(comunidade_id):
         flash("Acao invalida.", "danger")
         return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
 
-    # Comunidade e Ministerio agora vivem no Mongo, mas Membro (diretorio) e
-    # tudo que pende de Ministerio (Escala, TurnoPlantao) ainda estao no
-    # Postgres nesta fase da migracao -- sem o cascade automatico que
-    # existia antes (cascade="all, delete-orphan" em Comunidade.ministerios/
-    # membros), precisa apagar cada lado explicitamente, na ordem certa:
-    # Ministerio primeiro (reaproveita excluir_ministerio_em_cascata, que ja
-    # cuida do proprio Escala/Funcao dele) -- so depois Membro, ja que
-    # Funcao referencia Membro e barraria a delecao enquanto existir.
+    # Comunidade, Ministerio e Membro (diretorio) agora vivem todos no Mongo
+    # -- sem o cascade automatico que existia antes (cascade="all,
+    # delete-orphan" em Comunidade.ministerios/membros), precisa apagar cada
+    # lado explicitamente, na ordem certa: Ministerio primeiro (reaproveita
+    # excluir_ministerio_em_cascata, que ja cuida do proprio Escala/Funcao
+    # dele, ainda em SQLAlchemy) -- so depois Membro, ja que Funcao
+    # referencia Membro e a exclusao ficaria inconsistente enquanto existir.
     from app.ministerio.routes import excluir_ministerio_em_cascata
 
     _remover_logo_antiga(comunidade.imagem)
@@ -325,9 +321,8 @@ def excluir_comunidade(comunidade_id):
     for ministerio in Ministerio.objects(comunidade_id=comunidade.id):
         excluir_ministerio_em_cascata(ministerio)
 
-    for membro in Membro.query.filter_by(comunidade_id=comunidade.id).all():
-        db.session.delete(membro)
-    db.session.commit()
+    for membro in Membro.objects(comunidade_id=comunidade.id):
+        delete_cascade(membro)
 
     delete_cascade(comunidade)
 
@@ -359,12 +354,11 @@ def membros(comunidade_id):
             telefone=(form.telefone.data or "").strip() or None,
             email=(form.email.data or "").strip() or None,
         )
-        db.session.add(membro)
-        db.session.commit()
+        membro.save()
         flash(f"{membro.nome} adicionado(a) ao diretorio.", "success")
         return redirect(proximo or url_for("comunidade.membros", comunidade_id=comunidade.id))
 
-    diretorio = Membro.query.filter_by(comunidade_id=comunidade.id).order_by(Membro.nome).all()
+    diretorio = list(Membro.objects(comunidade_id=comunidade.id).order_by("nome"))
 
     # Diretorio (Membro, acima) e contas vinculadas (UsuarioComunidade) sao
     # coisas diferentes -- ver models.py -- mas quem entra em "Membros"
@@ -391,19 +385,18 @@ def membros(comunidade_id):
 @login_required
 def excluir_membro(comunidade_id, membro_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    membro = Membro.query.filter_by(id=membro_id, comunidade_id=comunidade.id).first_or_404()
+    membro = primeiro_ou_404(Membro.objects(id=membro_id, comunidade_id=comunidade.id))
     form = AcaoForm()
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
-    if Funcao.query.filter_by(membro_id=membro.id).count() > 0:
+    if Funcao.objects(membro_id=membro.id).count() > 0:
         flash(f"Remova {membro.nome} das escalas antes de excluir do diretorio.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
-    db.session.delete(membro)
-    db.session.commit()
+    delete_cascade(membro)
     flash(f"{membro.nome} removido(a) do diretorio.", "success")
     return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
@@ -412,12 +405,10 @@ def excluir_membro(comunidade_id, membro_id):
 @login_required
 def disponibilidade(comunidade_id, membro_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    membro = Membro.query.filter_by(id=membro_id, comunidade_id=comunidade.id).first_or_404()
+    membro = primeiro_ou_404(Membro.objects(id=membro_id, comunidade_id=comunidade.id))
 
-    ciclos = (
-        CicloDisponibilidade.query.filter_by(membro_id=membro.id)
-        .order_by(CicloDisponibilidade.data_inicio.desc())
-        .all()
+    ciclos = list(
+        CicloDisponibilidade.objects(membro_id=membro.id).order_by("-data_inicio")
     )
 
     return render_template(
@@ -434,7 +425,7 @@ def disponibilidade(comunidade_id, membro_id):
 @login_required
 def nova_disponibilidade(comunidade_id, membro_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    membro = Membro.query.filter_by(id=membro_id, comunidade_id=comunidade.id).first_or_404()
+    membro = primeiro_ou_404(Membro.objects(id=membro_id, comunidade_id=comunidade.id))
     form = CicloDisponibilidadeForm()
 
     if not form.validate_on_submit():
@@ -450,18 +441,16 @@ def nova_disponibilidade(comunidade_id, membro_id):
     ciclo = CicloDisponibilidade(
         membro_id=membro.id, nome=form.nome.data.strip(), data_inicio=form.data_inicio.data
     )
-    db.session.add(ciclo)
-    db.session.flush()  # garante ciclo.id antes de criar os segmentos
+    ciclo.save()
 
     for ordem, segmento in enumerate(segmentos):
-        db.session.add(SegmentoCiclo(
+        SegmentoCiclo(
             ciclo_id=ciclo.id,
             ordem=ordem,
             nome=segmento["nome"],
             duracao_dias=segmento["duracao_dias"],
             indisponivel=segmento["indisponivel"],
-        ))
-    db.session.commit()
+        ).save()
 
     flash(f'Ciclo "{ciclo.nome}" cadastrado pra {membro.nome}.', "success")
     return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro.id))
@@ -471,11 +460,12 @@ def nova_disponibilidade(comunidade_id, membro_id):
 @login_required
 def excluir_disponibilidade(comunidade_id, ciclo_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
-    ciclo = (
-        CicloDisponibilidade.query.join(Membro, CicloDisponibilidade.membro_id == Membro.id)
-        .filter(CicloDisponibilidade.id == ciclo_id, Membro.comunidade_id == comunidade.id)
-        .first_or_404()
-    )
+    ciclo = primeiro_ou_404(CicloDisponibilidade.objects(id=ciclo_id))
+    # Autorizacao: o ciclo precisa pertencer a um Membro desta comunidade
+    # (sem join possivel entre CicloDisponibilidade e Membro, os dois no
+    # Mongo agora -- confere em duas etapas em vez de uma so consulta).
+    if ciclo.membro is None or ciclo.membro.comunidade_id != comunidade.id:
+        abort(404)
     membro_id = ciclo.membro_id
     form = AcaoForm()
 
@@ -484,8 +474,7 @@ def excluir_disponibilidade(comunidade_id, ciclo_id):
         return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro_id))
 
     nome = ciclo.nome
-    db.session.delete(ciclo)
-    db.session.commit()
+    delete_cascade(ciclo)
     flash(f'Ciclo "{nome}" removido.', "success")
     return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro_id))
 
@@ -607,7 +596,7 @@ def lideres(comunidade_id):
         key=lambda item: (item["usuario"].name or item["usuario"].username or item["usuario"].email).lower(),
     )
     for item in lista_lideres:
-        membro_vinculado = Membro.query.filter_by(
+        membro_vinculado = Membro.objects(
             comunidade_id=comunidade.id, email=item["usuario"].email
         ).first()
         item["telefone"] = membro_vinculado.telefone if membro_vinculado else None
@@ -686,25 +675,32 @@ def escalados(comunidade_id):
     departamento = request.args.get("departamento", "").strip()
     funcao_nome = request.args.get("funcao", "").strip()
 
-    # Ministerio agora vive no Mongo -- sem join possivel com Funcao/Escala
-    # (SQLAlchemy). Busca os ids de ministerio da comunidade primeiro, filtra
-    # Escala por esses ids em vez de juntar direto na tabela.
+    # Ministerio/Escala/Funcao agora vivem no Mongo -- sem join possivel
+    # entre eles (SQLAlchemy). Busca em duas etapas: primeiro as Escalas do
+    # periodo/ministerios da comunidade, depois as Funcoes preenchidas
+    # dessas escalas -- ordena em Python (dá pra fazer com aggregation
+    # pipeline, mas nao compensa a complexidade nessa escala de dados).
     ids_ministerios = [m.id for m in Ministerio.objects(comunidade_id=comunidade.id)]
-    consulta = (
-        Funcao.query.join(Escala)
-        .filter(Escala.ministerio_id.in_(ids_ministerios), Funcao.membro_id.isnot(None))
-    )
-
+    filtro_escala = {"ministerio_id__in": ids_ministerios}
     if data_de:
-        consulta = consulta.filter(Escala.data >= data_de)
+        filtro_escala["data__gte"] = date.fromisoformat(data_de)
     if data_ate:
-        consulta = consulta.filter(Escala.data <= data_ate)
+        filtro_escala["data__lte"] = date.fromisoformat(data_ate)
     if departamento:
-        consulta = consulta.filter(Escala.departamento == departamento)
-    if funcao_nome:
-        consulta = consulta.filter(Funcao.nome.ilike(f"%{funcao_nome}%"))
+        filtro_escala["departamento"] = departamento
+    escalas_relevantes = {e.id: e for e in Escala.objects(**filtro_escala)}
 
-    funcoes = consulta.order_by(Escala.data.is_(None), Escala.data, Escala.horario).all()
+    filtro_funcao = {"escala_id__in": list(escalas_relevantes.keys()), "membro_id__ne": None}
+    if funcao_nome:
+        filtro_funcao["nome__icontains"] = funcao_nome
+
+    funcoes = list(Funcao.objects(**filtro_funcao))
+    funcoes.sort(key=lambda f: (
+        escalas_relevantes[f.escala_id].data is None,
+        escalas_relevantes[f.escala_id].data or date.min,
+        escalas_relevantes[f.escala_id].horario is None,
+        escalas_relevantes[f.escala_id].horario or time.min,
+    ))
 
     return render_template(
         "comunidade/escalados.html",

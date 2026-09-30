@@ -11,6 +11,7 @@ from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 
 from app.extensions import db
+from app.db_utils import delete_cascade
 from app.escala.models import Escala, Membro
 from app.plantao import bp
 from app.plantao.forms import TurnoPlantaoForm, AdicionarMembroFilaForm, AcaoForm
@@ -142,7 +143,7 @@ def nova(ministerio_id):
             # ministerio.routes._escalas_agrupadas_por_turno) -- o turno para
             # de gerar uma capa propria na listagem.
             escala_origem.turno_plantao_origem_id = turno.id
-            db.session.commit()
+            escala_origem.save()
 
         sincronizar_turno(turno)
         flash(f'Turno de rodizio "{turno.nome}" criado! Agora monte a fila de rodizio.', "success")
@@ -156,7 +157,7 @@ def nova(ministerio_id):
 def detalhe(turno_id):
     turno = _turno_do_usuario_ou_404(turno_id)
 
-    diretorio = Membro.query.filter_by(comunidade_id=turno.ministerio.comunidade_id).order_by(Membro.nome).all()
+    diretorio = list(Membro.objects(comunidade_id=turno.ministerio.comunidade_id).order_by("nome"))
     ids_na_fila = {em.membro_id for equipe in turno.fila for em in equipe.integrantes}
     diretorio_disponivel = [m for m in diretorio if m.id not in ids_na_fila]
 
@@ -176,17 +177,14 @@ def detalhe(turno_id):
     # limitado (historico recente), futuro sempre completo (ja e naturalmente
     # limitado pela janela de geracao). Ordem cronologica (passado -> hoje ->
     # futuro); o template desenha um divisor exatamente na fronteira de hoje.
-    passadas = (
-        Escala.query.filter(Escala.plantao_turno_id == turno.id, Escala.data < hoje)
-        .order_by(Escala.data.desc())
+    passadas = list(
+        Escala.objects(plantao_turno_id=turno.id, data__lt=hoje)
+        .order_by("-data")
         .limit(OCORRENCIAS_EXIBIDAS)
-        .all()
     )
     passadas.reverse()
-    futuras = (
-        Escala.query.filter(Escala.plantao_turno_id == turno.id, Escala.data >= hoje)
-        .order_by(Escala.data.asc())
-        .all()
+    futuras = list(
+        Escala.objects(plantao_turno_id=turno.id, data__gte=hoje).order_by("data")
     )
     ocorrencias = passadas + futuras
 
@@ -259,9 +257,9 @@ def excluir_turno(turno_id):
         if escala.plantao_fixado or ja_ocorreu:
             escala.plantao_turno_id = None
             escala.plantao_periodo = None
+            escala.save()
         else:
-            db.session.delete(escala)
-    db.session.flush()
+            delete_cascade(escala)
 
     ministerio_id = turno.ministerio_id
     nome = turno.nome
@@ -277,7 +275,7 @@ def excluir_turno(turno_id):
 def adicionar_membro_fila(turno_id):
     turno = _turno_do_usuario_ou_404(turno_id)
 
-    diretorio = Membro.query.filter_by(comunidade_id=turno.ministerio.comunidade_id).order_by(Membro.nome).all()
+    diretorio = list(Membro.objects(comunidade_id=turno.ministerio.comunidade_id).order_by("nome"))
     ids_na_fila = {em.membro_id for equipe in turno.fila for em in equipe.integrantes}
     diretorio_disponivel = [m for m in diretorio if m.id not in ids_na_fila]
 
@@ -290,7 +288,7 @@ def adicionar_membro_fila(turno_id):
         flash(erros[0] if erros else "Nao foi possivel adicionar a fila.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
-    membro = Membro.query.filter_by(id=form.membro_id.data, comunidade_id=turno.ministerio.comunidade_id).first()
+    membro = Membro.objects(id=form.membro_id.data, comunidade_id=turno.ministerio.comunidade_id).first()
     if membro is None:
         flash("Pessoa invalida para esta comunidade.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))

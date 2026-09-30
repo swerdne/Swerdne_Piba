@@ -13,7 +13,7 @@ tempo -- ver sincronizar_todos_os_turnos_ativos).
 """
 from datetime import datetime, timedelta
 
-from app.extensions import db
+from app.db_utils import delete_cascade
 from app.escala.models import Escala, Funcao, STATUS_PADRAO
 from app.plantao.models import TurnoPlantao, data_do_periodo, periodo_da_data, equipe_do_periodo
 
@@ -42,18 +42,16 @@ def _materializar_periodo(turno, periodo, data_periodo):
         plantao_turno_id=turno.id,
         plantao_periodo=periodo,
     )
-    db.session.add(escala)
-    db.session.flush()  # garante escala.id antes de criar as funcoes
+    escala.save()  # garante escala.id antes de criar as funcoes
 
     if membros:
         for ordem, membro in enumerate(membros):
-            db.session.add(Funcao(
+            Funcao(
                 escala_id=escala.id, nome=turno.nome_funcao, ordem=ordem,
                 membro_id=membro.id, status=STATUS_PADRAO,
-            ))
+            ).save()
     else:
-        db.session.add(Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0))
-    db.session.flush()
+        Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0).save()
     return escala
 
 
@@ -104,23 +102,25 @@ def _atualizar_periodo_existente(turno, escala, data_periodo):
 
     if mudou_equipe:
         for funcao in funcoes_atuais:
-            db.session.delete(funcao)
-        db.session.flush()
+            funcao.delete()
         if membros_novos:
             for ordem, membro in enumerate(membros_novos):
-                db.session.add(Funcao(
+                Funcao(
                     escala_id=escala.id, nome=turno.nome_funcao, ordem=ordem,
                     membro_id=membro.id, status=STATUS_PADRAO,
-                ))
+                ).save()
         else:
-            db.session.add(Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0))
+            Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0).save()
     elif mudou_nome_funcao:
         for funcao in funcoes_atuais:
             funcao.nome = turno.nome_funcao
+            funcao.save()
 
     if mudou_data_horario or mudou_equipe:
         escala.notificado_24h_em = None
         escala.notificado_16h_em = None
+
+    escala.save()
 
     if mudou_data_horario:
         enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo)
@@ -149,14 +149,11 @@ def sincronizar_turno(turno, ate_data=None):
 
     data_inicial = max(turno.data_inicio, hoje)
     if data_inicial > ate_data:
-        db.session.commit()
         return
 
     existentes = {
         escala.plantao_periodo: escala
-        for escala in Escala.query.filter(
-            Escala.plantao_turno_id == turno.id, Escala.plantao_periodo.isnot(None)
-        ).all()
+        for escala in Escala.objects(plantao_turno_id=turno.id, plantao_periodo__ne=None)
     }
 
     periodo = periodo_da_data(turno, data_inicial)
@@ -182,8 +179,6 @@ def sincronizar_turno(turno, ate_data=None):
                 _atualizar_periodo_existente(turno, escala, data_periodo)
 
         periodo += 1
-
-    db.session.commit()
 
 
 def sincronizar_todos_os_turnos_ativos():
@@ -211,6 +206,6 @@ def preparar_para_renumeracao(turno):
         ja_ocorreu = escala.data_hora and escala.data_hora <= agora
         if escala.plantao_fixado or ja_ocorreu:
             escala.plantao_periodo = None
+            escala.save()
         else:
-            db.session.delete(escala)
-    db.session.commit()
+            delete_cascade(escala)

@@ -34,14 +34,14 @@ def _criar_escala(cliente, ministerio_id, nome, departamento="Louvor", data="", 
         follow_redirects=True,
     )
     return (
-        Escala.query.filter_by(nome=nome, departamento=departamento, ministerio_id=ministerio_id)
-        .order_by(Escala.id.desc())
+        Escala.objects(nome=nome, departamento=departamento, ministerio_id=ministerio_id)
+        .order_by("-id")
         .first()
     )
 
 
 def _funcao_por_nome(escala, nome_funcao):
-    return Funcao.query.filter_by(escala_id=escala.id, nome=nome_funcao).first()
+    return Funcao.objects(escala_id=escala.id, nome=nome_funcao).first()
 
 
 def _criar_membro(cliente, comunidade_id, nome, telefone="", email=""):
@@ -51,8 +51,8 @@ def _criar_membro(cliente, comunidade_id, nome, telefone="", email=""):
         follow_redirects=True,
     )
     return (
-        Membro.query.filter_by(comunidade_id=comunidade_id, nome=nome)
-        .order_by(Membro.id.desc())
+        Membro.objects(comunidade_id=comunidade_id, nome=nome)
+        .order_by("-id")
         .first()
     )
 
@@ -158,7 +158,7 @@ def test_criar_escala_com_cor_escolhida_sobrepoe_departamento(logged_in_client, 
             data={"nome": "Culto Azul", "departamento": "Louvor", "data": "", "horario": "", "cor": "azul"},
             follow_redirects=True,
         )
-        escala = Escala.query.filter_by(nome="Culto Azul").first()
+        escala = Escala.objects(nome="Culto Azul").first()
         assert escala.cor_selecionada == "azul"
         assert escala.cor == "bg-blue-500"  # nao o laranja do departamento Louvor
 
@@ -175,8 +175,7 @@ def test_editar_escala_muda_a_cor(logged_in_client, app, db):
         )
         assert response.status_code == 200
 
-        db.session.expire_all()
-        escala_atualizada = db.session.get(Escala, escala.id)
+        escala_atualizada = Escala.objects(id=escala.id).first()
         assert escala_atualizada.cor_selecionada == "roxo"
         assert escala_atualizada.cor == "bg-purple-500"
 
@@ -190,7 +189,7 @@ def test_cor_da_escala_aparece_na_lista_do_ministerio(logged_in_client, app, db)
             data={"nome": "Culto Verde", "departamento": "Louvor", "data": "", "horario": "", "cor": "verde"},
             follow_redirects=True,
         )
-        escala = Escala.query.filter_by(nome="Culto Verde").first()
+        escala = Escala.objects(nome="Culto Verde").first()
 
         html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
         assert f'w-2.5 h-2.5 rounded-full {escala.cor} shrink-0' in html
@@ -201,13 +200,13 @@ def test_criar_escala_sem_nome_mostra_erro(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        total_antes = Escala.query.count()
+        total_antes = Escala.objects.count()
         logged_in_client.post(
             f"/escala/ministerio/{ministerio.id}/nova",
             data={"nome": "", "departamento": "Louvor", "data": "", "horario": ""},
             follow_redirects=True,
         )
-        assert Escala.query.count() == total_antes
+        assert Escala.objects.count() == total_antes
 
 
 def test_mesmo_nome_pode_repetir_em_escalas_diferentes(logged_in_client, app, db):
@@ -220,7 +219,7 @@ def test_mesmo_nome_pode_repetir_em_escalas_diferentes(logged_in_client, app, db
             data={"nome": "Culto de Domingo", "departamento": "Louvor", "data": "", "horario": ""},
             follow_redirects=True,
         )
-        total = Escala.query.filter_by(nome="Culto de Domingo").count()
+        total = Escala.objects(nome="Culto de Domingo").count()
         assert total == 2
         assert e1 is not None
 
@@ -237,7 +236,7 @@ def test_adicionar_membro_a_uma_funcao(logged_in_client, app, db):
         assert response.status_code == 200
         assert "Endrews Elias" in response.data.decode("utf-8")
 
-        baixo_atualizado = db.session.get(Funcao, baixo.id)
+        baixo_atualizado = Funcao.objects(id=baixo.id).first()
         assert baixo_atualizado.membro is not None
         assert baixo_atualizado.membro.nome == "Endrews Elias"
         assert baixo_atualizado.status == "nao_notificado"
@@ -272,7 +271,7 @@ def test_adicionar_membro_diretorio_vazio_mostra_aviso(logged_in_client, app, db
             f"/escala/funcao/{baixo.id}/adicionar", data={"membro_id": 999}, follow_redirects=True
         )
         assert response.status_code == 200
-        baixo_atualizado = db.session.get(Funcao, baixo.id)
+        baixo_atualizado = Funcao.objects(id=baixo.id).first()
         assert baixo_atualizado.membro_id is None
 
 
@@ -292,8 +291,8 @@ def test_mover_membro_entre_funcoes(logged_in_client, app, db):
             follow_redirects=True,
         )
 
-        baixo_final = db.session.get(Funcao, baixo.id)
-        bateria_final = db.session.get(Funcao, bateria.id)
+        baixo_final = Funcao.objects(id=baixo.id).first()
+        bateria_final = Funcao.objects(id=bateria.id).first()
         assert baixo_final.membro_id is None
         assert bateria_final.membro is not None
         assert bateria_final.membro.nome == "Endrews Elias"
@@ -311,7 +310,7 @@ def test_atualizar_status(logged_in_client, app, db):
         logged_in_client.post(
             f"/escala/funcao/{baixo.id}/status", data={"status": "confirmado"}, follow_redirects=True
         )
-        baixo_final = db.session.get(Funcao, baixo.id)
+        baixo_final = Funcao.objects(id=baixo.id).first()
         assert baixo_final.status == "confirmado"
 
 
@@ -325,7 +324,7 @@ def test_remover_membro(logged_in_client, app, db):
         _escalar(logged_in_client, baixo.id, membro.id)
 
         logged_in_client.post(f"/escala/funcao/{baixo.id}/remover", data={}, follow_redirects=True)
-        baixo_final = db.session.get(Funcao, baixo.id)
+        baixo_final = Funcao.objects(id=baixo.id).first()
         assert baixo_final.membro_id is None
 
 
@@ -516,15 +515,15 @@ def test_adicionar_funcao_nova(logged_in_client, app, db):
         )
         assert response.status_code == 200
         assert "Estacionamento" in response.data.decode("utf-8")
-        assert Funcao.query.filter_by(escala_id=escala.id, nome="Estacionamento").first() is not None
+        assert Funcao.objects(escala_id=escala.id, nome="Estacionamento").first() is not None
 
 
 def test_adicionar_funcao_sem_nome_mostra_erro(logged_in_client, app, db):
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Kids")
-        total_antes = Funcao.query.filter_by(escala_id=escala.id).count()
+        total_antes = Funcao.objects(escala_id=escala.id).count()
         logged_in_client.post(f"/escala/{escala.id}/funcao/adicionar", data={"nome": ""}, follow_redirects=True)
-        assert Funcao.query.filter_by(escala_id=escala.id).count() == total_antes
+        assert Funcao.objects(escala_id=escala.id).count() == total_antes
 
 
 def test_editar_funcao_renomeia(logged_in_client, app, db):
@@ -535,7 +534,7 @@ def test_editar_funcao_renomeia(logged_in_client, app, db):
             f"/escala/funcao/{funcao.id}/editar", data={"nome": "Sala Juniores"}, follow_redirects=True
         )
         assert response.status_code == 200
-        assert db.session.get(Funcao, funcao.id).nome == "Sala Juniores"
+        assert Funcao.objects(id=funcao.id).first().nome == "Sala Juniores"
 
 
 def test_excluir_funcao_remove_do_banco(logged_in_client, app, db):
@@ -545,8 +544,7 @@ def test_excluir_funcao_remove_do_banco(logged_in_client, app, db):
         funcao_id = funcao.id
         response = logged_in_client.post(f"/escala/funcao/{funcao_id}/excluir", data={}, follow_redirects=True)
         assert response.status_code == 200
-        db.session.remove()
-        assert db.session.get(Funcao, funcao_id) is None
+        assert Funcao.objects(id=funcao_id).first() is None
 
 
 def test_excluir_funcao_com_membro_tambem_remove(logged_in_client, app, db):
@@ -562,8 +560,7 @@ def test_excluir_funcao_com_membro_tambem_remove(logged_in_client, app, db):
         response = logged_in_client.post(f"/escala/funcao/{funcao_id}/excluir", data={}, follow_redirects=True)
         assert response.status_code == 200
         assert "Internal Server Error" not in response.data.decode("utf-8")
-        db.session.remove()
-        assert db.session.get(Funcao, funcao_id) is None
+        assert Funcao.objects(id=funcao_id).first() is None
 
 
 # --- Repertorio (musicas do Louvor) ------------------------------------------
@@ -579,7 +576,7 @@ def test_adicionar_item_repertorio_na_escala_de_louvor(logged_in_client, app, db
         )
         assert response.status_code == 200
         assert "Reckless Love" in response.data.decode("utf-8")
-        item = ItemRepertorio.query.filter_by(escala_id=escala.id, nome_musica="Reckless Love").first()
+        item = ItemRepertorio.objects(escala_id=escala.id, nome_musica="Reckless Love").first()
         assert item is not None
         assert item.tom == "G"
         assert item.link == "https://cifraclub.com.br/reckless-love"
@@ -588,11 +585,11 @@ def test_adicionar_item_repertorio_na_escala_de_louvor(logged_in_client, app, db
 def test_adicionar_item_repertorio_sem_nome_mostra_erro(logged_in_client, app, db):
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo", departamento="Louvor")
-        total_antes = ItemRepertorio.query.filter_by(escala_id=escala.id).count()
+        total_antes = ItemRepertorio.objects(escala_id=escala.id).count()
         logged_in_client.post(
             f"/escala/{escala.id}/repertorio/adicionar", data={"nome_musica": ""}, follow_redirects=True
         )
-        assert ItemRepertorio.query.filter_by(escala_id=escala.id).count() == total_antes
+        assert ItemRepertorio.objects(escala_id=escala.id).count() == total_antes
 
 
 def test_repertorio_nao_aparece_pra_escala_fora_do_louvor(logged_in_client, app, db):
@@ -610,13 +607,12 @@ def test_excluir_item_repertorio_remove_do_banco(logged_in_client, app, db):
             data={"nome_musica": "Oceanos", "tom": "", "link": ""},
             follow_redirects=True,
         )
-        item = ItemRepertorio.query.filter_by(escala_id=escala.id, nome_musica="Oceanos").first()
+        item = ItemRepertorio.objects(escala_id=escala.id, nome_musica="Oceanos").first()
         item_id = item.id
 
         response = logged_in_client.post(f"/escala/repertorio/{item_id}/excluir", data={}, follow_redirects=True)
         assert response.status_code == 200
-        db.session.remove()
-        assert db.session.get(ItemRepertorio, item_id) is None
+        assert ItemRepertorio.objects(id=item_id).first() is None
 
 
 def test_usuario_nao_consegue_mexer_no_repertorio_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
@@ -633,7 +629,7 @@ def test_usuario_nao_consegue_mexer_no_repertorio_de_outra_conta(logged_in_clien
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert ItemRepertorio.query.filter_by(escala_id=escala_id, nome_musica="Musica Invasora").first() is None
+        assert ItemRepertorio.objects(escala_id=escala_id, nome_musica="Musica Invasora").first() is None
 
 
 # --- Subcabecalhos (categorias) ----------------------------------------------
@@ -648,7 +644,7 @@ def test_adicionar_subcabecalho(logged_in_client, app, db):
         assert response.status_code == 200
         assert "Orquestra" in response.data.decode("utf-8")
 
-        subcabecalho = Funcao.query.filter_by(escala_id=escala.id, nome="Orquestra").first()
+        subcabecalho = Funcao.objects(escala_id=escala.id, nome="Orquestra").first()
         assert subcabecalho is not None
         assert subcabecalho.eh_subcabecalho
 
@@ -661,7 +657,7 @@ def test_subcabecalho_nao_aparece_como_opcao_para_mover_ou_escalar(logged_in_cli
         logged_in_client.post(
             f"/escala/{escala.id}/subcabecalho/adicionar", data={"nome": "Orquestra"}, follow_redirects=True
         )
-        subcabecalho = Funcao.query.filter_by(escala_id=escala.id, nome="Orquestra").first()
+        subcabecalho = Funcao.objects(escala_id=escala.id, nome="Orquestra").first()
 
         baixo = _funcao_por_nome(escala, "Baixo")
         membro = _criar_membro(logged_in_client, comunidade.id, "Fulano")
@@ -677,12 +673,12 @@ def test_renomear_subcabecalho(logged_in_client, app, db):
         logged_in_client.post(
             f"/escala/{escala.id}/subcabecalho/adicionar", data={"nome": "Orquestra"}, follow_redirects=True
         )
-        subcabecalho = Funcao.query.filter_by(escala_id=escala.id, nome="Orquestra").first()
+        subcabecalho = Funcao.objects(escala_id=escala.id, nome="Orquestra").first()
 
         logged_in_client.post(
             f"/escala/funcao/{subcabecalho.id}/editar", data={"nome": "Louvor"}, follow_redirects=True
         )
-        assert db.session.get(Funcao, subcabecalho.id).nome == "Louvor"
+        assert Funcao.objects(id=subcabecalho.id).first().nome == "Louvor"
 
 
 def test_excluir_subcabecalho(logged_in_client, app, db):
@@ -691,12 +687,11 @@ def test_excluir_subcabecalho(logged_in_client, app, db):
         logged_in_client.post(
             f"/escala/{escala.id}/subcabecalho/adicionar", data={"nome": "Orquestra"}, follow_redirects=True
         )
-        subcabecalho = Funcao.query.filter_by(escala_id=escala.id, nome="Orquestra").first()
+        subcabecalho = Funcao.objects(escala_id=escala.id, nome="Orquestra").first()
         subcabecalho_id = subcabecalho.id
 
         logged_in_client.post(f"/escala/funcao/{subcabecalho_id}/excluir", data={}, follow_redirects=True)
-        db.session.remove()
-        assert db.session.get(Funcao, subcabecalho_id) is None
+        assert Funcao.objects(id=subcabecalho_id).first() is None
 
 
 # --- Exclusao de escalas ------------------------------------------------------
@@ -715,7 +710,7 @@ def test_cancelar_escala_marca_cancelada_e_notifica_quem_estava_escalado(logged_
         assert response.status_code == 200
         assert "cancelada".encode() in response.data
 
-        atualizada = db.session.get(Escala, escala.id)
+        atualizada = Escala.objects(id=escala.id).first()
         assert atualizada.cancelada is True
         assert atualizada.cancelada_em is not None
 
@@ -741,12 +736,12 @@ def test_reabrir_escala_desfaz_cancelamento(logged_in_client, app, db):
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
         logged_in_client.post(f"/escala/{escala.id}/cancelar", data={}, follow_redirects=True)
-        assert db.session.get(Escala, escala.id).cancelada is True
+        assert Escala.objects(id=escala.id).first().cancelada is True
 
         response = logged_in_client.post(f"/escala/{escala.id}/reabrir", data={}, follow_redirects=True)
         assert "reaberta".encode() in response.data
 
-        atualizada = db.session.get(Escala, escala.id)
+        atualizada = Escala.objects(id=escala.id).first()
         assert atualizada.cancelada is False
         assert atualizada.cancelada_em is None
 
@@ -768,9 +763,8 @@ def test_excluir_escala(logged_in_client, app, db):
 
         response = logged_in_client.post(f"/escala/{escala_id}/excluir", data={}, follow_redirects=True)
         assert response.status_code == 200
-        db.session.remove()
-        assert db.session.get(Escala, escala_id) is None
-        assert Funcao.query.filter_by(escala_id=escala_id).count() == 0
+        assert Escala.objects(id=escala_id).first() is None
+        assert Funcao.objects(escala_id=escala_id).count() == 0
 
 
 def test_excluir_escala_redireciona_para_ministerio(logged_in_client, app, db):
@@ -794,7 +788,7 @@ def test_usuario_nao_consegue_excluir_escala_de_outra_conta(logged_in_client, ou
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert db.session.get(Escala, escala_id) is not None
+        assert Escala.objects(id=escala_id).first() is not None
 
 
 # --- Exclusao em lote (JS chama a rota individual de cada item, um por vez) --
@@ -822,8 +816,7 @@ def test_lista_marca_checkbox_de_selecao_so_em_escala_manual(logged_in_client, a
             plantao_turno_id=999999,
             plantao_periodo=0,
         )
-        db.session.add(gerada)
-        db.session.commit()
+        gerada.save()
 
         html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
         assert f'data-selecao-url="/escala/{manual.id}/excluir"' in html
@@ -871,7 +864,7 @@ def test_usuario_nao_consegue_mexer_em_funcao_de_outra_conta(logged_in_client, o
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert db.session.get(Funcao, funcao_id).membro_id is None
+        assert Funcao.objects(id=funcao_id).first().membro_id is None
 
 
 def test_usuario_nao_consegue_excluir_funcao_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
@@ -886,7 +879,7 @@ def test_usuario_nao_consegue_excluir_funcao_de_outra_conta(logged_in_client, ou
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert db.session.get(Funcao, funcao_id) is not None
+        assert Funcao.objects(id=funcao_id).first() is not None
 
 
 def test_usuario_nao_consegue_notificar_escala_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
@@ -924,7 +917,7 @@ def test_editar_escala_atualiza_data_e_horario(logged_in_client, app, db):
         )
         assert response.status_code == 200
 
-        atualizada = db.session.get(Escala, escala.id)
+        atualizada = Escala.objects(id=escala.id).first()
         assert atualizada.data.isoformat() == "2026-09-06"
         assert atualizada.horario.strftime("%H:%M") == "10:00"
 
@@ -942,7 +935,7 @@ def test_editar_escala_atualiza_o_nome(logged_in_client, app, db):
         assert response.status_code == 200
         assert "Nome atualizado de" in html and "Culto de Domingo" in html and "Culto de Quarta" in html
 
-        atualizada = db.session.get(Escala, escala.id)
+        atualizada = Escala.objects(id=escala.id).first()
         assert atualizada.nome == "Culto de Quarta"
 
 
@@ -955,15 +948,17 @@ def test_editar_escala_sem_nome_mostra_erro(logged_in_client, app, db):
             data={"nome": "", "data": "", "horario": ""},
             follow_redirects=True,
         )
-        assert db.session.get(Escala, escala.id).nome == "Culto de Domingo"
+        assert Escala.objects(id=escala.id).first().nome == "Culto de Domingo"
 
 
 def test_editar_escala_recalcula_notificacoes_automaticas(logged_in_client, app, db):
     with app.app_context():
+        from datetime import datetime
+
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
-        escala.notificado_24h_em = db.func.now()
-        escala.notificado_16h_em = db.func.now()
-        db.session.commit()
+        escala.notificado_24h_em = datetime.now()
+        escala.notificado_16h_em = datetime.now()
+        escala.save()
 
         logged_in_client.post(
             f"/escala/{escala.id}/editar",
@@ -971,7 +966,7 @@ def test_editar_escala_recalcula_notificacoes_automaticas(logged_in_client, app,
             follow_redirects=True,
         )
 
-        atualizada = db.session.get(Escala, escala.id)
+        atualizada = Escala.objects(id=escala.id).first()
         assert atualizada.notificado_24h_em is None
         assert atualizada.notificado_16h_em is None
 
@@ -984,9 +979,11 @@ def test_editar_escala_sem_mudanca_nao_reseta_notificacoes(logged_in_client, app
             data={"nome": escala.nome, "data": "2026-09-06", "horario": "10:00"},
             follow_redirects=True,
         )
-        escala_atualizada = db.session.get(Escala, escala.id)
-        escala_atualizada.notificado_24h_em = db.func.now()
-        db.session.commit()
+        from datetime import datetime
+
+        escala_atualizada = Escala.objects(id=escala.id).first()
+        escala_atualizada.notificado_24h_em = datetime.now()
+        escala_atualizada.save()
         nome_atual = escala_atualizada.nome
 
         # reenvia exatamente os mesmos valores -- nao deve mexer nas notificacoes
@@ -996,7 +993,7 @@ def test_editar_escala_sem_mudanca_nao_reseta_notificacoes(logged_in_client, app
             follow_redirects=True,
         )
         assert "Nenhuma mudanca" in response.data.decode("utf-8")
-        assert db.session.get(Escala, escala.id).notificado_24h_em is not None
+        assert Escala.objects(id=escala.id).first().notificado_24h_em is not None
 
 
 def test_editar_escala_avisa_membros_ja_escalados(logged_in_client, app, db):
@@ -1047,7 +1044,7 @@ def test_usuario_nao_consegue_editar_escala_de_outra_conta(logged_in_client, out
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        atual = db.session.get(Escala, escala_id)
+        atual = Escala.objects(id=escala_id).first()
         assert atual.data == data_original
         assert atual.nome == nome_original
 
@@ -1135,7 +1132,7 @@ def test_opcao_de_convidado_aparece_mesmo_com_diretorio_vazio(logged_in_client, 
     ter algum Membro cadastrado."""
     with app.app_context():
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
-        assert Membro.query.filter_by(comunidade_id=escala.ministerio.comunidade_id).count() == 0
+        assert Membro.objects(comunidade_id=escala.ministerio.comunidade_id).count() == 0
 
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
         assert "Diretorio da comunidade vazio" in html
@@ -1152,7 +1149,7 @@ def test_adicionar_convidado_cria_membro_novo_e_marca_flag(logged_in_client, out
         from app.auth.models import User
         bruno = User.objects(email="bruno@example.com").first()
 
-        assert Membro.query.filter_by(email="bruno@example.com").first() is None
+        assert Membro.objects(email="bruno@example.com").first() is None
 
         resposta = logged_in_client.post(
             f"/escala/funcao/{baixo_id}/adicionar-convidado",
@@ -1161,7 +1158,7 @@ def test_adicionar_convidado_cria_membro_novo_e_marca_flag(logged_in_client, out
         )
         assert resposta.status_code == 200
 
-        funcao_atualizada = db.session.get(Funcao, baixo_id)
+        funcao_atualizada = Funcao.objects(id=baixo_id).first()
         assert funcao_atualizada.eh_convidado is True
         membro = funcao_atualizada.membro
         assert membro is not None
@@ -1182,7 +1179,7 @@ def test_adicionar_convidado_reaproveita_membro_existente(logged_in_client, outr
             data={"usuario_id": bruno.id},
             follow_redirects=True,
         )
-        membro_id_primeira_vez = db.session.get(Funcao, baixo1_id).membro_id
+        membro_id_primeira_vez = Funcao.objects(id=baixo1_id).first().membro_id
 
     with sessao_isolada(app):
         escala2 = _criar_escala(logged_in_client, ministerio_id, "Culto de Quarta")
@@ -1195,9 +1192,9 @@ def test_adicionar_convidado_reaproveita_membro_existente(logged_in_client, outr
             follow_redirects=True,
         )
 
-        funcao2_atualizada = db.session.get(Funcao, bateria2.id)
+        funcao2_atualizada = Funcao.objects(id=bateria2.id).first()
         assert funcao2_atualizada.membro_id == membro_id_primeira_vez
-        assert Membro.query.filter_by(email="bruno@example.com").count() == 1
+        assert Membro.objects(email="bruno@example.com").count() == 1
 
 
 def test_adicionar_convidado_dispara_notificacao_no_app(logged_in_client, outro_logged_in_client, app, db):
@@ -1242,14 +1239,12 @@ def test_adicionar_convidado_marca_plantao_fixado_em_escala_de_rodizio(logged_in
             ministerio_id=ministerio.id, nome="Ocorrencia", departamento="Louvor",
             data=date(2026, 1, 1), plantao_turno_id=turno.id, plantao_periodo=0,
         )
-        db.session.add(escala)
-        db.session.flush()
+        escala.save()
         funcao = Funcao(escala_id=escala.id, nome="Responsavel", ordem=0)
-        db.session.add(funcao)
-        db.session.commit()
+        funcao.save()
         funcao_id = funcao.id
 
-        assert db.session.get(Escala, escala.id).plantao_fixado is False
+        assert Escala.objects(id=escala.id).first().plantao_fixado is False
 
         bruno = User.objects(email="bruno@example.com").first()
         logged_in_client.post(
@@ -1258,7 +1253,7 @@ def test_adicionar_convidado_marca_plantao_fixado_em_escala_de_rodizio(logged_in
             follow_redirects=True,
         )
 
-        assert db.session.get(Escala, escala.id).plantao_fixado is True
+        assert Escala.objects(id=escala.id).first().plantao_fixado is True
 
 
 def test_adicionar_convidado_exige_dono_da_funcao(logged_in_client, outro_logged_in_client, app, db):
@@ -1359,7 +1354,7 @@ def test_membro_escalado_solicita_troca_notifica_lider(logged_in_client, outro_l
         assert resposta.status_code == 200
 
     with sessao_isolada(app):
-        baixo_final = db.session.get(Funcao, baixo_id)
+        baixo_final = Funcao.objects(id=baixo_id).first()
         assert baixo_final.status == "troca_solicitada"
         assert baixo_final.troca_motivo == "Vou viajar nesse final de semana"
         assert baixo_final.troca_sugestao_membro_id == carla_id
@@ -1423,7 +1418,7 @@ def test_lider_aprova_troca_reatribui_funcao_e_notifica_solicitante(logged_in_cl
         assert "Troca aprovada" in resposta.data.decode("utf-8")
 
     with sessao_isolada(app):
-        baixo_final = db.session.get(Funcao, baixo_id)
+        baixo_final = Funcao.objects(id=baixo_id).first()
         assert baixo_final.membro_id == carla_id
         assert baixo_final.status == STATUS_PADRAO
         assert baixo_final.troca_motivo is None
@@ -1463,7 +1458,7 @@ def test_lider_recusa_troca_mantem_membro_e_notifica_solicitante(logged_in_clien
         assert resposta.status_code == 200
 
     with sessao_isolada(app):
-        baixo_final = db.session.get(Funcao, baixo_id)
+        baixo_final = Funcao.objects(id=baixo_id).first()
         assert baixo_final.membro_id == bruno_id
         assert baixo_final.status == STATUS_PADRAO
         assert baixo_final.troca_motivo is None
@@ -1530,7 +1525,7 @@ def test_criar_escala_com_horario_de_fim(logged_in_client, app, db):
                   "horario": "19:00", "horario_fim": "21:00"},
             follow_redirects=True,
         )
-        escala = Escala.query.filter_by(nome="Ensaio", ministerio_id=ministerio.id).first()
+        escala = Escala.objects(nome="Ensaio", ministerio_id=ministerio.id).first()
         assert str(escala.horario) == "19:00:00"
         assert str(escala.horario_fim) == "21:00:00"
 
@@ -1543,7 +1538,7 @@ def test_editar_escala_atualiza_horario_de_fim(logged_in_client, app, db):
             data={"nome": escala.nome, "data": "2026-10-04", "horario": "19:00", "horario_fim": "20:30", "cor": ""},
             follow_redirects=True,
         )
-        atualizada = db.session.get(Escala, escala.id)
+        atualizada = Escala.objects(id=escala.id).first()
         assert str(atualizada.horario_fim) == "20:30:00"
 
 

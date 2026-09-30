@@ -38,7 +38,7 @@ def _verificar_e_notificar(app):
             sincronizar_todos_os_turnos_ativos()
 
             agora = datetime.now()
-            escalas = Escala.query.filter(Escala.data.isnot(None)).all()
+            escalas = Escala.objects(data__ne=None)
 
             for escala in escalas:
                 data_hora = escala.data_hora
@@ -51,13 +51,13 @@ def _verificar_e_notificar(app):
                     logger.info("Notificacao automatica (24h antes): escala %s", escala.id)
                     enviar_notificacoes_da_escala(escala)
                     escala.notificado_24h_em = agora
-                    db.session.commit()
+                    escala.save()
 
                 if escala.notificado_16h_em is None and abs(faltam - timedelta(hours=16)) <= _JANELA:
                     logger.info("Notificacao automatica (16h antes): escala %s", escala.id)
                     enviar_notificacoes_da_escala(escala)
                     escala.notificado_16h_em = agora
-                    db.session.commit()
+                    escala.save()
         except Exception:
             logger.exception("Tick do agendador falhou -- sync/notificacoes deste ciclo foram pulados.")
             db.session.rollback()
