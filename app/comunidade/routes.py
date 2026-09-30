@@ -680,7 +680,8 @@ def escalados(comunidade_id):
     # periodo/ministerios da comunidade, depois as Funcoes preenchidas
     # dessas escalas -- ordena em Python (dá pra fazer com aggregation
     # pipeline, mas nao compensa a complexidade nessa escala de dados).
-    ids_ministerios = [m.id for m in Ministerio.objects(comunidade_id=comunidade.id)]
+    ministerios = list(Ministerio.objects(comunidade_id=comunidade.id).order_by("nome"))
+    ids_ministerios = [m.id for m in ministerios]
     filtro_escala = {"ministerio_id__in": ids_ministerios}
     if data_de:
         filtro_escala["data__gte"] = date.fromisoformat(data_de)
@@ -706,6 +707,7 @@ def escalados(comunidade_id):
         "comunidade/escalados.html",
         comunidade=comunidade,
         eh_dono=eh_dono,
+        ministerios=ministerios,
         funcoes=funcoes,
         departamentos=DEPARTAMENTOS.keys(),
         status_labels=STATUS_LABELS,

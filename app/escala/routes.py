@@ -69,16 +69,23 @@ def _funcao_do_usuario_ou_404(funcao_id):
 
 def _escala_visivel_ou_404(escala_id):
     """Acesso de LEITURA: admin/lider (gerencia) OU membro do ministerio OU
-    convidado escalado nesta Escala especifica (Funcao.eh_convidado=True cujo
-    Membro tem o mesmo e-mail da conta logada) -- mesmo mecanismo de match
-    por e-mail ja usado em comunidade.routes._comunidade_visivel_ou_404, so
-    que escopado a 1 unica Escala em vez da comunidade inteira. Retorna
+    qualquer membro da Comunidade (papel=membro em UsuarioComunidade, mesma
+    extensao de ministerio.routes._ministerio_visivel_ou_404) OU convidado
+    escalado nesta Escala especifica (Funcao.eh_convidado=True cujo Membro
+    tem o mesmo e-mail da conta logada) -- mesmo mecanismo de match por
+    e-mail ja usado em comunidade.routes._comunidade_visivel_ou_404, so que
+    escopado a 1 unica Escala em vez da comunidade inteira. Retorna
     (escala, pode_gerenciar)."""
+    from app.comunidade.routes import _eh_membro_da_comunidade
     from app.ministerio.routes import _eh_lider_do_ministerio, _eh_membro_do_ministerio
 
     escala = primeiro_ou_404(Escala.objects(id=escala_id))
     pode_gerenciar = _eh_lider_do_ministerio(escala.ministerio, current_user)
-    eh_membro = pode_gerenciar or _eh_membro_do_ministerio(escala.ministerio, current_user)
+    eh_membro = (
+        pode_gerenciar
+        or _eh_membro_do_ministerio(escala.ministerio, current_user)
+        or _eh_membro_da_comunidade(escala.ministerio.comunidade, current_user)
+    )
     eh_convidado_vinculado = any(
         f.eh_convidado and f.membro and f.membro.email == current_user.email
         for f in escala.funcoes

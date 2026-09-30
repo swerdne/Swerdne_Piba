@@ -358,6 +358,37 @@ def test_membro_do_ministerio_ve_escala_mas_nao_gerencia(logged_in_client, outro
         assert outro_logged_in_client.get(f"/ministerio/{ministerio_id}/papeis").status_code == 404
 
 
+def test_membro_da_comunidade_ve_qualquer_ministerio_mas_nao_gerencia(logged_in_client, outro_logged_in_client, app, db):
+    """Papel=membro na Comunidade (sem convite especifico pro Ministerio)
+    ja basta pra visualizar QUALQUER Ministerio/Escala da comunidade --
+    diferente de test_membro_do_ministerio_ve_escala_mas_nao_gerencia
+    (convidado direto pro Ministerio), aqui o vinculo e so com a Comunidade."""
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        ministerio_id = ministerio.id
+        escala = _criar_escala(logged_in_client, ministerio_id, "Culto de Domingo")
+        escala_id = escala.id
+
+        _convidar_comunidade(logged_in_client, comunidade.id, "bruno@example.com", "membro")
+        token = _convite_de("bruno@example.com", "comunidade", comunidade.id).token
+
+    with sessao_isolada(app):
+        outro_logged_in_client.post(f"/convite/{token}/aceitar", data={}, follow_redirects=True)
+
+    with sessao_isolada(app):
+        # membro da comunidade ve o ministerio e a escala (leitura), mesmo
+        # sem nenhum UsuarioMinisterio proprio...
+        assert outro_logged_in_client.get(f"/ministerio/{ministerio_id}").status_code == 200
+        assert outro_logged_in_client.get(f"/escala/{escala_id}").status_code == 200
+
+        # ...mas nao gerencia: sem botao de nova escala, sem acesso a criar/convidar
+        html = outro_logged_in_client.get(f"/ministerio/{ministerio_id}").data.decode("utf-8")
+        assert "Nova escala" not in html
+        assert outro_logged_in_client.get(f"/escala/ministerio/{ministerio_id}/nova").status_code == 404
+        assert outro_logged_in_client.get(f"/ministerio/{ministerio_id}/papeis").status_code == 404
+
+
 def test_membro_escalado_marca_o_proprio_status(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")

@@ -114,13 +114,23 @@ def _ministerio_gerenciavel_ou_404(ministerio_id):
 
 
 def _ministerio_visivel_ou_404(ministerio_id):
-    """Acesso de LEITURA: admin da comunidade, lider OU membro do ministerio.
-    Retorna (ministerio, pode_gerenciar) -- pode_gerenciar distingue quem so
-    visualiza (membro) de quem tambem gerencia conteudo (admin/lider), pro
-    template esconder acoes de escrita."""
+    """Acesso de LEITURA: admin da comunidade, lider/membro do ministerio, OU
+    qualquer membro da propria Comunidade (papel=membro em UsuarioComunidade)
+    -- visibilidade de leitura de TODOS os ministerios da comunidade, nao so
+    os que tem convite especifico via UsuarioMinisterio. Retorna (ministerio,
+    pode_gerenciar) -- pode_gerenciar distingue quem so visualiza de quem
+    tambem gerencia conteudo (admin/lider), pro template esconder acoes de
+    escrita (editar, convidar etc.)."""
+    from app.comunidade.routes import _eh_membro_da_comunidade
+
     ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
     pode_gerenciar = _eh_lider_do_ministerio(ministerio, current_user)
-    if not pode_gerenciar and not _eh_membro_do_ministerio(ministerio, current_user):
+    eh_visivel = (
+        pode_gerenciar
+        or _eh_membro_do_ministerio(ministerio, current_user)
+        or _eh_membro_da_comunidade(ministerio.comunidade, current_user)
+    )
+    if not eh_visivel:
         abort(404)
     return ministerio, pode_gerenciar
 
