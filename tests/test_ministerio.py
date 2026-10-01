@@ -386,6 +386,22 @@ def test_usuario_nao_consegue_criar_ministerio_em_comunidade_de_outra_conta(logg
 # --- Check-in de criancas ------------------------------------------------
 
 
+def test_icone_checkin_so_aparece_para_ministerio_kids(logged_in_client, app, db):
+    """Ministerio.eh_kids (nome contem "kids", case-insensitive) decide se o
+    icone de check-in aparece na pagina do Ministerio -- nao tem campo
+    dedicado pra isso, so o nome."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        kids = _criar_ministerio(logged_in_client, comunidade.id, "Piba Kids")
+        louvor = _criar_ministerio(logged_in_client, comunidade.id, "Louvor")
+
+        html_kids = logged_in_client.get(f"/ministerio/{kids.id}").data.decode("utf-8")
+        assert "Check-in de criancas" in html_kids
+
+        html_louvor = logged_in_client.get(f"/ministerio/{louvor.id}").data.decode("utf-8")
+        assert "Check-in de criancas" not in html_louvor
+
+
 def test_cadastrar_crianca_no_checkin(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)

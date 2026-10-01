@@ -46,6 +46,14 @@ class Ministerio(SequentialIdDocument):
         return sorted(int(d) for d in self.dias_culto.split(","))
 
     @property
+    def eh_kids(self):
+        """O check-in de criancas (ver ministerio.routes.checkin) so faz
+        sentido pra um Ministerio voltado a criancas -- sem um campo
+        dedicado pra isso, usa o nome como sinal (contem "kids",
+        case-insensitive, ex: "Piba Kids")."""
+        return "kids" in self.nome.lower()
+
+    @property
     def papeis_usuarios(self):
         return list(UsuarioMinisterio.objects(ministerio_id=self.id))
 
