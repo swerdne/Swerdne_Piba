@@ -7,23 +7,40 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    @keyframes cm-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes cm-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    .cm-blob { animation: cm-blob-a 20s ease-in-out infinite; will-change: transform; }
+    .cm-blob-2 { animation: cm-blob-b 24s ease-in-out infinite; will-change: transform; }
+    .cm-blob-3 { animation: cm-blob-a 17s ease-in-out infinite reverse; will-change: transform; }
+    @media (prefers-reduced-motion: reduce) {
+        .cm-blob, .cm-blob-2, .cm-blob-3 { animation: none; }
+    }
 </style>
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio %}
 {% block content %}
-<div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+<div id="comunidade-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
-    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl cm-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl cm-blob-2 -z-0"></div>
+    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl cm-blob-3 -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3">
         <div class="flex items-center justify-between gap-4">
-            <a href="{{ url_for('main.dashboard') }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
-                <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
-                <span class="font-semibold {{ tema.text_primary }} truncate">Comunidades</span>
+            <a href="{{ url_for('main.dashboard') }}" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
+                <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
+                    <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+                </span>
+                <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Comunidades</span>
             </a>
             <div class="flex items-center gap-4 shrink-0">
                 <a href="{{ url_for('comunidade.nova') }}" title="Nova comunidade" aria-label="Nova comunidade"
-                   class="{{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0">
-                    <i class="fa-solid fa-plus text-lg"></i>
+                   class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white transition shrink-0">
+                    <i class="fa-solid fa-plus text-sm"></i>
                 </a>
                 {{ logo_inicio(tema) }}
             </div>
@@ -37,7 +54,7 @@
             <i class="fa-solid fa-people-group text-4xl {{ tema.text_secondary }}"></i>
             <p class="mt-4 {{ tema.text_secondary }}">Voce ainda nao tem nenhuma comunidade.</p>
             <a href="{{ url_for('comunidade.nova') }}"
-               class="inline-block mt-4 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+               class="inline-block mt-4 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
                 <i class="fa-solid fa-plus mr-1"></i>Criar a primeira comunidade
             </a>
         </div>
@@ -46,10 +63,10 @@
         {% if comunidades_dono %}
         <div class="space-y-3">
             <div class="flex items-center justify-between">
-                <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Minhas comunidades</h2>
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Minhas comunidades</h2>
                 {% if comunidades_dono|length > 1 %}
                 <button type="button" data-selecao-alternar
-                        class="flex items-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-3 py-2 rounded-lg transition shrink-0">
+                        class="flex items-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-3 py-2 rounded-full transition shrink-0">
                     <i class="fa-solid fa-square-check" data-selecao-alternar-icone></i><span data-selecao-alternar-texto>Selecionar</span>
                 </button>
                 {% endif %}
@@ -60,7 +77,7 @@
                 {{ acao_form.hidden_tag() }}
 
                 {% for comunidade in comunidades_dono %}
-                <div class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition mb-3">
+                <div class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 transition mb-3">
                     <input type="checkbox"
                            data-selecao-item data-selecao-url="{{ url_for('comunidade.excluir_comunidade', comunidade_id=comunidade.id) }}"
                            class="hidden w-4 h-4 rounded shrink-0 accent-current {{ tema.accent_text }}">
@@ -74,7 +91,7 @@
                             </div>
                         {% endif %}
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
                             {% if comunidade.descricao %}
                             <p class="text-xs {{ tema.text_secondary }} truncate">{{ comunidade.descricao }}</p>
                             {% endif %}
@@ -91,13 +108,13 @@
                 </div>
                 {% endfor %}
 
-                <div data-selecao-barra class="hidden sticky bottom-4 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 shadow-lg">
+                <div data-selecao-barra class="hidden sticky bottom-4 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 shadow-lg">
                     <label class="flex items-center gap-2 text-sm {{ tema.text_primary }}">
                         <input type="checkbox" data-selecao-todas class="w-4 h-4 rounded">
                         Selecionar todas
                     </label>
                     <button type="submit" data-selecao-excluir disabled
-                            class="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                            class="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-full transition">
                         <i class="fa-solid fa-trash mr-1"></i><span data-selecao-excluir-texto>Excluir selecionadas (<span data-selecao-contagem>0</span>)</span>
                     </button>
                 </div>
@@ -107,10 +124,10 @@
 
         {% if comunidades_participa %}
         <div class="space-y-3">
-            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Comunidades que participo</h2>
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Comunidades que participo</h2>
             {% for comunidade in comunidades_participa %}
             <a href="{{ url_for('comunidade.escalados', comunidade_id=comunidade.id) }}"
-               class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+               class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 transition">
                 {% if comunidade.imagem %}
                     <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
                 {% else %}
@@ -119,7 +136,7 @@
                     </div>
                 {% endif %}
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
+                    <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ comunidade.nome }}</p>
                     <p class="text-xs {{ tema.text_secondary }}">Ver escalados</p>
                 </div>
                 <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
@@ -129,5 +146,6 @@
         {% endif %}
 
     </main>
+    </div>
 </div>
 {% endblock %}
