@@ -7,19 +7,34 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    @keyframes cm-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes cm-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    .cm-blob { animation: cm-blob-a 20s ease-in-out infinite; will-change: transform; }
+    .cm-blob-2 { animation: cm-blob-b 24s ease-in-out infinite; will-change: transform; }
+    .cm-blob-3 { animation: cm-blob-a 17s ease-in-out infinite reverse; will-change: transform; }
+    @media (prefers-reduced-motion: reduce) {
+        .cm-blob, .cm-blob-2, .cm-blob-3 { animation: none; }
+    }
 </style>
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio %}
 {% block content %}
-<div id="comunidade-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+<div id="comunidade-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
-    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl cm-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl cm-blob-2 -z-0"></div>
+    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl cm-blob-3 -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
         <div class="flex items-center gap-3 min-w-0">
-            <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) if eh_dono else url_for('comunidade.escalados', comunidade_id=comunidade.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
-                <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+            <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) if eh_dono else url_for('comunidade.escalados', comunidade_id=comunidade.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm group shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
             </a>
-            <span class="font-semibold {{ tema.text_primary }} truncate">Calendario - {{ comunidade.nome }}</span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Calendario - {{ comunidade.nome }}</span>
         </div>
         {{ logo_inicio(tema) }}
     </header>
@@ -33,20 +48,20 @@
         <!-- Navegacao do mes -->
         <div class="flex items-center justify-center gap-4 mb-4">
             <a href="{{ url_for('comunidade.calendario', comunidade_id=comunidade.id, ano=ano_anterior, mes=mes_anterior) }}"
-               class="w-8 h-8 flex items-center justify-center border {{ tema.card_border }} rounded-lg {{ tema.text_secondary }} {{ tema.text_hover }} transition"
+               class="w-9 h-9 flex items-center justify-center {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-xl {{ tema.text_secondary }} {{ tema.text_hover }} transition"
                aria-label="Mes anterior">
                 <i class="fa-solid fa-chevron-left text-xs"></i>
             </a>
-            <span class="text-lg font-semibold {{ tema.text_primary }} capitalize w-48 text-center">{{ mes_ano_texto }}</span>
+            <span class="text-lg font-bold {{ tema.text_primary }} capitalize w-48 text-center">{{ mes_ano_texto }}</span>
             <a href="{{ url_for('comunidade.calendario', comunidade_id=comunidade.id, ano=ano_proximo, mes=mes_proximo) }}"
-               class="w-8 h-8 flex items-center justify-center border {{ tema.card_border }} rounded-lg {{ tema.text_secondary }} {{ tema.text_hover }} transition"
+               class="w-9 h-9 flex items-center justify-center {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-xl {{ tema.text_secondary }} {{ tema.text_hover }} transition"
                aria-label="Proximo mes">
                 <i class="fa-solid fa-chevron-right text-xs"></i>
             </a>
         </div>
 
         <!-- Grade: linhas = semanas, colunas = dias da semana -->
-        <div class="grid grid-cols-7 border-l border-t {{ tema.card_border }} rounded-lg overflow-hidden">
+        <div class="grid grid-cols-7 border-l border-t {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden">
             {% for nome_dia in ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'] %}
             <div class="text-center text-xs font-semibold {{ tema.text_secondary }} py-2 border-r border-b {{ tema.card_border }} {{ tema.card_bg }}">
                 {{ nome_dia }}
@@ -123,7 +138,7 @@
             </p>
             <div id="preview-escala-escalados" class="space-y-1.5 mb-4 max-h-48 overflow-y-auto"></div>
             <a id="preview-escala-link" href="#"
-               class="block text-center {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+               class="block text-center {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
                 Ver escala completa
             </a>
         </div>
@@ -195,5 +210,6 @@
             if (card) card.addEventListener('click', function (evento) { evento.stopPropagation(); });
         })();
     </script>
+    </div>
 </div>
 {% endblock %}
