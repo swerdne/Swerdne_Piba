@@ -389,6 +389,38 @@ def test_membro_da_comunidade_ve_qualquer_ministerio_mas_nao_gerencia(logged_in_
         assert outro_logged_in_client.get(f"/ministerio/{ministerio_id}/papeis").status_code == 404
 
 
+def test_membro_da_comunidade_consegue_voltar_sem_cair_em_404(logged_in_client, outro_logged_in_client, app, db):
+    """Regressao: as telas que um membro comum (nao-admin) alcanca -- Ministerio,
+    calendario da Comunidade, lideres -- tinham o botao "Voltar" apontando
+    incondicionalmente pra comunidade.detalhe (admin-only), que devolve 404
+    pra quem so tem papel=membro. O destino certo pra quem nao e dono e
+    comunidade.escalados (ver eh_dono/eh_admin em cada template)."""
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        comunidade_id = comunidade.id
+        ministerio_id = ministerio.id
+
+        _convidar_comunidade(logged_in_client, comunidade.id, "bruno@example.com", "membro")
+        token = _convite_de("bruno@example.com", "comunidade", comunidade.id).token
+
+    with sessao_isolada(app):
+        outro_logged_in_client.post(f"/convite/{token}/aceitar", data={}, follow_redirects=True)
+
+    with sessao_isolada(app):
+        # comunidade.detalhe (admin-only) continua 404 pra membro comum --
+        # e exatamente por isso que os templates nao podem linkar pra la.
+        assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}").status_code == 404
+
+        # mas todas as telas que ele alcanca, e os destinos dos links "Voltar"
+        # delas, respondem 200 (nunca 404) pra essa mesma conta.
+        assert outro_logged_in_client.get(f"/ministerio/{ministerio_id}").status_code == 200
+        assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}/escalados").status_code == 200
+        assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}/calendario").status_code == 200
+        assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}/lideres").status_code == 200
+        assert outro_logged_in_client.get(f"/comunidade/{comunidade_id}/eventos").status_code == 200
+
+
 def test_membro_escalado_marca_o_proprio_status(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")

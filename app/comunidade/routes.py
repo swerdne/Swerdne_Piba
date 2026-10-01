@@ -564,6 +564,7 @@ def calendario(comunidade_id):
         mes_proximo=mes_proximo,
         hoje=hoje,
         previews_calendario=previews_calendario,
+        eh_dono=eh_dono,
     )
 
 
@@ -606,7 +607,7 @@ def lideres(comunidade_id):
         ).first()
         item["telefone"] = membro_vinculado.telefone if membro_vinculado else None
 
-    return render_template("comunidade/lideres.html", comunidade=comunidade, lideres=lista_lideres)
+    return render_template("comunidade/lideres.html", comunidade=comunidade, eh_dono=eh_dono, lideres=lista_lideres)
 
 
 @bp.route("/<int:comunidade_id>/eventos", methods=["GET", "POST"])
