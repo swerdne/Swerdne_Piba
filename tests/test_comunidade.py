@@ -663,7 +663,7 @@ def test_contagem_de_membros_inclui_quem_entrou_via_link(logged_in_client, app, 
 
         # Quem criou a comunidade ja conta como 1 (vira admin automaticamente).
         html_antes = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
-        assert "Membros" in html_antes and "(1)" in html_antes
+        assert "Membros" in html_antes and ">1</span>" in html_antes
 
     with sessao_isolada(app):
         bruno_client = app.test_client()
@@ -672,7 +672,7 @@ def test_contagem_de_membros_inclui_quem_entrou_via_link(logged_in_client, app, 
 
     with sessao_isolada(app):
         html_depois = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
-        assert "(2)" in html_depois
+        assert ">2</span>" in html_depois
 
 
 def test_contagem_de_membros_nao_duplica_quem_esta_no_diretorio_e_tem_conta(logged_in_client, app, db):
@@ -687,7 +687,7 @@ def test_contagem_de_membros_nao_duplica_quem_esta_no_diretorio_e_tem_conta(logg
 
         # Ana (admin) + Bruno (diretorio) = 2, antes de Bruno ter conta.
         html_antes = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
-        assert "(2)" in html_antes
+        assert ">2</span>" in html_antes
 
     with sessao_isolada(app):
         bruno_client = app.test_client()
@@ -697,7 +697,7 @@ def test_contagem_de_membros_nao_duplica_quem_esta_no_diretorio_e_tem_conta(logg
     with sessao_isolada(app):
         # Mesmo e-mail do diretorio -- continua 2, nao vira 3.
         html_depois = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
-        assert "(2)" in html_depois
+        assert ">2</span>" in html_depois
 
 
 def test_tela_de_membros_mostra_quem_entrou_via_link(logged_in_client, app, db):
