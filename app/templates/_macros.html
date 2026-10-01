@@ -12,5 +12,5 @@ tema.text_primary_bg (funciona nos dois temas, claro e escuro).
 #}
 <a href="{{ url_for('main.dashboard') }}" title="Ir para o inicio" aria-label="Ir para o inicio"
    class="w-7 h-7 {{ tema.text_primary_bg }} opacity-60 hover:opacity-100 transition shrink-0"
-   style="-webkit-mask-image:url('{{ url_for('static', filename='img/logo-icone.png') }}'); mask-image:url('{{ url_for('static', filename='img/logo-icone.png') }}'); -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-position:center; mask-position:center;"></a>
+   style="-webkit-mask-image:url('{{ url_for('static', filename='img/logo-icone.svg') }}'); mask-image:url('{{ url_for('static', filename='img/logo-icone.svg') }}'); -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-position:center; mask-position:center;"></a>
 {% endmacro %}
