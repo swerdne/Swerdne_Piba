@@ -7,23 +7,38 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    @keyframes mn-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes mn-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    .mn-blob { animation: mn-blob-a 20s ease-in-out infinite; will-change: transform; }
+    .mn-blob-2 { animation: mn-blob-b 24s ease-in-out infinite; will-change: transform; }
+    .mn-blob-3 { animation: mn-blob-a 17s ease-in-out infinite reverse; will-change: transform; }
+    @media (prefers-reduced-motion: reduce) {
+        .mn-blob, .mn-blob-2, .mn-blob-3 { animation: none; }
+    }
 </style>
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio %}
 {% block content %}
-<div id="ministerio-app" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+<div id="ministerio-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
-    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl mn-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl mn-blob-2 -z-0"></div>
+    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl mn-blob-3 -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3">
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 min-w-0">
-                <a href="{{ url_for('comunidade.detalhe', comunidade_id=ministerio.comunidade_id) if eh_admin else url_for('comunidade.escalados', comunidade_id=ministerio.comunidade_id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
-                    <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
+                <a href="{{ url_for('comunidade.detalhe', comunidade_id=ministerio.comunidade_id) if eh_admin else url_for('comunidade.escalados', comunidade_id=ministerio.comunidade_id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm group shrink-0" aria-label="Voltar">
+                    <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
                 </a>
                 {% if ministerio.imagem %}
-                    <img src="{{ ministerio.imagem }}" alt="" class="w-8 h-8 rounded-full object-cover shrink-0">
+                    <img src="{{ ministerio.imagem }}" alt="" class="w-9 h-9 rounded-xl object-cover shrink-0 shadow-sm">
                 {% endif %}
-                <span class="font-semibold {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
+                <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
             </div>
             <div class="flex items-center gap-3 shrink-0">
                 {% if pode_gerenciar %}
@@ -68,17 +83,17 @@
             {% set escalas_manuais = escalas | rejectattr('plantao_turno_id') | list %}
             <div class="space-y-4">
                 <div class="flex items-center justify-between gap-3">
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Escalas</h2>
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Escalas</h2>
                     <div class="flex items-center gap-3 shrink-0">
                         {% if pode_gerenciar and escalas_manuais|length > 1 %}
                         <button type="button" data-selecao-alternar
-                                class="flex items-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-3 py-2 rounded-lg transition shrink-0">
+                                class="flex items-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-3 py-2 rounded-full transition shrink-0">
                             <i class="fa-solid fa-square-check" data-selecao-alternar-icone></i><span data-selecao-alternar-texto>Selecionar</span>
                         </button>
                         {% endif %}
                         {% if pode_gerenciar %}
                         <a href="{{ url_for('escala.nova', ministerio_id=ministerio.id) }}"
-                           class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0">
+                           class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-full transition shrink-0">
                             <i class="fa-solid fa-plus mr-1"></i>Nova escala
                         </a>
                         {% endif %}
@@ -105,7 +120,7 @@
                                class="hidden w-4 h-4 rounded shrink-0 accent-current {{ tema.accent_text }}">
                         {% endif %}
                         <a href="{{ url_for('plantao.detalhe', turno_id=escala.plantao_turno_id) if escala.plantao_turno_id else url_for('escala.detalhe', escala_id=escala.id) }}"
-                           class="flex items-center gap-3 flex-1 min-w-0 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+                           class="flex items-center gap-3 flex-1 min-w-0 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 transition">
                             <span class="w-2.5 h-2.5 rounded-full {{ escala.cor }} shrink-0"></span>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-medium {{ tema.text_primary }} truncate {{ 'line-through opacity-60' if escala.cancelada }}">
@@ -133,13 +148,13 @@
                     {% endfor %}
 
                     {% if escalas_manuais|length > 1 %}
-                    <div data-selecao-barra class="hidden sticky bottom-4 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-4 py-3 shadow-lg">
+                    <div data-selecao-barra class="hidden sticky bottom-4 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 shadow-lg">
                         <label class="flex items-center gap-2 text-sm {{ tema.text_primary }}">
                             <input type="checkbox" data-selecao-todas class="w-4 h-4 rounded">
                             Selecionar todas
                         </label>
                         <button type="submit" data-selecao-excluir disabled
-                                class="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                                class="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-full transition">
                             <i class="fa-solid fa-trash mr-1"></i><span data-selecao-excluir-texto>Excluir selecionadas (<span data-selecao-contagem>0</span>)</span>
                         </button>
                     </div>
@@ -147,7 +162,7 @@
                 </form>
 
                 <div class="pt-2">
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodizio</h2>
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodizio</h2>
                 </div>
                 <p class="text-xs {{ tema.text_secondary }} -mt-2">
                     As ocorrencias geradas por rodizio ja aparecem na lista de Escalas e no calendario acima.
@@ -165,7 +180,7 @@
                 <div class="space-y-3">
                     {% for turno in turnos_plantao %}
                     <a href="{{ url_for('plantao.detalhe', turno_id=turno.id) }}"
-                       class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-4 py-3 transition">
+                       class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 transition">
                         <i class="fa-solid fa-arrows-rotate {{ tema.text_secondary }}"></i>
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ turno.nome }}</p>
@@ -181,7 +196,7 @@
             </div>
 
             <!-- Calendario -->
-            <div class="{{ tema.card_bg }} rounded-2xl overflow-hidden lg:sticky lg:top-4">
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-3xl overflow-hidden lg:sticky lg:top-4">
 
                 <!-- Data de hoje por extenso + recolher/expandir -->
                 <div class="flex items-center justify-between px-5 py-4">
@@ -265,6 +280,7 @@
 
         </div>
     </main>
+    </div>
 </div>
 
 <script>
