@@ -7,29 +7,44 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #escala-rapida { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    @keyframes es-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes es-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    .es-blob { animation: es-blob-a 20s ease-in-out infinite; will-change: transform; }
+    .es-blob-2 { animation: es-blob-b 24s ease-in-out infinite; will-change: transform; }
+    @media (prefers-reduced-motion: reduce) {
+        .es-blob, .es-blob-2 { animation: none; }
+    }
 </style>
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio %}
 {% block content %}
-<div id="escala-rapida" class="min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+<div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
-    <header class="border-b {{ tema.header_border }} px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}" class="flex items-center gap-2 min-w-0 group" aria-label="Voltar">
-            <i class="fa-solid fa-chevron-left {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0"></i>
-            <span class="font-semibold {{ tema.text_primary }} truncate">Editar Escala</span>
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} blur-3xl es-blob -z-0"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl es-blob-2 -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
+            <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+            </span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Editar Escala</span>
         </a>
         {{ logo_inicio(tema) }}
     </header>
 
     <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">
-        <h1 class="text-xl font-semibold {{ tema.text_primary }} mb-1">{{ escala.nome }}</h1>
+        <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }} mb-1">{{ escala.nome }}</h1>
         <p class="text-sm {{ tema.text_secondary }} mb-6">
             Mudar a data ou o horario recalcula as notificacoes automaticas (24h/16h antes)
             e avisa quem ja estiver escalado sobre a mudanca.
         </p>
 
-        <form method="POST" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-5">
+        <form method="POST" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5">
             {{ form.hidden_tag() }}
 
             <div>
@@ -73,8 +88,9 @@
                 {% endfor %}
             </div>
 
-            {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-lg transition") }}
+            {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-full transition") }}
         </form>
     </main>
+    </div>
 </div>
 {% endblock %}
