@@ -28,9 +28,9 @@
     <header class="{{ tema.header_bg }} border-b {{ tema.header_border }}">
         <div class="flex items-center justify-between px-4 sm:px-6 py-4">
             <div class="flex items-center gap-2.5">
-                <!-- O PNG e so linhas brancas (sem fundo), entao sem cor por tras ele
+                <!-- O SVG e so linhas brancas (sem fundo), entao sem cor por tras ele
                 some no tema claro (cabecalho branco). Em vez do quadrado colorido,
-                usa o PNG como mascara CSS pra "pintar" o icone na cor de text_primary
+                usa o SVG como mascara CSS pra "pintar" o icone na cor de text_primary
                 (branco no tema escuro, escuro no tema claro pra continuar visivel
                 no cabecalho branco) -- funciona nos dois temas, sem fundo atras. -->
                 <div class="w-8 h-8 {{ tema.text_primary_bg }} shrink-0"
@@ -44,7 +44,7 @@
 
             <div class="flex items-center gap-3">
                 <a href="{{ url_for('comunidade.index') }}"
-                   class="hidden sm:inline-flex items-center gap-2 text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                   class="hidden sm:inline-flex items-center gap-2 text-sm font-semibold {{ tema.text_secondary }} {{ tema.text_hover }} transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M9 20H4v-2a4 4 0 014-4h1m5-6a3 3 0 11-6 0 3 3 0 016 0zm6 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
@@ -56,25 +56,25 @@
 
                 <div class="relative">
                     <button type="button" id="sino-notificacoes" aria-label="Notificacoes"
-                            class="p-2 rounded-lg {{ tema.text_secondary }} hover:bg-black/5 transition relative">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            class="w-10 h-10 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_primary }} hover:shadow-md transition relative flex items-center justify-center">
+                        <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                   d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
                         </svg>
                         {% if notificacoes_nao_lidas %}
-                        <span class="absolute top-0.5 right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">
+                        <span class="absolute top-1 right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center border-2 {{ tema.card_bg }}">
                             {{ notificacoes_nao_lidas if notificacoes_nao_lidas < 10 else '9+' }}
                         </span>
                         {% endif %}
                     </button>
 
                     <div id="painel-notificacoes"
-                         class="hidden absolute right-0 mt-2 w-80 max-w-[90vw] {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl shadow-xl z-30 overflow-hidden">
+                         class="hidden absolute right-0 mt-2 w-80 max-w-[90vw] {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl z-30 overflow-hidden">
                         <div class="flex items-center justify-between px-4 py-3 border-b {{ tema.card_border }}">
                             <span class="text-sm font-semibold {{ tema.text_primary }}">Notificacoes</span>
                             {% if notificacoes_nao_lidas %}
                             <form method="POST" action="{{ url_for('main.marcar_notificacoes_lidas') }}">
-                                <button type="submit" class="text-xs {{ tema.accent_text }} hover:underline">
+                                <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
                                     Marcar todas como lidas
                                 </button>
                             </form>
@@ -94,7 +94,7 @@
                                 {% endif %}
                                 <div class="space-y-2">
                                     {% for n in grupo.itens %}
-                                    <div class="flex items-start gap-2 {{ '' if n.lida else tema.accent_soft_bg }} rounded-lg {{ 'p-1.5' if not n.lida else '' }}">
+                                    <div class="flex items-start gap-2 {{ '' if n.lida else tema.accent_soft_bg }} rounded-xl {{ 'p-1.5' if not n.lida else '' }}">
                                         <i class="fa-solid {{ icone_por_tipo.get(n.tipo, icone_padrao) }} {{ tema.text_secondary }} text-xs mt-0.5 shrink-0"></i>
                                         <div class="min-w-0">
                                             <p class="text-sm font-medium {{ tema.text_primary }}">{{ n.titulo }}</p>
@@ -116,15 +116,15 @@
 
                 {% if foto_perfil %}
                     <img src="{{ foto_perfil }}" alt="Foto de {{ primeiro_nome }}"
-                         class="w-8 h-8 rounded-full object-cover border {{ tema.card_border }}">
+                         class="w-9 h-9 rounded-full object-cover border {{ tema.card_border }}">
                 {% else %}
-                    <div class="w-8 h-8 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-sm font-semibold {{ tema.accent_text }}">
+                    <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-sm font-bold {{ tema.accent_text }}">
                         {{ primeiro_nome[0]|upper }}
                     </div>
                 {% endif %}
 
                 <a href="{{ url_for('auth.logout') }}"
-                   class="text-sm font-medium {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                   class="text-sm font-semibold {{ tema.text_secondary }} {{ tema.text_hover }} transition">
                     Sair
                 </a>
             </div>
@@ -134,15 +134,15 @@
         <nav class="flex items-center gap-6 px-4 sm:px-6 overflow-x-auto"
              data-accent-text="{{ tema.accent_text }}" data-accent-border="{{ tema.accent_border }}">
             <button type="button" data-tab-btn="geral"
-                    class="tab-btn py-3 text-sm font-medium border-b-2 {{ tema.accent_text }} {{ tema.accent_border }} whitespace-nowrap">
+                    class="tab-btn py-3 text-sm font-semibold border-b-2 {{ tema.accent_text }} {{ tema.accent_border }} whitespace-nowrap">
                 Visao Geral
             </button>
             <button type="button" data-tab-btn="atividade"
-                    class="tab-btn py-3 text-sm font-medium border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
+                    class="tab-btn py-3 text-sm font-semibold border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
                 Atividade
             </button>
             <button type="button" data-tab-btn="config"
-                    class="tab-btn py-3 text-sm font-medium border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
+                    class="tab-btn py-3 text-sm font-semibold border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
                 Configuracoes
             </button>
         </nav>
@@ -153,24 +153,43 @@
         <div class="max-w-3xl mx-auto space-y-6">
 
             <div data-tab-panel="geral">
-                <h1 class="text-2xl font-semibold {{ tema.text_primary }}">Ola, {{ primeiro_nome }}</h1>
+                <h1 class="text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Ola, {{ primeiro_nome }}</h1>
                 <p class="{{ tema.text_secondary }} mt-1">Bem-vindo de volta ao seu painel.</p>
 
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Dados da conta</h2>
+                <!-- Card de destaque -- mesmo tratamento "hero" usado pro CTA
+                mais importante da tela, pra chamar mais atencao que um card
+                neutro igual aos outros. -->
+                <div class="mt-6 rounded-3xl p-6 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                     style="background: linear-gradient(135deg, {{ '#6366f1, #4f46e5' if tema_atual == 'escuro' else '#4f46e5, #4338ca' }}); box-shadow: 0 10px 24px -6px rgba(79,70,229,0.35);">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-100">Comunidades</p>
+                        <h2 class="text-xl font-extrabold mt-1">Crie e gerencie suas comunidades</h2>
+                        <p class="text-sm text-indigo-100 mt-1">Membros, ministerios e escalas, tudo num so lugar.</p>
+                    </div>
+                    <a href="{{ url_for('comunidade.index') }}"
+                       class="inline-flex items-center justify-center gap-2 bg-white text-indigo-700 text-sm font-bold px-5 py-2.5 rounded-full transition hover:opacity-90 shrink-0">
+                        Abrir Comunidades
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" />
+                        </svg>
+                    </a>
+                </div>
+
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Dados da conta</h2>
                     <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                         {% if foto_perfil %}
                             <img src="{{ foto_perfil }}" alt="Foto de perfil"
                                  class="w-16 h-16 rounded-full object-cover border {{ tema.card_border }}">
                         {% else %}
-                            <div class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-semibold {{ tema.accent_text }}">
+                            <div class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-bold {{ tema.accent_text }}">
                                 {{ primeiro_nome[0]|upper }}
                             </div>
                         {% endif %}
                         <div>
-                            <p class="text-base font-medium {{ tema.text_primary }}">{{ nome_completo }}</p>
+                            <p class="text-base font-bold {{ tema.text_primary }}">{{ nome_completo }}</p>
                             <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
-                            <span class="inline-block mt-1 text-xs px-2 py-0.5 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
+                            <span class="inline-block mt-1.5 text-xs font-semibold px-2.5 py-1 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
                                 {{ "Conta Google" if eh_conta_google else "Conta tradicional" }}
                             </span>
                         </div>
@@ -178,58 +197,43 @@
 
                     <div class="flex flex-wrap gap-3 mt-6">
                         <button type="button" data-tab-jump="config"
-                                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+                                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
                             Editar perfil
                         </button>
                         <button type="button" data-tab-jump="config"
-                                class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition">
+                                class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
                             Ver configuracoes
                         </button>
-                    </div>
-                </div>
-
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <h2 class="text-sm font-semibold {{ tema.text_primary }}">Comunidades</h2>
-                            <p class="text-sm {{ tema.text_secondary }} mt-1">
-                                Crie comunidades, gerencie membros e monte escalas para cada uma.
-                            </p>
-                        </div>
-                        <a href="{{ url_for('comunidade.index') }}"
-                           class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition text-center shrink-0">
-                            Abrir Comunidades
-                        </a>
                     </div>
                 </div>
             </div>
 
             <div data-tab-panel="atividade" class="hidden">
-                <h1 class="text-2xl font-semibold {{ tema.text_primary }}">Atividade</h1>
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6 text-sm {{ tema.text_secondary }}">
+                <h1 class="text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Atividade</h1>
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6 text-sm {{ tema.text_secondary }}">
                     Nenhuma atividade recente.
                 </div>
             </div>
 
             <div data-tab-panel="config" class="hidden">
-                <h1 class="text-2xl font-semibold {{ tema.text_primary }}">Configuracoes</h1>
+                <h1 class="text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Configuracoes</h1>
 
                 <!-- Nome de exibicao -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Nome de exibicao</h2>
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Nome de exibicao</h2>
                     <form method="POST" action="{{ url_for('main.salvar_nome') }}" class="flex flex-col sm:flex-row sm:items-end gap-3 max-w-sm">
                         {{ nome_form.hidden_tag() }}
                         <div class="flex-1 w-full">
                             {{ nome_form.nome.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ nome_form.nome(class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                            {{ nome_form.nome(class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
                         </div>
-                        {{ nome_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0") }}
+                        {{ nome_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0") }}
                     </form>
                 </div>
 
                 <!-- Foto de perfil -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Foto de perfil</h2>
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Foto de perfil</h2>
                     <form method="POST" action="{{ url_for('main.salvar_foto_perfil') }}" enctype="multipart/form-data"
                           class="flex flex-col sm:flex-row sm:items-center gap-4">
                         {{ foto_form.hidden_tag() }}
@@ -237,7 +241,7 @@
                         <img id="preview-foto" src="{{ foto_perfil or '#' }}" alt="Preview"
                              class="w-16 h-16 rounded-full object-cover border {{ tema.card_border }} {{ '' if foto_perfil else 'hidden' }}">
                         <div id="preview-inicial"
-                             class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-semibold {{ tema.accent_text }} {{ 'hidden' if foto_perfil else '' }}">
+                             class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-bold {{ tema.accent_text }} {{ 'hidden' if foto_perfil else '' }}">
                             {{ primeiro_nome[0]|upper }}
                         </div>
 
@@ -249,31 +253,31 @@
                             <p class="text-xs {{ tema.text_secondary }} mt-1">JPG ou PNG, ate 2 MB.</p>
                         </div>
 
-                        {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0") }}
+                        {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0") }}
                     </form>
                 </div>
 
                 <!-- Aparencia / tema -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Aparencia</h2>
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Aparencia</h2>
                     <form method="POST" action="{{ url_for('main.salvar_tema') }}" class="space-y-4">
                         {{ tema_form.hidden_tag() }}
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             {% for chave, dado in temas.items() %}
-                            <label class="flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer border-2 {{ tema.accent_border if chave == tema_atual else tema.card_border }}">
+                            <label class="flex items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer border-2 {{ tema.accent_border if chave == tema_atual else tema.card_border }}">
                                 <input type="radio" name="tema" value="{{ chave }}" {{ "checked" if chave == tema_atual else "" }}>
                                 <span class="w-4 h-4 rounded-full {{ dado.swatch }} border border-black/10"></span>
-                                <span class="text-sm {{ tema.text_primary }}">{{ dado.label }}</span>
+                                <span class="text-sm font-medium {{ tema.text_primary }}">{{ dado.label }}</span>
                             </label>
                             {% endfor %}
                         </div>
-                        {{ tema_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition") }}
+                        {{ tema_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
                     </form>
                 </div>
 
                 <!-- Senha -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-4">
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">
                         {{ "Alterar senha" if tem_senha else "Definir senha" }}
                     </h2>
                     {% if not tem_senha %}
@@ -286,36 +290,36 @@
                         {% if tem_senha %}
                         <div>
                             {{ senha_form.senha_atual.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ senha_form.senha_atual(autocomplete="current-password", class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
-                            <a href="{{ url_for('auth.esqueci_senha') }}" class="text-xs {{ tema.accent_text }} hover:underline">
+                            {{ senha_form.senha_atual(autocomplete="current-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                            <a href="{{ url_for('auth.esqueci_senha') }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
                                 Esqueceu a senha atual? Redefinir por e-mail
                             </a>
                         </div>
                         {% endif %}
                         <div>
                             {{ senha_form.nova_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ senha_form.nova_senha(autocomplete="new-password", class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                            {{ senha_form.nova_senha(autocomplete="new-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
                         </div>
                         <div>
                             {{ senha_form.confirmar_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ senha_form.confirmar_senha(autocomplete="new-password", class_="block w-full rounded-lg border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                            {{ senha_form.confirmar_senha(autocomplete="new-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
                         </div>
                         <p class="text-xs {{ tema.text_secondary }}">Minimo de 8 caracteres.</p>
-                        {{ senha_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-medium px-4 py-2 rounded-lg transition") }}
+                        {{ senha_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
                     </form>
                 </div>
 
                 <!-- E-mail -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
-                    <p class="text-sm font-medium {{ tema.text_primary }}">E-mail</p>
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
+                    <p class="text-sm font-bold {{ tema.text_primary }}">E-mail</p>
                     <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
                 </div>
 
                 <!-- Conexao com o Google -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
                     <div class="flex items-center justify-between gap-4">
                         <div>
-                            <p class="text-sm font-medium {{ tema.text_primary }}">Login com Google</p>
+                            <p class="text-sm font-bold {{ tema.text_primary }}">Login com Google</p>
                             <p class="text-sm {{ tema.text_secondary }}">
                                 {{ "Sua conta esta conectada ao Google." if eh_conta_google else "Sua conta nao esta conectada ao Google." }}
                             </p>
@@ -326,7 +330,7 @@
                               data-confirm-excluir="Desconectar sua conta do Google? Voce ainda vai poder entrar com e-mail e senha.">
                             {{ acao_form.hidden_tag() }}
                             <button type="submit"
-                                    class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                                    class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0">
                                 Desconectar
                             </button>
                         </form>
@@ -337,7 +341,7 @@
                         {% endif %}
                         {% else %}
                         <a href="{{ url_for('auth.google_login') }}"
-                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0">
                             Conectar
                         </a>
                         {% endif %}
@@ -345,14 +349,14 @@
                 </div>
 
                 <!-- Privacidade / dados -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-2xl shadow-sm border {{ tema.card_border }} p-6">
+                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
                     <div class="flex items-center justify-between gap-4">
                         <div>
-                            <p class="text-sm font-medium {{ tema.text_primary }}">Meus dados</p>
+                            <p class="text-sm font-bold {{ tema.text_primary }}">Meus dados</p>
                             <p class="text-sm {{ tema.text_secondary }}">Baixe uma copia dos dados da sua conta.</p>
                         </div>
                         <a href="{{ url_for('main.baixar_dados') }}"
-                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0">
                             Baixar meus dados
                         </a>
                     </div>
@@ -364,10 +368,10 @@
 
     <!-- Chat -->
     <div id="chat-panel"
-         class="hidden fixed bottom-24 right-6 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl flex flex-col overflow-hidden z-20"
+         class="hidden fixed bottom-24 right-6 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-xl flex flex-col overflow-hidden z-20"
          style="height: 480px;">
         <div class="{{ tema.accent_bg }} text-white px-4 py-3 flex items-center justify-between shrink-0">
-            <span class="font-medium text-sm">Assistente do site</span>
+            <span class="font-semibold text-sm">Assistente do site</span>
             <button type="button" id="chat-fechar" aria-label="Fechar chat" class="text-white/80 hover:text-white text-lg leading-none">
                 &times;
             </button>
@@ -375,9 +379,9 @@
         <div id="chat-mensagens" class="flex-1 overflow-y-auto p-4 space-y-2 text-sm"></div>
         <form id="chat-form" class="border-t {{ tema.card_border }} p-3 flex items-center gap-2 shrink-0">
             <input id="chat-input" type="text" placeholder="Digite sua duvida..." autocomplete="off"
-                   class="flex-1 rounded-lg border {{ tema.card_border }} px-3 py-2 text-sm focus:outline-none {{ tema.text_primary }}">
+                   class="flex-1 rounded-full border {{ tema.card_border }} px-4 py-2 text-sm focus:outline-none {{ tema.text_primary }}">
             <button type="submit" aria-label="Enviar"
-                    class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white rounded-lg px-3 py-2 text-sm shrink-0">
+                    class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white rounded-full px-4 py-2 text-sm font-semibold shrink-0">
                 Enviar
             </button>
         </form>
@@ -502,7 +506,7 @@
         function renderMensagem(autor, texto) {
             var bolha = document.createElement('div');
             var souUsuario = autor === 'usuario';
-            bolha.className = 'max-w-[80%] px-3 py-2 rounded-lg ' + (souUsuario
+            bolha.className = 'max-w-[80%] px-3 py-2 rounded-2xl ' + (souUsuario
                 ? 'ml-auto {{ tema.accent_bg }} text-white'
                 : 'mr-auto bg-gray-100 text-gray-800');
             bolha.textContent = texto;
@@ -528,7 +532,7 @@
         function mostrarDigitando() {
             var bolha = document.createElement('div');
             bolha.id = 'chat-digitando';
-            bolha.className = 'mr-auto bg-gray-100 text-gray-500 text-xs px-3 py-2 rounded-lg italic';
+            bolha.className = 'mr-auto bg-gray-100 text-gray-500 text-xs px-3 py-2 rounded-2xl italic';
             bolha.textContent = 'digitando...';
             mensagensEl.appendChild(bolha);
             mensagensEl.scrollTop = mensagensEl.scrollHeight;
