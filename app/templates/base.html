@@ -29,6 +29,18 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TyBenson">
 
+    <!-- Previa de link (WhatsApp, Telegram, Instagram...): sem og:image o
+    WhatsApp pegava o favicon transparente e mostrava a logo em fundo
+    branco. URL absoluta (URL_PUBLICA) -- os robos de previa exigem. -->
+    <meta property="og:site_name" content="TyBenson">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ self.title() }}">
+    <meta property="og:image" content="{{ config.URL_PUBLICA }}{{ url_for('static', filename='img/og-preview.png') }}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta name="twitter:card" content="summary">
+
     {% block head %}{% endblock %}
 </head>
 {% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register', 'auth.esqueci_senha', 'auth.redefinir_senha') %}
