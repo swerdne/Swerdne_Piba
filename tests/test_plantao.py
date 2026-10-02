@@ -907,6 +907,21 @@ def test_form_novo_turno_pre_preenche_a_partir_da_escala_de_origem(logged_in_cli
         assert "recadastrar ninguem" in html
 
 
+
+def test_voltar_do_novo_turno_vai_pra_escala_de_origem(logged_in_client, app, db):
+    """Criando o turno a partir de uma escala, a seta de voltar leva de volta
+    pra essa escala (nao pro ministerio); sem escala de origem, pro ministerio."""
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala, _, _ = _criar_escala_com_dois_escalados(logged_in_client, ministerio.id)
+
+        com_origem = logged_in_client.get(f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}").data.decode("utf-8")
+        assert f'href="/escala/{escala.id}" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar"' in com_origem
+
+        sem_origem = logged_in_client.get(f"/plantao/ministerio/{ministerio.id}/nova").data.decode("utf-8")
+        assert f'href="/ministerio/{ministerio.id}" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar"' in sem_origem
+
 def test_criar_turno_a_partir_de_escala_semeia_fila_com_os_escalados(logged_in_client, app, db):
     """As pessoas ja escaladas na Escala de origem viram UMA UNICA equipe
     (nao posicoes separadas) -- e assim que "criar turno com esta equipe"

@@ -28,7 +28,7 @@
     <div class="h-1 {{ tema.accent_bg }}"></div>
 
     <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-        <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
+        <a href="{{ url_for('escala.detalhe', escala_id=escala_origem.id) if escala_origem else url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
             <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
             </span>
