@@ -42,11 +42,11 @@
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
 
-    <main class="max-w-xl mx-auto px-5 pt-5 pb-8">
+    <main class="relative max-w-xl lg:max-w-5xl mx-auto px-5 lg:px-10 pt-5 lg:pt-10 pb-8">
 
         <!-- Cabecalho comum as 3 abas: logo + nome na esquerda, sino na mesma linha -->
-        <header class="flex items-center justify-between gap-4 mb-6">
-            <div class="flex items-center gap-2.5 min-w-0">
+        <header class="flex items-center justify-between gap-4 mb-6 lg:mb-0 lg:absolute lg:top-10 lg:right-10 lg:z-10">
+            <div class="flex items-center gap-2.5 min-w-0 lg:hidden">
                 <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-9 h-9 object-contain shrink-0">
                 <div class="leading-tight">
                     {{ nome_marca(tema.text_primary, "text-base") }}
@@ -60,10 +60,11 @@
         <section data-painel="inicio" class="space-y-6">
 
             <div class="min-w-0">
-                <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }} truncate">{{ saudacao }}, {{ primeiro_nome }}</h1>
+                <h1 class="text-2xl lg:text-3xl font-extrabold tracking-tight {{ tema.text_primary }} truncate">{{ saudacao }}, {{ primeiro_nome }}</h1>
                 <p class="text-sm {{ tema.text_secondary }} mt-0.5">Bem-vindo de volta ao TyBenson</p>
             </div>
 
+            <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
             <!-- Proxima escala -->
             <div class="rounded-3xl p-6 text-white space-y-2.5"
                  style="background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 10px 24px -6px rgba(79,70,229,0.35);">
@@ -129,12 +130,13 @@
                 </div>
                 {% endif %}
             </div>
+            </div>
         </section>
 
         <!-- ===================== AVISOS ===================== -->
         <section data-painel="avisos" class="hidden space-y-5">
-            <div class="flex items-center justify-between gap-3">
-                <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }}">Avisos</h1>
+            <div class="flex items-center justify-between gap-3 lg:pr-16">
+                <h1 class="text-2xl lg:text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Avisos</h1>
                 {% if notificacoes_nao_lidas %}
                 <form method="POST" action="{{ url_for('main.marcar_notificacoes_lidas') }}">
                     {{ acao_form.hidden_tag() }}
@@ -147,7 +149,7 @@
             </div>
 
             {% if grupos_notificacoes %}
-            <div class="space-y-3">
+            <div class="grid gap-3 lg:grid-cols-2 lg:items-start">
                 {% for grupo in grupos_notificacoes %}
                 <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
                     {% if grupo.escala %}
@@ -184,7 +186,10 @@
 
         <!-- ===================== PERFIL ===================== -->
         <section data-painel="perfil" class="hidden space-y-6">
-            <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }}">Perfil</h1>
+            <h1 class="text-2xl lg:text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Perfil</h1>
+
+            <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <div class="space-y-6">
 
             <div class="flex flex-col items-center gap-2.5">
                 <label for="input-foto" class="relative cursor-pointer" title="Trocar foto">
@@ -255,6 +260,8 @@
                 </form>
             </div>
 
+            </div>
+            <div class="space-y-6">
             <!-- Preferencias / tema -->
             <div>
                 <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Preferencias</h2>
@@ -358,6 +365,8 @@
                class="block text-center border border-red-500/40 text-red-500 hover:bg-red-500/10 text-sm font-semibold py-3 rounded-full transition">
                 Sair da conta
             </a>
+            </div>
+            </div>
         </section>
 
     </main>
@@ -367,7 +376,7 @@
 
     <!-- Chat -->
     <div id="chat-panel"
-         class="hidden fixed bottom-40 right-5 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-xl flex flex-col overflow-hidden z-40"
+         class="hidden fixed bottom-40 lg:bottom-24 right-5 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-xl flex flex-col overflow-hidden z-40"
          style="height: 440px;">
         <div class="{{ tema.accent_bg }} text-white px-4 py-3 flex items-center justify-between shrink-0">
             <span class="font-semibold text-sm">Assistente do site</span>
@@ -387,7 +396,7 @@
     </div>
 
     <button type="button" id="chat-fab" aria-label="Abrir chat"
-            class="fixed bottom-24 right-5 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-40">
+            class="fixed bottom-24 lg:bottom-8 right-5 lg:right-8 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-40">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />

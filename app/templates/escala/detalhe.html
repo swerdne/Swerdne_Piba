@@ -505,7 +505,7 @@
         {% endif %}
 
         {% if eh_dono %}
-        <div id="atribuicao-barra" class="hidden sticky bottom-24 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 shadow-lg">
+        <div id="atribuicao-barra" class="hidden sticky bottom-24 lg:bottom-6 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 shadow-lg">
             <span class="text-sm {{ tema.text_primary }}">
                 <span id="atribuicao-contagem">0</span> pessoa(s) selecionada(s) pra escalar
             </span>
@@ -520,7 +520,7 @@
 
     <!-- Chat -->
     <div id="chat-panel"
-         class="hidden fixed bottom-40 right-5 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-xl flex flex-col overflow-hidden z-40"
+         class="hidden fixed bottom-40 lg:bottom-24 right-5 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-xl flex flex-col overflow-hidden z-40"
          style="height: 480px;">
         <div class="{{ tema.accent_bg }} text-white px-4 py-3 flex items-center justify-between shrink-0">
             <span class="font-semibold text-sm">Assistente do site</span>
@@ -541,7 +541,7 @@
 
     <!-- Botao flutuante de chat -->
     <button type="button" id="chat-fab" aria-label="Abrir chat"
-            class="fixed bottom-24 right-5 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-40">
+            class="fixed bottom-24 lg:bottom-8 right-5 lg:right-8 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-40">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />

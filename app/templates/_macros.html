@@ -35,23 +35,40 @@ import "with context" por causa do sino.
 {% endmacro %}
 
 
+{% macro _icone_nav(tema, chave, tamanho="w-5 h-5") %}
+{% if chave == 'inicio' %}
+<svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
+{% elif chave == 'comunidades' %}
+<svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path></svg>
+{% elif current_user.foto_perfil %}
+<img src="{{ current_user.foto_perfil }}" alt="" class="{{ tamanho }} rounded-full object-cover shrink-0">
+{% else %}
+<span class="{{ tamanho }} rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-[10px] font-bold flex items-center justify-center shrink-0">{{ (current_user.name or current_user.username or current_user.email)[0]|upper }}</span>
+{% endif %}
+{% endmacro %}
+
+
 {% macro nav_inferior(tema, ativo) %}
 {#
-Barra de navegacao inferior fixa (Inicio / Comunidades / Perfil -- avisos
-ficam no sino do cabecalho, ver sino_avisos),
-igual em todas as telas internas. Precisa ser importada "with context" (usa
-current_user). Chamar logo depois
-do </main>: o espacador abaixo reserva a altura da barra dentro do fundo da
-pagina. No Dashboard, os itens com data-ir-painel trocam de aba sem
+Navegacao principal (Inicio / Comunidades / Perfil -- avisos ficam no sino
+do cabecalho, ver sino_avisos), igual em todas as telas internas:
+- celular: barra fixa no rodape (o espacador reserva a altura dela);
+- desktop (lg+): menu lateral fixo a esquerda, com logo e conta/Sair; o
+  <style> empurra o body pra direita pra liberar a largura do menu.
+Precisa de import "with context" (usa current_user). Chamar logo depois do
+</main>. No Dashboard, itens com data-ir-painel trocam de aba sem
 recarregar (ver main/dashboard.html); nas outras telas sao links normais.
+data-nav-pill marca o elemento que recebe o fundo de "ativo".
 #}
 {% set itens = [
     ("inicio", "Inicio", url_for('main.dashboard')),
     ("comunidades", "Comunidades", url_for('comunidade.index')),
     ("perfil", "Perfil", url_for('main.dashboard') ~ '#perfil'),
 ] %}
-<div class="h-24" aria-hidden="true"></div>
-<nav class="fixed bottom-0 inset-x-0 z-30 {{ tema.card_bg }} border-t {{ tema.card_border }}">
+<style>@media (min-width: 1024px) { body { padding-left: 16rem; } }</style>
+<div class="h-24 lg:hidden" aria-hidden="true"></div>
+
+<nav class="lg:hidden fixed bottom-0 inset-x-0 z-30 {{ tema.card_bg }} border-t {{ tema.card_border }}">
     <div class="max-w-xl mx-auto flex items-center justify-around px-3 pt-2.5 pb-4">
         {% for chave, rotulo, href in itens %}
         {% set eh_ativo = chave == ativo %}
@@ -59,23 +76,49 @@ recarregar (ver main/dashboard.html); nas outras telas sao links normais.
            {% if chave != 'comunidades' %}data-ir-painel="{{ chave }}"{% endif %}
            class="relative flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.accent_text if eh_ativo else tema.text_secondary }}">
             <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center {{ tema.accent_bg ~ ' text-white' if eh_ativo else '' }}">
-                {% if chave == 'inicio' %}
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
-                {% elif chave == 'comunidades' %}
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path></svg>
-                {% else %}
-                {% if current_user.foto_perfil %}
-                <img src="{{ current_user.foto_perfil }}" alt="" class="w-5 h-5 rounded-full object-cover">
-                {% else %}
-                <span class="w-5 h-5 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-[10px] font-bold flex items-center justify-center">{{ (current_user.name or current_user.username or current_user.email)[0]|upper }}</span>
-                {% endif %}
-                {% endif %}
+                {{ _icone_nav(tema, chave) }}
             </span>
             {{ rotulo }}
         </a>
         {% endfor %}
     </div>
 </nav>
+
+<aside class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col {{ tema.card_bg }} border-r {{ tema.card_border }} px-5 py-7">
+    <a href="{{ url_for('main.dashboard') }}" data-ir-painel="inicio" class="flex items-center gap-3 px-2 mb-9">
+        <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-10 h-10 object-contain shrink-0">
+        <span class="leading-tight">
+            {{ nome_marca(tema.text_primary, "text-lg") }}
+            <span class="block text-[11px] {{ tema.text_secondary }}">By Swerdne</span>
+        </span>
+    </a>
+
+    <nav class="space-y-1.5">
+        {% for chave, rotulo, href in itens %}
+        {% set eh_ativo = chave == ativo %}
+        <a href="{{ href }}" data-nav-item="{{ chave }}"
+           {% if chave != 'comunidades' %}data-ir-painel="{{ chave }}"{% endif %}
+           class="block text-sm font-semibold {{ tema.accent_text if eh_ativo else tema.text_secondary }}">
+            <span data-nav-pill class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl transition {{ tema.accent_bg ~ ' text-white' if eh_ativo else tema.card_bg_hover }}">
+                {{ _icone_nav(tema, chave) }}
+                {{ rotulo }}
+            </span>
+        </a>
+        {% endfor %}
+    </nav>
+
+    <div class="mt-auto pt-5 border-t {{ tema.card_border }} flex items-center gap-3">
+        {{ _icone_nav(tema, 'perfil', "w-9 h-9") }}
+        <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ current_user.name or current_user.username }}</p>
+            <p class="text-xs {{ tema.text_secondary }} truncate">{{ current_user.email }}</p>
+        </div>
+        <a href="{{ url_for('auth.logout') }}" title="Sair" aria-label="Sair"
+           class="{{ tema.text_secondary }} hover:text-red-500 transition shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"></path><path d="M10 17l5-5-5-5"></path><path d="M15 12H4"></path></svg>
+        </a>
+    </div>
+</aside>
 {% endmacro %}
 
 {% macro nome_marca(cor_ty, classes="") %}
