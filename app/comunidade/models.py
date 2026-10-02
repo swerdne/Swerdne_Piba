@@ -87,6 +87,10 @@ class UsuarioComunidade(SequentialIdDocument):
     comunidade_id = mongoengine.IntField(required=True)
     papel = mongoengine.StringField(required=True, max_length=10)
     criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    # O admin recusou colocar essa conta no diretorio de escalacao (Membro)
+    # -- sai da lista "Aguardando entrar no diretorio", mas continua com o
+    # papel na comunidade; da pra adicionar depois pela lista de contas.
+    diretorio_recusado = mongoengine.BooleanField(default=False)
 
     @property
     def usuario(self):

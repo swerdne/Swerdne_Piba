@@ -70,7 +70,8 @@ def entrar_na_comunidade(usuario, comunidade):
     _notificar(
         _admins_da_comunidade(comunidade), usuario,
         f'{nome} entrou em "{comunidade.nome}"',
-        f"{nome} entrou na comunidade pelo link de acesso direto, como membro.",
+        f"{nome} entrou na comunidade pelo link de acesso direto, como membro. "
+        "Confirme a entrada no diretorio em Membros.",
     )
     return destino_membro, f'Voce entrou em "{comunidade.nome}"!'
 

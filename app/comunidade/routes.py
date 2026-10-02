@@ -248,6 +248,7 @@ def detalhe(comunidade_id):
         comunidade=comunidade,
         ministerios=ministerios,
         total_membros=total_membros,
+        pedidos_diretorio=len(_pedidos_diretorio(comunidade, contas_vinculadas, emails_diretorio)),
         acao_form=AcaoForm(),
         mostrar_tutorial=not current_user.tutorial_comunidade_visto,
         passos_tutorial=PASSOS_TUTORIAL_COMUNIDADE,
@@ -315,6 +316,86 @@ def excluir_comunidade(comunidade_id):
     return redirect(url_for("comunidade.index"))
 
 
+def _emails_do_diretorio(comunidade):
+    return {
+        m.email.strip().lower()
+        for m in Membro.objects(comunidade_id=comunidade.id).only("email") if m.email
+    }
+
+
+def _pedidos_diretorio(comunidade, contas=None, emails_diretorio=None):
+    """Contas com papel "membro" na comunidade (entraram pelo link ou por convite) que
+    ainda nao estao no diretorio de escalacao (Membro, casado por e-mail) e
+    que o admin nao recusou -- a lista "Aguardando entrar no diretorio"."""
+    if contas is None:
+        contas = UsuarioComunidade.objects(comunidade_id=comunidade.id)
+    if emails_diretorio is None:
+        emails_diretorio = _emails_do_diretorio(comunidade)
+    pedidos = []
+    for conta in contas:
+        usuario = conta.usuario
+        # So papel "membro" (quem entrou pelo link/convite de membro) -- admin
+        # recebe o papel de proposito e e posto no diretorio a mao se precisar.
+        if conta.papel != "membro" or conta.diretorio_recusado or usuario is None or not usuario.email:
+            continue
+        if usuario.email.strip().lower() not in emails_diretorio:
+            pedidos.append(conta)
+    return sorted(pedidos, key=lambda c: c.id)  # ordem de entrada
+
+
+def _colocar_no_diretorio(comunidade, conta):
+    """Cria o Membro do diretorio a partir da conta (nome + e-mail da conta,
+    o mesmo e-mail que liga notificacoes/"Minha escala" a ela). Nao duplica
+    se ja tiver alguem com esse e-mail."""
+    usuario = conta.usuario
+    if usuario.email.strip().lower() not in _emails_do_diretorio(comunidade):
+        Membro(
+            comunidade_id=comunidade.id,
+            nome=(usuario.name or usuario.username or usuario.email.split("@")[0])[:120],
+            email=usuario.email,
+        ).save()
+    if conta.diretorio_recusado:
+        conta.diretorio_recusado = False
+        conta.save()
+    return usuario.name or usuario.username or usuario.email
+
+
+@bp.route("/<int:comunidade_id>/membros/pedidos/<int:conta_id>/<any(aceitar, recusar):acao>", methods=["POST"])
+@login_required
+def responder_pedido_diretorio(comunidade_id, conta_id, acao):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    conta = primeiro_ou_404(UsuarioComunidade.objects(id=conta_id, comunidade_id=comunidade.id))
+    destino = url_for("comunidade.membros", comunidade_id=comunidade.id)
+    if not AcaoForm().validate_on_submit() or conta.usuario is None:
+        flash("Acao invalida.", "danger")
+        return redirect(destino)
+
+    if acao == "aceitar":
+        nome = _colocar_no_diretorio(comunidade, conta)
+        flash(f"{nome} entrou no diretorio -- ja pode ser escalado(a).", "success")
+    else:
+        conta.diretorio_recusado = True
+        conta.save()
+        nome = conta.usuario.name or conta.usuario.username or conta.usuario.email
+        flash(f"{nome} nao vai entrar no diretorio (continua com a conta na comunidade).", "success")
+    return redirect(destino)
+
+
+@bp.route("/<int:comunidade_id>/membros/pedidos/aceitar-todos", methods=["POST"])
+@login_required
+def aceitar_todos_pedidos_diretorio(comunidade_id):
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    destino = url_for("comunidade.membros", comunidade_id=comunidade.id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(destino)
+    pedidos = _pedidos_diretorio(comunidade)
+    for conta in pedidos:
+        _colocar_no_diretorio(comunidade, conta)
+    flash(f"{len(pedidos)} pessoa(s) adicionada(s) ao diretorio.", "success")
+    return redirect(destino)
+
+
 @bp.route("/<int:comunidade_id>/membros", methods=["GET", "POST"])
 @login_required
 def membros(comunidade_id):
@@ -355,11 +436,14 @@ def membros(comunidade_id):
         key=lambda uc: (uc.papel, (uc.usuario.name or uc.usuario.username or uc.usuario.email).lower()),
     )
 
+    emails_diretorio = {m.email.strip().lower() for m in diretorio if m.email}
     return render_template(
         "comunidade/membros.html",
         comunidade=comunidade,
         diretorio=diretorio,
         contas_vinculadas=contas_vinculadas,
+        pedidos=_pedidos_diretorio(comunidade, contas_vinculadas, emails_diretorio),
+        emails_diretorio=emails_diretorio,
         form=form,
         acao_form=AcaoForm(),
         proximo=proximo,

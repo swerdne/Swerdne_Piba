@@ -41,6 +41,54 @@
 
     <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
 
+        {% if pedidos %}
+        <!-- Quem entrou na comunidade (link/convite) e ainda nao esta no diretorio -->
+        <div id="pedidos">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="text-xs font-bold text-amber-600 uppercase tracking-wide">Aguardando entrar no diretorio ({{ pedidos|length }})</h2>
+                {% if pedidos|length > 1 %}
+                <form method="POST" action="{{ url_for('comunidade.aceitar_todos_pedidos_diretorio', comunidade_id=comunidade.id) }}">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">Aceitar todos</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="space-y-2">
+                {% for conta in pedidos %}
+                {% set nome = conta.usuario.name or conta.usuario.username or conta.usuario.email %}
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 {{ tema.card_bg }} border border-amber-500/40 rounded-2xl shadow-sm px-4 py-3">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        {% if conta.usuario.foto_perfil %}
+                        <img src="{{ conta.usuario.foto_perfil }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
+                        {% else %}
+                        <div class="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center text-xs font-semibold text-amber-600 shrink-0">{{ nome[:2].upper() }}</div>
+                        {% endif %}
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">{{ conta.usuario.email }}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <form method="POST" action="{{ url_for('comunidade.responder_pedido_diretorio', comunidade_id=comunidade.id, conta_id=conta.id, acao='recusar') }}" class="flex-1 sm:flex-none">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" class="w-full border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-semibold px-4 py-2 rounded-full transition">
+                                <i class="fa-solid fa-xmark mr-1"></i>Recusar
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('comunidade.responder_pedido_diretorio', comunidade_id=comunidade.id, conta_id=conta.id, acao='aceitar') }}" class="flex-1 sm:flex-none">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-full transition">
+                                <i class="fa-solid fa-check mr-1"></i>Aceitar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-xs {{ tema.text_secondary }} mt-2">Aceitar coloca a pessoa no diretorio (nome e e-mail da conta) e ela ja pode ser escalada. Recusar so tira daqui -- ela continua na comunidade.</p>
+        </div>
+        {% endif %}
+
         <div>
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Adicionar ao diretorio</h2>
             <form method="POST" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
@@ -135,6 +183,14 @@
                         <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ conta.usuario.name or conta.usuario.username or conta.usuario.email }}</p>
                         <p class="text-xs {{ tema.text_secondary }} truncate">{{ conta.usuario.email }}</p>
                     </div>
+                    {% if conta.usuario.email and conta.usuario.email.strip().lower() not in emails_diretorio and conta.diretorio_recusado %}
+                    <form method="POST" action="{{ url_for('comunidade.responder_pedido_diretorio', comunidade_id=comunidade.id, conta_id=conta.id, acao='aceitar') }}">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" title="Colocar no diretorio" class="text-xs font-semibold {{ tema.accent_text }} hover:underline shrink-0">
+                            <i class="fa-solid fa-plus mr-0.5"></i>Diretorio
+                        </button>
+                    </form>
+                    {% endif %}
                     <span class="text-[11px] font-semibold uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded-full px-2.5 py-1 shrink-0">{{ conta.papel }}</span>
                 </div>
                 {% endfor %}
