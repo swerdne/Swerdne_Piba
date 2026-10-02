@@ -46,6 +46,16 @@ def _redirecionar_apos_login():
     tentando acessar antes de autenticar (ex: aceitar um convite, ver
     app/convites/routes.py::ver_convite) -- cai no dashboard se nao havia
     nenhum destino guardado. `pop` de proposito: o destino so vale uma vez."""
+    # Chegou por um link de acesso direto (Comunidade/Ministerio)? Ja entra
+    # sozinho, sem mais um clique -- ver app/convites/link_publico.py.
+    from app.convites.link_publico import concluir_entrada_pendente
+
+    entrada = concluir_entrada_pendente(current_user)
+    if entrada:
+        session.pop("proximo_apos_login", None)
+        destino, mensagem = entrada
+        flash(mensagem, "success")
+        return redirect(destino)
     destino = session.pop("proximo_apos_login", None)
     return redirect(destino or url_for("main.dashboard"))
 

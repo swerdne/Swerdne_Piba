@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Entrar em {{ comunidade.nome }}{% endblock %}
+{% block title %}Entrar em {{ nome_escopo }}{% endblock %}
 
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,14 +25,19 @@
 
     <div class="relative z-10 max-w-md w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-6 text-center space-y-4">
 
+        {% if imagem_escopo %}
+        <img src="{{ imagem_escopo }}" alt="" class="w-16 h-16 mx-auto rounded-2xl object-cover shadow-sm">
+        {% else %}
         <div class="w-14 h-14 mx-auto rounded-2xl {{ tema.accent_soft_bg }} flex items-center justify-center">
-            <i class="fa-solid fa-user-plus {{ tema.accent_text }} text-xl"></i>
+            <i class="fa-solid {{ 'fa-people-group' if tipo_escopo == 'ministerio' else 'fa-user-plus' }} {{ tema.accent_text }} text-xl"></i>
         </div>
+        {% endif %}
+        {% set rotulo = ('o ministerio' if tipo_escopo == 'ministerio' else 'a comunidade') %}
 
         {% if precisa_confirmar %}
-        <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Entrar em {{ comunidade.nome }}?</h1>
+        <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Entrar em {{ nome_escopo }}?</h1>
         <p class="text-sm {{ tema.text_secondary }}">
-            Voce vai entrar como membro de <strong>{{ comunidade.nome }}</strong>.
+            Voce vai entrar como membro n{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %}.
         </p>
         <form method="POST" class="pt-2">
             {{ acao_form.hidden_tag() }}
@@ -43,14 +48,18 @@
         {% else %}
         <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Voce foi convidado(a)!</h1>
         <p class="text-sm {{ tema.text_secondary }}">
-            Entre ou crie uma conta pra fazer parte de <strong>{{ comunidade.nome }}</strong> como membro.
+            Entre ou crie sua conta pra fazer parte d{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %} como membro.
+            Assim que terminar, voce ja entra automaticamente.
         </p>
         <div class="flex flex-col gap-2 pt-2">
-            <a href="{{ url_for('auth.login') }}" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
+            <a href="{{ url_for('auth.register') }}" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
+                Criar conta
+            </a>
+            <a href="{{ url_for('auth.login') }}" class="border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
                 Ja tenho conta -- Entrar
             </a>
-            <a href="{{ url_for('auth.register') }}" class="border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
-                Criar conta
+            <a href="{{ url_for('auth.google_login') }}" class="flex items-center justify-center gap-2 border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
+                <i class="fa-brands fa-google"></i>Continuar com Google
             </a>
         </div>
         {% endif %}

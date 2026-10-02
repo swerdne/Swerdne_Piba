@@ -14,7 +14,6 @@ from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDispo
 from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade
 from app.ministerio.models import Ministerio
 from app.auth.models import User
-from app.notificacoes import Notificacao
 from app.escala.models import (
     Escala,
     Funcao,
@@ -804,51 +803,26 @@ def entrar_via_link(token):
     com CSRF (AcaoForm), senao um GET simples (preview de link no
     WhatsApp/Telegram, prefetch do navegador, ou um <img src="..."> num
     site malicioso) poderia inscrever alguem autenticado sem intencao."""
+    from app.convites.link_publico import entrar_na_comunidade, eh_navegacao_direta, guardar_entrada_pendente
+
     comunidade = primeiro_ou_404(Comunidade.objects(token_convite_publico=token))
+    tela = dict(nome_escopo=comunidade.nome, tipo_escopo="comunidade", imagem_escopo=comunidade.imagem)
 
     if not current_user.is_authenticated:
-        session["proximo_apos_login"] = url_for("comunidade.entrar_via_link", token=token)
-        return render_template("comunidade/entrar.html", comunidade=comunidade)
-
-    papel_existente = UsuarioComunidade.objects(
-        usuario_id=current_user.id, comunidade_id=comunidade.id
-    ).first()
-    if papel_existente:
-        # So leitura (ja tem papel, entrar de novo nao muda nada) -- seguro
-        # em GET. O link generico nunca rebaixa ninguem, so avisa.
-        flash(f'Voce ja faz parte de "{comunidade.nome}".', "success")
-        # main.dashboard nao lista comunidades (e so perfil/notificacoes) --
-        # um "membro" simples tambem nao acessa comunidade.detalhe (admin-only,
-        # ver _comunidade_do_usuario_ou_404), entao o destino que sobra pra
-        # ele ver algo de fato e comunidade.escalados (mesma rota que
-        # comunidade/lista.html usa pras comunidades em que so participa).
-        # Sem isso, quem entra por aqui e nao e admin cai numa tela que nao
-        # mostra nenhum indicio de que a entrada funcionou.
-        destino = (
-            url_for("comunidade.detalhe", comunidade_id=comunidade.id)
-            if papel_existente.papel == "admin" else url_for("comunidade.escalados", comunidade_id=comunidade.id)
-        )
-        return redirect(destino)
+        guardar_entrada_pendente("comunidade", token, url_for("comunidade.entrar_via_link", token=token))
+        return render_template("comunidade/entrar.html", **tela)
 
     form = AcaoForm()
-    if request.method == "POST" and form.validate_on_submit():
-        UsuarioComunidade(usuario_id=current_user.id, comunidade_id=comunidade.id, papel="membro").save()
+    # Abrir o link no navegador ja e o aceite (entra direto). POST e o botao
+    # da tela de confirmacao, pra navegador que nao manda Sec-Fetch-*.
+    if (request.method == "POST" and form.validate_on_submit()) or (
+        request.method == "GET" and eh_navegacao_direta(request)
+    ) or UsuarioComunidade.objects(usuario_id=current_user.id, comunidade_id=comunidade.id).first():
+        destino, mensagem = entrar_na_comunidade(current_user, comunidade)
+        flash(mensagem, "success")
+        return redirect(destino)
 
-        nome_novo_membro = current_user.name or current_user.username or current_user.email
-        for admin in _admins_da_comunidade(comunidade):
-            if admin.id == current_user.id:
-                continue  # nunca notifica quem acabou de entrar sobre a propria entrada
-            Notificacao(
-                usuario_id=admin.id,
-                titulo=f'{nome_novo_membro} entrou em "{comunidade.nome}"',
-                mensagem=f'{nome_novo_membro} entrou na comunidade pelo link de convite.',
-                tipo="novo_membro",
-            ).save()
-
-        flash(f'Voce entrou em "{comunidade.nome}"!', "success")
-        return redirect(url_for("comunidade.escalados", comunidade_id=comunidade.id))
-
-    return render_template("comunidade/entrar.html", comunidade=comunidade, precisa_confirmar=True, acao_form=form)
+    return render_template("comunidade/entrar.html", precisa_confirmar=True, acao_form=form, **tela)
 
 
 @bp.route("/<int:comunidade_id>/papeis/<int:usuario_comunidade_id>/remover", methods=["POST"])

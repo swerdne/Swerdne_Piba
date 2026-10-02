@@ -43,6 +43,34 @@
 
         {% if pode_convidar %}
         <div>
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Link de acesso direto</h2>
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                <p class="text-xs {{ tema.text_secondary }}">
+                    Pra divulgar (ex: grupo de WhatsApp): quem abrir entra direto como <strong>membro</strong> deste ministerio -- sem convite individual nem aceite.
+                    Quem ainda nao tem conta se cadastra e ja entra. Os lideres recebem um aviso a cada entrada.
+                    Pra dar papel de <strong>lider</strong>, use o convite por e-mail abaixo.
+                </p>
+                {% if link_convite %}
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" readonly value="{{ link_convite }}" id="input-link-convite"
+                           class="flex-1 min-w-0 {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2 text-xs {{ tema.text_secondary }} truncate">
+                    <button type="button" data-copiar-link="input-link-convite"
+                            class="border {{ tema.card_border }} {{ tema.text_primary }} text-xs font-semibold px-3 py-2 rounded-full transition hover:bg-black/5 shrink-0">
+                        <i class="fa-solid fa-copy mr-1"></i>Copiar
+                    </button>
+                </div>
+                {% endif %}
+                <form method="POST" action="{{ url_for('ministerio.gerar_link_convite', ministerio_id=ministerio.id) }}"
+                      {% if link_convite %}onsubmit="return confirm('Gerar um novo link? O link atual vai parar de funcionar.');"{% endif %}>
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                        {{ "Gerar novo link (invalida o atual)" if link_convite else "Gerar link de acesso" }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div>
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Convidar por e-mail</h2>
             <form method="POST" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
                 {{ form.hidden_tag() }}

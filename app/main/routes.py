@@ -33,6 +33,7 @@ _ICONE_POR_TIPO = {
     "troca_recusada": "fa-circle-xmark",
     "cancelamento": "fa-ban",
     "ensaio_cancelado": "fa-calendar-xmark",
+    "novo_membro": "fa-user-plus",
 }
 _ICONE_PADRAO = "fa-bell"
 

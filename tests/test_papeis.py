@@ -601,14 +601,10 @@ def test_entrar_via_link_deslogado_pede_login_e_completa_depois(logged_in_client
         assert resposta_cadastro.status_code == 200
 
         carla = User.objects(email="carla@example.com").first()
-        # Cadastro sozinho nao completa a entrada -- cai na tela de
-        # confirmacao (o redirect pos-login e sempre GET, que nunca muda
-        # estado). Precisa do POST explicito pra realmente entrar.
-        assert UsuarioComunidade.objects(usuario_id=carla.id, comunidade_id=comunidade_id).first() is None
-        assert "Entrar em".encode() in resposta_cadastro.data
-
-        resposta_confirmar = visitante.post(f"/comunidade/entrar/{token}", follow_redirects=True)
-        assert resposta_confirmar.status_code == 200
+        # Concluir o cadastro ja conclui a entrada (o proprio cadastro e a
+        # acao intencional) -- sem mais um clique, ver
+        # app/convites/link_publico.py::concluir_entrada_pendente.
+        assert "Comunidade Ana".encode() in resposta_cadastro.data
 
         papel = UsuarioComunidade.objects(usuario_id=carla.id, comunidade_id=comunidade_id).first()
         assert papel is not None

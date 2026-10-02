@@ -61,3 +61,15 @@ Nenhuma rota de conteúdo (escala, turno, membro do diretório) foi reescrita um
 ## Testes
 
 `tests/test_papeis.py`: admin automático do criador, matriz de convite (admin convida admin/membro/líder; líder só convida membro, rejeitado tanto na UI quanto no servidor se tentar mais que isso), `super_admin` nunca é uma choice válida, aceitar cria/atualiza papel e dá acesso, recusar não cria nada, e-mail errado e convite já respondido são rejeitados, tela pública mostra "criar conta" só quando não existe `User` com aquele e-mail, admin da comunidade gerencia ministério sem linha própria (cascata), membro vê mas não gerencia (sem botão "nova escala", 404 em rotas de escrita), membro escalado marca o próprio status, não-membro recebe 404 em Ministério/Escala, bootstrap via CLI (`app.test_cli_runner()`) cria e recusa e-mail sem conta, Super Admin acessa qualquer Comunidade sem nenhuma linha de papel.
+
+## Link de acesso direto (metodo alternativo)
+
+`app/convites/link_publico.py` -- convive com o convite por e-mail acima:
+
+- **Convite por e-mail**: pessoa especifica + papel especifico (admin/lider/membro), exige aceite.
+- **Link de acesso direto** (`Comunidade.token_convite_publico` / `Ministerio.token_convite_publico`): qualquer um com o link entra como **membro** comum (nunca admin/lider; nunca rebaixa quem ja tem papel maior). Abrir o link ja e o aceite.
+  - Logado: entra direto se a requisicao e navegacao de pagina (`Sec-Fetch-Mode: navigate` + `Sec-Fetch-Dest: document`, sem prefetch); senao mostra a tela com botao "Entrar" (POST + CSRF). `<img src>`/prefetch nunca inscrevem.
+  - Sem conta/deslogado: a visita guarda `session["entrada_por_link"]`; `auth.routes._redirecionar_apos_login` (login, cadastro e Google) chama `concluir_entrada_pendente`, que reconfere o token (link revogado nesse meio tempo = nao entra).
+  - Entrar num Ministerio tambem da papel "membro" na Comunidade dele, se a pessoa nao tinha nenhum.
+  - Notifica (sino, `tipo="novo_membro"`) os admins da comunidade / lideres do ministerio.
+  - Rotas: `comunidade.gerar_link_convite`/`entrar_via_link`, `ministerio.gerar_link_convite`/`entrar_via_link`. Gerar de novo invalida o anterior.

@@ -4,6 +4,7 @@ Camada organizacional dentro de uma Comunidade: agrupa escalas relacionadas
 (ex: "Ministerio de Louvor", "Equipe de Midia"). Puramente organizacional --
 nao tem ligacao obrigatoria com o campo `departamento` de cada Escala.
 """
+import secrets
 from datetime import datetime, timezone
 
 import mongoengine
@@ -29,6 +30,15 @@ class Ministerio(SequentialIdDocument):
     # dias_culto_efetivos) -- nunca restringe quais dias podem ser
     # escolhidos la, so destaca os habituais.
     dias_culto = mongoengine.StringField(max_length=20)
+
+    # Link de acesso direto do ministerio (mesma ideia de
+    # Comunidade.token_convite_publico, ver app/convites/link_publico.py):
+    # quem abre entra como "membro". Regenerar invalida o anterior.
+    token_convite_publico = mongoengine.StringField(unique=True, sparse=True, max_length=64)
+
+    def gerar_novo_link_convite(self):
+        self.token_convite_publico = secrets.token_urlsafe(8)
+        return self.token_convite_publico
 
     @property
     def comunidade(self):

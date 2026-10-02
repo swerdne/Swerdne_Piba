@@ -42,11 +42,12 @@
     <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
 
         <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Link de convite</h2>
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Link de acesso direto</h2>
             <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
                 <p class="text-xs {{ tema.text_secondary }}">
-                    Qualquer pessoa com esse link entra direto como membro, sem precisar convidar por e-mail um por um.
-                    O lider adiciona ela a um Ministerio depois, se for o caso.
+                    Pra divulgar (ex: grupo de WhatsApp): quem abrir entra direto como <strong>membro</strong> -- sem convite individual nem aceite.
+                    Quem ainda nao tem conta se cadastra e ja entra. Voce recebe um aviso a cada entrada.
+                    Pra dar papel de <strong>admin</strong>, use o convite por e-mail abaixo.
                 </p>
                 {% if link_convite %}
                 <div class="flex flex-col sm:flex-row gap-2">

@@ -8,6 +8,7 @@ from flask import render_template, redirect, url_for, flash, request, abort, jso
 from flask_login import login_required, current_user
 
 from app.imagens import salvar_imagem, remover_imagem
+from app.extensions import limiter
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.ministerio import bp
 from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm
@@ -489,15 +490,66 @@ def papeis(ministerio_id):
         .order_by("-criado_em")
     )
 
+    link_convite = (
+        url_for("ministerio.entrar_via_link", token=ministerio.token_convite_publico, _external=True)
+        if ministerio.token_convite_publico else None
+    )
+
     return render_template(
         "ministerio/papeis.html",
         ministerio=ministerio,
         form=form,
+        link_convite=link_convite,
         pode_convidar=bool(papeis_permitidos),
         papeis_atuais=papeis_atuais,
         convites_pendentes=convites_pendentes,
         acao_form=AcaoForm(),
     )
+
+
+@bp.route("/<int:ministerio_id>/papeis/link/gerar", methods=["POST"])
+@login_required
+def gerar_link_convite(ministerio_id):
+    """Gera (ou regenera, invalidando o anterior) o link de acesso direto do
+    ministerio -- ver app/convites/link_publico.py. Lider ou admin da
+    comunidade; quem entra por ele e sempre "membro"."""
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+    ministerio.gerar_novo_link_convite()
+    ministerio.save()
+    flash("Novo link de acesso gerado! O link anterior (se existia) parou de funcionar.", "success")
+    return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+
+@bp.route("/entrar/<token>", methods=["GET", "POST"])
+@limiter.limit("30 per minute")
+def entrar_via_link(token):
+    """Publica (sem @login_required): quem nao tem conta ve a tela pra entrar
+    ou se cadastrar, e a entrada se conclui sozinha depois. Mesmo fluxo de
+    comunidade.routes.entrar_via_link."""
+    from app.convites.link_publico import entrar_no_ministerio, eh_navegacao_direta, guardar_entrada_pendente
+
+    ministerio = primeiro_ou_404(Ministerio.objects(token_convite_publico=token))
+    tela = dict(
+        nome_escopo=ministerio.nome, tipo_escopo="ministerio", imagem_escopo=ministerio.imagem,
+        comunidade_escopo=ministerio.comunidade.nome if ministerio.comunidade else None,
+    )
+
+    if not current_user.is_authenticated:
+        guardar_entrada_pendente("ministerio", token, url_for("ministerio.entrar_via_link", token=token))
+        return render_template("comunidade/entrar.html", **tela)
+
+    form = AcaoForm()
+    if (request.method == "POST" and form.validate_on_submit()) or (
+        request.method == "GET" and eh_navegacao_direta(request)
+    ) or UsuarioMinisterio.objects(usuario_id=current_user.id, ministerio_id=ministerio.id).first():
+        destino, mensagem = entrar_no_ministerio(current_user, ministerio)
+        flash(mensagem, "success")
+        return redirect(destino)
+
+    return render_template("comunidade/entrar.html", precisa_confirmar=True, acao_form=form, **tela)
 
 
 @bp.route("/<int:ministerio_id>/papeis/<int:usuario_ministerio_id>/remover", methods=["POST"])
