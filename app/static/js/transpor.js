@@ -117,11 +117,16 @@
             for (var i = 0; i < 12; i++) {
                 var opcao = document.createElement('option');
                 opcao.value = String(i);
-                opcao.textContent = transporTom(tomOriginal, i) + (i === 0 ? ' (original)' : '');
+                opcao.textContent = transporTom(tomOriginal, i) + (i === 0 ? ' (atual)' : '');
                 seletor.appendChild(opcao);
             }
         } else if (seletor) {
             seletor.classList.add('hidden');
+        }
+
+        // Avisa o rascunho automatico (static/js/rascunho.js) que o texto mudou.
+        function avisarMudanca() {
+            if (ehCampo) alvo.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
         function atualizar() {
@@ -154,6 +159,7 @@
             deslocamento += passo;
             tomAtual = novoTom;
             atualizar();
+            avisarMudanca();
         }
 
         caixa.querySelectorAll('[data-transpor-passo]').forEach(function (botao) {
@@ -173,6 +179,7 @@
                 deslocamento = 0;
                 tomAtual = tomOriginal;
                 atualizar();
+                avisarMudanca();
             });
         }
         atualizar();

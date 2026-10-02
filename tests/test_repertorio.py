@@ -369,3 +369,16 @@ def test_folha_de_cifras_sai_no_tom_do_dia(logged_in_client, app, db):
         assert "transposta do original em G" in cifras
         musica.reload()
         assert musica.cifra_louvor == CIFRA  # o banco continua no tom original
+
+
+def test_formularios_da_musica_guardam_rascunho_por_tom(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": "D", "tom": "D"})
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        for chave in ("projecao", "louvor-original", "info"):
+            assert f'data-guardar-rascunho="musica-{musica.id}-{chave}"' in html
+        assert "js/rascunho.js" in html and "data-rascunho-descartar" in html
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}?tom=D").data.decode("utf-8")
+        assert f'data-guardar-rascunho="musica-{musica.id}-louvor-D"' in html
