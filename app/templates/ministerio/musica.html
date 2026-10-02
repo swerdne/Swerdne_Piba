@@ -72,11 +72,25 @@
                     <p class="text-sm font-semibold {{ tema.text_primary }}">Letra para projecao</p>
                     <p class="text-xs {{ tema.text_secondary }}">Sem acordes. Use <span class="font-mono">[VERSO 1]</span>, <span class="font-mono">[REFRAO]</span>, <span class="font-mono">[PONTE]</span> numa linha sozinha; linha em branco separa os slides.</p>
                 </div>
+                {% if projecao_tem_acordes %}
+                <p data-aviso-acordes class="text-xs rounded-xl bg-amber-500/10 text-amber-700 px-3 py-2">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>Essa letra tem linhas de acordes -- no telao elas aparecem como texto. Use <span class="font-semibold">Limpar acordes</span> e salve.
+                </p>
+                {% endif %}
                 {{ form_projecao.letra_projecao(rows="14", class_="w-full mu-mono " ~ CAMPO,
                     placeholder="[VERSO 1]\nPRIMEIRA LINHA DA LETRA\nSEGUNDA LINHA\n\n[REFRAO]\n...") }}
-                <div class="flex items-center gap-2">
+                <p data-rascunho-aviso class="hidden text-xs {{ tema.accent_text }}"></p>
+                <div class="flex flex-wrap items-center gap-2">
+                    {% if musica.cifra_louvor %}
+                    <button type="button" data-rascunho="cifra" class="border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-xs font-semibold px-3 py-2 rounded-full transition" title="Monta a letra de projecao a partir da cifra original, sem acordes. Nao salva sozinho.">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Gerar da cifra
+                    </button>
+                    {% endif %}
+                    <button type="button" data-rascunho="texto" class="border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-xs font-semibold px-3 py-2 rounded-full transition" title="Tira os acordes do texto do editor e aplica o formato de projecao">
+                        <i class="fa-solid fa-eraser mr-1"></i>Limpar acordes
+                    </button>
                     <button type="button" data-maiusculas class="border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-xs font-semibold px-3 py-2 rounded-full transition">
-                        <i class="fa-solid fa-font mr-1"></i>Tudo em maiusculas
+                        <i class="fa-solid fa-font mr-1"></i>Maiusculas
                     </button>
                     <button type="submit" class="ml-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">
                         Salvar projecao
@@ -102,19 +116,37 @@
             {% endif %}
         </section>
 
-        <!-- Aba Louvor: cifra com acordes sobre a letra -->
+        <!-- Aba Louvor: cifra original + versoes salvas em outros tons -->
         <section data-aba="louvor" class="space-y-4 hidden">
+            {% if musica.tons_salvos|length > 1 or (musica.tons_salvos and not aberta_eh_original) %}
+            <div class="space-y-1.5">
+                <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">Tons salvos</p>
+                <div class="flex flex-wrap gap-1.5">
+                    {% for tom, original in musica.tons_salvos %}
+                    {% set ativo = (original and aberta_eh_original) or (not original and not aberta_eh_original and tom == tom_aberto) %}
+                    <a href="{{ url_for('ministerio.musica', musica_id=musica.id, tom=(none if original else tom)) }}#louvor" data-tom-salvo="{{ tom }}"
+                       class="text-sm font-semibold rounded-full px-3.5 py-1.5 border transition {{ tema.accent_bg ~ ' text-white border-transparent' if ativo else tema.card_bg ~ ' ' ~ tema.card_border ~ ' ' ~ tema.text_primary }}">
+                        {{ tom or 'Sem tom' }}{% if original %} <span class="text-[10px] font-bold uppercase {{ 'text-white/80' if ativo else tema.text_secondary }}">original</span>{% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             {% if pode_gerenciar %}
             <form method="POST" action="{{ url_for('ministerio.salvar_louvor_musica', musica_id=musica.id) }}"
                   class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
-                {{ form_louvor.hidden_tag() }}
+                {{ form_louvor.csrf_token }}
+                <input type="hidden" name="tom" id="tom_transposto" value="{{ tom_aberto }}">
                 <div>
-                    <p class="text-sm font-semibold {{ tema.text_primary }}">Cifra para o louvor</p>
-                    <p class="text-xs {{ tema.text_secondary }}">Acordes na linha de cima, letra embaixo -- a fonte e monoespacada, entao o alinhamento fica igual na folha.</p>
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">
+                        {% if aberta_eh_original %}Cifra original{% if musica.tom %} &middot; Tom {{ musica.tom }}{% endif %}{% else %}Versao no tom {{ tom_aberto }}{% endif %}
+                    </p>
+                    <p class="text-xs {{ tema.text_secondary }}">Acordes na linha de cima, letra embaixo. Editar aqui nao altera a aba Projecao.</p>
                 </div>
-                <div data-transpor="#cifra_louvor" data-tom="{{ musica.tom or '' }}" data-transpor-campo="#tom_transposto" data-transpor-aviso="#aviso_transposto"
+                <div data-transpor="#cifra_louvor" data-tom="{{ tom_aberto }}" data-tom-cadastro="{{ musica.tom or '' }}" data-transpor-campo="#tom_transposto" data-transpor-aviso="#aviso_transposto"
                      class="flex flex-wrap items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-3 py-2.5">
-                    <span class="text-xs font-semibold {{ tema.text_secondary }}"><i class="fa-solid fa-arrows-up-down mr-1"></i>Tom</span>
+                    <span class="text-xs font-semibold {{ tema.text_secondary }}"><i class="fa-solid fa-arrows-up-down mr-1"></i>Converter</span>
                     <button type="button" data-transpor-passo="-1" title="Descer meio tom"
                             class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">-&frac12;</button>
                     <select data-transpor-tom aria-label="Converter para o tom"
@@ -122,22 +154,34 @@
                     <span data-transpor-rotulo class="text-sm font-semibold {{ tema.text_primary }}"></span>
                     <button type="button" data-transpor-passo="1" title="Subir meio tom"
                             class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">+&frac12;</button>
-                    <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Voltar ao original</button>
+                    <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Desfazer</button>
                 </div>
-                {{ form_louvor.tom(id="tom_transposto") }}
+                {% if not musica.tom %}
+                <p class="text-xs {{ tema.text_secondary }}"><i class="fa-solid fa-circle-info mr-1"></i>Defina o tom original na aba Dados pra poder salvar versoes em outros tons.</p>
+                {% endif %}
                 {{ form_louvor.cifra_louvor(rows="18", wrap="off", spellcheck="false", class_="w-full mu-mono whitespace-pre overflow-x-auto " ~ CAMPO,
                     placeholder="Intro: G  D  Em  C\n\n[Verso 1]\nG              D\nPrimeira linha da letra\n...") }}
                 <div class="flex items-center justify-end gap-3">
-                    <p id="aviso_transposto" class="hidden text-xs {{ tema.text_secondary }} mr-auto">Salve pra guardar a cifra (e o tom da musica) no tom novo.</p>
+                    <p id="aviso_transposto" class="hidden text-xs font-semibold {{ tema.accent_text }} mr-auto"></p>
                     <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition shrink-0">
                         Salvar cifra
                     </button>
                 </div>
             </form>
-            {% elif musica.cifra_louvor %}
-            <div data-transpor="#cifra_leitura" data-tom="{{ musica.tom or '' }}" 
+            {% if not aberta_eh_original %}
+            <form method="POST" action="{{ url_for('ministerio.excluir_versao_cifra', musica_id=musica.id) }}"
+                  data-confirm-excluir="Remover a versao no tom {{ tom_aberto }}? A cifra original continua guardada.">
+                {{ acao_form.hidden_tag() }}
+                <input type="hidden" name="tom" value="{{ tom_aberto }}">
+                <button type="submit" class="w-full border border-red-500/40 text-red-500 hover:bg-red-500/10 text-sm font-semibold py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-trash mr-1"></i>Remover versao em {{ tom_aberto }}
+                </button>
+            </form>
+            {% endif %}
+            {% elif form_louvor.cifra_louvor.data %}
+            <div data-transpor="#cifra_leitura" data-tom="{{ tom_aberto }}" data-tom-cadastro="{{ musica.tom or '' }}" 
                  class="flex flex-wrap items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-3 py-2.5">
-                <span class="text-xs font-semibold {{ tema.text_secondary }}"><i class="fa-solid fa-arrows-up-down mr-1"></i>Tom</span>
+                <span class="text-xs font-semibold {{ tema.text_secondary }}"><i class="fa-solid fa-arrows-up-down mr-1"></i>Converter</span>
                 <button type="button" data-transpor-passo="-1" title="Descer meio tom"
                         class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">-&frac12;</button>
                 <select data-transpor-tom aria-label="Converter para o tom"
@@ -145,9 +189,9 @@
                 <span data-transpor-rotulo class="text-sm font-semibold {{ tema.text_primary }}"></span>
                 <button type="button" data-transpor-passo="1" title="Subir meio tom"
                         class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">+&frac12;</button>
-                <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Voltar ao original</button>
+                <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Desfazer</button>
             </div>
-            <pre id="cifra_leitura" class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-sm {{ tema.text_primary }} overflow-x-auto">{{ musica.cifra_louvor }}</pre>
+            <pre id="cifra_leitura" class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-sm {{ tema.text_primary }} overflow-x-auto">{{ form_louvor.cifra_louvor.data }}</pre>
             {% else %}
             <p class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl p-6 text-center text-sm {{ tema.text_secondary }}">A cifra ainda nao foi preenchida.</p>
             {% endif %}
@@ -222,6 +266,31 @@
         document.querySelectorAll('[data-confirm-excluir]').forEach(function (form) {
             form.addEventListener('submit', function (evento) {
                 if (!window.confirm(form.getAttribute('data-confirm-excluir'))) evento.preventDefault();
+            });
+        });
+
+        // Rascunho da projecao: so preenche o editor -- nada e salvo ate
+        // a pessoa clicar em "Salvar projecao".
+        var editorProjecao = document.getElementById('letra_projecao');
+        var avisoRascunho = document.querySelector('[data-rascunho-aviso]');
+        document.querySelectorAll('[data-rascunho]').forEach(function (botao) {
+            botao.addEventListener('click', function () {
+                var daCifra = botao.getAttribute('data-rascunho') === 'cifra';
+                if (daCifra && editorProjecao.value.trim() &&
+                    !window.confirm('Substituir o texto do editor pelo rascunho gerado da cifra? Nada e salvo ate voce clicar em Salvar projecao.')) return;
+                var dados = new FormData();
+                dados.append('csrf_token', editorProjecao.form.querySelector('[name=csrf_token]').value);
+                if (!daCifra) dados.append('texto', editorProjecao.value);
+                fetch({{ url_for('ministerio.rascunho_projecao', musica_id=musica.id)|tojson }}, { method: 'POST', body: dados, credentials: 'same-origin' })
+                    .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                    .then(function (resposta) {
+                        editorProjecao.value = resposta.texto;
+                        avisoRascunho.textContent = (daCifra ? 'Rascunho gerado da cifra' : 'Acordes removidos') + ' -- revise e clique em Salvar projecao.';
+                        avisoRascunho.classList.remove('hidden');
+                        var avisoAcordes = document.querySelector('[data-aviso-acordes]');
+                        if (avisoAcordes) avisoAcordes.classList.add('hidden');
+                    })
+                    .catch(function () { window.alert('Nao foi possivel gerar o rascunho agora.'); });
             });
         });
 

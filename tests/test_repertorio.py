@@ -234,16 +234,127 @@ def test_transpor_tom_escolhe_a_grafia_do_tom():
     assert semitons_entre(None, "A") is None
 
 
-def test_salvar_cifra_transposta_atualiza_o_tom(logged_in_client, app, db):
+def _inputs_tom_escondidos(html, acao):
+    """Campos hidden name=tom dentro do form que posta em `acao`."""
+    import re
+    form = re.search(r'<form[^>]*action="' + re.escape(acao) + r'".*?</form>', html, re.S).group(0)
+    return [c for c in re.findall(r'<input[^>]*>', form) if 'name="tom"' in c and 'type="hidden"' in c]
+
+
+def test_form_da_cifra_tem_um_unico_campo_tom(logged_in_client, app, db):
+    """Regressao: o hidden_tag() renderizava um 2o "tom" vazio que vinha
+    antes do tom convertido -- o servidor lia o vazio e a cifra transposta
+    sobrescrevia a original."""
     with app.app_context():
         _, ministerio, _ = _montar(logged_in_client)
         musica = _nova_musica(logged_in_client, ministerio.id)
-        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
-                              data={"cifra_louvor": "A        E", "tom": "A"})
-        musica.reload()
-        assert musica.tom == "A" and musica.cifra_louvor == "A        E"
         html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        campos = _inputs_tom_escondidos(html, f"/ministerio/repertorio/{musica.id}/louvor")
+        assert len(campos) == 1 and 'value="G"' in campos[0]
         assert "data-transpor" in html and "js/transpor.js" in html
+
+
+def test_salva_cifra_em_varios_tons_sem_mexer_na_original(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)  # tom G
+        _preencher(logged_in_client, musica)
+        url = f"/ministerio/repertorio/{musica.id}/louvor"
+
+        logged_in_client.post(url, data={"cifra_louvor": "D        A\nGrande e o Senhor", "tom": "D"})
+        logged_in_client.post(url, data={"cifra_louvor": "A        E\nGrande e o Senhor", "tom": "A"})
+        # salvar de novo em D atualiza a versao D, nao cria outra
+        logged_in_client.post(url, data={"cifra_louvor": "D        A\nGrande e o Senhor (v2)", "tom": "D"})
+
+        musica.reload()
+        assert musica.tom == "G" and musica.cifra_louvor == CIFRA  # original intacta
+        assert [(v.tom, v.cifra) for v in musica.versoes_cifra] == [
+            ("D", "D        A\nGrande e o Senhor (v2)"),
+            ("A", "A        E\nGrande e o Senhor"),
+        ]
+        assert musica.tons_salvos == [("G", True), ("D", False), ("A", False)]
+        assert musica.cifra_no_tom("A").startswith("A        E")
+        assert musica.cifra_no_tom("G") == CIFRA
+
+        # alternar entre os tons salvos na aba Louvor
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}?tom=A").data.decode("utf-8")
+        assert "Versao no tom A" in html and "A        E" in html
+        assert 'data-tom-salvo="G"' in html and 'data-tom-salvo="D"' in html
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        assert "Cifra original" in html and "G        D" in html
+
+        # salvar no tom do cadastro continua editando a original
+        logged_in_client.post(url, data={"cifra_louvor": "G nova", "tom": "G"})
+        musica.reload()
+        assert musica.cifra_louvor == "G nova" and len(musica.versoes_cifra) == 2
+
+
+def test_remover_versao_de_tom(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        _preencher(logged_in_client, musica)
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": "D", "tom": "D"})
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor/excluir-versao", data={"tom": "D"})
+        musica.reload()
+        assert list(musica.versoes_cifra) == [] and musica.cifra_louvor == CIFRA
+
+
+def test_editar_louvor_nao_altera_a_projecao(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        projecao = "[VERSO 1]\nGRANDE E O SENHOR\n\n[REFRAO]\nSANTO, SANTO\nAJUSTE MANUAL"
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/projecao", data={"letra_projecao": projecao})
+
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": CIFRA, "tom": "G"})
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
+                              data={"cifra_louvor": "C        G\nOutra letra", "tom": "C"})
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/rascunho-projecao", data={})
+
+        musica.reload()
+        assert musica.letra_projecao == projecao
+
+
+def test_rascunho_da_projecao_tira_acordes_sem_gravar(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        _preencher(logged_in_client, musica)
+        url = f"/ministerio/repertorio/{musica.id}/rascunho-projecao"
+
+        da_cifra = logged_in_client.post(url, data={}).get_json()["texto"]
+        assert da_cifra == "GRANDE E O SENHOR\nDIGNO DE LOUVOR"
+
+        colado = "Intro: G D\n\nVerso 1:\nG      D\nGrande e o   Senhor\n\n[Refrão]\n[C]Santo, [G]santo\nSolo: Em C"
+        limpo = logged_in_client.post(url, data={"texto": colado}).get_json()["texto"]
+        assert limpo == "[VERSO 1]\nGRANDE E O SENHOR\n\n[REFRÃO]\nSANTO, SANTO"
+
+        musica.reload()
+        assert musica.letra_projecao == LETRA  # nada foi gravado
+
+
+def test_aviso_quando_a_projecao_tem_acordes(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/projecao", data={"letra_projecao": CIFRA})
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        assert "data-aviso-acordes" in html
+
+
+def test_folha_usa_a_versao_salva_no_tom_do_dia(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, escala = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        _preencher(logged_in_client, musica)
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
+                              data={"cifra_louvor": "A9       E\nVersao ajustada em A", "tom": "A"})
+        logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
+                              data={"banco-musica_id": musica.id, "banco-momento": "", "banco-tom": "A"})
+        cifras = logged_in_client.get(f"/escala/{escala.id}/repertorio/cifras").data.decode("utf-8")
+        assert "Versao ajustada em A" in cifras
+        assert "transposta do original" not in cifras
 
 
 def test_folha_de_cifras_sai_no_tom_do_dia(logged_in_client, app, db):

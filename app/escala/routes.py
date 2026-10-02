@@ -1634,13 +1634,16 @@ def folha_repertorio(escala_id, tipo):
     for item in escala.repertorio:
         musica = item.musica
         tom = item.tom or (musica.tom if musica else None)
-        cifra = musica.cifra_louvor if musica else None
         tom_original = None
-        # Tom do dia diferente do tom cadastrado: a cifra ja sai transposta.
-        semitons = semitons_entre(musica.tom, tom) if musica and cifra else None
-        if semitons:
-            cifra = transpor_cifra(cifra, semitons, prefere_bemol(tom))
-            tom_original = musica.tom
+        # 1o a cifra salva nesse tom (original ou versao); senao, a original
+        # transposta na hora pro tom do dia.
+        cifra = musica.cifra_no_tom(tom) if musica else None
+        if musica and cifra is None and musica.cifra_louvor:
+            cifra = musica.cifra_louvor
+            semitons = semitons_entre(musica.tom, tom)
+            if semitons:
+                cifra = transpor_cifra(cifra, semitons, prefere_bemol(tom))
+                tom_original = musica.tom
         itens.append({
             "item": item,
             "musica": musica,

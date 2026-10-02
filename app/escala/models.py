@@ -680,6 +680,15 @@ class Anexo(SequentialIdDocument):
         return f"<Anexo {self.nome_arquivo!r} da escala {self.escala_id}>"
 
 
+class VersaoCifra(mongoengine.EmbeddedDocument):
+    """Cifra da musica guardada em outro tom (alem da original). Cada versao
+    e independente: editar a original nao mexe nas versoes, e vice-versa."""
+
+    tom = mongoengine.StringField(required=True, max_length=10)
+    cifra = mongoengine.StringField()
+    atualizada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+
 class Musica(SequentialIdDocument):
     """Musica do banco de repertorio de um Ministerio. Uma unica musica com
     duas versoes editadas separadamente: letra_projecao (pro telao: blocos
@@ -698,6 +707,8 @@ class Musica(SequentialIdDocument):
     link = mongoengine.StringField(max_length=500)
     letra_projecao = mongoengine.StringField()
     cifra_louvor = mongoengine.StringField()
+    # Cifra salva em outros tons (a original continua em cifra_louvor/tom).
+    versoes_cifra = mongoengine.EmbeddedDocumentListField(VersaoCifra)
     criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
     atualizada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
@@ -705,6 +716,29 @@ class Musica(SequentialIdDocument):
     def ministerio(self):
         from app.ministerio.models import Ministerio
         return Ministerio.objects(id=self.ministerio_id).first()
+
+    def eh_tom_original(self, tom):
+        """Sem tom informado, ou mesmo tom (mesma nota e modo) do cadastro."""
+        return not (tom or "").strip() or not self.tom or mesmo_tom(tom, self.tom)
+
+    def versao_no_tom(self, tom):
+        for versao in self.versoes_cifra or []:
+            if mesmo_tom(versao.tom, tom):
+                return versao
+        return None
+
+    def cifra_no_tom(self, tom):
+        """Cifra salva exatamente nesse tom (original ou versao); None se nao houver."""
+        if self.eh_tom_original(tom):
+            return self.cifra_louvor
+        versao = self.versao_no_tom(tom)
+        return versao.cifra if versao else None
+
+    @property
+    def tons_salvos(self):
+        """[(tom, eh_original)] -- original primeiro, depois as versoes."""
+        tons = [(self.tom or "", True)] if self.cifra_louvor else []
+        return tons + [(v.tom, False) for v in self.versoes_cifra or []]
 
     def __repr__(self):
         return f"<Musica {self.nome!r} do ministerio {self.ministerio_id}>"
@@ -790,6 +824,14 @@ def transpor_tom(tom, semitons):
     return (_NOTAS_BEMOL if bemol else _NOTAS_SUSTENIDO)[novo] + ("m" if menor else "")
 
 
+def mesmo_tom(a, b):
+    """G == G, Gb == F#, mas G != Gm."""
+    x, y = _ler_tom(a), _ler_tom(b)
+    if x is None or y is None:
+        return (a or "").strip().lower() == (b or "").strip().lower()
+    return x[0] == y[0] and x[1] == y[1]
+
+
 def semitons_entre(de, para):
     """Quantos semitons (0..11) do tom `de` pro tom `para`; None se nao der pra ler."""
     a, b = _ler_tom(de), _ler_tom(para)
@@ -856,3 +898,59 @@ def transpor_cifra(texto, semitons, bemol=False):
         _transpor_linha(linha, semitons, bemol) if eh_linha_de_acordes(linha) else linha
         for linha in texto.replace("\r\n", "\n").split("\n")
     )
+
+
+# --- Rascunho da projecao a partir da cifra ----------------------------------
+
+_LINHA_DE_TABLATURA = re.compile(r"^\s*[eBGDAEbgdae]\s*\|[-\d|hpbr/\\~x ]*$")
+_ACORDE_ENTRE_COLCHETES = re.compile(r"\[([^\]\s]+)\]")
+_ROTULO_DE_SECAO = re.compile(
+    r"^\s*[\[(]?\s*((?:intro|introducao|introdução|verso|estrofe|parte|pre[- ]?refrao|pré[- ]?refrão|"
+    r"refrao|refrão|coro|ponte|final|tag|interludio|interlúdio|solo|instrumental|outro|vamp)"
+    r"[\w\sÀ-ÿ]*?\d*)\s*[\])]?\s*:?\s*(?:\(?\s*\d*\s*x\s*\d*\s*\)?)?\s*$",
+    re.I,
+)
+
+
+def _sem_acorde_inline(linha):
+    # "[G]Grande e o [D]Senhor" -> "Grande e o Senhor"
+    return _ACORDE_ENTRE_COLCHETES.sub(
+        lambda m: "" if _TOKEN_ACORDE.match(m.group(1)) else m.group(0), linha
+    )
+
+
+def projecao_da_cifra(texto):
+    """Gera o RASCUNHO da letra de projecao a partir de uma cifra: tira as
+    linhas de acordes e tablaturas, poe os rotulos no padrao [VERSO 1]/
+    [REFRAO], passa a letra pra maiusculas e separa os slides por linha em
+    branco. Partes so instrumentais (intro, solo) somem. Quem chama decide
+    se usa -- nada aqui grava na musica."""
+    blocos, atual = [], None
+    for linha in (texto or "").replace("\r\n", "\n").split("\n"):
+        if eh_linha_de_acordes(linha) or _LINHA_DE_TABLATURA.match(linha):
+            continue
+        rotulo = _ROTULO_DE_SECAO.match(linha) or _ROTULO_SECAO.match(linha)
+        if rotulo:
+            atual = {"rotulo": " ".join(rotulo.group(1).split()).upper(), "linhas": []}
+            blocos.append(atual)
+            continue
+        letra = " ".join(_sem_acorde_inline(linha).split())
+        if not letra:
+            if atual is not None and atual["linhas"]:
+                atual = None
+            continue
+        if atual is None:
+            atual = {"rotulo": None, "linhas": []}
+            blocos.append(atual)
+        atual["linhas"].append(letra.upper())
+    partes = []
+    for bloco in blocos:
+        if not bloco["linhas"]:
+            continue  # rotulo sem letra (intro, solo...)
+        cabeca = [f"[{bloco['rotulo']}]"] if bloco["rotulo"] else []
+        partes.append("\n".join(cabeca + bloco["linhas"]))
+    return "\n\n".join(partes)
+
+
+def tem_acordes(texto):
+    return any(eh_linha_de_acordes(l) for l in (texto or "").split("\n"))

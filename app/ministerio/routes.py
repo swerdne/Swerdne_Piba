@@ -4,7 +4,7 @@ import random
 import string
 from datetime import date, datetime, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, request, abort
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify
 from flask_login import login_required, current_user
 
 from app.imagens import salvar_imagem, remover_imagem
@@ -19,7 +19,10 @@ from app.ministerio.models import (
     CheckInCrianca,
     criar_ministerio,
 )
-from app.escala.models import resumos_para_calendario_em_lote, Musica, ItemRepertorio, blocos_da_letra
+from app.escala.models import (
+    resumos_para_calendario_em_lote, Musica, ItemRepertorio, VersaoCifra,
+    blocos_da_letra, projecao_da_cifra, tem_acordes,
+)
 from app.escala.forms import MusicaForm, LetraProjecaoForm, CifraLouvorForm
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
@@ -718,14 +721,21 @@ def nova_musica(ministerio_id):
         link=(form.link.data or "").strip() or None,
     )
     musica.save()
-    flash(f'"{musica.nome}" cadastrada. Agora preencha as versoes de projecao e louvor.', "success")
-    return redirect(url_for("ministerio.musica", musica_id=musica.id))
+    flash(f'"{musica.nome}" cadastrada. Cole a cifra aqui no Louvor; na aba Projecao, '
+          '"Gerar da cifra" monta a letra sem acordes.', "success")
+    return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
 
 
 @bp.route("/repertorio/<int:musica_id>")
 @login_required
 def musica(musica_id):
     musica, ministerio, pode_gerenciar = _musica_visivel_ou_404(musica_id)
+    # ?tom=D abre a versao salva nesse tom (a original, se nao existir).
+    pedido = (request.args.get("tom") or "").strip()
+    versao = None if musica.eh_tom_original(pedido) else musica.versao_no_tom(pedido)
+    aberta_eh_original = versao is None
+    cifra_aberta = musica.cifra_louvor if aberta_eh_original else versao.cifra
+    tom_aberto = (musica.tom or "") if aberta_eh_original else versao.tom
     form_info = MusicaForm(
         nome=musica.nome, artista=musica.artista, tom=musica.tom,
         tags=", ".join(musica.tags or []), link=musica.link,
@@ -737,7 +747,10 @@ def musica(musica_id):
         pode_gerenciar=pode_gerenciar,
         form_info=form_info,
         form_projecao=LetraProjecaoForm(letra_projecao=musica.letra_projecao),
-        form_louvor=CifraLouvorForm(cifra_louvor=musica.cifra_louvor),
+        form_louvor=CifraLouvorForm(cifra_louvor=cifra_aberta, tom=tom_aberto),
+        tom_aberto=tom_aberto,
+        aberta_eh_original=aberta_eh_original,
+        projecao_tem_acordes=tem_acordes(musica.letra_projecao),
         blocos=blocos_da_letra(musica.letra_projecao),
         acao_form=AcaoForm(),
     )
@@ -789,12 +802,48 @@ def salvar_louvor_musica(musica_id):
     if not form.validate_on_submit():
         flash("Nao foi possivel salvar a cifra.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
-    musica.cifra_louvor = form.cifra_louvor.data or None
-    tom_novo = (form.tom.data or "").strip()
-    if tom_novo and tom_novo != musica.tom:
-        musica.tom = tom_novo
-        return _salvar_musica(musica, "louvor", f"Cifra salva no tom {tom_novo}.")
-    return _salvar_musica(musica, "louvor", "Versao do louvor (cifra) salva.")
+    tom = (form.tom.data or "").strip()
+    if musica.eh_tom_original(tom):
+        musica.cifra_louvor = form.cifra_louvor.data or None
+        return _salvar_musica(musica, "louvor", "Cifra original salva.")
+    # Outro tom: vira (ou atualiza) uma versao separada -- a original fica intacta.
+    versao = musica.versao_no_tom(tom)
+    if versao is None:
+        versao = VersaoCifra(tom=tom)
+        musica.versoes_cifra.append(versao)
+    versao.cifra = form.cifra_louvor.data or None
+    versao.atualizada_em = datetime.now(timezone.utc)
+    musica.atualizada_em = versao.atualizada_em
+    musica.save()
+    flash(f"Cifra salva no tom {tom}. A original em {musica.tom} continua guardada.", "success")
+    return redirect(url_for("ministerio.musica", musica_id=musica.id, tom=tom) + "#louvor")
+
+
+@bp.route("/repertorio/<int:musica_id>/louvor/excluir-versao", methods=["POST"])
+@login_required
+def excluir_versao_cifra(musica_id):
+    musica, _ = _musica_do_lider_ou_404(musica_id)
+    tom = (request.form.get("tom") or "").strip()
+    if not AcaoForm().validate_on_submit() or musica.eh_tom_original(tom) or not musica.versao_no_tom(tom):
+        flash("Versao nao encontrada.", "danger")
+        return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
+    musica.versoes_cifra = [v for v in musica.versoes_cifra if v is not musica.versao_no_tom(tom)]
+    return _salvar_musica(musica, "louvor", f"Versao em {tom} removida.")
+
+
+@bp.route("/repertorio/<int:musica_id>/rascunho-projecao", methods=["POST"])
+@login_required
+def rascunho_projecao(musica_id):
+    """Devolve (sem gravar nada) a letra de projecao gerada a partir de um
+    texto com cifra -- o enviado no campo "texto" ou, sem ele, a cifra
+    original. A tela poe no editor da projecao e a pessoa ajusta/salva."""
+    musica, _ = _musica_do_lider_ou_404(musica_id)
+    if not AcaoForm().validate_on_submit():
+        abort(400)
+    texto = request.form.get("texto")
+    if texto is None:
+        texto = musica.cifra_louvor or ""
+    return jsonify({"texto": projecao_da_cifra(texto)})
 
 
 @bp.route("/repertorio/<int:musica_id>/excluir", methods=["POST"])

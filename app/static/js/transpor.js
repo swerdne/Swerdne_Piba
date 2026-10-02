@@ -132,8 +132,18 @@
                     ? '' : (d ? (deslocamento > 0 ? '+' : '') + (deslocamento) + ' semitom' + (Math.abs(deslocamento) > 1 ? 's' : '') : 'Tom original');
             }
             if (original) original.classList.toggle('hidden', d === 0);
-            if (campoTom) campoTom.value = d && lerTom(tomOriginal) ? tomAtual : '';
-            if (aviso) aviso.classList.toggle('hidden', d === 0);
+            // O campo leva o tom do texto que esta no editor: o servidor grava
+            // na original (se for o tom do cadastro) ou numa versao separada.
+            if (campoTom) campoTom.value = lerTom(tomOriginal) ? tomAtual : '';
+            if (aviso) {
+                aviso.classList.toggle('hidden', d === 0);
+                var cadastro = lerTom(caixa.getAttribute('data-tom-cadastro'));
+                var atual = lerTom(tomAtual);
+                var ehOriginal = cadastro && atual && cadastro.indice === atual.indice && cadastro.menor === atual.menor;
+                aviso.textContent = !atual ? 'Ao salvar, a cifra e substituida pela convertida.'
+                    : ehOriginal ? 'Ao salvar, substitui a cifra original em ' + tomAtual + '.'
+                    : 'Ao salvar, vira uma versao em ' + tomAtual + ' -- a original nao muda.';
+            }
         }
 
         function mover(passo) {
