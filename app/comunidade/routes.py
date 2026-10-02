@@ -1,14 +1,12 @@
 """Controller (C do MVC): rotas do modulo comunidade."""
 import calendar
-import os
-import uuid
 from datetime import date, time, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, current_app, abort, session
+from flask import render_template, redirect, url_for, flash, request, abort, session
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf
-from werkzeug.utils import secure_filename
 
+from app.imagens import salvar_imagem, remover_imagem
 from app.extensions import limiter
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.comunidade import bp
@@ -100,24 +98,11 @@ def _comunidade_visivel_ou_404(comunidade_id):
 
 
 def _salvar_logo(arquivo):
-    extensao = arquivo.filename.rsplit(".", 1)[1].lower()
-    nome_arquivo = secure_filename(f"comunidade_{uuid.uuid4().hex}.{extensao}")
-
-    upload_folder = current_app.config["COMUNIDADE_UPLOAD_FOLDER"]
-    os.makedirs(upload_folder, exist_ok=True)
-    arquivo.save(os.path.join(upload_folder, nome_arquivo))
-
-    return f"/static/uploads/comunidades/{nome_arquivo}"
+    return salvar_imagem(arquivo)
 
 
 def _remover_logo_antiga(caminho):
-    if caminho and caminho.startswith("/static/uploads/comunidades/"):
-        caminho_absoluto = os.path.join("app", caminho.lstrip("/"))
-        if os.path.isfile(caminho_absoluto):
-            try:
-                os.remove(caminho_absoluto)
-            except OSError:
-                pass
+    remover_imagem(caminho)
 
 
 def _ler_segmentos_do_form():

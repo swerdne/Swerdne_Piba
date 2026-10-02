@@ -1,15 +1,13 @@
 """Controller (C do MVC): rotas do modulo ministerio."""
 import calendar
-import os
 import random
 import string
-import uuid
 from datetime import date, datetime, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, request, current_app, abort
+from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
-from werkzeug.utils import secure_filename
 
+from app.imagens import salvar_imagem, remover_imagem
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.ministerio import bp
 from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm
@@ -136,24 +134,11 @@ def _ministerio_visivel_ou_404(ministerio_id):
 
 
 def _salvar_logo(arquivo):
-    extensao = arquivo.filename.rsplit(".", 1)[1].lower()
-    nome_arquivo = secure_filename(f"ministerio_{uuid.uuid4().hex}.{extensao}")
-
-    upload_folder = current_app.config["MINISTERIO_UPLOAD_FOLDER"]
-    os.makedirs(upload_folder, exist_ok=True)
-    arquivo.save(os.path.join(upload_folder, nome_arquivo))
-
-    return f"/static/uploads/ministerios/{nome_arquivo}"
+    return salvar_imagem(arquivo)
 
 
 def _remover_logo_antiga(caminho):
-    if caminho and caminho.startswith("/static/uploads/ministerios/"):
-        caminho_absoluto = os.path.join("app", caminho.lstrip("/"))
-        if os.path.isfile(caminho_absoluto):
-            try:
-                os.remove(caminho_absoluto)
-            except OSError:
-                pass
+    remover_imagem(caminho)
 
 
 @bp.route("/comunidade/<int:comunidade_id>/nova", methods=["GET", "POST"])

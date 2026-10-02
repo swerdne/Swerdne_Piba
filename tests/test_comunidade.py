@@ -931,4 +931,25 @@ def test_upload_de_imagem_pequena_na_comunidade_funciona(logged_in_client, app, 
         )
         assert resposta.status_code == 302
         comunidade = Comunidade.objects(nome="Igreja Y").first()
-        assert comunidade.imagem.startswith("/static/uploads/comunidades/")
+        assert comunidade.imagem.startswith("/imagem/")
+
+        # A imagem fica no banco (sobrevive a deploy) e e servida pela rota propria.
+        imagem = logged_in_client.get(comunidade.imagem)
+        assert imagem.status_code == 200
+        assert imagem.headers["Content-Type"] == "image/png"
+        assert imagem.data[:4] == bytes([0x89]) + b"PNG"
+
+
+def test_referencia_a_foto_antiga_apagada_vira_sem_imagem(app, db):
+    """Fotos do disco antigo (app/static/uploads) foram apagadas pelos
+    deploys; a referencia morta vira None ao carregar, pra mostrar o icone
+    padrao em vez de imagem quebrada."""
+    from app.ministerio.models import Ministerio
+    with app.app_context():
+        c = Comunidade(nome="Igreja Z", usuario_id=1)
+        c.save()
+        Ministerio(nome="PLAY", comunidade_id=c.id, imagem="/static/uploads/ministerios/ministerio_sumiu.png").save()
+        Comunidade.objects(id=c.id).update(set__imagem="/static/uploads/comunidades/comunidade_sumiu.png")
+
+        assert Ministerio.objects(nome="PLAY").first().imagem is None
+        assert Comunidade.objects(id=c.id).first().imagem is None

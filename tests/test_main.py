@@ -341,7 +341,7 @@ def test_upload_foto_valida_salva_avatar(logged_in_client, app, db):
     with app.app_context():
         from app.auth.models import User
         user = User.objects(email="ana@example.com").first()
-        assert user.foto_perfil.startswith("/static/uploads/avatars/user_")
+        assert user.foto_perfil.startswith("/imagem/")
 
 
 def test_chat_mock_responde(logged_in_client):

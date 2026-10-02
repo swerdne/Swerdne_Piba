@@ -123,6 +123,11 @@ def create_app(config_name="default"):
     # Disponibiliza `tema`/`temas` em TODOS os templates automaticamente (nao
     # so no dashboard) -- assim comunidade/escala/ministerio tambem respeitam
     # a preferencia de tema do usuario sem cada rota precisar passar isso.
+    # Fotos antigas (app/static/uploads) apagadas por deploys viram "sem
+    # imagem" ao carregar o documento -- icone padrao em vez de <img> quebrado.
+    from .imagens import registrar_limpeza_de_legado
+    registrar_limpeza_de_legado()
+
     @app.context_processor
     def injetar_tema():
         from flask_login import current_user

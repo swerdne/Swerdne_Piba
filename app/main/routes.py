@@ -1,20 +1,18 @@
 """Controller (C do MVC): rotas do modulo main."""
-import os
 import re
 import time
-import uuid
 from datetime import datetime, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
+from flask import render_template, redirect, url_for, flash, request, jsonify, current_app, abort, make_response
 from flask_login import login_required, current_user
 from sqlalchemy import text
-from werkzeug.utils import secure_filename
 
 from app.extensions import db, limiter
 from app.main import bp
 from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
+from app.imagens import ImagemArmazenada, salvar_imagem, remover_imagem
 from app.auth.routes import _notificar_senha_alterada
 from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import Ministerio
@@ -154,6 +152,20 @@ def service_worker():
     return current_app.send_static_file("js/service-worker.js")
 
 
+@bp.route("/imagem/<imagem_id>")
+def imagem(imagem_id):
+    """Serve uma imagem enviada (ver app/imagens.py). O id e um uuid4
+    aleatorio e nunca reaproveitado -- da pra cachear pra sempre."""
+    registro = ImagemArmazenada.objects(id=imagem_id).first()
+    if registro is None:
+        abort(404)
+    resposta = make_response(registro.conteudo)
+    resposta.headers["Content-Type"] = registro.tipo
+    resposta.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    resposta.headers["X-Content-Type-Options"] = "nosniff"
+    return resposta
+
+
 @bp.route("/healthz")
 def healthz():
     """Endpoint publico e leve pra ping externo de keep-alive (cron-job.org,
@@ -258,26 +270,10 @@ def salvar_foto_perfil():
         flash(erros[0] if erros else "Nao foi possivel enviar a foto.", "danger")
         return redirect(url_for("main.dashboard") + "#config")
 
-    arquivo = form.foto.data
-    extensao = arquivo.filename.rsplit(".", 1)[1].lower()
-    nome_arquivo = secure_filename(f"user_{current_user.id}_{uuid.uuid4().hex}.{extensao}")
-
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
-    os.makedirs(upload_folder, exist_ok=True)
-    arquivo.save(os.path.join(upload_folder, nome_arquivo))
-
-    # Remove o avatar local anterior (se houver) para nao acumular arquivos orfaos.
     foto_antiga = current_user.foto_perfil
-    if foto_antiga and foto_antiga.startswith("/static/uploads/avatars/"):
-        caminho_antigo = os.path.join("app", foto_antiga.lstrip("/"))
-        if os.path.isfile(caminho_antigo):
-            try:
-                os.remove(caminho_antigo)
-            except OSError:
-                pass
-
-    current_user.foto_perfil = f"/static/uploads/avatars/{nome_arquivo}"
+    current_user.foto_perfil = salvar_imagem(form.foto.data)
     current_user.save()
+    remover_imagem(foto_antiga)
 
     flash("Foto de perfil atualizada!", "success")
     return redirect(url_for("main.dashboard") + "#config")
