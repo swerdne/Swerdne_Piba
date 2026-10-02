@@ -16,3 +16,55 @@ ignoraria o gradiente).
     <img src="{{ url_for('static', filename='img/logo-icone.svg') }}" alt="" class="w-full h-full object-contain">
 </a>
 {% endmacro %}
+
+
+{% macro nav_inferior(tema, ativo) %}
+{#
+Barra de navegacao inferior fixa (Inicio / Comunidades / Avisos / Perfil),
+igual em todas as telas internas. Precisa ser importada "with context" (usa
+current_user e avisos_nao_lidos do context processor). Chamar logo depois
+do </main>: o espacador abaixo reserva a altura da barra dentro do fundo da
+pagina. No Dashboard, os itens com data-ir-painel trocam de aba sem
+recarregar (ver main/dashboard.html); nas outras telas sao links normais.
+#}
+{% set nao_lidas = avisos_nao_lidos() %}
+{% set itens = [
+    ("inicio", "Inicio", url_for('main.dashboard')),
+    ("comunidades", "Comunidades", url_for('comunidade.index')),
+    ("avisos", "Avisos", url_for('main.dashboard') ~ '#avisos'),
+    ("perfil", "Perfil", url_for('main.dashboard') ~ '#perfil'),
+] %}
+<div class="h-24" aria-hidden="true"></div>
+<nav class="fixed bottom-0 inset-x-0 z-30 {{ tema.card_bg }} border-t {{ tema.card_border }}">
+    <div class="max-w-xl mx-auto flex items-center justify-around px-3 pt-2.5 pb-4">
+        {% for chave, rotulo, href in itens %}
+        {% set eh_ativo = chave == ativo %}
+        <a href="{{ href }}" data-nav-item="{{ chave }}"
+           {% if chave != 'comunidades' %}data-ir-painel="{{ chave }}"{% endif %}
+           class="relative flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.accent_text if eh_ativo else tema.text_secondary }}">
+            <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center {{ tema.accent_bg ~ ' text-white' if eh_ativo else '' }}">
+                {% if chave == 'inicio' %}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
+                {% elif chave == 'comunidades' %}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path></svg>
+                {% elif chave == 'avisos' %}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 4a4 4 0 0 0-4 4v3.5L6 15h12l-2-3.5V8a4 4 0 0 0-4-4z"></path><path d="M10 18a2 2 0 0 0 4 0"></path></svg>
+                {% else %}
+                {% if current_user.foto_perfil %}
+                <img src="{{ current_user.foto_perfil }}" alt="" class="w-5 h-5 rounded-full object-cover">
+                {% else %}
+                <span class="w-5 h-5 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-[10px] font-bold flex items-center justify-center">{{ (current_user.name or current_user.username or current_user.email)[0]|upper }}</span>
+                {% endif %}
+                {% endif %}
+            </span>
+            {{ rotulo }}
+            {% if chave == 'avisos' and nao_lidas %}
+            <span class="absolute -top-1 right-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {{ nao_lidas if nao_lidas < 10 else '9+' }}
+            </span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</nav>
+{% endmacro %}

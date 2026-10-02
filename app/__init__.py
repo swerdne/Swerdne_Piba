@@ -129,7 +129,16 @@ def create_app(config_name="default"):
         from .main.themes import obter_tema, THEMES, TEMA_PADRAO
 
         chave = current_user.theme if current_user.is_authenticated else TEMA_PADRAO
-        return {"tema": obter_tema(chave), "temas": THEMES}
+
+        def avisos_nao_lidos():
+            # Callable (nao valor) pra so consultar o banco nas telas que
+            # realmente desenham a barra de navegacao inferior.
+            if not current_user.is_authenticated:
+                return 0
+            from .notificacoes import Notificacao
+            return Notificacao.objects(usuario_id=current_user.id, lida=False).count()
+
+        return {"tema": obter_tema(chave), "temas": THEMES, "avisos_nao_lidos": avisos_nao_lidos}
 
     # Agendador de notificacoes automaticas (24h/16h antes do evento) -- unico
     # no projeto: cada tick tambem sincroniza os Turnos de Rodizio (materializa

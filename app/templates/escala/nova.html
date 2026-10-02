@@ -17,7 +17,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio %}
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
 {% block content %}
 <div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -105,6 +105,7 @@
             {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-full transition") }}
         </form>
     </main>
+    {{ nav_inferior(tema, 'comunidades') }}
     </div>
 </div>
 {% endblock %}

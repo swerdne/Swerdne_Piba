@@ -31,6 +31,7 @@
 <svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
 {% endmacro %}
 
+{% from "_macros.html" import nav_inferior with context %}
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} overflow-hidden">
 
@@ -41,7 +42,7 @@
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
 
-    <main class="max-w-xl mx-auto px-5 pt-5 pb-32">
+    <main class="max-w-xl mx-auto px-5 pt-5 pb-8">
 
         <!-- ===================== INICIO ===================== -->
         <section data-painel="inicio" class="space-y-6">
@@ -365,46 +366,9 @@
         </section>
 
     </main>
+    {{ nav_inferior(tema, 'inicio') }}
     </div>
 
-    <!-- Barra de navegacao inferior -->
-    <nav class="fixed bottom-0 inset-x-0 z-30 {{ tema.card_bg }} border-t {{ tema.card_border }}">
-        <div class="max-w-xl mx-auto flex items-center justify-around px-3 pt-2.5 pb-4">
-            <button type="button" data-ir-painel="inicio" data-nav-item="inicio"
-                    class="flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
-                <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
-                </span>
-                Inicio
-            </button>
-            <a href="{{ url_for('comunidade.index') }}"
-               class="flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
-                <span class="w-10 h-7 rounded-xl flex items-center justify-center">{{ icone_pessoa("w-5 h-5") }}</span>
-                Comunidades
-            </a>
-            <button type="button" data-ir-painel="avisos" data-nav-item="avisos"
-                    class="relative flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
-                <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center">{{ icone_sino("w-5 h-5") }}</span>
-                Avisos
-                {% if notificacoes_nao_lidas %}
-                <span class="absolute -top-1 right-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {{ notificacoes_nao_lidas if notificacoes_nao_lidas < 10 else '9+' }}
-                </span>
-                {% endif %}
-            </button>
-            <button type="button" data-ir-painel="perfil" data-nav-item="perfil"
-                    class="flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
-                <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center">
-                    {% if foto_perfil %}
-                    <img src="{{ foto_perfil }}" alt="" class="w-5 h-5 rounded-full object-cover">
-                    {% else %}
-                    <span class="w-5 h-5 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-[10px] font-bold flex items-center justify-center">{{ primeiro_nome[0]|upper }}</span>
-                    {% endif %}
-                </span>
-                Perfil
-            </button>
-        </div>
-    </nav>
 
     <!-- Chat -->
     <div id="chat-panel"
@@ -461,7 +425,8 @@
         }
 
         document.querySelectorAll('[data-ir-painel]').forEach(function (botao) {
-            botao.addEventListener('click', function () {
+            botao.addEventListener('click', function (evento) {
+                evento.preventDefault();
                 var nome = botao.getAttribute('data-ir-painel');
                 history.replaceState(null, '', nome === 'inicio' ? location.pathname : '#' + nome);
                 mostrar(nome);
