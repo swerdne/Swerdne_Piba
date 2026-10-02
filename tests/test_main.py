@@ -28,7 +28,80 @@ def test_service_worker_servido_na_raiz_sem_login(client):
 def test_dashboard_com_login(logged_in_client):
     response = logged_in_client.get("/dashboard")
     assert response.status_code == 200
-    assert "Ola, ana".encode() in response.data
+    html = response.data.decode("utf-8")
+    assert any(f"{s}, ana" in html for s in ("Bom dia", "Boa tarde", "Boa noite"))
+
+
+def test_dashboard_mostra_proxima_escala_em_que_o_usuario_esta_escalado(logged_in_client, app, db):
+    from datetime import date, timedelta
+    from app.auth.models import User
+    from app.comunidade.models import Comunidade
+    from app.ministerio.models import Ministerio
+    from app.escala.models import Escala, Funcao, Membro
+
+    with app.app_context():
+        ana = User.objects(email="ana@example.com").first()
+        comunidade = Comunidade(nome="Comunidade Teste", usuario_id=ana.id)
+        comunidade.save()
+        ministerio = Ministerio(nome="Louvor", comunidade_id=comunidade.id)
+        ministerio.save()
+        membro = Membro(comunidade_id=comunidade.id, nome="Ana", email="ana@example.com")
+        membro.save()
+
+        passada = Escala(ministerio_id=ministerio.id, nome="Culto Passado", departamento="Louvor",
+                         data=date.today() - timedelta(days=7))
+        passada.save()
+        cancelada = Escala(ministerio_id=ministerio.id, nome="Culto Cancelado", departamento="Louvor",
+                           data=date.today() + timedelta(days=1), cancelada=True)
+        cancelada.save()
+        proxima = Escala(ministerio_id=ministerio.id, nome="Culto de Domingo", departamento="Louvor",
+                         data=date.today() + timedelta(days=3))
+        proxima.save()
+        depois = Escala(ministerio_id=ministerio.id, nome="Culto Depois", departamento="Louvor",
+                        data=date.today() + timedelta(days=10))
+        depois.save()
+        for escala in (passada, cancelada, proxima, depois):
+            Funcao(escala_id=escala.id, nome="Baixo", membro_id=membro.id).save()
+
+        html = logged_in_client.get("/dashboard").data.decode("utf-8")
+
+    assert "Culto de Domingo" in html
+    assert "Sua funcao" in html and "Baixo" in html
+    assert "Culto Passado" not in html
+    assert "Culto Cancelado" not in html
+    assert "Culto Depois" not in html
+
+
+def test_dashboard_sem_escala_mostra_estado_vazio(logged_in_client):
+    html = logged_in_client.get("/dashboard").data.decode("utf-8")
+    assert "Nenhuma escala marcada" in html
+
+
+def test_dashboard_lista_comunidades_do_usuario(logged_in_client, app, db):
+    from app.auth.models import User
+    from app.comunidade.models import Comunidade, UsuarioComunidade
+    from app.ministerio.models import Ministerio
+
+    with app.app_context():
+        ana = User.objects(email="ana@example.com").first()
+        minha = Comunidade(nome="Igreja da Ana", usuario_id=ana.id)
+        minha.save()
+        UsuarioComunidade(usuario_id=ana.id, comunidade_id=minha.id, papel="admin").save()
+        Ministerio(nome="Louvor", comunidade_id=minha.id).save()
+        Ministerio(nome="Midia", comunidade_id=minha.id).save()
+
+        participo = Comunidade(nome="Igreja Vizinha", usuario_id=ana.id)
+        participo.save()
+        UsuarioComunidade(usuario_id=ana.id, comunidade_id=participo.id, papel="membro").save()
+
+        alheia = Comunidade(nome="Igreja Alheia", usuario_id=ana.id)
+        alheia.save()
+
+        html = logged_in_client.get("/dashboard").data.decode("utf-8")
+
+    assert "Igreja da Ana" in html and "2 ministerios" in html
+    assert "Igreja Vizinha" in html and "Membro" in html
+    assert "Igreja Alheia" not in html
 
 
 def test_marca_tybenson_by_swerdne_aparece_so_no_dashboard(logged_in_client):

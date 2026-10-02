@@ -58,7 +58,7 @@
 
         <div>
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Acessar</h2>
-            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.card_border }} px-4">
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} px-4">
                 <a href="{{ url_for('comunidade.membros', comunidade_id=comunidade.id) }}" data-tutorial="membros"
                    class="flex items-center gap-3 py-3.5 group">
                     <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
@@ -105,7 +105,7 @@
 
         <div>
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Administracao</h2>
-            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.card_border }} px-4">
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} px-4">
                 <a href="{{ url_for('comunidade.papeis', comunidade_id=comunidade.id) }}" data-tutorial="convites"
                    class="flex items-center gap-3 py-3.5 group">
                     <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">

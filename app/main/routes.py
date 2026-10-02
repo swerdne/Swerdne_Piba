@@ -3,6 +3,7 @@ import os
 import re
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
@@ -15,6 +16,9 @@ from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, 
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
 from app.auth.routes import _notificar_senha_alterada
+from app.comunidade.models import Comunidade, UsuarioComunidade
+from app.ministerio.models import Ministerio
+from app.escala.models import Membro, Escala, Funcao
 
 
 # Icone por tipo de notificacao no sino do Dashboard -- fallback pra
@@ -48,6 +52,92 @@ def _agrupar_notificacoes(notificacoes):
             ordem.append(chave)
         grupos_por_chave[chave]["itens"].append(n)
     return [grupos_por_chave[chave] for chave in ordem]
+
+
+_MESES = [
+    "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]
+
+# Brasilia nao tem horario de verao desde 2019 -- offset fixo evita depender
+# do pacote tzdata (ausente no Windows por padrao) so pra uma saudacao.
+_OFFSET_BRASILIA = timedelta(hours=-3)
+
+
+def _agora_brasilia():
+    return datetime.now(timezone.utc) + _OFFSET_BRASILIA
+
+
+def _saudacao(hora):
+    if 5 <= hora < 12:
+        return "Bom dia"
+    if 12 <= hora < 18:
+        return "Boa tarde"
+    return "Boa noite"
+
+
+def _proxima_escala_do_usuario(usuario, hoje):
+    """Proxima Escala (nao cancelada, de hoje em diante) em que alguma Funcao
+    esta atribuida a um Membro com o e-mail da conta -- mesmo vinculo
+    conta<->diretorio usado em comunidade.routes.index."""
+    ids_membro = [m.id for m in Membro.objects(email=usuario.email).only("id")]
+    if not ids_membro:
+        return None, None
+    funcoes = list(Funcao.objects(membro_id__in=ids_membro).only("escala_id", "nome"))
+    if not funcoes:
+        return None, None
+    funcao_por_escala = {f.escala_id: f.nome for f in funcoes}
+    escala = (
+        Escala.objects(id__in=list(funcao_por_escala), data__gte=hoje, cancelada__ne=True)
+        .order_by("data", "horario")
+        .first()
+    )
+    if escala is None:
+        return None, None
+    return escala, funcao_por_escala[escala.id]
+
+
+def _comunidades_do_usuario(usuario):
+    """Mesma regra de comunidade.routes.index (admin x participa), achatada
+    numa lista so pro resumo do Dashboard."""
+    if usuario.eh_super_admin:
+        donas = list(Comunidade.objects.order_by("nome"))
+    else:
+        ids_admin = [
+            row.comunidade_id for row in
+            UsuarioComunidade.objects(usuario_id=usuario.id, papel="admin")
+        ]
+        donas = list(Comunidade.objects(id__in=ids_admin).order_by("nome")) if ids_admin else []
+
+    ids_dono = {c.id for c in donas}
+    ids_membro = set(Membro.objects(email=usuario.email).distinct("comunidade_id"))
+    ids_membro |= {
+        row.comunidade_id for row in
+        UsuarioComunidade.objects(usuario_id=usuario.id, papel="membro")
+    }
+    ids_membro -= ids_dono
+    participa = list(Comunidade.objects(id__in=list(ids_membro)).order_by("nome")) if ids_membro else []
+
+    qtd_ministerios = {}
+    if donas:
+        for m in Ministerio.objects(comunidade_id__in=list(ids_dono)).only("comunidade_id"):
+            qtd_ministerios[m.comunidade_id] = qtd_ministerios.get(m.comunidade_id, 0) + 1
+
+    itens = []
+    for c in donas:
+        qtd = qtd_ministerios.get(c.id, 0)
+        itens.append({
+            "comunidade": c,
+            "subtitulo": f"{qtd} ministerio{'s' if qtd != 1 else ''}",
+            "url": url_for("comunidade.detalhe", comunidade_id=c.id),
+        })
+    for c in participa:
+        itens.append({
+            "comunidade": c,
+            "subtitulo": "Membro",
+            "url": url_for("comunidade.escalados", comunidade_id=c.id),
+        })
+    return itens
 
 
 @bp.route("/")
@@ -94,8 +184,25 @@ def dashboard():
     notificacoes_nao_lidas = sum(1 for n in notificacoes if not n.lida)
     grupos_notificacoes = _agrupar_notificacoes(notificacoes)
 
+    agora = _agora_brasilia()
+    proxima_escala, funcao_proxima = _proxima_escala_do_usuario(current_user, agora.date())
+    proxima_escala_info = None
+    if proxima_escala is not None:
+        partes = [f"{proxima_escala.data.day:02d} de {_MESES[proxima_escala.data.month - 1]}"]
+        if proxima_escala.horario:
+            partes.append(proxima_escala.horario.strftime("%H:%M"))
+        partes.append(proxima_escala.departamento)
+        proxima_escala_info = {
+            "escala": proxima_escala,
+            "detalhes": " · ".join(partes),
+            "funcao": funcao_proxima,
+        }
+
     return render_template(
         "main/dashboard.html",
+        saudacao=_saudacao(agora.hour),
+        proxima_escala=proxima_escala_info,
+        comunidades=_comunidades_do_usuario(current_user),
         primeiro_nome=primeiro_nome,
         nome_completo=nome_completo,
         email=current_user.email,

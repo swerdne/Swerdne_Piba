@@ -386,7 +386,7 @@
                                 <input type="text" placeholder="Nome, e-mail ou usuario..." autocomplete="off"
                                        class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-lg pl-9 pr-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"
                                        data-busca-convidado-input>
-                                <div class="hidden absolute z-10 w-full mt-1 rounded-lg border {{ tema.card_border }} {{ tema.card_bg }} divide-y {{ tema.card_border }} overflow-hidden shadow-lg"
+                                <div class="hidden absolute z-10 w-full mt-1 rounded-lg border {{ tema.card_border }} {{ tema.card_bg }} divide-y {{ tema.divide }} overflow-hidden shadow-lg"
                                      data-busca-convidado-resultados></div>
                             </div>
                             <form method="POST" action="{{ url_for('escala.adicionar_convidado', funcao_id=funcao.id) }}" data-form-convidado="{{ funcao.id }}">
@@ -448,7 +448,7 @@
                 <span class="text-sm font-semibold {{ tema.text_primary }}">Repertorio</span>
             </div>
             {% if escala.repertorio %}
-            <ul class="divide-y {{ tema.card_border }}">
+            <ul class="divide-y {{ tema.divide }}">
                 {% for item in escala.repertorio %}
                 <li class="flex items-center justify-between gap-3 px-4 py-2.5">
                     <div class="min-w-0">

@@ -169,7 +169,7 @@
             {% elif not ocorrencias %}
             <p class="text-sm {{ tema.text_secondary }}">Nenhuma ocorrencia gerada ainda.</p>
             {% else %}
-            <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden divide-y {{ tema.card_border }}">
+            <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden divide-y {{ tema.divide }}">
                 {% set ns = namespace(divisor_mostrado=false) %}
                 {% for escala in ocorrencias %}
                 {% set escalados = escala.funcoes | selectattr('membro_id') | list %}

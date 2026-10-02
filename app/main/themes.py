@@ -15,6 +15,8 @@ THEMES = {
         "card_bg": "bg-white",
         "card_bg_hover": "hover:bg-gray-50",
         "card_border": "border-gray-100",
+        # Cor das linhas de divide-y (precisa ser divide-*, nao border-*).
+        "divide": "divide-gray-100",
         "text_primary": "text-gray-900",
         "text_secondary": "text-gray-500",
         "accent_bg": "bg-indigo-600",
@@ -51,6 +53,7 @@ THEMES = {
         "card_bg": "bg-gray-900",
         "card_bg_hover": "hover:bg-gray-800/70",
         "card_border": "border-gray-800",
+        "divide": "divide-gray-800",
         "text_primary": "text-white",
         "text_secondary": "text-gray-400",
         "accent_bg": "bg-indigo-500",

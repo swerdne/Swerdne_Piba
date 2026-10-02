@@ -2,6 +2,7 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     @keyframes db-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
     @keyframes db-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
@@ -14,309 +15,312 @@
 </style>
 {% endblock %}
 
+{% macro icone_pessoa(classe) %}
+<svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+    <circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path>
+</svg>
+{% endmacro %}
+
+{% macro icone_sino(classe) %}
+<svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+    <path d="M12 4a4 4 0 0 0-4 4v3.5L6 15h12l-2-3.5V8a4 4 0 0 0-4-4z"></path><path d="M10 18a2 2 0 0 0 4 0"></path>
+</svg>
+{% endmacro %}
+
+{% macro chevron(classe) %}
+<svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+{% endmacro %}
+
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} overflow-hidden">
 
-    <!-- Fundo animado -- teste: mesma ideia da tela de login, so que sutil o
-    suficiente pra nao atrapalhar leitura de conteudo real (cards, tabelas). -->
     <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl db-blob -z-0"></div>
     <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl db-blob-2 -z-0"></div>
     <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl db-blob-3 -z-0"></div>
 
     <div class="relative z-10">
-    <!-- Navbar -->
-    <header class="{{ tema.header_bg }} border-b {{ tema.header_border }}">
-        <div class="flex items-center justify-between px-4 sm:px-6 py-4">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <main class="max-w-xl mx-auto px-5 pt-5 pb-32">
+
+        <!-- ===================== INICIO ===================== -->
+        <section data-painel="inicio" class="space-y-6">
+
             <div class="flex items-center gap-2.5">
-                <!-- O SVG tem cor propria (gradiente azul/ciano), funciona igual nos
-                dois temas sem precisar de mascara CSS. -->
-                <img src="{{ url_for('static', filename='img/logo-icone.svg') }}" alt=""
-                     class="w-8 h-8 object-contain shrink-0">
-                <div class="relative inline-block">
-                    <span class="font-marca text-base font-bold tracking-tight {{ tema.text_primary }} whitespace-nowrap">TyBenson</span>
-                    <span class="absolute left-1/2 top-full mt-0.5 text-[10px] leading-none {{ tema.text_secondary }} whitespace-nowrap">By Swerdne</span>
+                <img src="{{ url_for('static', filename='img/logo-icone.svg') }}" alt="" class="w-7 h-7 object-contain shrink-0">
+                <div class="leading-tight">
+                    <span class="font-marca text-sm font-bold tracking-tight {{ tema.text_primary }}">TyBenson</span>
+                    <span class="block text-[10px] {{ tema.text_secondary }}">By Swerdne</span>
                 </div>
             </div>
 
-            <div class="flex items-center gap-3">
-                <a href="{{ url_for('comunidade.index') }}"
-                   class="hidden sm:inline-flex items-center gap-2 text-sm font-semibold {{ tema.text_secondary }} {{ tema.text_hover }} transition">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M9 20H4v-2a4 4 0 014-4h1m5-6a3 3 0 11-6 0 3 3 0 016 0zm6 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-                    </svg>
-                    Comunidades
-                </a>
-
-                <div class="w-px h-6 bg-current opacity-10 hidden sm:block"></div>
-
-                <div class="relative">
-                    <button type="button" id="sino-notificacoes" aria-label="Notificacoes"
-                            class="w-10 h-10 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_primary }} hover:shadow-md transition relative flex items-center justify-center">
-                        <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
-                        </svg>
-                        {% if notificacoes_nao_lidas %}
-                        <span class="absolute top-1 right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center border-2 {{ tema.card_bg }}">
-                            {{ notificacoes_nao_lidas if notificacoes_nao_lidas < 10 else '9+' }}
-                        </span>
-                        {% endif %}
-                    </button>
-
-                    <div id="painel-notificacoes"
-                         class="hidden absolute right-0 mt-2 w-80 max-w-[90vw] {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl z-30 overflow-hidden">
-                        <div class="flex items-center justify-between px-4 py-3 border-b {{ tema.card_border }}">
-                            <span class="text-sm font-semibold {{ tema.text_primary }}">Notificacoes</span>
-                            {% if notificacoes_nao_lidas %}
-                            <form method="POST" action="{{ url_for('main.marcar_notificacoes_lidas') }}">
-                                <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
-                                    Marcar todas como lidas
-                                </button>
-                            </form>
-                            {% endif %}
-                        </div>
-                        <div class="max-h-80 overflow-y-auto divide-y {{ tema.card_border }}">
-                            {% for grupo in grupos_notificacoes %}
-                            <div class="px-4 py-3">
-                                {% if grupo.escala %}
-                                <div class="flex items-center gap-1.5 mb-1.5">
-                                    <span class="w-1.5 h-1.5 rounded-full {{ grupo.escala.cor }} shrink-0"></span>
-                                    <a href="{{ url_for('escala.detalhe', escala_id=grupo.escala.id) }}"
-                                       class="text-[11px] font-semibold uppercase tracking-wide {{ tema.accent_text }} hover:underline truncate">
-                                        {{ grupo.escala.nome }}
-                                    </a>
-                                </div>
-                                {% endif %}
-                                <div class="space-y-2">
-                                    {% for n in grupo.itens %}
-                                    <div class="flex items-start gap-2 {{ '' if n.lida else tema.accent_soft_bg }} rounded-xl {{ 'p-1.5' if not n.lida else '' }}">
-                                        <i class="fa-solid {{ icone_por_tipo.get(n.tipo, icone_padrao) }} {{ tema.text_secondary }} text-xs mt-0.5 shrink-0"></i>
-                                        <div class="min-w-0">
-                                            <p class="text-sm font-medium {{ tema.text_primary }}">{{ n.titulo }}</p>
-                                            <p class="text-xs {{ tema.text_secondary }} mt-0.5">{{ n.mensagem }}</p>
-                                            <p class="text-[10px] {{ tema.text_secondary }} opacity-70 mt-0.5">{{ n.criada_em.strftime('%d/%m/%Y %H:%M') }}</p>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            {% else %}
-                            <p class="px-4 py-6 text-sm {{ tema.text_secondary }} text-center">Nenhuma notificacao ainda.</p>
-                            {% endfor %}
-                        </div>
-                    </div>
+            <div class="flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }} truncate">{{ saudacao }}, {{ primeiro_nome }}</h1>
+                    <p class="text-sm {{ tema.text_secondary }} mt-0.5">Bem-vindo de volta ao TyBenson</p>
                 </div>
+                <button type="button" data-ir-painel="avisos" aria-label="Avisos"
+                        class="relative w-11 h-11 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_primary }} flex items-center justify-center shrink-0 transition hover:shadow-md">
+                    {{ icone_sino("w-5 h-5") }}
+                    {% if notificacoes_nao_lidas %}
+                    <span class="absolute top-2 right-2.5 w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                    {% endif %}
+                </button>
+            </div>
 
-                <div class="w-px h-6 bg-current opacity-10 hidden sm:block"></div>
-
-                {% if foto_perfil %}
-                    <img src="{{ foto_perfil }}" alt="Foto de {{ primeiro_nome }}"
-                         class="w-9 h-9 rounded-full object-cover border {{ tema.card_border }}">
+            <!-- Proxima escala -->
+            <div class="rounded-3xl p-6 text-white space-y-2.5"
+                 style="background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 10px 24px -6px rgba(79,70,229,0.35);">
+                <p class="text-xs font-semibold uppercase tracking-wide text-indigo-200">Proxima escala</p>
+                {% if proxima_escala %}
+                <h2 class="text-2xl font-extrabold tracking-tight">{{ proxima_escala.escala.nome }}</h2>
+                <p class="text-sm text-indigo-100">{{ proxima_escala.detalhes }}</p>
+                <p class="text-xs text-indigo-200">Sua funcao: <span class="font-semibold text-white">{{ proxima_escala.funcao }}</span></p>
+                <div class="pt-1.5">
+                    <a href="{{ url_for('escala.detalhe', escala_id=proxima_escala.escala.id) }}"
+                       class="inline-flex items-center gap-1.5 bg-white text-indigo-700 text-sm font-bold px-4 py-2 rounded-full transition hover:opacity-90">
+                        Ver detalhes {{ chevron("w-3.5 h-3.5") }}
+                    </a>
+                </div>
                 {% else %}
-                    <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-sm font-bold {{ tema.accent_text }}">
-                        {{ primeiro_nome[0]|upper }}
-                    </div>
-                {% endif %}
-
-                <a href="{{ url_for('auth.logout') }}"
-                   class="text-sm font-semibold {{ tema.text_secondary }} {{ tema.text_hover }} transition">
-                    Sair
-                </a>
-            </div>
-        </div>
-
-        <!-- Tabs -->
-        <nav class="flex items-center gap-6 px-4 sm:px-6 overflow-x-auto"
-             data-accent-text="{{ tema.accent_text }}" data-accent-border="{{ tema.accent_border }}">
-            <button type="button" data-tab-btn="geral"
-                    class="tab-btn py-3 text-sm font-semibold border-b-2 {{ tema.accent_text }} {{ tema.accent_border }} whitespace-nowrap">
-                Visao Geral
-            </button>
-            <button type="button" data-tab-btn="atividade"
-                    class="tab-btn py-3 text-sm font-semibold border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
-                Atividade
-            </button>
-            <button type="button" data-tab-btn="config"
-                    class="tab-btn py-3 text-sm font-semibold border-b-2 text-gray-400 border-transparent {{ tema.text_hover }} whitespace-nowrap">
-                Configuracoes
-            </button>
-        </nav>
-    </header>
-
-    <!-- Conteudo -->
-    <main class="px-4 sm:px-6 py-10">
-        <div class="max-w-3xl mx-auto space-y-6">
-
-            <div data-tab-panel="geral">
-                <h1 class="text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Ola, {{ primeiro_nome }}</h1>
-                <p class="{{ tema.text_secondary }} mt-1">Bem-vindo de volta ao seu painel.</p>
-
-                <!-- Card de destaque -- mesmo tratamento "hero" usado pro CTA
-                mais importante da tela, pra chamar mais atencao que um card
-                neutro igual aos outros. -->
-                <div class="mt-6 rounded-3xl p-6 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-                     style="background: linear-gradient(135deg, {{ '#6366f1, #4f46e5' if tema_atual == 'escuro' else '#4f46e5, #4338ca' }}); box-shadow: 0 10px 24px -6px rgba(79,70,229,0.35);">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-100">Comunidades</p>
-                        <h2 class="text-xl font-extrabold mt-1">Crie e gerencie suas comunidades</h2>
-                        <p class="text-sm text-indigo-100 mt-1">Membros, ministerios e escalas, tudo num so lugar.</p>
-                    </div>
+                <h2 class="text-2xl font-extrabold tracking-tight">Nenhuma escala marcada</h2>
+                <p class="text-sm text-indigo-100">Quando voce for escalado, ela aparece aqui.</p>
+                <div class="pt-1.5">
                     <a href="{{ url_for('comunidade.index') }}"
-                       class="inline-flex items-center justify-center gap-2 bg-white text-indigo-700 text-sm font-bold px-5 py-2.5 rounded-full transition hover:opacity-90 shrink-0">
-                        Abrir Comunidades
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" />
-                        </svg>
+                       class="inline-flex items-center gap-1.5 bg-white text-indigo-700 text-sm font-bold px-4 py-2 rounded-full transition hover:opacity-90">
+                        Abrir Comunidades {{ chevron("w-3.5 h-3.5") }}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Suas comunidades -->
+            <div>
+                <div class="flex items-center justify-between mb-2.5">
+                    <h2 class="text-base font-bold {{ tema.text_primary }}">Suas comunidades</h2>
+                    <a href="{{ url_for('comunidade.index') }}"
+                       class="text-xs font-bold text-white {{ tema.accent_bg }} {{ tema.accent_bg_hover }} px-3 py-1.5 rounded-full transition">
+                        Ver todas
                     </a>
                 </div>
 
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Dados da conta</h2>
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-                        {% if foto_perfil %}
-                            <img src="{{ foto_perfil }}" alt="Foto de perfil"
-                                 class="w-16 h-16 rounded-full object-cover border {{ tema.card_border }}">
+                {% if comunidades %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} overflow-hidden">
+                    {% for item in comunidades %}
+                    <a href="{{ item.url }}" class="flex items-center gap-3 px-4 py-3.5 {{ tema.card_bg_hover }} transition">
+                        {% if item.comunidade.imagem %}
+                        <img src="{{ item.comunidade.imagem }}" alt="" class="w-10 h-10 rounded-xl object-cover shrink-0">
                         {% else %}
-                            <div class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-bold {{ tema.accent_text }}">
-                                {{ primeiro_nome[0]|upper }}
-                            </div>
+                        <div class="w-10 h-10 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
+                            {{ icone_pessoa("w-5 h-5") }}
+                        </div>
                         {% endif %}
-                        <div>
-                            <p class="text-base font-bold {{ tema.text_primary }}">{{ nome_completo }}</p>
-                            <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
-                            <span class="inline-block mt-1.5 text-xs font-semibold px-2.5 py-1 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
-                                {{ "Conta Google" if eh_conta_google else "Conta tradicional" }}
-                            </span>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-bold {{ tema.text_primary }} truncate">{{ item.comunidade.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }}">{{ item.subtitulo }}</p>
                         </div>
-                    </div>
-
-                    <div class="flex flex-wrap gap-3 mt-6">
-                        <button type="button" data-tab-jump="config"
-                                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
-                            Editar perfil
-                        </button>
-                        <button type="button" data-tab-jump="config"
-                                class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
-                            Ver configuracoes
-                        </button>
-                    </div>
+                        {{ chevron("w-4 h-4 " ~ tema.text_secondary) }}
+                    </a>
+                    {% endfor %}
                 </div>
+                {% else %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-6 text-center">
+                    <p class="text-sm {{ tema.text_secondary }}">Voce ainda nao participa de nenhuma comunidade.</p>
+                    <a href="{{ url_for('comunidade.nova') }}"
+                       class="inline-block mt-3 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">
+                        Criar comunidade
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <!-- ===================== AVISOS ===================== -->
+        <section data-painel="avisos" class="hidden space-y-5">
+            <div class="flex items-center justify-between gap-3">
+                <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }}">Avisos</h1>
+                {% if notificacoes_nao_lidas %}
+                <form method="POST" action="{{ url_for('main.marcar_notificacoes_lidas') }}">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit"
+                            class="text-xs font-bold text-white {{ tema.accent_bg }} {{ tema.accent_bg_hover }} px-3 py-1.5 rounded-full transition">
+                        Marcar todas como lidas
+                    </button>
+                </form>
+                {% endif %}
             </div>
 
-            <div data-tab-panel="atividade" class="hidden">
-                <h1 class="text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Atividade</h1>
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6 text-sm {{ tema.text_secondary }}">
-                    Nenhuma atividade recente.
-                </div>
-            </div>
-
-            <div data-tab-panel="config" class="hidden">
-                <h1 class="text-3xl font-extrabold tracking-tight {{ tema.text_primary }}">Configuracoes</h1>
-
-                <!-- Nome de exibicao -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Nome de exibicao</h2>
-                    <form method="POST" action="{{ url_for('main.salvar_nome') }}" class="flex flex-col sm:flex-row sm:items-end gap-3 max-w-sm">
-                        {{ nome_form.hidden_tag() }}
-                        <div class="flex-1 w-full">
-                            {{ nome_form.nome.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ nome_form.nome(class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
-                        </div>
-                        {{ nome_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0") }}
-                    </form>
-                </div>
-
-                <!-- Foto de perfil -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Foto de perfil</h2>
-                    <form method="POST" action="{{ url_for('main.salvar_foto_perfil') }}" enctype="multipart/form-data"
-                          class="flex flex-col sm:flex-row sm:items-center gap-4">
-                        {{ foto_form.hidden_tag() }}
-
-                        <img id="preview-foto" src="{{ foto_perfil or '#' }}" alt="Preview"
-                             class="w-16 h-16 rounded-full object-cover border {{ tema.card_border }} {{ '' if foto_perfil else 'hidden' }}">
-                        <div id="preview-inicial"
-                             class="w-16 h-16 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-xl font-bold {{ tema.accent_text }} {{ 'hidden' if foto_perfil else '' }}">
-                            {{ primeiro_nome[0]|upper }}
-                        </div>
-
-                        <div class="flex-1">
-                            {{ foto_form.foto(id="input-foto", accept="image/png, image/jpeg", class_="block w-full text-sm " ~ tema.text_secondary) }}
-                            {% for erro in foto_form.foto.errors %}
-                                <p class="text-xs text-red-600 mt-1">{{ erro }}</p>
-                            {% endfor %}
-                            <p class="text-xs {{ tema.text_secondary }} mt-1">JPG ou PNG, ate 2 MB.</p>
-                        </div>
-
-                        {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0") }}
-                    </form>
-                </div>
-
-                <!-- Aparencia / tema -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">Aparencia</h2>
-                    <form method="POST" action="{{ url_for('main.salvar_tema') }}" class="space-y-4">
-                        {{ tema_form.hidden_tag() }}
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            {% for chave, dado in temas.items() %}
-                            <label class="flex items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer border-2 {{ tema.accent_border if chave == tema_atual else tema.card_border }}">
-                                <input type="radio" name="tema" value="{{ chave }}" {{ "checked" if chave == tema_atual else "" }}>
-                                <span class="w-4 h-4 rounded-full {{ dado.swatch }} border border-black/10"></span>
-                                <span class="text-sm font-medium {{ tema.text_primary }}">{{ dado.label }}</span>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        {{ tema_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
-                    </form>
-                </div>
-
-                <!-- Senha -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-4">
-                        {{ "Alterar senha" if tem_senha else "Definir senha" }}
-                    </h2>
-                    {% if not tem_senha %}
-                    <p class="text-xs {{ tema.text_secondary }} mb-4">
-                        Sua conta entra so pelo Google. Defina uma senha pra tambem poder entrar com e-mail e senha.
-                    </p>
+            {% if grupos_notificacoes %}
+            <div class="space-y-3">
+                {% for grupo in grupos_notificacoes %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
+                    {% if grupo.escala %}
+                    <div class="flex items-center gap-1.5 mb-2">
+                        <span class="w-2 h-2 rounded-full {{ grupo.escala.cor }} shrink-0"></span>
+                        <a href="{{ url_for('escala.detalhe', escala_id=grupo.escala.id) }}"
+                           class="text-[11px] font-bold uppercase tracking-wide {{ tema.accent_text }} hover:underline truncate">
+                            {{ grupo.escala.nome }}
+                        </a>
+                    </div>
                     {% endif %}
-                    <form method="POST" action="{{ url_for('main.salvar_senha') }}" class="space-y-3 max-w-sm">
-                        {{ senha_form.hidden_tag() }}
-                        {% if tem_senha %}
-                        <div>
-                            {{ senha_form.senha_atual.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ senha_form.senha_atual(autocomplete="current-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
-                            <a href="{{ url_for('auth.esqueci_senha') }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
-                                Esqueceu a senha atual? Redefinir por e-mail
-                            </a>
+                    <div class="space-y-2">
+                        {% for n in grupo.itens %}
+                        <div class="flex items-start gap-2.5 rounded-2xl {{ tema.accent_soft_bg ~ ' p-2.5' if not n.lida else '' }}">
+                            <i class="fa-solid {{ icone_por_tipo.get(n.tipo, icone_padrao) }} {{ tema.text_secondary }} text-xs mt-1 shrink-0"></i>
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold {{ tema.text_primary }}">{{ n.titulo }}</p>
+                                <p class="text-xs {{ tema.text_secondary }} mt-0.5">{{ n.mensagem }}</p>
+                                <p class="text-[10px] {{ tema.text_secondary }} opacity-70 mt-0.5">{{ n.criada_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                            </div>
                         </div>
-                        {% endif %}
-                        <div>
-                            {{ senha_form.nova_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ senha_form.nova_senha(autocomplete="new-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
+                {{ icone_sino("w-8 h-8 mx-auto " ~ tema.text_secondary) }}
+                <p class="text-sm {{ tema.text_secondary }} mt-3">Nenhum aviso ainda.</p>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- ===================== PERFIL ===================== -->
+        <section data-painel="perfil" class="hidden space-y-6">
+            <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }}">Perfil</h1>
+
+            <div class="flex flex-col items-center gap-2.5">
+                <label for="input-foto" class="relative cursor-pointer" title="Trocar foto">
+                    <img id="preview-foto" src="{{ foto_perfil or '#' }}" alt="Foto de perfil"
+                         class="w-24 h-24 rounded-full object-cover border {{ tema.card_border }} {{ '' if foto_perfil else 'hidden' }}">
+                    <div id="preview-inicial"
+                         class="w-24 h-24 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-3xl font-extrabold {{ tema.accent_text }} {{ 'hidden' if foto_perfil else '' }}">
+                        {{ primeiro_nome[0]|upper }}
+                    </div>
+                    <span class="absolute -bottom-0.5 -right-0.5 w-8 h-8 rounded-full {{ tema.accent_bg }} text-white flex items-center justify-center shadow-md">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 20l1-4 11-11 3 3-11 11-4 1z"></path></svg>
+                    </span>
+                </label>
+                <p class="text-lg font-extrabold {{ tema.text_primary }}">{{ nome_completo }}</p>
+            </div>
+
+            <!-- Foto (form fica escondido -- o lapis no avatar abre o seletor) -->
+            <form method="POST" action="{{ url_for('main.salvar_foto_perfil') }}" enctype="multipart/form-data"
+                  id="form-foto" class="hidden {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                {{ foto_form.hidden_tag() }}
+                {{ foto_form.foto(id="input-foto", accept="image/png, image/jpeg", class_="block w-full text-sm " ~ tema.text_secondary) }}
+                {% for erro in foto_form.foto.errors %}
+                    <p class="text-xs text-red-600">{{ erro }}</p>
+                {% endfor %}
+                <p class="text-xs {{ tema.text_secondary }}">JPG ou PNG, ate 2 MB.</p>
+                {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
+            </form>
+
+            <!-- Informacoes pessoais -->
+            <div>
+                <div class="flex items-center justify-between mb-2.5">
+                    <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide">Informacoes pessoais</h2>
+                    <button type="button" data-toggle-alvo="form-nome"
+                            class="text-xs font-bold text-white {{ tema.accent_bg }} {{ tema.accent_bg_hover }} px-3 py-1.5 rounded-full transition">
+                        Editar
+                    </button>
+                </div>
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} px-4">
+                    <div class="flex items-center gap-3 py-3.5">
+                        {{ icone_pessoa("w-5 h-5 shrink-0 " ~ tema.text_secondary) }}
+                        <div class="min-w-0">
+                            <p class="text-[11px] {{ tema.text_secondary }}">Nome</p>
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ nome_completo }}</p>
                         </div>
-                        <div>
-                            {{ senha_form.confirmar_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
-                            {{ senha_form.confirmar_senha(autocomplete="new-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                    </div>
+                    <div class="flex items-center gap-3 py-3.5">
+                        <svg class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"></rect><path d="M4 7l8 6 8-6"></path></svg>
+                        <div class="min-w-0">
+                            <p class="text-[11px] {{ tema.text_secondary }}">E-mail</p>
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ email }}</p>
                         </div>
-                        <p class="text-xs {{ tema.text_secondary }}">Minimo de 8 caracteres.</p>
-                        {{ senha_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
-                    </form>
+                    </div>
+                    <div class="flex items-center gap-3 py-3.5">
+                        <svg class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>
+                        <div class="min-w-0">
+                            <p class="text-[11px] {{ tema.text_secondary }}">Tipo de conta</p>
+                            <p class="text-sm font-semibold {{ tema.text_primary }}">{{ "Conta Google" if eh_conta_google else "Conta tradicional" }}</p>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- E-mail -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <p class="text-sm font-bold {{ tema.text_primary }}">E-mail</p>
-                    <p class="text-sm {{ tema.text_secondary }}">{{ email }}</p>
-                </div>
+                <form method="POST" action="{{ url_for('main.salvar_nome') }}" id="form-nome"
+                      class="hidden mt-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                    {{ nome_form.hidden_tag() }}
+                    {{ nome_form.nome.label(class_="block text-sm font-medium " ~ tema.text_primary) }}
+                    {{ nome_form.nome(class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                    {{ nome_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
+                </form>
+            </div>
 
-                <!-- Conexao com o Google -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <p class="text-sm font-bold {{ tema.text_primary }}">Login com Google</p>
-                            <p class="text-sm {{ tema.text_secondary }}">
+            <!-- Preferencias / tema -->
+            <div>
+                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Preferencias</h2>
+                <form method="POST" action="{{ url_for('main.salvar_tema') }}"
+                      class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                    {{ tema_form.hidden_tag() }}
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">Aparencia</p>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        {% for chave, dado in temas.items() %}
+                        <label class="flex items-center gap-2 rounded-2xl px-3 py-2.5 cursor-pointer border-2 {{ tema.accent_border if chave == tema_atual else tema.card_border }}">
+                            <input type="radio" name="tema" value="{{ chave }}" {{ "checked" if chave == tema_atual else "" }}>
+                            <span class="w-4 h-4 rounded-full {{ dado.swatch }} border border-black/10"></span>
+                            <span class="text-sm font-medium {{ tema.text_primary }}">{{ dado.label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {{ tema_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
+                </form>
+            </div>
+
+            <!-- Seguranca -->
+            <div>
+                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Seguranca</h2>
+                <div class="space-y-3">
+                    <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
+                        <button type="button" data-toggle-alvo="form-senha" class="w-full flex items-center justify-between gap-3 text-left">
+                            <span class="text-sm font-semibold {{ tema.text_primary }}">{{ "Alterar senha" if tem_senha else "Definir senha" }}</span>
+                            {{ chevron("w-4 h-4 " ~ tema.text_secondary) }}
+                        </button>
+                        <form method="POST" action="{{ url_for('main.salvar_senha') }}" id="form-senha" class="hidden mt-4 space-y-3">
+                            {{ senha_form.hidden_tag() }}
+                            {% if not tem_senha %}
+                            <p class="text-xs {{ tema.text_secondary }}">
+                                Sua conta entra so pelo Google. Defina uma senha pra tambem poder entrar com e-mail e senha.
+                            </p>
+                            {% endif %}
+                            {% if tem_senha %}
+                            <div>
+                                {{ senha_form.senha_atual.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
+                                {{ senha_form.senha_atual(autocomplete="current-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                                <a href="{{ url_for('auth.esqueci_senha') }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                                    Esqueceu a senha atual? Redefinir por e-mail
+                                </a>
+                            </div>
+                            {% endif %}
+                            <div>
+                                {{ senha_form.nova_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
+                                {{ senha_form.nova_senha(autocomplete="new-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                            </div>
+                            <div>
+                                {{ senha_form.confirmar_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
+                                {{ senha_form.confirmar_senha(autocomplete="new-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
+                            </div>
+                            <p class="text-xs {{ tema.text_secondary }}">Minimo de 8 caracteres.</p>
+                            {{ senha_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
+                        </form>
+                    </div>
+
+                    <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center justify-between gap-4">
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }}">Login com Google</p>
+                            <p class="text-xs {{ tema.text_secondary }}">
                                 {{ "Sua conta esta conectada ao Google." if eh_conta_google else "Sua conta nao esta conectada ao Google." }}
                             </p>
                         </div>
@@ -326,46 +330,86 @@
                               data-confirm-excluir="Desconectar sua conta do Google? Voce ainda vai poder entrar com e-mail e senha.">
                             {{ acao_form.hidden_tag() }}
                             <button type="submit"
-                                    class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0">
+                                    class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-xs font-semibold px-4 py-2 rounded-full transition shrink-0">
                                 Desconectar
                             </button>
                         </form>
                         {% else %}
-                        <span class="text-xs {{ tema.text_secondary }} max-w-[10rem] text-right">
-                            Defina uma senha antes de desconectar.
-                        </span>
+                        <span class="text-xs {{ tema.text_secondary }} max-w-[9rem] text-right">Defina uma senha antes de desconectar.</span>
                         {% endif %}
                         {% else %}
                         <a href="{{ url_for('auth.google_login') }}"
-                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0">
+                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-xs font-semibold px-4 py-2 rounded-full transition shrink-0">
                             Conectar
                         </a>
                         {% endif %}
                     </div>
-                </div>
 
-                <!-- Privacidade / dados -->
-                <div class="mt-6 {{ tema.card_bg }} rounded-3xl shadow-sm border {{ tema.card_border }} p-6">
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <p class="text-sm font-bold {{ tema.text_primary }}">Meus dados</p>
-                            <p class="text-sm {{ tema.text_secondary }}">Baixe uma copia dos dados da sua conta.</p>
+                    <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center justify-between gap-4">
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }}">Meus dados</p>
+                            <p class="text-xs {{ tema.text_secondary }}">Baixe uma copia dos dados da sua conta.</p>
                         </div>
                         <a href="{{ url_for('main.baixar_dados') }}"
-                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition shrink-0">
-                            Baixar meus dados
+                           class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-xs font-semibold px-4 py-2 rounded-full transition shrink-0">
+                            Baixar
                         </a>
                     </div>
                 </div>
             </div>
 
-        </div>
+            <a href="{{ url_for('auth.logout') }}"
+               class="block text-center border border-red-500/40 text-red-500 hover:bg-red-500/10 text-sm font-semibold py-3 rounded-full transition">
+                Sair da conta
+            </a>
+        </section>
+
     </main>
+    </div>
+
+    <!-- Barra de navegacao inferior -->
+    <nav class="fixed bottom-0 inset-x-0 z-30 {{ tema.card_bg }} border-t {{ tema.card_border }}">
+        <div class="max-w-xl mx-auto flex items-center justify-around px-3 pt-2.5 pb-4">
+            <button type="button" data-ir-painel="inicio" data-nav-item="inicio"
+                    class="flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
+                <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
+                </span>
+                Inicio
+            </button>
+            <a href="{{ url_for('comunidade.index') }}"
+               class="flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
+                <span class="w-10 h-7 rounded-xl flex items-center justify-center">{{ icone_pessoa("w-5 h-5") }}</span>
+                Comunidades
+            </a>
+            <button type="button" data-ir-painel="avisos" data-nav-item="avisos"
+                    class="relative flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
+                <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center">{{ icone_sino("w-5 h-5") }}</span>
+                Avisos
+                {% if notificacoes_nao_lidas %}
+                <span class="absolute -top-1 right-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {{ notificacoes_nao_lidas if notificacoes_nao_lidas < 10 else '9+' }}
+                </span>
+                {% endif %}
+            </button>
+            <button type="button" data-ir-painel="perfil" data-nav-item="perfil"
+                    class="flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.text_secondary }}">
+                <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center">
+                    {% if foto_perfil %}
+                    <img src="{{ foto_perfil }}" alt="" class="w-5 h-5 rounded-full object-cover">
+                    {% else %}
+                    <span class="w-5 h-5 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-[10px] font-bold flex items-center justify-center">{{ primeiro_nome[0]|upper }}</span>
+                    {% endif %}
+                </span>
+                Perfil
+            </button>
+        </div>
+    </nav>
 
     <!-- Chat -->
     <div id="chat-panel"
-         class="hidden fixed bottom-24 right-6 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-xl flex flex-col overflow-hidden z-20"
-         style="height: 480px;">
+         class="hidden fixed bottom-40 right-5 w-[90vw] max-w-sm {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-xl flex flex-col overflow-hidden z-40"
+         style="height: 440px;">
         <div class="{{ tema.accent_bg }} text-white px-4 py-3 flex items-center justify-between shrink-0">
             <span class="font-semibold text-sm">Assistente do site</span>
             <button type="button" id="chat-fechar" aria-label="Fechar chat" class="text-white/80 hover:text-white text-lg leading-none">
@@ -384,70 +428,65 @@
     </div>
 
     <button type="button" id="chat-fab" aria-label="Abrir chat"
-            class="fixed bottom-6 right-6 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-20">
+            class="fixed bottom-24 right-5 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-40">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
     </button>
-    </div>
 </div>
 
 <script>
-    // --- Tabs ---
+    // --- Paineis (Inicio / Avisos / Perfil) pela barra inferior ---
     (function () {
-        var tabsNav = document.querySelector('[data-accent-text]');
-        var accentText = (tabsNav && tabsNav.dataset.accentText || '').split(' ').filter(Boolean);
-        var accentBorder = (tabsNav && tabsNav.dataset.accentBorder || '').split(' ').filter(Boolean);
+        var ACENTO = '{{ tema.accent_bg }}'.split(' ').filter(Boolean);
+        var ACENTO_TEXTO = '{{ tema.accent_text }}'.split(' ').filter(Boolean);
+        var SECUNDARIO = '{{ tema.text_secondary }}'.split(' ').filter(Boolean);
 
-        function ativarTab(target) {
-            document.querySelectorAll('.tab-btn').forEach(function (btn) {
-                var ativo = btn.getAttribute('data-tab-btn') === target;
-                accentText.forEach(function (c) { btn.classList.toggle(c, ativo); });
-                accentBorder.forEach(function (c) { btn.classList.toggle(c, ativo); });
-                btn.classList.toggle('text-gray-400', !ativo);
-                btn.classList.toggle('border-transparent', !ativo);
+        function mostrar(nome) {
+            document.querySelectorAll('[data-painel]').forEach(function (p) {
+                p.classList.toggle('hidden', p.getAttribute('data-painel') !== nome);
             });
-            document.querySelectorAll('[data-tab-panel]').forEach(function (painel) {
-                painel.classList.toggle('hidden', painel.getAttribute('data-tab-panel') !== target);
+            document.querySelectorAll('[data-nav-item]').forEach(function (item) {
+                var ativo = item.getAttribute('data-nav-item') === nome;
+                var pill = item.querySelector('[data-nav-pill]');
+                ACENTO_TEXTO.forEach(function (c) { item.classList.toggle(c, ativo); });
+                SECUNDARIO.forEach(function (c) { item.classList.toggle(c, !ativo); });
+                if (pill) {
+                    ACENTO.forEach(function (c) { pill.classList.toggle(c, ativo); });
+                    pill.classList.toggle('text-white', ativo);
+                }
             });
+            window.scrollTo(0, 0);
         }
 
-        document.querySelectorAll('[data-tab-btn]').forEach(function (btn) {
-            btn.addEventListener('click', function () { ativarTab(btn.getAttribute('data-tab-btn')); });
-        });
-        document.querySelectorAll('[data-tab-jump]').forEach(function (btn) {
-            btn.addEventListener('click', function () { ativarTab(btn.getAttribute('data-tab-jump')); });
-        });
-
-        if (window.location.hash === '#config') {
-            ativarTab('config');
-        }
-    })();
-
-    // --- Sino de notificacoes ---
-    (function () {
-        var sino = document.getElementById('sino-notificacoes');
-        var painel = document.getElementById('painel-notificacoes');
-        if (!sino || !painel) return;
-
-        sino.addEventListener('click', function (evento) {
-            evento.stopPropagation();
-            painel.classList.toggle('hidden');
+        document.querySelectorAll('[data-ir-painel]').forEach(function (botao) {
+            botao.addEventListener('click', function () {
+                var nome = botao.getAttribute('data-ir-painel');
+                history.replaceState(null, '', nome === 'inicio' ? location.pathname : '#' + nome);
+                mostrar(nome);
+            });
         });
 
-        document.addEventListener('click', function (evento) {
-            if (!painel.classList.contains('hidden') && !painel.contains(evento.target)) {
-                painel.classList.add('hidden');
-            }
+        // As rotas de perfil redirecionam pra "#config" depois de salvar.
+        var hash = location.hash.replace('#', '');
+        if (hash === 'config') hash = 'perfil';
+        mostrar(['avisos', 'perfil'].indexOf(hash) !== -1 ? hash : 'inicio');
+
+        document.querySelectorAll('[data-toggle-alvo]').forEach(function (botao) {
+            botao.addEventListener('click', function () {
+                var alvo = document.getElementById(botao.getAttribute('data-toggle-alvo'));
+                if (alvo) alvo.classList.toggle('hidden');
+            });
         });
     })();
 
-    // --- Preview da foto de perfil ---
+    // --- Foto de perfil: o lapis abre o seletor; ao escolher, mostra preview + botao salvar ---
     (function () {
         var input = document.getElementById('input-foto');
         var preview = document.getElementById('preview-foto');
         var inicial = document.getElementById('preview-inicial');
+        var form = document.getElementById('form-foto');
         if (!input) return;
 
         input.addEventListener('change', function () {
@@ -472,6 +511,7 @@
                 if (inicial) inicial.classList.add('hidden');
             };
             leitor.readAsDataURL(arquivo);
+            if (form) form.classList.remove('hidden');
         });
     })();
 
@@ -485,8 +525,7 @@
         var mensagensEl = document.getElementById('chat-mensagens');
         var historico = [];
 
-        // Topicos de atalho, tipo um mini-questionario -- poupam quem nao
-        // sabe bem o que perguntar. Mesmos assuntos das regras do bot (ver
+        // Topicos de atalho -- mesmos assuntos das regras do bot (ver
         // app/main/routes.py::_REGRAS_CHAT).
         var TOPICOS_CHAT = [
             { rotulo: 'Login e cadastro', pergunta: 'Como faco login ou cadastro?' },
