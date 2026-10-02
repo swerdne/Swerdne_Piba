@@ -348,42 +348,53 @@
                     {% elif not eh_dono %}
                         <p class="text-xs {{ tema.text_secondary }} w-full">Vaga em aberto.</p>
                     {% else %}
-                        {% if diretorio_vazio %}
-                            <p class="text-xs {{ tema.text_secondary }} w-full mb-2">Diretorio da comunidade vazio.</p>
-                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id, proximo=request.path) }}"
-                               class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
-                                <i class="fa-solid fa-address-book"></i>
-                                Cadastrar membros no diretorio
-                            </a>
-                        {% else %}
-                            {% set form = formularios_membro[funcao.id] %}
-                            <div class="flex flex-wrap items-center gap-2 w-full">
-                                <input type="text" placeholder="Buscar pessoa..." autocomplete="off"
-                                       class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"
-                                       data-busca-diretorio>
-                                {{ form.membro_id(
-                                    data_atribuicao_item=funcao.id,
-                                    data_atribuicao_url=url_for('escala.adicionar_membro', funcao_id=funcao.id),
-                                    class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
-                                ) }}
-                            </div>
-                            <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id, proximo=request.path) }}"
-                               class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
-                                <i class="fa-solid fa-user-plus"></i>
-                                Adicionar novo membro ao diretorio
-                            </a>
-                        {% endif %}
-
-                        <div class="w-full mt-2" data-convidado-bloco>
-                            <button type="button" data-toggle-busca-convidado="{{ funcao.id }}"
-                                    class="w-full flex items-center justify-center gap-2 border border-dashed {{ tema.accent_border }} {{ tema.accent_text }} text-xs font-semibold px-3 py-2.5 rounded-lg transition hover:opacity-80">
-                                <i class="fa-solid fa-user-plus"></i>
-                                Convidar conta ja cadastrada
+                        {# Um dropdown so: abre com busca + lista do diretorio; as acoes
+                        "adicionar ao diretorio" e "convidar conta" ficam no rodape dele.
+                        O <select> original fica escondido -- o dropdown so preenche ele,
+                        entao a atribuicao em lote (data-atribuicao-item) segue igual. #}
+                        {% set form = formularios_membro.get(funcao.id) if not diretorio_vazio else none %}
+                        <div class="w-full" data-combo>
+                            {% if form %}
+                            {{ form.membro_id(
+                                data_atribuicao_item=funcao.id,
+                                data_atribuicao_url=url_for('escala.adicionar_membro', funcao_id=funcao.id),
+                                class_="hidden", tabindex="-1", **{"aria-hidden": "true"}
+                            ) }}
+                            {% endif %}
+                            <button type="button" data-combo-abrir aria-haspopup="listbox" aria-expanded="false"
+                                    class="w-full flex items-center justify-between gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2.5 text-sm text-left focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                                <span data-combo-rotulo class="truncate {{ tema.text_secondary }}">Selecione a pessoa</span>
+                                <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} shrink-0"></i>
                             </button>
+                            <div data-combo-painel class="hidden mt-1.5 rounded-xl border {{ tema.card_border }} {{ tema.card_bg }} shadow-lg overflow-hidden">
+                                {% if form %}
+                                <div class="relative p-2 border-b {{ tema.card_border }}">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-xs {{ tema.text_secondary }}"></i>
+                                    <input type="text" data-combo-busca placeholder="Buscar pessoa..." autocomplete="off"
+                                           class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg pl-8 pr-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                                </div>
+                                <div data-combo-lista role="listbox" class="max-h-60 overflow-y-auto py-1"></div>
+                                <p data-combo-vazio class="hidden px-3 py-2.5 text-xs {{ tema.text_secondary }}">Ninguem encontrado.</p>
+                                {% else %}
+                                <p class="px-3 py-2.5 text-xs {{ tema.text_secondary }}">Diretorio da comunidade vazio.</p>
+                                {% endif %}
+                                <div class="border-t {{ tema.card_border }} py-1">
+                                    <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id, proximo=request.path) }}"
+                                       class="flex items-center gap-2.5 px-3 py-2.5 text-sm {{ tema.text_primary }} {{ tema.card_bg_hover }} transition">
+                                        <i class="fa-solid fa-address-book w-4 text-center {{ tema.text_secondary }}"></i>
+                                        Adicionar novo membro ao diretorio
+                                    </a>
+                                    <button type="button" data-toggle-busca-convidado="{{ funcao.id }}"
+                                            class="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left {{ tema.accent_text }} {{ tema.card_bg_hover }} transition">
+                                        <i class="fa-solid fa-user-plus w-4 text-center"></i>
+                                        Convidar conta ja cadastrada
+                                    </button>
+                                </div>
+                            </div>
                             <div class="hidden relative mt-2" data-busca-convidado="{{ funcao.id }}"
                                  data-busca-convidado-url="{{ url_for('escala.buscar_usuario', funcao_id=funcao.id) }}">
                                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs {{ tema.text_secondary }}"></i>
-                                <input type="text" placeholder="Nome, e-mail ou usuario..." autocomplete="off"
+                                <input type="text" placeholder="Nome, e-mail ou usuario da conta..." autocomplete="off"
                                        class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-lg pl-9 pr-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"
                                        data-busca-convidado-input>
                                 <div class="hidden absolute z-10 w-full mt-1 rounded-lg border {{ tema.card_border }} {{ tema.card_bg }} divide-y {{ tema.divide }} overflow-hidden shadow-lg"
@@ -626,20 +637,105 @@
         }
     })();
 
-    // Filtra as opcoes do <select> "Selecione a pessoa" (diretorio ja
-    // carregado no HTML -- filtro so no client, sem ida ao servidor)
-    // conforme a pessoa digita. O placeholder (value=0) fica sempre visivel.
-    document.querySelectorAll('[data-busca-diretorio]').forEach(function (input) {
-        var select = input.nextElementSibling;
-        if (!select || select.tagName !== 'SELECT') return;
-        input.addEventListener('input', function () {
-            var termo = input.value.trim().toLowerCase();
-            Array.from(select.options).forEach(function (opcao) {
-                if (!opcao.value || opcao.value === '0') return;
-                opcao.hidden = termo.length > 0 && opcao.text.toLowerCase().indexOf(termo) === -1;
+    // Dropdown "Selecione a pessoa" com busca (ver data-combo no HTML).
+    // Le as opcoes do <select> escondido, filtra enquanto digita (sem
+    // acento/maiuscula) e, ao escolher, preenche o <select> e dispara
+    // "change" -- a barra de atribuicao em lote continua contando igual.
+    (function () {
+        var ITEM = 'w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left {{ tema.text_primary }} {{ tema.card_bg_hover }} transition';
+        var ATIVO = '{{ tema.accent_soft_bg }} {{ tema.accent_text }} font-semibold';
+        var COR_VAZIO = '{{ tema.text_secondary }}'.split(' ').filter(Boolean);
+        var COR_CHEIO = '{{ tema.text_primary }}'.split(' ').filter(Boolean);
+        var combos = [];
+
+        function normalizar(texto) {
+            return (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        }
+
+        document.querySelectorAll('[data-combo]').forEach(function (combo) {
+            var select = combo.querySelector('select');
+            var botao = combo.querySelector('[data-combo-abrir]');
+            var rotulo = combo.querySelector('[data-combo-rotulo]');
+            var painel = combo.querySelector('[data-combo-painel]');
+            var busca = combo.querySelector('[data-combo-busca]');
+            var lista = combo.querySelector('[data-combo-lista]');
+            var vazio = combo.querySelector('[data-combo-vazio]');
+            var opcoes = select ? Array.from(select.options).filter(function (o) { return o.value && o.value !== '0'; }) : [];
+
+            function fechar() {
+                painel.classList.add('hidden');
+                botao.setAttribute('aria-expanded', 'false');
+            }
+
+            function escolher(valor, texto) {
+                select.value = valor;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                var cheio = valor && valor !== '0';
+                rotulo.textContent = cheio ? texto : 'Selecione a pessoa';
+                COR_VAZIO.forEach(function (c) { rotulo.classList.toggle(c, !cheio); });
+                COR_CHEIO.forEach(function (c) { rotulo.classList.toggle(c, cheio); });
+                fechar();
+            }
+
+            function desenhar() {
+                if (!lista) return;
+                var termo = normalizar(busca ? busca.value : '');
+                lista.innerHTML = '';
+                var achados = 0;
+                if (select.value && select.value !== '0' && !termo) {
+                    var limpar = document.createElement('button');
+                    limpar.type = 'button';
+                    limpar.className = ITEM + ' {{ tema.text_secondary }}';
+                    limpar.textContent = 'Limpar selecao';
+                    limpar.addEventListener('click', function () { escolher('0', ''); });
+                    lista.appendChild(limpar);
+                }
+                opcoes.forEach(function (opcao) {
+                    if (termo && normalizar(opcao.text).indexOf(termo) === -1) return;
+                    achados++;
+                    var item = document.createElement('button');
+                    item.type = 'button';
+                    item.setAttribute('role', 'option');
+                    item.className = ITEM + (opcao.value === select.value ? ' ' + ATIVO : '');
+                    item.textContent = opcao.text;
+                    item.addEventListener('click', function () { escolher(opcao.value, opcao.text); });
+                    lista.appendChild(item);
+                });
+                if (vazio) vazio.classList.toggle('hidden', achados > 0);
+            }
+
+            botao.addEventListener('click', function () {
+                var abrir = painel.classList.contains('hidden');
+                combos.forEach(function (outro) { outro.fechar(); });
+                if (!abrir) return;
+                painel.classList.remove('hidden');
+                botao.setAttribute('aria-expanded', 'true');
+                if (busca) { busca.value = ''; }
+                desenhar();
+                if (busca) busca.focus();
             });
+            if (busca) {
+                busca.addEventListener('input', desenhar);
+                busca.addEventListener('keydown', function (evento) {
+                    if (evento.key === 'Escape') { fechar(); botao.focus(); }
+                    if (evento.key === 'Enter') {
+                        evento.preventDefault();
+                        var primeiro = lista.querySelector('[role="option"]');
+                        if (primeiro) primeiro.click();
+                    }
+                });
+            }
+            // "Convidar conta ja cadastrada" abre a busca de contas abaixo; fecha o dropdown.
+            painel.querySelectorAll('[data-toggle-busca-convidado]').forEach(function (b) {
+                b.addEventListener('click', fechar);
+            });
+            combos.push({ el: combo, fechar: fechar });
         });
-    });
+
+        document.addEventListener('click', function (evento) {
+            combos.forEach(function (c) { if (!c.el.contains(evento.target)) c.fechar(); });
+        });
+    })();
 
     document.querySelectorAll('[data-editar-funcao]').forEach(function (btn) {
         btn.addEventListener('click', function () {
