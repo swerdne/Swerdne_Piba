@@ -39,6 +39,9 @@ class Config:
     # (porta 443) nao tem essa restricao.
     RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
     RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL")
+    # Endereco publico do site, pra links absolutos fora de uma requisicao
+    # (ex: a logo no cabecalho dos e-mails enviados pelo agendador).
+    URL_PUBLICA = os.environ.get("URL_PUBLICA", "https://pibaswerdne.me").rstrip("/")
 
     # Envio de SMS via Twilio (notificacoes da Escala Rapida, ver app/sms.py).
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
