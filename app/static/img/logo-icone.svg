@@ -1,18 +1,72 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 -5 277 230">
   <defs>
-    <linearGradient id="g1" x1="2" y1="2" x2="42" y2="44" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1d6fe0"/>
-      <stop offset="0.55" stop-color="#2aa6dc"/>
-      <stop offset="1" stop-color="#28d6cf"/>
+    <linearGradient id="tbGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1677FF"/>
+      <stop offset="100%" stop-color="#16D9D1"/>
     </linearGradient>
   </defs>
-  <g fill="url(#g1)">
-    <rect x="20" y="4" width="5" height="34" rx="2.5"/>
-    <rect x="9" y="12" width="22" height="5" rx="2.5"/>
-    <path fill-rule="evenodd" d="M25,18 Q34,18 34,23 Q34,27 25,27 Z M25,20.2 Q31.8,20.2 31.8,22.5 Q31.8,24.8 25,24.8 Z"/>
-    <path fill-rule="evenodd" d="M25,27 Q35,27 35,33.5 Q35,38 25,38 Z M25,29.3 Q32.7,29.3 32.7,32.5 Q32.7,35.7 25,35.7 Z"/>
-    <path d="M19,22 C25,23 25,28 19,29 Z"/>
-    <rect x="17" y="21" width="2" height="15" rx="1"/>
-    <ellipse cx="15" cy="37" rx="3.3" ry="2.6" transform="rotate(-15 15 37)"/>
-  </g>
+
+  <path
+    d="M20 15
+       H150
+       V60
+       H112
+       V145
+       C112 170 96 185 73 185
+       C51 185 35 169 35 145
+       V60
+       H20 Z"
+    fill="url(#tbGradient)"
+  />
+
+  <path
+    d="M145 15
+       H205
+       C245 15 268 37 268 69
+       C268 91 257 105 240 113
+       C262 120 277 138 277 164
+       C277 201 249 220 207 220
+       H145
+       V15 Z
+
+       M188 52
+       V96
+       H204
+       C218 96 226 88 226 74
+       C226 60 217 52 204 52 Z
+
+       M188 132
+       V183
+       H207
+       C224 183 234 174 234 157
+       C234 141 224 132 207 132 Z"
+    fill="url(#tbGradient)"
+  />
+
+  <path
+    d="M125 65
+       V145
+       C125 159 114 169 101 169
+       C87 169 77 160 77 148
+       C77 136 88 126 101 126
+       C106 126 111 127 115 129
+       V65 Z"
+    fill="#18D8D2"
+  />
+
+  <path
+    d="M103 5
+       H121
+       V40
+       H156
+       V58
+       H121
+       V91
+       H103
+       V58
+       H68
+       V40
+       H103 Z"
+    fill="#071426"
+  />
 </svg>
