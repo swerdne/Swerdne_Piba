@@ -603,20 +603,28 @@
         </div>
 
         {% if escala.departamento == 'Louvor' %}
-        <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
-            <div class="{{ tema.card_bg }} px-4 py-3 border-b {{ tema.card_border }} flex items-center gap-2">
-                <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>
-                <span class="text-sm font-semibold {{ tema.text_primary }}">Repertorio</span>
+        <div id="repertorio" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden scroll-mt-20">
+            <div class="{{ tema.card_bg }} px-4 py-3 border-b {{ tema.card_border }} flex items-center justify-between gap-2">
+                <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
+                    <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Repertorio
+                </span>
+                <a href="{{ url_for('ministerio.repertorio', ministerio_id=escala.ministerio_id) }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                    Banco de musicas <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
             </div>
             {% if escala.repertorio %}
-            <ul class="divide-y {{ tema.divide }}">
+            <ol class="divide-y {{ tema.divide }}">
                 {% for item in escala.repertorio %}
                 <li class="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <div class="min-w-0">
+                    <span class="text-xs font-bold {{ tema.text_secondary }} w-4 text-right shrink-0">{{ loop.index }}</span>
+                    <div class="min-w-0 flex-1">
                         <p class="text-sm {{ tema.text_primary }} truncate">
-                            {{ item.nome_musica }}
+                            {% if item.musica_id %}
+                            <a href="{{ url_for('ministerio.musica', musica_id=item.musica_id) }}" class="font-semibold hover:underline">{{ item.nome_musica }}</a>
+                            {% else %}{{ item.nome_musica }}{% endif %}
                             {% if item.tom %}<span class="text-xs {{ tema.text_secondary }}">&middot; Tom {{ item.tom }}</span>{% endif %}
                         </p>
+                        {% if item.momento %}<p class="text-xs {{ tema.text_secondary }} truncate">{{ item.momento }}</p>{% endif %}
                         {% if item.link %}
                         <a href="{{ item.link }}" target="_blank" rel="noopener" class="text-xs {{ tema.accent_text }} hover:underline truncate block">
                             <i class="fa-solid fa-link mr-1"></i>{{ item.link }}
@@ -634,33 +642,62 @@
                     {% endif %}
                 </li>
                 {% endfor %}
-            </ul>
+            </ol>
+            <!-- Folhas geradas do banco: projecao (letra) e louvor (cifras) -->
+            <div class="border-t {{ tema.card_border }} px-4 py-3 grid grid-cols-2 gap-2">
+                <a href="{{ url_for('escala.folha_repertorio', escala_id=escala.id, tipo='projecao') }}" target="_blank" rel="noopener"
+                   class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 transition">
+                    <i class="fa-solid fa-display"></i>Folha de projecao
+                </a>
+                <a href="{{ url_for('escala.folha_repertorio', escala_id=escala.id, tipo='cifras') }}" target="_blank" rel="noopener"
+                   class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 transition">
+                    <i class="fa-solid fa-guitar"></i>Cifras
+                </a>
+            </div>
             {% else %}
             <p class="text-xs {{ tema.text_secondary }} px-4 py-3">Nenhuma musica adicionada ainda.</p>
             {% endif %}
             {% if eh_dono %}
-            <form method="POST" action="{{ url_for('escala.adicionar_item_repertorio', escala_id=escala.id) }}"
-                  class="border-t {{ tema.card_border }} px-4 py-3 flex flex-col sm:flex-row gap-2">
-                {{ formulario_novo_item_repertorio.hidden_tag() }}
-                {{ formulario_novo_item_repertorio.nome_musica(
-                    class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                    placeholder="Nome da musica"
-                ) }}
-                {{ formulario_novo_item_repertorio.tom(
-                    class_="w-full sm:w-24 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                    placeholder="Tom"
-                ) }}
-                {{ formulario_novo_item_repertorio.link(
-                    class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                    placeholder="Link (opcional)"
-                ) }}
-                <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
-                    <i class="fa-solid fa-plus mr-1"></i>Adicionar
-                </button>
+            {% if formulario_item_banco.musica_id.choices %}
+            <form method="POST" action="{{ url_for('escala.adicionar_musica_do_banco', escala_id=escala.id) }}"
+                  class="border-t {{ tema.card_border }} px-4 py-3 space-y-2">
+                {{ formulario_item_banco.hidden_tag() }}
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Adicionar do banco de musicas</p>
+                {{ formulario_item_banco.musica_id(class_="w-full " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring)) }}
+                <div class="flex gap-2">
+                    {{ formulario_item_banco.momento(class_="flex-1 min-w-0 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Momento (ex: Abertura)") }}
+                    {{ formulario_item_banco.tom(class_="w-20 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Tom") }}
+                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
             </form>
+            {% endif %}
+            <details class="border-t {{ tema.card_border }}">
+                <summary class="px-4 py-3 text-xs font-semibold {{ tema.text_secondary }} cursor-pointer select-none">Adicionar musica avulsa (fora do banco)</summary>
+                <form method="POST" action="{{ url_for('escala.adicionar_item_repertorio', escala_id=escala.id) }}"
+                      class="px-4 pb-3 flex flex-col sm:flex-row gap-2">
+                    {{ formulario_novo_item_repertorio.hidden_tag() }}
+                    {{ formulario_novo_item_repertorio.nome_musica(class_="flex-1 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Nome da musica") }}
+                    {{ formulario_novo_item_repertorio.tom(class_="w-full sm:w-24 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Tom") }}
+                    {{ formulario_novo_item_repertorio.link(class_="flex-1 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Link (opcional)") }}
+                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                        <i class="fa-solid fa-plus mr-1"></i>Adicionar
+                    </button>
+                </form>
+            </details>
             {% for erro in formulario_novo_item_repertorio.nome_musica.errors %}
                 <p class="text-xs text-red-400 px-4 pb-2">{{ erro }}</p>
             {% endfor %}
+            <form method="POST" action="{{ url_for('escala.salvar_observacoes_repertorio', escala_id=escala.id) }}"
+                  class="border-t {{ tema.card_border }} px-4 py-3 space-y-2">
+                {{ formulario_observacoes.hidden_tag() }}
+                <label class="block text-xs font-semibold {{ tema.text_secondary }}" for="observacoes_repertorio">Observacoes gerais (saem nas folhas)</label>
+                {{ formulario_observacoes.observacoes_repertorio(rows="2", class_="w-full " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Ex: Ministracao livre apos a musica 3") }}
+                <button type="submit" class="border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-xs font-semibold px-4 py-2 rounded-full transition">Salvar observacoes</button>
+            </form>
+            {% elif escala.observacoes_repertorio %}
+            <p class="border-t {{ tema.card_border }} px-4 py-3 text-xs {{ tema.text_secondary }} whitespace-pre-line"><span class="font-semibold">Observacoes:</span> {{ escala.observacoes_repertorio }}</p>
             {% endif %}
         </div>
         {% endif %}

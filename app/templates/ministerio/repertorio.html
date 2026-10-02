@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Repertorio - {{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl -z-0"></div>
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ ministerio.nome }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Repertorio</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 pt-2 pb-8 max-w-xl lg:max-w-3xl mx-auto space-y-5">
+        <p class="text-sm {{ tema.text_secondary }}">
+            Cada musica tem duas versoes: <span class="font-semibold {{ tema.text_primary }}">Projecao</span> (so a letra, pro telao)
+            e <span class="font-semibold {{ tema.text_primary }}">Louvor</span> (com cifras, pra quem toca).
+        </p>
+
+        {% if pode_gerenciar %}
+        <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden" {% if not musicas %}open{% endif %}>
+            <summary class="flex items-center gap-2 px-4 py-3.5 text-sm font-semibold {{ tema.accent_text }} cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                <i class="fa-solid fa-plus"></i>Nova musica
+            </summary>
+            <form method="POST" action="{{ url_for('ministerio.nova_musica', ministerio_id=ministerio.id) }}" class="px-4 pb-4 space-y-2.5">
+                {{ form.hidden_tag() }}
+                {{ form.nome(class_="w-full " ~ CAMPO, placeholder="Nome da musica") }}
+                <div class="grid grid-cols-[1fr_6rem] gap-2">
+                    {{ form.artista(class_="w-full min-w-0 " ~ CAMPO, placeholder="Artista / ministerio") }}
+                    {{ form.tom(class_="w-full " ~ CAMPO, placeholder="Tom") }}
+                </div>
+                {{ form.tags(class_="w-full " ~ CAMPO, placeholder="Tags: adoracao, ceia, abertura...") }}
+                {{ form.link(class_="w-full " ~ CAMPO, placeholder="Link de referencia (opcional)") }}
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
+                    Cadastrar e editar versoes
+                </button>
+            </form>
+        </details>
+        {% endif %}
+
+        {% if musicas %}
+        <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-sm {{ tema.text_secondary }}"></i>
+            <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tom ou tag"
+                   class="w-full pl-10 {{ CAMPO }}">
+        </div>
+
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
+            {% for m in musicas %}
+            <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" data-musica-item
+               data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
+               class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
+                <div class="w-11 h-11 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0 font-extrabold text-sm">
+                    {{ m.tom or '-' }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ m.nome }}</p>
+                    <p class="text-xs {{ tema.text_secondary }} truncate">{{ m.artista or 'Artista nao informado' }}</p>
+                    {% if m.tags %}
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        {% for tag in m.tags %}
+                        <span class="text-[10px] font-semibold rounded-full px-2 py-0.5 border {{ tema.card_border }} {{ tema.text_secondary }}">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="flex flex-col gap-1 shrink-0 text-[10px] font-semibold">
+                    <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.letra_projecao else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao de projecao">
+                        <i class="fa-solid fa-display mr-0.5"></i>Projecao
+                    </span>
+                    <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.cifra_louvor else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao do louvor (cifra)">
+                        <i class="fa-solid fa-guitar mr-0.5"></i>Louvor
+                    </span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        <p data-busca-vazia class="hidden text-center text-sm {{ tema.text_secondary }} py-6">Nenhuma musica encontrada.</p>
+        {% else %}
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
+            <i class="fa-solid fa-music text-3xl {{ tema.text_secondary }}"></i>
+            <p class="text-sm {{ tema.text_secondary }} mt-3">Nenhuma musica no repertorio ainda.</p>
+        </div>
+        {% endif %}
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+
+<script>
+    (function () {
+        var busca = document.querySelector('[data-busca-musica]');
+        if (!busca) return;
+        var semAcento = function (t) { return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
+        var itens = document.querySelectorAll('[data-musica-item]');
+        var vazia = document.querySelector('[data-busca-vazia]');
+        busca.addEventListener('input', function () {
+            var termo = semAcento(busca.value.trim());
+            var visiveis = 0;
+            itens.forEach(function (item) {
+                var ok = !termo || semAcento(item.getAttribute('data-texto')).indexOf(termo) !== -1;
+                item.classList.toggle('hidden', !ok);
+                if (ok) visiveis++;
+            });
+            vazia.classList.toggle('hidden', visiveis > 0);
+        });
+    })();
+</script>
+{% endblock %}

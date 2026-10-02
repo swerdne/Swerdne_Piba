@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ 'Projecao' if tipo == 'projecao' else 'Cifras' }} - {{ escala.nome }}</title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .barra { position: sticky; top: 0; display: flex; gap: 8px; align-items: center; justify-content: space-between;
+             padding: 10px 16px; background: #111827; color: #fff; font-size: 14px; z-index: 1; }
+    .barra a, .barra button { color: #fff; background: #4f46e5; border: 0; border-radius: 999px; padding: 8px 16px;
+             font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; }
+    .barra a { background: transparent; border: 1px solid #4b5563; }
+    .folha { background: #fff; max-width: 210mm; margin: 16px auto; padding: 18mm 16mm; box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+    h1 { font-size: 20px; margin: 0 0 4px; text-transform: uppercase; }
+    .sub { font-size: 15px; font-weight: 700; margin: 0 0 18px; text-transform: uppercase; }
+    .indice { margin: 0 0 22px; padding-left: 0; list-style: none; font-size: 14px; }
+    .indice li { margin: 3px 0; font-weight: 700; text-transform: uppercase; }
+    .musica { margin: 0 0 26px; }
+    .musica h2 { font-size: 16px; margin: 0 0 2px; text-transform: uppercase; }
+    .obs { font-size: 13px; margin: 0 0 10px; color: #374151; }
+    .bloco { margin: 0 0 12px; break-inside: avoid; }
+    .rotulo { font-size: 12px; font-weight: 700; color: #4338ca; margin: 0 0 2px; }
+    .linha { font-size: 14px; line-height: 1.45; text-transform: uppercase; margin: 0; }
+    pre { font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.4;
+          white-space: pre-wrap; margin: 8px 0 0; }
+    .vazio { font-size: 13px; color: #9ca3af; font-style: italic; }
+    .gerais { border-top: 2px solid #111827; padding-top: 10px; margin-top: 10px; }
+    .gerais h3 { font-size: 14px; margin: 0 0 4px; }
+    .gerais p { font-size: 13px; white-space: pre-line; margin: 0; }
+    .quebra { break-before: page; }
+    @media (max-width: 640px) { .folha { margin: 0; padding: 20px 16px; box-shadow: none; } }
+    @media print {
+        body { background: #fff; }
+        .barra { display: none; }
+        .folha { margin: 0; padding: 0; box-shadow: none; max-width: none; }
+        @page { margin: 15mm; }
+    }
+</style>
+</head>
+<body>
+{% set data_curta = escala.data.strftime('%d.%m.%y') if escala.data else 'sem data' %}
+<div class="barra">
+    <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}">&larr; Voltar</a>
+    <span>{{ 'Folha de projecao' if tipo == 'projecao' else 'Cifras do louvor' }}</span>
+    <button type="button" onclick="window.print()">Imprimir / PDF</button>
+</div>
+
+<div class="folha">
+    <h1>Escala {{ escala.departamento or '' }} &ndash; [{{ data_curta }}]</h1>
+    <p class="sub">{{ escala.nome }}{% if escala.horario %} &ndash; {{ escala.horario.strftime('%H:%M') }}h{% endif %}</p>
+
+    {% if not itens %}
+    <p class="vazio">Nenhuma musica no repertorio desta escala.</p>
+    {% else %}
+    <ol class="indice">
+        {% for it in itens %}
+        <li>{{ loop.index }}. {{ it.item.nome_musica }}{% if it.item.momento %} - {{ it.item.momento }}{% endif %}</li>
+        {% endfor %}
+    </ol>
+
+    {% for it in itens %}
+    <section class="musica {{ 'quebra' if tipo == 'cifras' and not loop.first }}">
+        <h2>{{ loop.index }}. {{ it.item.nome_musica }}{% if it.item.momento %} - {{ it.item.momento }}{% endif %}</h2>
+        <p class="obs">
+            {% if tipo == 'cifras' and it.musica and it.musica.artista %}{{ it.musica.artista }} &middot; {% endif %}
+            Observacoes: {% if it.tom %}TOM {{ it.tom }}{% else %}-{% endif %}
+        </p>
+        {% if tipo == 'projecao' %}
+            {% if it.blocos %}
+                {% for bloco in it.blocos %}
+                <div class="bloco">
+                    {% if bloco.rotulo %}<p class="rotulo">[{{ bloco.rotulo|upper }}]</p>{% endif %}
+                    {% for linha in bloco.linhas %}<p class="linha">{{ linha }}</p>{% endfor %}
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="vazio">{{ 'Letra de projecao ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
+            {% endif %}
+        {% else %}
+            {% if it.cifra %}
+            <pre>{{ it.cifra }}</pre>
+            {% else %}
+            <p class="vazio">{{ 'Cifra ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
+            {% endif %}
+        {% endif %}
+    </section>
+    {% endfor %}
+    {% endif %}
+
+    {% if escala.observacoes_repertorio %}
+    <div class="gerais">
+        <h3>OBSERVACOES GERAIS</h3>
+        <p>{{ escala.observacoes_repertorio }}</p>
+    </div>
+    {% endif %}
+</div>
+</body>
+</html>

@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}{{ musica.nome }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    .mu-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; tab-size: 4; }
+</style>
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl -z-0"></div>
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('ministerio.repertorio', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar ao repertorio">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate">Repertorio &middot; {{ ministerio.nome }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">{{ musica.nome }}</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 pt-2 pb-8 max-w-xl lg:max-w-3xl mx-auto space-y-5">
+        <!-- Resumo -->
+        <div class="rounded-3xl p-5 text-white space-y-1"
+             style="background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 10px 24px -6px rgba(79,70,229,0.35);">
+            <p class="text-xs font-semibold uppercase tracking-wide text-indigo-200">{{ musica.artista or 'Artista nao informado' }}</p>
+            <h2 class="text-2xl font-extrabold tracking-tight">{{ musica.nome }}</h2>
+            <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                {% if musica.tom %}<span class="text-xs font-bold bg-white text-indigo-700 rounded-full px-2.5 py-0.5">Tom {{ musica.tom }}</span>{% endif %}
+                {% for tag in musica.tags or [] %}
+                <span class="text-xs font-semibold bg-white/15 rounded-full px-2.5 py-0.5">{{ tag }}</span>
+                {% endfor %}
+                {% if musica.link %}
+                <a href="{{ musica.link }}" target="_blank" rel="noopener" class="text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-full px-2.5 py-0.5"><i class="fa-solid fa-link mr-1"></i>Referencia</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Abas -->
+        <div class="grid {{ 'grid-cols-3' if pode_gerenciar else 'grid-cols-2' }} gap-1 p-1 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm" role="tablist">
+            <button type="button" role="tab" data-aba-botao="projecao" class="flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition">
+                <i class="fa-solid fa-display"></i>Projecao
+            </button>
+            <button type="button" role="tab" data-aba-botao="louvor" class="flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition">
+                <i class="fa-solid fa-guitar"></i>Louvor
+            </button>
+            {% if pode_gerenciar %}
+            <button type="button" role="tab" data-aba-botao="info" class="flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition">
+                <i class="fa-solid fa-circle-info"></i>Dados
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Aba Projecao: letra sem cifra, em blocos -->
+        <section data-aba="projecao" class="space-y-4">
+            {% if pode_gerenciar %}
+            <form method="POST" action="{{ url_for('ministerio.salvar_projecao_musica', musica_id=musica.id) }}"
+                  class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                {{ form_projecao.hidden_tag() }}
+                <div>
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">Letra para projecao</p>
+                    <p class="text-xs {{ tema.text_secondary }}">Sem acordes. Use <span class="font-mono">[VERSO 1]</span>, <span class="font-mono">[REFRAO]</span>, <span class="font-mono">[PONTE]</span> numa linha sozinha; linha em branco separa os slides.</p>
+                </div>
+                {{ form_projecao.letra_projecao(rows="14", class_="w-full mu-mono " ~ CAMPO,
+                    placeholder="[VERSO 1]\nPRIMEIRA LINHA DA LETRA\nSEGUNDA LINHA\n\n[REFRAO]\n...") }}
+                <div class="flex items-center gap-2">
+                    <button type="button" data-maiusculas class="border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-xs font-semibold px-3 py-2 rounded-full transition">
+                        <i class="fa-solid fa-font mr-1"></i>Tudo em maiusculas
+                    </button>
+                    <button type="submit" class="ml-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">
+                        Salvar projecao
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+
+            {% if blocos %}
+            <div class="space-y-2">
+                <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">Como fica no telao</p>
+                <div class="grid sm:grid-cols-2 gap-2">
+                    {% for bloco in blocos %}
+                    <div class="rounded-2xl bg-slate-900 text-white p-4 text-center flex flex-col justify-center min-h-[7rem]">
+                        {% if bloco.rotulo %}<p class="text-[10px] font-bold tracking-widest text-indigo-300 mb-1.5">{{ bloco.rotulo|upper }}</p>{% endif %}
+                        {% for linha in bloco.linhas %}<p class="text-sm font-semibold leading-snug uppercase">{{ linha }}</p>{% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% elif not pode_gerenciar %}
+            <p class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl p-6 text-center text-sm {{ tema.text_secondary }}">A versao de projecao ainda nao foi preenchida.</p>
+            {% endif %}
+        </section>
+
+        <!-- Aba Louvor: cifra com acordes sobre a letra -->
+        <section data-aba="louvor" class="space-y-4 hidden">
+            {% if pode_gerenciar %}
+            <form method="POST" action="{{ url_for('ministerio.salvar_louvor_musica', musica_id=musica.id) }}"
+                  class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                {{ form_louvor.hidden_tag() }}
+                <div>
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">Cifra para o louvor</p>
+                    <p class="text-xs {{ tema.text_secondary }}">Acordes na linha de cima, letra embaixo -- a fonte e monoespacada, entao o alinhamento fica igual na folha.</p>
+                </div>
+                {{ form_louvor.cifra_louvor(rows="18", wrap="off", spellcheck="false", class_="w-full mu-mono whitespace-pre overflow-x-auto " ~ CAMPO,
+                    placeholder="Intro: G  D  Em  C\n\n[Verso 1]\nG              D\nPrimeira linha da letra\n...") }}
+                <div class="flex justify-end">
+                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">
+                        Salvar cifra
+                    </button>
+                </div>
+            </form>
+            {% elif musica.cifra_louvor %}
+            <pre class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-sm {{ tema.text_primary }} overflow-x-auto">{{ musica.cifra_louvor }}</pre>
+            {% else %}
+            <p class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl p-6 text-center text-sm {{ tema.text_secondary }}">A cifra ainda nao foi preenchida.</p>
+            {% endif %}
+        </section>
+
+        {% if pode_gerenciar %}
+        <!-- Aba Dados: nome, tom, tags... -->
+        <section data-aba="info" class="space-y-4 hidden">
+            <form method="POST" action="{{ url_for('ministerio.salvar_info_musica', musica_id=musica.id) }}"
+                  class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2.5">
+                {{ form_info.hidden_tag() }}
+                <label class="block text-xs font-semibold {{ tema.text_secondary }}">Nome</label>
+                {{ form_info.nome(class_="w-full " ~ CAMPO) }}
+                <div class="grid grid-cols-[1fr_6rem] gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Artista</label>
+                        {{ form_info.artista(class_="w-full min-w-0 " ~ CAMPO) }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Tom</label>
+                        {{ form_info.tom(class_="w-full " ~ CAMPO) }}
+                    </div>
+                </div>
+                <label class="block text-xs font-semibold {{ tema.text_secondary }}">Tags (separadas por virgula)</label>
+                {{ form_info.tags(class_="w-full " ~ CAMPO) }}
+                <label class="block text-xs font-semibold {{ tema.text_secondary }}">Link de referencia</label>
+                {{ form_info.link(class_="w-full " ~ CAMPO) }}
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
+                    Salvar dados
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('ministerio.excluir_musica', musica_id=musica.id) }}"
+                  data-confirm-excluir='Excluir "{{ musica.nome }}" do repertorio? As escalas que usam a musica mantem so o nome.'>
+                {{ acao_form.hidden_tag() }}
+                <button type="submit" class="w-full border border-red-500/40 text-red-500 hover:bg-red-500/10 text-sm font-semibold py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-trash mr-1"></i>Excluir musica
+                </button>
+            </form>
+        </section>
+        {% endif %}
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+
+<script>
+    (function () {
+        var ativoCls = {{ (tema.accent_bg ~ ' text-white shadow-sm')|tojson }}.split(' ');
+        var inativoCls = {{ tema.text_secondary|tojson }}.split(' ');
+        var botoes = document.querySelectorAll('[data-aba-botao]');
+        function abrir(nome) {
+            if (!document.querySelector('[data-aba="' + nome + '"]')) nome = 'projecao';
+            document.querySelectorAll('[data-aba]').forEach(function (s) {
+                s.classList.toggle('hidden', s.getAttribute('data-aba') !== nome);
+            });
+            botoes.forEach(function (b) {
+                var ativo = b.getAttribute('data-aba-botao') === nome;
+                b.setAttribute('aria-selected', ativo ? 'true' : 'false');
+                ativoCls.forEach(function (c) { if (c) b.classList.toggle(c, ativo); });
+                inativoCls.forEach(function (c) { if (c) b.classList.toggle(c, !ativo); });
+            });
+        }
+        botoes.forEach(function (b) {
+            b.addEventListener('click', function () {
+                var nome = b.getAttribute('data-aba-botao');
+                history.replaceState(null, '', '#' + nome);
+                abrir(nome);
+            });
+        });
+        abrir((location.hash || '#projecao').slice(1));
+
+        document.querySelectorAll('[data-confirm-excluir]').forEach(function (form) {
+            form.addEventListener('submit', function (evento) {
+                if (!window.confirm(form.getAttribute('data-confirm-excluir'))) evento.preventDefault();
+            });
+        });
+
+        var maiusculas = document.querySelector('[data-maiusculas]');
+        if (maiusculas) {
+            maiusculas.addEventListener('click', function () {
+                var campo = document.getElementById('letra_projecao');
+                campo.value = campo.value.toUpperCase();
+            });
+        }
+    })();
+</script>
+{% endblock %}

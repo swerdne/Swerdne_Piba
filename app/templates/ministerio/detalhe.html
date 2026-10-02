@@ -41,6 +41,12 @@
                 <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
             </div>
             <div class="flex items-center gap-3 shrink-0">
+                {% if not ministerio.eh_kids %}
+                <a href="{{ url_for('ministerio.repertorio', ministerio_id=ministerio.id) }}"
+                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" title="Repertorio (banco de musicas)" aria-label="Repertorio">
+                    <i class="fa-solid fa-music"></i>
+                </a>
+                {% endif %}
                 {% if pode_gerenciar %}
                 {% if ministerio.eh_kids %}
                 <a href="{{ url_for('ministerio.checkin', ministerio_id=ministerio.id) }}"

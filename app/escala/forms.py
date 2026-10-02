@@ -111,3 +111,34 @@ class AnexoForm(FlaskForm):
     # 0 = toda a equipe; senao, o id da Funcao (choices montadas na rota).
     funcao_id = SelectField("Para quem", coerce=int, validators=[Optional()])
     submit = SubmitField("Anexar")
+
+
+class MusicaForm(FlaskForm):
+    nome = StringField("Nome da musica", validators=[DataRequired(message="Informe o nome da musica."), Length(max=150)])
+    artista = StringField("Artista / ministerio", validators=[Optional(), Length(max=120)])
+    tom = StringField("Tom original", validators=[Optional(), Length(max=10)])
+    tags = StringField("Tags (separadas por virgula)", validators=[Optional(), Length(max=300)])
+    link = StringField("Link de referencia (video, cifra...)", validators=[Optional(), Length(max=500)])
+    submit = SubmitField("Salvar")
+
+
+class LetraProjecaoForm(FlaskForm):
+    letra_projecao = TextAreaField("Letra para projecao", validators=[Optional(), Length(max=20000)])
+    submit = SubmitField("Salvar projecao")
+
+
+class CifraLouvorForm(FlaskForm):
+    cifra_louvor = TextAreaField("Cifra para o louvor", validators=[Optional(), Length(max=30000)])
+    submit = SubmitField("Salvar cifra")
+
+
+class ItemDoBancoForm(FlaskForm):
+    musica_id = SelectField("Musica", coerce=int, validators=[DataRequired(message="Escolha uma musica.")])
+    momento = StringField("Momento", validators=[Optional(), Length(max=60)])
+    tom = StringField("Tom do dia", validators=[Optional(), Length(max=10)])
+    submit = SubmitField("Adicionar")
+
+
+class ObservacoesRepertorioForm(FlaskForm):
+    observacoes_repertorio = TextAreaField("Observacoes gerais", validators=[Optional(), Length(max=2000)])
+    submit = SubmitField("Salvar observacoes")

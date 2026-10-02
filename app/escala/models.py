@@ -4,6 +4,8 @@ Cada Escala e um EVENTO especifico (nome, departamento, data e horario),
 pertencente a um usuario. Departamentos sao independentes entre si (uma
 escala de Louvor nao tem nenhuma ligacao com uma de Midia ou Kids).
 """
+import re
+import unicodedata
 from datetime import datetime, timezone
 
 import mongoengine
@@ -297,6 +299,9 @@ class Escala(SequentialIdDocument):
     # tanto na lista de Escalas quanto no calendario do Ministerio. None =
     # usa a cor do departamento (comportamento de sempre).
     cor_selecionada = mongoengine.StringField(max_length=20)
+    # Observacoes gerais do repertorio (saem no fim da folha de projecao e
+    # das cifras, ver escala.routes.folha_repertorio).
+    observacoes_repertorio = mongoengine.StringField(max_length=2000)
 
     # uq_escala_plantao_turno_periodo do Postgres (unique(plantao_turno_id,
     # plantao_periodo)) nao foi recriada aqui -- e uma invariante mantida
@@ -443,10 +448,19 @@ class ItemRepertorio(SequentialIdDocument):
     tom = mongoengine.StringField(max_length=10)
     link = mongoengine.StringField(max_length=500)
     ordem = mongoengine.IntField(default=0)
+    # Musica do banco do ministerio (ver Musica) -- None = musica avulsa,
+    # so com nome/tom/link (como era antes do banco existir).
+    musica_id = mongoengine.IntField()
+    # Momento do culto em que ela entra (ex: "Musica 1", "Ofertorio").
+    momento = mongoengine.StringField(max_length=60)
 
     @property
     def escala(self):
         return Escala.objects(id=self.escala_id).first()
+
+    @property
+    def musica(self):
+        return Musica.objects(id=self.musica_id).first() if self.musica_id else None
 
     def __repr__(self):
         return f"<ItemRepertorio {self.nome_musica!r} da escala {self.escala_id}>"
@@ -664,3 +678,67 @@ class Anexo(SequentialIdDocument):
 
     def __repr__(self):
         return f"<Anexo {self.nome_arquivo!r} da escala {self.escala_id}>"
+
+
+class Musica(SequentialIdDocument):
+    """Musica do banco de repertorio de um Ministerio. Uma unica musica com
+    duas versoes editadas separadamente: letra_projecao (pro telao: blocos
+    sem cifra, rotulos tipo [VERSO 1]/[REFRAO]) e cifra_louvor (pra quem toca:
+    acordes em cima da letra, alinhamento monoespacado). As escalas apontam
+    pra ela via ItemRepertorio.musica_id."""
+
+    meta = {"collection": "musicas"}
+    _nome_sequencia = "musicas"
+
+    ministerio_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=150)
+    artista = mongoengine.StringField(max_length=120)
+    tom = mongoengine.StringField(max_length=10)
+    tags = mongoengine.ListField(mongoengine.StringField(max_length=40))
+    link = mongoengine.StringField(max_length=500)
+    letra_projecao = mongoengine.StringField()
+    cifra_louvor = mongoengine.StringField()
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    atualizada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def ministerio(self):
+        from app.ministerio.models import Ministerio
+        return Ministerio.objects(id=self.ministerio_id).first()
+
+    def __repr__(self):
+        return f"<Musica {self.nome!r} do ministerio {self.ministerio_id}>"
+
+
+_ROTULO_SECAO = re.compile(r"^\s*\[(.+?)\]\s*$")
+
+
+def blocos_da_letra(texto):
+    """Quebra a letra de projecao em blocos pra exibir/imprimir: cada bloco
+    e {"rotulo": "VERSO 1" ou None, "linhas": [...]}. Linha so com [ALGO]
+    vira rotulo; linha em branco separa blocos (um "slide")."""
+    blocos, atual = [], None
+    for linha in (texto or "").replace("\r\n", "\n").split("\n"):
+        rotulo = _ROTULO_SECAO.match(linha)
+        if rotulo:
+            atual = {"rotulo": rotulo.group(1).strip(), "linhas": []}
+            blocos.append(atual)
+        elif not linha.strip():
+            if atual is not None and atual["linhas"]:
+                atual = None
+        else:
+            if atual is None:
+                atual = {"rotulo": None, "linhas": []}
+                blocos.append(atual)
+            atual["linhas"].append(linha.rstrip())
+    return blocos
+
+
+_PALAVRAS_PROJECAO = ("proje", "midia", "datashow", "telao", "slide", "letra", "transmiss")
+
+
+def eh_funcao_de_projecao(nome_funcao):
+    """Funcoes que recebem a versao de projecao (letra) em vez das cifras.
+    Pelo nome da funcao, sem acento: Projecao, Midia, Datashow, Telao..."""
+    nome = unicodedata.normalize("NFD", nome_funcao or "").encode("ascii", "ignore").decode().lower()
+    return any(p in nome for p in _PALAVRAS_PROJECAO)

@@ -16,7 +16,7 @@ from app.imagens import ImagemArmazenada, salvar_imagem, remover_imagem
 from app.auth.routes import _notificar_senha_alterada
 from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import Ministerio
-from app.escala.models import Membro, Escala, Funcao, Ensaio, Anexo, STATUS_LABELS, STATUS_CORES
+from app.escala.models import Membro, Escala, Funcao, Ensaio, Anexo, STATUS_LABELS, STATUS_CORES, eh_funcao_de_projecao
 from app.escala.forms import StatusForm
 
 
@@ -649,6 +649,11 @@ def minha_escala():
             "nomes_funcao": nomes_funcao,
             "repertorio": selecionada.repertorio,
             "ministerio": ministerio,
+            # Cada funcao recebe a sua versao do repertorio: projecao/midia
+            # fica com a letra; quem toca/canta, com as cifras.
+            "folhas_repertorio": sorted({
+                "projecao" if eh_funcao_de_projecao(f.nome) else "cifras" for f in minhas_funcoes
+            }, reverse=True),
         }
 
     return render_template(

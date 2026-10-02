@@ -22,6 +22,8 @@ from app.escala.forms import (
     ItemRepertorioForm,
     EnsaioForm,
     AnexoForm,
+    ItemDoBancoForm,
+    ObservacoesRepertorioForm,
 )
 from app.escala.models import (
     Escala,
@@ -30,6 +32,8 @@ from app.escala.models import (
     ItemRepertorio,
     Ensaio,
     Anexo,
+    Musica,
+    blocos_da_letra,
     TIPOS_ANEXO,
     TAMANHO_MAXIMO_ANEXO,
     DEPARTAMENTOS,
@@ -390,6 +394,8 @@ def detalhe(escala_id):
         formulario_novo_item_repertorio=ItemRepertorioForm(),
         formulario_ensaio=EnsaioForm(prefix="ensaio"),
         formulario_anexo=_form_anexo(escala),
+        formulario_item_banco=_form_item_banco(escala),
+        formulario_observacoes=ObservacoesRepertorioForm(observacoes_repertorio=escala.observacoes_repertorio),
         anexos=_anexos_visiveis(escala, eh_dono),
         ensaios=escala.ensaios,
         hoje=_hoje_brasilia(),
@@ -1528,9 +1534,7 @@ def adicionar_anexo(escala_id):
 def baixar_anexo(anexo_id):
     """Quem pode ver a escala, ou quem esta escalado nela, abre o arquivo."""
     anexo = primeiro_ou_404(Anexo.objects(id=anexo_id))
-    escala = primeiro_ou_404(Escala.objects(id=anexo.escala_id))
-    if not _funcoes_da_conta(escala):
-        _escala_visivel_ou_404(escala.id)
+    _escala_da_equipe_ou_404(anexo.escala_id)
     resposta = send_file(
         io.BytesIO(anexo.conteudo),
         mimetype=anexo.tipo,
@@ -1553,3 +1557,89 @@ def excluir_anexo(anexo_id):
     Anexo.objects(id=anexo.id).delete()
     flash(f'"{nome}" removido.', "success")
     return _voltar_pros_materiais(escala)
+
+
+def _escala_da_equipe_ou_404(escala_id):
+    """Leitura pra quem pode ver a escala OU esta escalado nela (Membro com o
+    e-mail da conta) -- materiais e folhas do repertorio."""
+    escala = primeiro_ou_404(Escala.objects(id=escala_id))
+    if not _funcoes_da_conta(escala):
+        _escala_visivel_ou_404(escala.id)
+    return escala
+
+
+# --- Repertorio da escala puxando do banco de musicas ----------------------
+
+def _form_item_banco(escala):
+    form = ItemDoBancoForm(prefix="banco")
+    form.musica_id.choices = [
+        (m.id, f"{m.nome}" + (f" - {m.artista}" if m.artista else ""))
+        for m in Musica.objects(ministerio_id=escala.ministerio_id).only("id", "nome", "artista").order_by("nome")
+    ]
+    return form
+
+
+@bp.route("/<int:escala_id>/repertorio/banco", methods=["POST"])
+@login_required
+def adicionar_musica_do_banco(escala_id):
+    escala = _escala_do_usuario_ou_404(escala_id)
+    form = _form_item_banco(escala)
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Escolha uma musica do repertorio.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+    musica = Musica.objects(id=form.musica_id.data, ministerio_id=escala.ministerio_id).first()
+    if musica is None:
+        flash("Musica nao encontrada no repertorio deste ministerio.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+    maior_ordem = max([item.ordem for item in escala.repertorio], default=-1)
+    ItemRepertorio(
+        escala_id=escala.id,
+        musica_id=musica.id,
+        nome_musica=musica.nome,
+        tom=(form.tom.data or "").strip() or musica.tom,
+        link=musica.link,
+        momento=(form.momento.data or "").strip() or None,
+        ordem=maior_ordem + 1,
+    ).save()
+    flash(f'"{musica.nome}" adicionada ao repertorio.', "success")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+
+
+@bp.route("/<int:escala_id>/repertorio/observacoes", methods=["POST"])
+@login_required
+def salvar_observacoes_repertorio(escala_id):
+    escala = _escala_do_usuario_ou_404(escala_id)
+    form = ObservacoesRepertorioForm()
+    if form.validate_on_submit():
+        escala.observacoes_repertorio = (form.observacoes_repertorio.data or "").strip() or None
+        escala.save()
+        flash("Observacoes do repertorio salvas.", "success")
+    else:
+        flash("Nao foi possivel salvar as observacoes.", "danger")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+
+
+@bp.route("/<int:escala_id>/repertorio/<any(projecao, cifras):tipo>")
+@login_required
+def folha_repertorio(escala_id, tipo):
+    """Folha pronta pra imprimir/salvar em PDF, montada do banco de musicas:
+    "projecao" = letras em blocos, sem cifra (equipe de midia/projecao);
+    "cifras" = versao do louvor, com acordes (quem toca/canta)."""
+    escala = _escala_da_equipe_ou_404(escala_id)
+    itens = []
+    for item in escala.repertorio:
+        musica = item.musica
+        itens.append({
+            "item": item,
+            "musica": musica,
+            "tom": item.tom or (musica.tom if musica else None),
+            "blocos": blocos_da_letra(musica.letra_projecao) if musica else [],
+            "cifra": musica.cifra_louvor if musica else None,
+        })
+    return render_template(
+        "escala/folha_repertorio.html",
+        escala=escala,
+        tipo=tipo,
+        itens=itens,
+    )

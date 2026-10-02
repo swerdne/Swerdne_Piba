@@ -197,6 +197,15 @@
                         </li>
                         {% endfor %}
                     </ol>
+                    <!-- A versao certa pra funcao da pessoa (projecao = letra, demais = cifras) -->
+                    <div class="border-t {{ tema.card_border }} px-4 py-3 grid gap-2 {{ 'grid-cols-2' if folhas_repertorio|length > 1 else 'grid-cols-1' }}">
+                        {% for tipo in folhas_repertorio %}
+                        <a href="{{ url_for('escala.folha_repertorio', escala_id=selecionada.id, tipo=tipo) }}" target="_blank" rel="noopener"
+                           class="flex items-center justify-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-xl transition">
+                            <i class="fa-solid {{ 'fa-display' if tipo == 'projecao' else 'fa-guitar' }}"></i>{{ 'Letras pra projecao' if tipo == 'projecao' else 'Suas cifras' }}
+                        </a>
+                        {% endfor %}
+                    </div>
                 </div>
                 {% endif %}
             </div>

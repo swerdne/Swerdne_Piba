@@ -19,7 +19,8 @@ from app.ministerio.models import (
     CheckInCrianca,
     criar_ministerio,
 )
-from app.escala.models import resumos_para_calendario_em_lote
+from app.escala.models import resumos_para_calendario_em_lote, Musica, ItemRepertorio, blocos_da_letra
+from app.escala.forms import MusicaForm, LetraProjecaoForm, CifraLouvorForm
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
 from app.convites.routes import _enviar_email_de_convite
@@ -653,3 +654,155 @@ def excluir_crianca(ministerio_id, crianca_id):
 
     flash(f"{nome} removido(a) do cadastro.", "success")
     return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
+
+
+# --- Repertorio: banco de musicas do ministerio (ver escala.models.Musica) ---
+
+def _tags_do_texto(texto):
+    tags = []
+    for tag in (texto or "").split(","):
+        tag = tag.strip()[:40]
+        if tag and tag.lower() not in [t.lower() for t in tags]:
+            tags.append(tag)
+    return tags[:12]
+
+
+def _musica_visivel_ou_404(musica_id):
+    musica = primeiro_ou_404(Musica.objects(id=musica_id))
+    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(musica.ministerio_id)
+    return musica, ministerio, pode_gerenciar
+
+
+def _musica_do_lider_ou_404(musica_id):
+    musica, ministerio, pode_gerenciar = _musica_visivel_ou_404(musica_id)
+    if not pode_gerenciar:
+        abort(404)
+    return musica, ministerio
+
+
+@bp.route("/<int:ministerio_id>/repertorio")
+@login_required
+def repertorio(ministerio_id):
+    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
+    musicas = list(
+        Musica.objects(ministerio_id=ministerio.id)
+        .only("id", "nome", "artista", "tom", "tags", "letra_projecao", "cifra_louvor")
+        .order_by("nome")
+    )
+    return render_template(
+        "ministerio/repertorio.html",
+        ministerio=ministerio,
+        pode_gerenciar=pode_gerenciar,
+        musicas=musicas,
+        form=MusicaForm(),
+    )
+
+
+@bp.route("/<int:ministerio_id>/repertorio/nova", methods=["POST"])
+@login_required
+def nova_musica(ministerio_id):
+    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
+    if not pode_gerenciar:
+        abort(404)
+    form = MusicaForm()
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel cadastrar a musica.", "danger")
+        return redirect(url_for("ministerio.repertorio", ministerio_id=ministerio.id))
+    musica = Musica(
+        ministerio_id=ministerio.id,
+        nome=form.nome.data.strip(),
+        artista=(form.artista.data or "").strip() or None,
+        tom=(form.tom.data or "").strip() or None,
+        tags=_tags_do_texto(form.tags.data),
+        link=(form.link.data or "").strip() or None,
+    )
+    musica.save()
+    flash(f'"{musica.nome}" cadastrada. Agora preencha as versoes de projecao e louvor.', "success")
+    return redirect(url_for("ministerio.musica", musica_id=musica.id))
+
+
+@bp.route("/repertorio/<int:musica_id>")
+@login_required
+def musica(musica_id):
+    musica, ministerio, pode_gerenciar = _musica_visivel_ou_404(musica_id)
+    form_info = MusicaForm(
+        nome=musica.nome, artista=musica.artista, tom=musica.tom,
+        tags=", ".join(musica.tags or []), link=musica.link,
+    )
+    return render_template(
+        "ministerio/musica.html",
+        musica=musica,
+        ministerio=ministerio,
+        pode_gerenciar=pode_gerenciar,
+        form_info=form_info,
+        form_projecao=LetraProjecaoForm(letra_projecao=musica.letra_projecao),
+        form_louvor=CifraLouvorForm(cifra_louvor=musica.cifra_louvor),
+        blocos=blocos_da_letra(musica.letra_projecao),
+        acao_form=AcaoForm(),
+    )
+
+
+def _salvar_musica(musica, aba, mensagem):
+    musica.atualizada_em = datetime.now(timezone.utc)
+    musica.save()
+    flash(mensagem, "success")
+    return redirect(url_for("ministerio.musica", musica_id=musica.id) + f"#{aba}")
+
+
+@bp.route("/repertorio/<int:musica_id>/info", methods=["POST"])
+@login_required
+def salvar_info_musica(musica_id):
+    musica, _ = _musica_do_lider_ou_404(musica_id)
+    form = MusicaForm()
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel salvar.", "danger")
+        return redirect(url_for("ministerio.musica", musica_id=musica.id))
+    musica.nome = form.nome.data.strip()
+    musica.artista = (form.artista.data or "").strip() or None
+    musica.tom = (form.tom.data or "").strip() or None
+    musica.tags = _tags_do_texto(form.tags.data)
+    musica.link = (form.link.data or "").strip() or None
+    return _salvar_musica(musica, "info", "Dados da musica salvos.")
+
+
+@bp.route("/repertorio/<int:musica_id>/projecao", methods=["POST"])
+@login_required
+def salvar_projecao_musica(musica_id):
+    """So a versao de projecao -- nao toca na cifra (edicao independente)."""
+    musica, _ = _musica_do_lider_ou_404(musica_id)
+    form = LetraProjecaoForm()
+    if not form.validate_on_submit():
+        flash("Nao foi possivel salvar a letra de projecao.", "danger")
+        return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#projecao")
+    musica.letra_projecao = form.letra_projecao.data or None
+    return _salvar_musica(musica, "projecao", "Versao de projecao salva.")
+
+
+@bp.route("/repertorio/<int:musica_id>/louvor", methods=["POST"])
+@login_required
+def salvar_louvor_musica(musica_id):
+    """So a versao com cifras -- nao toca na letra de projecao."""
+    musica, _ = _musica_do_lider_ou_404(musica_id)
+    form = CifraLouvorForm()
+    if not form.validate_on_submit():
+        flash("Nao foi possivel salvar a cifra.", "danger")
+        return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
+    musica.cifra_louvor = form.cifra_louvor.data or None
+    return _salvar_musica(musica, "louvor", "Versao do louvor (cifra) salva.")
+
+
+@bp.route("/repertorio/<int:musica_id>/excluir", methods=["POST"])
+@login_required
+def excluir_musica(musica_id):
+    musica, ministerio = _musica_do_lider_ou_404(musica_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.musica", musica_id=musica.id))
+    nome = musica.nome
+    # As escalas que usavam a musica ficam com o item "avulso" (nome/tom).
+    ItemRepertorio.objects(musica_id=musica.id).update(set__musica_id=None)
+    musica.delete()
+    flash(f'"{nome}" removida do repertorio.', "success")
+    return redirect(url_for("ministerio.repertorio", ministerio_id=ministerio.id))

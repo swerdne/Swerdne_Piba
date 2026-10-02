@@ -71,9 +71,11 @@ class Ministerio(SequentialIdDocument):
     def cascade_children(self):
         """Ver app/db_utils.py::delete_cascade. Escala e TurnoPlantao sao
         apagados a parte, explicitamente, em ministerio.routes.excluir_ministerio."""
+        from app.escala.models import Musica
         return [
             UsuarioMinisterio.objects(ministerio_id=self.id),
             Crianca.objects(ministerio_id=self.id),
+            Musica.objects(ministerio_id=self.id),
         ]
 
     def __repr__(self):
