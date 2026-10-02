@@ -28,14 +28,10 @@
     <header class="{{ tema.header_bg }} border-b {{ tema.header_border }}">
         <div class="flex items-center justify-between px-4 sm:px-6 py-4">
             <div class="flex items-center gap-2.5">
-                <!-- O SVG e so linhas brancas (sem fundo), entao sem cor por tras ele
-                some no tema claro (cabecalho branco). Em vez do quadrado colorido,
-                usa o SVG como mascara CSS pra "pintar" o icone na cor de text_primary
-                (branco no tema escuro, escuro no tema claro pra continuar visivel
-                no cabecalho branco) -- funciona nos dois temas, sem fundo atras. -->
-                <div class="w-8 h-8 {{ tema.text_primary_bg }} shrink-0"
-                     style="-webkit-mask-image:url('{{ url_for('static', filename='img/logo-icone.svg') }}'); mask-image:url('{{ url_for('static', filename='img/logo-icone.svg') }}'); -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; -webkit-mask-position:center; mask-position:center;">
-                </div>
+                <!-- O SVG tem cor propria (gradiente azul/ciano), funciona igual nos
+                dois temas sem precisar de mascara CSS. -->
+                <img src="{{ url_for('static', filename='img/logo-icone.svg') }}" alt=""
+                     class="w-8 h-8 object-contain shrink-0">
                 <div class="relative inline-block">
                     <span class="font-marca text-base font-bold tracking-tight {{ tema.text_primary }} whitespace-nowrap">TyBenson</span>
                     <span class="absolute left-1/2 top-full mt-0.5 text-[10px] leading-none {{ tema.text_secondary }} whitespace-nowrap">By Swerdne</span>
