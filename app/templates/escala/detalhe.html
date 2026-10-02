@@ -39,7 +39,7 @@
                 <div class="min-w-0">
                     <div class="flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full {{ escala.cor }} shrink-0"></span>
-                        <span class="font-extrabold {{ tema.text_primary }} truncate {{ 'line-through opacity-60' if escala.cancelada }}">{{ escala.nome }}</span>
+                        <span class="font-extrabold {{ tema.text_primary }} truncate {{ 'opacity-60' if escala.cancelada }}">{{ escala.nome }}</span>
                         {% if escala.cancelada %}
                         <span class="text-[10px] uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelada</span>
                         {% endif %}
@@ -148,6 +148,102 @@
         {% endif %}
         {% endif %}
         {% endif %}
+
+        <!-- Ensaios: dias de ensaio antes do evento; cada um pode ser cancelado sozinho -->
+        <div id="ensaios" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden scroll-mt-4">
+            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b {{ tema.card_border }}">
+                <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
+                    <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Ensaios
+                </span>
+                {% if ensaios %}<span class="text-xs {{ tema.text_secondary }}">{{ ensaios|length }}</span>{% endif %}
+            </div>
+
+            {% if ensaios %}
+            <ul class="divide-y {{ tema.divide }}">
+                {% for ensaio in ensaios %}
+                {% set passou = ensaio.data < hoje %}
+                <li class="flex items-center gap-3 px-4 py-3 {{ 'opacity-60' if passou }}">
+                    <div class="w-11 shrink-0 text-center rounded-xl py-1 {{ 'bg-red-500/10 text-red-500' if ensaio.cancelado else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
+                        <p class="text-[10px] font-bold uppercase leading-none">{{ ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'][ensaio.data.weekday()] }}</p>
+                        <p class="text-base font-extrabold leading-tight">{{ ensaio.data.day }}</p>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">
+                                {{ ensaio.data.strftime('%d/%m/%Y') }}{% if ensaio.horario %} &middot; {{ ensaio.horario.strftime('%H:%M') }}{% if ensaio.horario_fim %} as {{ ensaio.horario_fim.strftime('%H:%M') }}{% endif %}{% endif %}
+                            </p>
+                            {% if ensaio.cancelado %}
+                            <span class="text-[10px] font-semibold uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelado</span>
+                            {% elif passou %}
+                            <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">ja ocorreu</span>
+                            {% endif %}
+                        </div>
+                        {% if ensaio.local %}
+                        <p class="text-xs {{ tema.text_secondary }} truncate"><i class="fa-solid fa-location-dot mr-1"></i>{{ ensaio.local }}</p>
+                        {% endif %}
+                    </div>
+                    {% if eh_dono %}
+                    <div class="flex items-center gap-3 shrink-0">
+                        {% if ensaio.cancelado %}
+                        <form method="POST" action="{{ url_for('escala.reabrir_ensaio', ensaio_id=ensaio.id) }}">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" title="Reabrir ensaio" aria-label="Reabrir ensaio" class="{{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                        </form>
+                        {% elif not passou %}
+                        <form method="POST" action="{{ url_for('escala.cancelar_ensaio', ensaio_id=ensaio.id) }}"
+                              data-confirm-excluir="Cancelar o ensaio de {{ ensaio.descricao_data }}? Quem esta escalado sera avisado.">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" title="Cancelar ensaio" aria-label="Cancelar ensaio" class="text-red-500 hover:text-red-400 transition">
+                                <i class="fa-solid fa-ban"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('escala.excluir_ensaio', ensaio_id=ensaio.id) }}"
+                              data-confirm-excluir="Remover o ensaio de {{ ensaio.descricao_data }}? (Diferente de cancelar: ninguem e avisado.)">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" title="Remover ensaio" aria-label="Remover ensaio" class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="px-4 py-4 text-sm {{ tema.text_secondary }}">Nenhum ensaio marcado{% if eh_dono %}. Adicione os dias de ensaio abaixo.{% else %}.{% endif %}</p>
+            {% endif %}
+
+            {% if eh_dono and not escala.cancelada %}
+            {% set fe = formulario_ensaio %}
+            <form method="POST" action="{{ url_for('escala.adicionar_ensaio', escala_id=escala.id) }}"
+                  class="border-t {{ tema.card_border }} px-4 py-3 space-y-2.5">
+                {{ fe.hidden_tag() }}
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div class="col-span-2">
+                        {{ fe.data.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ fe.data(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                    <div>
+                        {{ fe.horario.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ fe.horario(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                    <div>
+                        {{ fe.horario_fim.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ fe.horario_fim(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                    <div class="col-span-2">
+                        {{ fe.local(placeholder="Local (opcional)", class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                </div>
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-plus mr-1"></i>Adicionar ensaio
+                </button>
+            </form>
+            {% endif %}
+        </div>
 
         <!-- Grid da escala -->
         <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
@@ -508,28 +604,59 @@
         {% endif %}
 
         {% if eh_dono and not escala.cancelada %}
-        <!-- Cancelar ensaio: recolhido no fim da pagina, fora das acoes do dia a dia -->
+        {% set ensaios_futuros = [] %}
+        {% for e in ensaios if not e.cancelado and e.data >= hoje %}{% set _ = ensaios_futuros.append(e) %}{% endfor %}
+        <!-- Cancelar: recolhido no fim da pagina; escolhe entre UM ensaio ou a escala inteira -->
         <details class="group {{ tema.card_bg }} border border-red-500/30 rounded-2xl overflow-hidden">
             <summary class="flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
                 <span class="flex items-center gap-2.5 text-sm font-semibold text-red-500">
-                    <i class="fa-solid fa-ban"></i>Cancelar ensaio
+                    <i class="fa-solid fa-ban"></i>{{ "Cancelar ensaio ou escala" if ensaios_futuros else "Cancelar escala" }}
                 </span>
                 <i class="fa-solid fa-chevron-down text-xs text-red-500 transition-transform group-open:rotate-180"></i>
             </summary>
-            <div class="px-4 pb-4 pt-3 space-y-3 border-t border-red-500/20">
-                <p class="text-sm {{ tema.text_secondary }}">
-                    Use quando o ensaio ou evento nao vai mais acontecer. A escala continua no historico e no
-                    calendario, marcada como cancelada, e quem ja estiver escalado e avisado automaticamente
-                    (e-mail, SMS e no app). Da pra reabrir depois.
-                </p>
-                <form method="POST" action="{{ url_for('escala.cancelar_escala', escala_id=escala.id) }}"
-                      onsubmit="return confirm('Cancelar o ensaio \'{{ escala.nome }}\'? Quem ja estiver escalado sera avisado automaticamente (e-mail, SMS e no app).');">
-                    {{ acao_form.hidden_tag() }}
-                    <button type="submit"
-                            class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-3 rounded-full transition">
-                        <i class="fa-solid fa-ban mr-2"></i>Confirmar cancelamento
-                    </button>
-                </form>
+            <div class="px-4 pb-4 pt-3 space-y-4 border-t border-red-500/20">
+                {% if ensaios_futuros %}
+                <div class="space-y-2.5">
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">So um dia de ensaio</p>
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        A escala continua de pe. Quem esta escalado e avisado de que nesse dia nao vai ter ensaio.
+                    </p>
+                    <form method="POST" action="{{ url_for('escala.cancelar_ensaio_escolhido', escala_id=escala.id) }}"
+                          data-confirm-excluir="Cancelar o ensaio escolhido? Quem esta escalado sera avisado."
+                          class="flex flex-col sm:flex-row gap-2">
+                        {{ acao_form.hidden_tag() }}
+                        <select name="ensaio_id" class="flex-1 {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                            {% for e in ensaios_futuros %}
+                            <option value="{{ e.id }}">{{ e.descricao_data }}{% if e.local %} - {{ e.local }}{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit"
+                                class="border border-red-500/40 text-red-500 hover:bg-red-500/10 text-sm font-semibold px-4 py-2.5 rounded-full transition shrink-0">
+                            Cancelar este ensaio
+                        </button>
+                    </form>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex-1 h-px bg-red-500/20"></div>
+                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }}">ou</span>
+                    <div class="flex-1 h-px bg-red-500/20"></div>
+                </div>
+                {% endif %}
+                <div class="space-y-2.5">
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">A escala inteira</p>
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        O evento nao vai mais acontecer. A escala continua no historico e no calendario, marcada
+                        como cancelada, e quem ja estiver escalado e avisado (e-mail, SMS e no app). Da pra reabrir depois.
+                    </p>
+                    <form method="POST" action="{{ url_for('escala.cancelar_escala', escala_id=escala.id) }}"
+                          data-confirm-excluir="Cancelar a escala inteira? Quem ja estiver escalado sera avisado automaticamente (e-mail, SMS e no app).">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit"
+                                class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-3 rounded-full transition">
+                            <i class="fa-solid fa-ban mr-2"></i>Cancelar a escala inteira
+                        </button>
+                    </form>
+                </div>
             </div>
         </details>
         {% endif %}

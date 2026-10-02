@@ -123,10 +123,10 @@
                            class="flex items-center gap-3 flex-1 min-w-0 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 transition">
                             <span class="w-2.5 h-2.5 rounded-full {{ escala.cor }} shrink-0"></span>
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium {{ tema.text_primary }} truncate {{ 'line-through opacity-60' if escala.cancelada }}">
-                                    {{ escala.nome }}
-                                    {% if escala.cancelada %}<span class="text-[10px] uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-1.5 py-0.5 ml-1">Cancelada</span>{% endif %}
-                                </p>
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <p class="text-sm font-medium {{ tema.text_primary }} truncate {{ 'opacity-60' if escala.cancelada }}">{{ escala.nome }}</p>
+                                    {% if escala.cancelada %}<span class="text-[10px] font-semibold uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelada</span>{% endif %}
+                                </div>
                                 <p class="text-xs {{ tema.text_secondary }}">
                                     {{ escala.departamento }}
                                     {% if escala.data %}
@@ -136,6 +136,12 @@
                                         &middot; sem data definida
                                     {% endif %}
                                 </p>
+                                {% set prox_ensaio = proximo_ensaio_por_escala.get(escala.id) %}
+                                {% if prox_ensaio and not escala.cancelada %}
+                                <p class="text-[11px] font-medium {{ tema.accent_text }} mt-0.5 truncate">
+                                    <i class="fa-solid fa-music mr-1"></i>Proximo ensaio: {{ prox_ensaio.descricao_data }}
+                                </p>
+                                {% endif %}
                             </div>
                             {% if qtd and qtd > 1 %}
                             <span class="flex items-center gap-1 text-[11px] {{ tema.text_secondary }} shrink-0" title="Gerado por rodizio">
@@ -249,10 +255,15 @@
                                 {% else %}
                                 <span class="w-7 h-7 flex items-center justify-center text-sm {{ tema.text_secondary if dia.month != mes else tema.text_primary }}">{{ dia.day }}</span>
                                 {% endif %}
-                                {% if eventos %}
+                                {% set ensaios_dia = ensaios_por_dia.get(dia, []) %}
+                                {% if eventos or ensaios_dia %}
                                 <div class="flex items-center gap-0.5">
                                     {% for escala, cor in eventos[:3] %}
                                     <span class="w-1 h-1 rounded-full {{ cor }}" title="{{ escala.nome }}"></span>
+                                    {% endfor %}
+                                    {# Ensaio: mesmo tom da escala, mais apagado #}
+                                    {% for ensaio, escala, cor in ensaios_dia[:2] %}
+                                    <span class="w-1 h-1 rounded-full {{ cor }} opacity-40" title="Ensaio: {{ escala.nome }}"></span>
                                     {% endfor %}
                                 </div>
                                 {% endif %}
@@ -274,6 +285,21 @@
                     </div>
                     {% else %}
                     <p class="text-[11px] {{ tema.text_secondary }} mt-3">Nenhuma escala com data neste mes.</p>
+                    {% endif %}
+                    {% if ensaios_por_dia %}
+                    <div class="mt-3 pt-3 border-t {{ tema.card_border }} space-y-1.5">
+                        <p class="text-[10px] font-bold uppercase tracking-wide {{ tema.text_secondary }}">Ensaios</p>
+                        {% for dia in ensaios_por_dia|sort %}
+                        {% for ensaio, escala, cor in ensaios_por_dia[dia] %}
+                        <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}#ensaios"
+                           class="flex items-center gap-1.5 text-[11px] {{ tema.text_secondary }} {{ tema.text_hover }} transition">
+                            <span class="w-2 h-2 rounded-full {{ cor }} opacity-40 shrink-0"></span>
+                            <span class="truncate">{{ escala.nome }}</span>
+                            <span class="shrink-0">{{ ensaio.data.strftime('%d/%m') }}{% if ensaio.horario %} {{ ensaio.horario.strftime('%H:%M') }}{% endif %}</span>
+                        </a>
+                        {% endfor %}
+                        {% endfor %}
+                    </div>
                     {% endif %}
                 </div>
             </div>

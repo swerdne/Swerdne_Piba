@@ -1,6 +1,6 @@
 """Controller (C do MVC): rotas do modulo escala."""
 import concurrent.futures
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app
 from flask_login import login_required, current_user
@@ -18,12 +18,14 @@ from app.escala.forms import (
     EditarEscalaForm,
     TrocaAprovarForm,
     ItemRepertorioForm,
+    EnsaioForm,
 )
 from app.escala.models import (
     Escala,
     Funcao,
     Membro,
     ItemRepertorio,
+    Ensaio,
     DEPARTAMENTOS,
     STATUS_PADRAO,
     STATUS_LABELS,
@@ -380,6 +382,9 @@ def detalhe(escala_id):
         formulario_nova_funcao=FuncaoForm(),
         formulario_novo_subcabecalho=FuncaoForm(),
         formulario_novo_item_repertorio=ItemRepertorioForm(),
+        formulario_ensaio=EnsaioForm(prefix="ensaio"),
+        ensaios=escala.ensaios,
+        hoje=_hoje_brasilia(),
         acao_form=AcaoForm(),
         status_labels=STATUS_LABELS,
         status_cores=STATUS_CORES,
@@ -1276,3 +1281,164 @@ def excluir_escala(escala_id):
     return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio_id))
 
 
+# --- Ensaios (dias de ensaio de uma Escala, ver models.Ensaio) -------------
+
+def _hoje_brasilia():
+    # Mesmo offset fixo de main.routes (Brasilia sem horario de verao).
+    return (datetime.now(timezone.utc) - timedelta(hours=3)).date()
+
+
+def _ensaio_do_usuario_ou_404(ensaio_id):
+    ensaio = primeiro_ou_404(Ensaio.objects(id=ensaio_id))
+    escala = _escala_do_usuario_ou_404(ensaio.escala_id)
+    return ensaio, escala
+
+
+def _voltar_pros_ensaios(escala):
+    return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#ensaios")
+
+
+def enviar_aviso_de_ensaio_cancelado(escala, ensaio):
+    """Avisa quem esta escalado que UM ensaio foi cancelado (a escala segue
+    de pe). Sino + e-mail + SMS; sem WhatsApp porque la so ha template
+    aprovado pro cancelamento da escala inteira. Uma vez por pessoa, mesmo
+    que ela esteja em mais de uma funcao."""
+    membros = {}
+    for funcao in escala.funcoes:
+        if funcao.membro_id is not None and funcao.membro_id not in membros:
+            membros[funcao.membro_id] = funcao.membro
+
+    mensagem = (
+        f'O ensaio de "{escala.nome}" em {ensaio.descricao_data} foi cancelado. '
+        "Voce nao precisa comparecer nesse dia."
+    )
+    resultado = {"notificacoes_app": 0, "email_enviados": 0, "sms_enviados": 0}
+    for membro in membros.values():
+        if membro is None:
+            continue
+        if membro.email:
+            usuario = User.objects(email=membro.email).first()
+            if usuario:
+                Notificacao(
+                    usuario_id=usuario.id,
+                    titulo=f"Ensaio cancelado: {escala.nome}",
+                    mensagem=mensagem,
+                    escala_id=escala.id,
+                    tipo="ensaio_cancelado",
+                ).save()
+                resultado["notificacoes_app"] += 1
+            try:
+                enviar_email(destinatario=membro.email, assunto=f"Ensaio cancelado: {escala.nome}", corpo=mensagem)
+                resultado["email_enviados"] += 1
+            except EmailNaoEnviadoError:
+                pass
+        if membro.telefone:
+            try:
+                enviar_sms(destinatario=membro.telefone, corpo=mensagem)
+                resultado["sms_enviados"] += 1
+            except SmsNaoEnviadoError:
+                pass
+    return resultado
+
+
+def _cancelar_ensaio(ensaio, escala):
+    if ensaio.cancelado:
+        flash("Esse ensaio ja esta cancelado.", "danger")
+        return
+    ensaio.cancelado = True
+    ensaio.cancelado_em = datetime.now(timezone.utc)
+    ensaio.save()
+
+    resultado = enviar_aviso_de_ensaio_cancelado(escala, ensaio)
+    partes = []
+    if resultado["notificacoes_app"]:
+        partes.append(f"{resultado['notificacoes_app']} no app")
+    if resultado["email_enviados"]:
+        partes.append(f"{resultado['email_enviados']} por e-mail")
+    if resultado["sms_enviados"]:
+        partes.append(f"{resultado['sms_enviados']} por SMS")
+    aviso = f" Equipe avisada: {', '.join(partes)}." if partes else ""
+    flash(f"Ensaio de {ensaio.descricao_data} cancelado.{aviso}", "success")
+
+
+@bp.route("/<int:escala_id>/ensaios", methods=["POST"])
+@login_required
+def adicionar_ensaio(escala_id):
+    escala = _escala_do_usuario_ou_404(escala_id)
+    form = EnsaioForm(prefix="ensaio")
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel adicionar o ensaio.", "danger")
+        return _voltar_pros_ensaios(escala)
+    if form.horario.data and form.horario_fim.data and form.horario_fim.data <= form.horario.data:
+        flash("O horario de fim do ensaio precisa ser depois do inicio.", "danger")
+        return _voltar_pros_ensaios(escala)
+
+    Ensaio(
+        escala_id=escala.id,
+        data=form.data.data,
+        horario=form.horario.data,
+        horario_fim=form.horario_fim.data,
+        local=(form.local.data or "").strip() or None,
+    ).save()
+    flash("Ensaio adicionado.", "success")
+    return _voltar_pros_ensaios(escala)
+
+
+@bp.route("/ensaio/<int:ensaio_id>/cancelar", methods=["POST"])
+@login_required
+def cancelar_ensaio(ensaio_id):
+    ensaio, escala = _ensaio_do_usuario_ou_404(ensaio_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return _voltar_pros_ensaios(escala)
+    _cancelar_ensaio(ensaio, escala)
+    return _voltar_pros_ensaios(escala)
+
+
+@bp.route("/<int:escala_id>/ensaios/cancelar", methods=["POST"])
+@login_required
+def cancelar_ensaio_escolhido(escala_id):
+    """Mesma acao de cancelar_ensaio, a partir do seletor da secao "Cancelar"
+    no fim da tela da escala (escolhe qual ensaio num <select>)."""
+    escala = _escala_do_usuario_ou_404(escala_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return _voltar_pros_ensaios(escala)
+    try:
+        ensaio_id = int(request.form.get("ensaio_id", ""))
+    except ValueError:
+        ensaio_id = None
+    ensaio = Ensaio.objects(id=ensaio_id, escala_id=escala.id).first() if ensaio_id else None
+    if ensaio is None:
+        flash("Escolha qual ensaio cancelar.", "danger")
+        return _voltar_pros_ensaios(escala)
+    _cancelar_ensaio(ensaio, escala)
+    return _voltar_pros_ensaios(escala)
+
+
+@bp.route("/ensaio/<int:ensaio_id>/reabrir", methods=["POST"])
+@login_required
+def reabrir_ensaio(ensaio_id):
+    ensaio, escala = _ensaio_do_usuario_ou_404(ensaio_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return _voltar_pros_ensaios(escala)
+    ensaio.cancelado = False
+    ensaio.cancelado_em = None
+    ensaio.save()
+    flash(f"Ensaio de {ensaio.descricao_data} reaberto.", "success")
+    return _voltar_pros_ensaios(escala)
+
+
+@bp.route("/ensaio/<int:ensaio_id>/excluir", methods=["POST"])
+@login_required
+def excluir_ensaio(ensaio_id):
+    ensaio, escala = _ensaio_do_usuario_ou_404(ensaio_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return _voltar_pros_ensaios(escala)
+    descricao = ensaio.descricao_data
+    ensaio.delete()
+    flash(f"Ensaio de {descricao} removido.", "success")
+    return _voltar_pros_ensaios(escala)

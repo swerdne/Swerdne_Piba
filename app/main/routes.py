@@ -16,7 +16,7 @@ from app.imagens import ImagemArmazenada, salvar_imagem, remover_imagem
 from app.auth.routes import _notificar_senha_alterada
 from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import Ministerio
-from app.escala.models import Membro, Escala, Funcao
+from app.escala.models import Membro, Escala, Funcao, Ensaio
 
 
 # Icone por tipo de notificacao no sino do Dashboard -- fallback pra
@@ -30,6 +30,8 @@ _ICONE_POR_TIPO = {
     "troca_solicitada": "fa-rotate",
     "troca_aprovada": "fa-check-double",
     "troca_recusada": "fa-circle-xmark",
+    "cancelamento": "fa-ban",
+    "ensaio_cancelado": "fa-calendar-xmark",
 }
 _ICONE_PADRAO = "fa-bell"
 
@@ -94,6 +96,56 @@ def _proxima_escala_do_usuario(usuario, hoje):
         return None, None
     return escala, funcao_por_escala[escala.id]
 
+
+
+def _ids_escalas_do_usuario(usuario):
+    ids_membro = [m.id for m in Membro.objects(email=usuario.email).only("id")]
+    if not ids_membro:
+        return []
+    return list(Funcao.objects(membro_id__in=ids_membro).distinct("escala_id"))
+
+
+def _agenda_do_usuario(usuario, hoje, dias=30, limite=6):
+    """Proximos ensaios (inclusive os cancelados, pra avisar) e escalas
+    canceladas das escalas em que a conta esta escalada, nos proximos
+    `dias` -- a secao "Ensaios e avisos" da tela Inicio."""
+    ids_escalas = _ids_escalas_do_usuario(usuario)
+    if not ids_escalas:
+        return []
+    ate = hoje + timedelta(days=dias)
+    ensaios = list(
+        Ensaio.objects(escala_id__in=ids_escalas, data__gte=hoje, data__lte=ate).order_by("data", "horario")
+    )
+    escalas = {
+        e.id: e for e in Escala.objects(id__in=list({x.escala_id for x in ensaios}))
+    } if ensaios else {}
+    itens = []
+    for ensaio in ensaios:
+        escala = escalas.get(ensaio.escala_id)
+        if escala is None or escala.cancelada:
+            continue
+        detalhe = ensaio.descricao_data + (f" · {ensaio.local}" if ensaio.local else "")
+        itens.append({
+            "data": ensaio.data,
+            "ordem": ensaio.horario,
+            "titulo": f"Ensaio · {escala.nome}",
+            "detalhe": detalhe,
+            "url": url_for("escala.detalhe", escala_id=escala.id) + "#ensaios",
+            "cancelado": ensaio.cancelado,
+            "rotulo_cancelado": "Cancelado",
+        })
+    for escala in Escala.objects(id__in=ids_escalas, cancelada=True, data__gte=hoje, data__lte=ate):
+        itens.append({
+            "data": escala.data,
+            "ordem": escala.horario,
+            "titulo": escala.nome,
+            "detalhe": f"{escala.data.strftime('%d/%m')} · {escala.departamento}",
+            "url": url_for("escala.detalhe", escala_id=escala.id),
+            "cancelado": True,
+            "rotulo_cancelado": "Cancelada",
+        })
+    itens.sort(key=lambda i: (i["data"], i["ordem"] or datetime.min.time()))
+    return itens[:limite]
 
 def _comunidades_do_usuario(usuario):
     """Mesma regra de comunidade.routes.index (admin x participa), achatada
@@ -204,16 +256,22 @@ def dashboard():
         if proxima_escala.horario:
             partes.append(proxima_escala.horario.strftime("%H:%M"))
         partes.append(proxima_escala.departamento)
+        proximo_ensaio = (
+            Ensaio.objects(escala_id=proxima_escala.id, data__gte=agora.date(), cancelado__ne=True)
+            .order_by("data", "horario").first()
+        )
         proxima_escala_info = {
             "escala": proxima_escala,
             "detalhes": " · ".join(partes),
             "funcao": funcao_proxima,
+            "proximo_ensaio": proximo_ensaio,
         }
 
     return render_template(
         "main/dashboard.html",
         saudacao=_saudacao(agora.hour),
         proxima_escala=proxima_escala_info,
+        agenda=_agenda_do_usuario(current_user, agora.date()),
         comunidades=_comunidades_do_usuario(current_user),
         primeiro_nome=primeiro_nome,
         nome_completo=nome_completo,

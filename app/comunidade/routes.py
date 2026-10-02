@@ -25,6 +25,7 @@ from app.escala.models import (
     STATUS_LABELS,
     STATUS_CORES,
     resumos_para_calendario_em_lote,
+    ensaios_do_mes_por_dia,
 )
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite, criar_ou_reenviar_convite
@@ -527,8 +528,14 @@ def calendario(comunidade_id):
     # Igual ao de um Ministerio (ver ministerio.routes._dados_calendario),
     # so que com o nome do ministerio junto -- aqui um mesmo dia pode ter
     # escalas de ministerios diferentes.
-    previews_calendario = resumos_para_calendario_em_lote(escalas_do_mes)
-    for escala in escalas_do_mes:
+    ensaios_por_dia, escalas_dos_ensaios = ensaios_do_mes_por_dia(
+        primeiro_dia_mes, ultimo_dia_mes, ministerio_ids=list(nomes_por_ministerio.keys())
+    )
+    ids_no_mes = {e.id for e in escalas_do_mes}
+    escalas_pra_preview = escalas_do_mes + [e for e in escalas_dos_ensaios if e.id not in ids_no_mes]
+
+    previews_calendario = resumos_para_calendario_em_lote(escalas_pra_preview)
+    for escala in escalas_pra_preview:
         previews_calendario[escala.id]["ministerio"] = nomes_por_ministerio.get(escala.ministerio_id)
 
     (ano_anterior, mes_anterior), (ano_proximo, mes_proximo) = _navegacao_calendario_comunidade(ano, mes)
@@ -542,6 +549,7 @@ def calendario(comunidade_id):
         nome_mes=_MESES_PT[mes],
         mes_ano_texto=f"{_MESES_PT[mes].lower()} de {ano}",
         escalas_por_dia=escalas_por_dia,
+        ensaios_por_dia=ensaios_por_dia,
         legenda=[(e, e.cor) for e in escalas_do_mes],
         ano_anterior=ano_anterior,
         mes_anterior=mes_anterior,

@@ -88,3 +88,11 @@ class ItemRepertorioForm(FlaskForm):
     tom = StringField("Tom", validators=[Optional(), Length(max=10)])
     link = StringField("Link (cifra, video...)", validators=[Optional(), Length(max=500)])
     submit = SubmitField("Adicionar")
+
+
+class EnsaioForm(FlaskForm):
+    data = DateField("Data do ensaio", validators=[DataRequired(message="Informe a data do ensaio.")])
+    horario = TimeField("Inicio", validators=[Optional()])
+    horario_fim = TimeField("Fim", validators=[Optional()])
+    local = StringField("Local (opcional)", validators=[Optional(), Length(max=120)])
+    submit = SubmitField("Adicionar ensaio")

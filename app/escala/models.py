@@ -335,8 +335,16 @@ class Escala(SequentialIdDocument):
         from app.plantao.models import TurnoPlantao
         return TurnoPlantao.objects(id=self.turno_plantao_origem_id).first()
 
+    @property
+    def ensaios(self):
+        return list(Ensaio.objects(escala_id=self.id).order_by("data", "horario"))
+
     def cascade_children(self):
-        return [Funcao.objects(escala_id=self.id), ItemRepertorio.objects(escala_id=self.id)]
+        return [
+            Funcao.objects(escala_id=self.id),
+            ItemRepertorio.objects(escala_id=self.id),
+            Ensaio.objects(escala_id=self.id),
+        ]
 
     @property
     def cor(self):
@@ -443,6 +451,45 @@ class ItemRepertorio(SequentialIdDocument):
         return f"<ItemRepertorio {self.nome_musica!r} da escala {self.escala_id}>"
 
 
+
+DIAS_SEMANA_CURTOS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
+
+
+class Ensaio(SequentialIdDocument):
+    """Um dia de ensaio de uma Escala (a Escala em si e o evento; os ensaios
+    sao os encontros antes dele). Cada ensaio pode ser cancelado sozinho --
+    quem esta escalado e avisado (ver escala.routes.cancelar_ensaio) -- sem
+    cancelar a escala inteira."""
+
+    meta = {"collection": "escala_ensaios"}
+    _nome_sequencia = "escala_ensaios"
+
+    escala_id = mongoengine.IntField(required=True)
+    data = PureDateField(required=True)
+    horario = PureTimeField()
+    horario_fim = PureTimeField()
+    local = mongoengine.StringField(max_length=120)
+    cancelado = mongoengine.BooleanField(default=False)
+    cancelado_em = mongoengine.DateTimeField()
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def escala(self):
+        return Escala.objects(id=self.escala_id).first()
+
+    @property
+    def descricao_data(self):
+        """Ex: "sab 03/10 - 18:15 as 20:00"."""
+        texto = f"{DIAS_SEMANA_CURTOS[self.data.weekday()]} {self.data.strftime('%d/%m')}"
+        if self.horario:
+            texto += f" - {self.horario.strftime('%H:%M')}"
+            if self.horario_fim:
+                texto += f" as {self.horario_fim.strftime('%H:%M')}"
+        return texto
+
+    def __repr__(self):
+        return f"<Ensaio {self.data} da escala {self.escala_id}>"
+
 def criar_escala_com_funcoes_padrao(
     ministerio_id, nome, departamento, data=None, horario=None, horario_fim=None, cor_selecionada=None
 ):
@@ -534,3 +581,24 @@ def resumo_para_calendario(escala):
     (usada pelas telas de calendario de verdade, que precisam de varias de
     uma vez). Mantida pra quem precisar do resumo de uma unica escala."""
     return resumos_para_calendario_em_lote([escala])[escala.id]
+
+
+def ensaios_do_mes_por_dia(inicio, fim, ministerio_ids):
+    """Ensaios nao cancelados entre inicio e fim das escalas desses
+    ministerios, agrupados por dia: ({data: [(ensaio, escala, cor)]},
+    [escalas envolvidas]). Busca os ensaios do periodo primeiro (poucos) e so
+    depois as escalas deles -- nao varre todas as escalas do ministerio."""
+    ensaios = list(Ensaio.objects(data__gte=inicio, data__lte=fim, cancelado__ne=True).order_by("data", "horario"))
+    if not ensaios:
+        return {}, []
+    escalas = {
+        e.id: e for e in Escala.objects(
+            id__in=list({x.escala_id for x in ensaios}), ministerio_id__in=list(ministerio_ids)
+        )
+    }
+    por_dia = {}
+    for ensaio in ensaios:
+        escala = escalas.get(ensaio.escala_id)
+        if escala is not None:
+            por_dia.setdefault(ensaio.data, []).append((ensaio, escala, escala.cor))
+    return por_dia, list(escalas.values())

@@ -205,7 +205,7 @@ def _dados_calendario(ministerio, hoje):
     # visualmente consistentes. Filtro de data direto na consulta (nao em
     # Python sobre TODAS as escalas do ministerio) -- evita carregar
     # historico inteiro so pra descartar quase tudo depois.
-    from app.escala.models import Escala
+    from app.escala.models import Escala, ensaios_do_mes_por_dia
 
     primeiro_dia_mes = date(ano, mes, 1)
     ultimo_dia_mes = date(ano, mes, calendar.monthrange(ano, mes)[1])
@@ -216,6 +216,12 @@ def _dados_calendario(ministerio, hoje):
     for escala in escalas_do_mes:
         escalas_por_dia.setdefault(escala.data, []).append((escala, escala.cor))
 
+    ensaios_por_dia, escalas_dos_ensaios = ensaios_do_mes_por_dia(
+        primeiro_dia_mes, ultimo_dia_mes, ministerio_ids=[ministerio.id]
+    )
+    ids_no_mes = {e.id for e in escalas_do_mes}
+    escalas_pra_preview = escalas_do_mes + [e for e in escalas_dos_ensaios if e.id not in ids_no_mes]
+
     (ano_anterior, mes_anterior), (ano_proximo, mes_proximo) = _navegacao_calendario(ano, mes)
 
     return {
@@ -225,13 +231,14 @@ def _dados_calendario(ministerio, hoje):
         "nome_mes": MESES_PT[mes],
         "mes_ano_texto": f"{MESES_PT[mes].lower()} de {ano}",
         "escalas_por_dia": escalas_por_dia,
+        "ensaios_por_dia": ensaios_por_dia,
         "legenda": [(e, e.cor) for e in escalas_do_mes],
         "ano_anterior": ano_anterior,
         "mes_anterior": mes_anterior,
         "ano_proximo": ano_proximo,
         "mes_proximo": mes_proximo,
         "hoje": hoje,
-        "previews_calendario": resumos_para_calendario_em_lote(escalas_do_mes),
+        "previews_calendario": resumos_para_calendario_em_lote(escalas_pra_preview),
     }
 
 
@@ -316,6 +323,16 @@ def detalhe(ministerio_id):
     )
 
     dados_calendario = _dados_calendario(ministerio, hoje)
+
+    # Proximo ensaio (nao cancelado) de cada escala da lista, numa consulta so.
+    from app.escala.models import Ensaio
+    proximo_ensaio_por_escala = {}
+    if escalas:
+        for ensaio in Ensaio.objects(
+            escala_id__in=[e.id for e in escalas], data__gte=hoje, cancelado__ne=True
+        ).order_by("data", "horario"):
+            proximo_ensaio_por_escala.setdefault(ensaio.escala_id, ensaio)
+
     data_extenso = f"{DIAS_SEMANA_PT[hoje.weekday()]}, {hoje.day} de {MESES_PT[hoje.month].lower()}"
 
     return render_template(
@@ -325,6 +342,7 @@ def detalhe(ministerio_id):
         eh_admin=eh_admin,
         escalas=escalas,
         qtd_ocorrencias_por_turno=qtd_ocorrencias_por_turno,
+        proximo_ensaio_por_escala=proximo_ensaio_por_escala,
         turnos_plantao=turnos_plantao,
         data_extenso=data_extenso,
         acao_form=AcaoForm(),

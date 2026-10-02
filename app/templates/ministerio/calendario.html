@@ -99,6 +99,26 @@
                         {% endif %}
                     </div>
                     {% endif %}
+                    {% set ensaios_dia = ensaios_por_dia.get(dia, []) %}
+                    {% if ensaios_dia %}
+                    <div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+                        {% for ensaio, escala, cor in ensaios_dia[:3] %}
+                        <button type="button" data-abrir-preview="{{ escala.id }}"
+                           class="w-1.5 h-1.5 rounded-full {{ cor }} opacity-40"
+                           title="Ensaio: {{ escala.nome }}{% if ensaio.horario %} - {{ ensaio.horario.strftime('%H:%M') }}{% endif %}"></button>
+                        {% endfor %}
+                    </div>
+                    <div class="mt-1 space-y-1 hidden sm:block">
+                        {% for ensaio, escala, cor in ensaios_dia[:2] %}
+                        <button type="button" data-abrir-preview="{{ escala.id }}"
+                           class="flex items-center gap-1 w-full text-left border border-dashed {{ tema.card_border }} rounded px-1 py-0.5 transition hover:opacity-80"
+                           title="Ensaio: {{ escala.nome }}{% if ensaio.horario %} - {{ ensaio.horario.strftime('%H:%M') }}{% endif %}">
+                            <i class="fa-solid fa-music text-[8px] {{ tema.text_secondary }} shrink-0"></i>
+                            <span class="text-[10px] {{ tema.text_secondary }} truncate">Ensaio &middot; {{ escala.nome }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             {% endfor %}

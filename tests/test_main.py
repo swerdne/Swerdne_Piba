@@ -68,7 +68,10 @@ def test_dashboard_mostra_proxima_escala_em_que_o_usuario_esta_escalado(logged_i
     assert "Culto de Domingo" in html
     assert "Sua funcao" in html and "Baixo" in html
     assert "Culto Passado" not in html
-    assert "Culto Cancelado" not in html
+    # Cancelada nao vira "Proxima escala" -- aparece so como aviso em "Ensaios e avisos".
+    card_proxima, avisos = html.split("Ensaios e avisos", 1)
+    assert "Culto Cancelado" not in card_proxima
+    assert "Culto Cancelado" in avisos and ">Cancelada<" in avisos
     assert "Culto Depois" not in html
 
 

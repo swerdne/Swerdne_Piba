@@ -73,6 +73,9 @@
                 <h2 class="text-2xl font-extrabold tracking-tight">{{ proxima_escala.escala.nome }}</h2>
                 <p class="text-sm text-indigo-100">{{ proxima_escala.detalhes }}</p>
                 <p class="text-xs text-indigo-200">Sua funcao: <span class="font-semibold text-white">{{ proxima_escala.funcao }}</span></p>
+                {% if proxima_escala.proximo_ensaio %}
+                <p class="text-xs text-indigo-200"><i class="fa-solid fa-music mr-1"></i>Proximo ensaio: <span class="font-semibold text-white">{{ proxima_escala.proximo_ensaio.descricao_data }}</span></p>
+                {% endif %}
                 <div class="pt-1.5">
                     <a href="{{ url_for('escala.detalhe', escala_id=proxima_escala.escala.id) }}"
                        class="inline-flex items-center gap-1.5 bg-white text-indigo-700 text-sm font-bold px-4 py-2 rounded-full transition hover:opacity-90">
@@ -131,6 +134,31 @@
                 {% endif %}
             </div>
             </div>
+
+            {% if agenda %}
+            <!-- Ensaios e avisos: proximos ensaios e cancelamentos das escalas da pessoa -->
+            <div>
+                <h2 class="text-base font-bold {{ tema.text_primary }} mb-2.5">Ensaios e avisos</h2>
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} overflow-hidden">
+                    {% for item in agenda %}
+                    <a href="{{ item.url }}" class="flex items-center gap-3 px-4 py-3.5 {{ tema.card_bg_hover }} transition">
+                        <div class="w-11 shrink-0 text-center rounded-xl py-1 {{ 'bg-red-500/10 text-red-500' if item.cancelado else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
+                            <p class="text-[10px] font-bold uppercase leading-none">{{ ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'][item.data.weekday()] }}</p>
+                            <p class="text-base font-extrabold leading-tight">{{ item.data.day }}</p>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-bold {{ tema.text_primary }} truncate">{{ item.titulo }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">{{ item.detalhe }}</p>
+                        </div>
+                        {% if item.cancelado %}
+                        <span class="text-[10px] font-semibold uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">{{ item.rotulo_cancelado }}</span>
+                        {% endif %}
+                        {{ chevron("w-4 h-4 shrink-0 " ~ tema.text_secondary) }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </section>
 
         <!-- ===================== AVISOS ===================== -->
