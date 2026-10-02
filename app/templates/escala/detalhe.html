@@ -245,6 +245,68 @@
             {% endif %}
         </div>
 
+        <!-- Materiais: arquivos da equipe toda ou de uma funcao especifica -->
+        <div id="materiais" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden scroll-mt-4">
+            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b {{ tema.card_border }}">
+                <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
+                    <i class="fa-solid fa-paperclip {{ tema.text_secondary }}"></i>Materiais
+                </span>
+                {% if anexos %}<span class="text-xs {{ tema.text_secondary }}">{{ anexos|length }}</span>{% endif %}
+            </div>
+
+            {% if anexos %}
+            <ul class="divide-y {{ tema.divide }}">
+                {% for anexo in anexos %}
+                <li class="flex items-center gap-3 px-4 py-3">
+                    <a href="{{ url_for('escala.baixar_anexo', anexo_id=anexo.id) }}" target="_blank" rel="noopener"
+                       class="flex items-center gap-3 flex-1 min-w-0">
+                        <div class="w-10 h-10 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
+                            <i class="fa-solid {{ anexo.icone }}"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ anexo.nome_arquivo }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">
+                                {% if anexo.funcao_id %}Para: {{ anexo.funcao.nome if anexo.funcao else 'funcao removida' }}{% else %}Toda a equipe{% endif %}
+                                &middot; {{ anexo.tamanho_legivel }}
+                            </p>
+                        </div>
+                    </a>
+                    {% if eh_dono %}
+                    <form method="POST" action="{{ url_for('escala.excluir_anexo', anexo_id=anexo.id) }}"
+                          data-confirm-excluir="Remover o arquivo {{ anexo.nome_arquivo }}?">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" title="Remover arquivo" aria-label="Remover arquivo" class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="px-4 py-4 text-sm {{ tema.text_secondary }}">
+                Nenhum material{% if eh_dono %}. Anexe cifras, partituras, letras ou roteiros abaixo -- pra equipe toda ou so pra uma funcao.{% else %} pra voce nessa escala.{% endif %}
+            </p>
+            {% endif %}
+
+            {% if eh_dono %}
+            {% set fa = formulario_anexo %}
+            <form method="POST" action="{{ url_for('escala.adicionar_anexo', escala_id=escala.id) }}" enctype="multipart/form-data"
+                  class="border-t {{ tema.card_border }} px-4 py-3 space-y-2.5">
+                {{ fa.hidden_tag() }}
+                {{ fa.arquivo(accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx", class_="block w-full text-sm " ~ tema.text_secondary ~ " file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:bg-gray-700 file:text-gray-200") }}
+                <div>
+                    {{ fa.funcao_id.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                    {{ fa.funcao_id(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                </div>
+                <p class="text-xs {{ tema.text_secondary }}">PDF, imagem, Word ou texto, ate 10 MB. Arquivo de uma funcao so aparece pra quem esta nela.</p>
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-paperclip mr-1"></i>Anexar arquivo
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
         <!-- Grid da escala -->
         <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
             <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr]">

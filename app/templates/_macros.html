@@ -38,6 +38,8 @@ import "with context" por causa do sino.
 {% macro _icone_nav(tema, chave, tamanho="w-5 h-5") %}
 {% if chave == 'inicio' %}
 <svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
+{% elif chave == 'minha' %}
+<svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M9 15l2 2 4-4"></path></svg>
 {% elif chave == 'comunidades' %}
 <svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path></svg>
 {% elif current_user.foto_perfil %}
@@ -62,6 +64,7 @@ data-nav-pill marca o elemento que recebe o fundo de "ativo".
 #}
 {% set itens = [
     ("inicio", "Inicio", url_for('main.dashboard')),
+    ("minha", "Minha escala", url_for('main.minha_escala')),
     ("comunidades", "Comunidades", url_for('comunidade.index')),
     ("perfil", "Perfil", url_for('main.dashboard') ~ '#perfil'),
 ] %}
@@ -73,7 +76,7 @@ data-nav-pill marca o elemento que recebe o fundo de "ativo".
         {% for chave, rotulo, href in itens %}
         {% set eh_ativo = chave == ativo %}
         <a href="{{ href }}" data-nav-item="{{ chave }}"
-           {% if chave != 'comunidades' %}data-ir-painel="{{ chave }}"{% endif %}
+           {% if chave in ('inicio', 'perfil') %}data-ir-painel="{{ chave }}"{% endif %}
            class="relative flex flex-col items-center gap-1 text-[10px] font-semibold {{ tema.accent_text if eh_ativo else tema.text_secondary }}">
             <span data-nav-pill class="w-10 h-7 rounded-xl flex items-center justify-center {{ tema.accent_bg ~ ' text-white' if eh_ativo else '' }}">
                 {{ _icone_nav(tema, chave) }}
@@ -97,7 +100,7 @@ data-nav-pill marca o elemento que recebe o fundo de "ativo".
         {% for chave, rotulo, href in itens %}
         {% set eh_ativo = chave == ativo %}
         <a href="{{ href }}" data-nav-item="{{ chave }}"
-           {% if chave != 'comunidades' %}data-ir-painel="{{ chave }}"{% endif %}
+           {% if chave in ('inicio', 'perfil') %}data-ir-painel="{{ chave }}"{% endif %}
            class="block text-sm font-semibold {{ tema.accent_text if eh_ativo else tema.text_secondary }}">
             <span data-nav-pill class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl transition {{ tema.accent_bg ~ ' text-white' if eh_ativo else tema.card_bg_hover }}">
                 {{ _icone_nav(tema, chave) }}

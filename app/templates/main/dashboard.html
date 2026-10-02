@@ -77,7 +77,7 @@
                 <p class="text-xs text-indigo-200"><i class="fa-solid fa-music mr-1"></i>Proximo ensaio: <span class="font-semibold text-white">{{ proxima_escala.proximo_ensaio.descricao_data }}</span></p>
                 {% endif %}
                 <div class="pt-1.5">
-                    <a href="{{ url_for('escala.detalhe', escala_id=proxima_escala.escala.id) }}"
+                    <a href="{{ url_for('main.minha_escala', escala=proxima_escala.escala.id) }}"
                        class="inline-flex items-center gap-1.5 bg-white text-indigo-700 text-sm font-bold px-4 py-2 rounded-full transition hover:opacity-90">
                         Ver detalhes {{ chevron("w-3.5 h-3.5") }}
                     </a>

@@ -16,7 +16,8 @@ from app.imagens import ImagemArmazenada, salvar_imagem, remover_imagem
 from app.auth.routes import _notificar_senha_alterada
 from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import Ministerio
-from app.escala.models import Membro, Escala, Funcao, Ensaio
+from app.escala.models import Membro, Escala, Funcao, Ensaio, Anexo, STATUS_LABELS, STATUS_CORES
+from app.escala.forms import StatusForm
 
 
 # Icone por tipo de notificacao no sino do Dashboard -- fallback pra
@@ -589,3 +590,77 @@ def chat():
         resposta = "O chatbot com IA real ainda nao foi configurado neste ambiente."
 
     return jsonify({"resposta": resposta})
+
+
+@bp.route("/minha-escala")
+@login_required
+def minha_escala():
+    """Visao pessoal de cada dia em que a conta esta escalada (Membro com o
+    mesmo e-mail): funcao(oes), status, ensaios, repertorio e os materiais
+    da equipe + os da propria funcao -- sem a escala inteira de todo mundo.
+    Navega entre os dias pela barra de datas (?escala=<id>)."""
+    hoje = _agora_brasilia().date()
+    ids_membro = [m.id for m in Membro.objects(email=current_user.email).only("id")]
+    funcoes = list(Funcao.objects(membro_id__in=ids_membro)) if ids_membro else []
+    funcoes_por_escala = {}
+    for funcao in funcoes:
+        funcoes_por_escala.setdefault(funcao.escala_id, []).append(funcao)
+    escalas = list(Escala.objects(id__in=list(funcoes_por_escala))) if funcoes_por_escala else []
+
+    sem_data = datetime.max.date()
+    proximas = sorted(
+        (e for e in escalas if e.data is None or e.data >= hoje),
+        key=lambda e: (e.data or sem_data, e.horario or datetime.min.time()),
+    )
+    anteriores = sorted(
+        (e for e in escalas if e.data is not None and e.data < hoje),
+        key=lambda e: (e.data, e.horario or datetime.min.time()),
+        reverse=True,
+    )[:12]
+    ver_anteriores = request.args.get("anteriores") == "1"
+    dias = anteriores if ver_anteriores else proximas
+
+    escolhida_id = request.args.get("escala", type=int)
+    selecionada = next((e for e in escalas if e.id == escolhida_id), None) or (dias[0] if dias else None)
+
+    contexto = {}
+    if selecionada is not None:
+        minhas_funcoes = sorted(funcoes_por_escala[selecionada.id], key=lambda f: f.ordem)
+        ids_minhas = {f.id for f in minhas_funcoes}
+        nomes_funcao = {f.id: f.nome for f in minhas_funcoes}
+        anexos = [
+            a for a in Anexo.objects(escala_id=selecionada.id).exclude("conteudo").order_by("criado_em")
+            if a.funcao_id is None or a.funcao_id in ids_minhas
+        ]
+        ministerio = selecionada.ministerio
+        sugestoes = [(0, "Ninguem em especial")] + [
+            (m.id, m.nome) for m in Membro.objects(comunidade_id=ministerio.comunidade_id).order_by("nome")
+        ]
+        formularios_status = {}
+        for funcao in minhas_funcoes:
+            form = StatusForm(status=funcao.status or "nao_notificado")
+            form.troca_sugestao_membro_id.choices = sugestoes
+            formularios_status[funcao.id] = form
+        contexto = {
+            "minhas_funcoes": minhas_funcoes,
+            "formularios_status": formularios_status,
+            "ensaios": selecionada.ensaios,
+            "anexos": anexos,
+            "nomes_funcao": nomes_funcao,
+            "repertorio": selecionada.repertorio,
+            "ministerio": ministerio,
+        }
+
+    return render_template(
+        "main/minha_escala.html",
+        dias=dias,
+        ver_anteriores=ver_anteriores,
+        tem_anteriores=bool(anteriores),
+        selecionada=selecionada,
+        hoje=hoje,
+        meses=_MESES,
+        status_labels=STATUS_LABELS,
+        status_cores=STATUS_CORES,
+        acao_form=AcaoForm(),
+        **contexto,
+    )

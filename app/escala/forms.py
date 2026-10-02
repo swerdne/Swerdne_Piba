@@ -1,9 +1,10 @@
 """Formularios Flask-WTF do modulo escala."""
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
 from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField
 from wtforms.validators import DataRequired, Length, Optional
 
-from app.escala.models import DEPARTAMENTOS, CORES_DISPONIVEIS
+from app.escala.models import DEPARTAMENTOS, CORES_DISPONIVEIS, TIPOS_ANEXO, TAMANHO_MAXIMO_ANEXO
 
 # "" (vazio) = usa a cor padrao do departamento (Escala.cor_selecionada fica
 # None) -- sempre a 1a opcao, pra nao forcar o usuario a escolher uma cor.
@@ -96,3 +97,17 @@ class EnsaioForm(FlaskForm):
     horario_fim = TimeField("Fim", validators=[Optional()])
     local = StringField("Local (opcional)", validators=[Optional(), Length(max=120)])
     submit = SubmitField("Adicionar ensaio")
+
+
+class AnexoForm(FlaskForm):
+    arquivo = FileField(
+        "Arquivo",
+        validators=[
+            FileRequired(message="Escolha um arquivo."),
+            FileAllowed(list(TIPOS_ANEXO), "Formatos aceitos: PDF, imagem (JPG/PNG), Word ou texto."),
+            FileSize(max_size=TAMANHO_MAXIMO_ANEXO, message="O arquivo deve ter no maximo 10 MB."),
+        ],
+    )
+    # 0 = toda a equipe; senao, o id da Funcao (choices montadas na rota).
+    funcao_id = SelectField("Para quem", coerce=int, validators=[Optional()])
+    submit = SubmitField("Anexar")

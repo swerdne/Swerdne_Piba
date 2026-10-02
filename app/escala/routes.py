@@ -1,8 +1,10 @@
 """Controller (C do MVC): rotas do modulo escala."""
 import concurrent.futures
+import os
+import io
 from datetime import datetime, time, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app
+from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from mongoengine.queryset.visitor import Q as MongoQ
 
@@ -19,6 +21,7 @@ from app.escala.forms import (
     TrocaAprovarForm,
     ItemRepertorioForm,
     EnsaioForm,
+    AnexoForm,
 )
 from app.escala.models import (
     Escala,
@@ -26,6 +29,9 @@ from app.escala.models import (
     Membro,
     ItemRepertorio,
     Ensaio,
+    Anexo,
+    TIPOS_ANEXO,
+    TAMANHO_MAXIMO_ANEXO,
     DEPARTAMENTOS,
     STATUS_PADRAO,
     STATUS_LABELS,
@@ -383,6 +389,8 @@ def detalhe(escala_id):
         formulario_novo_subcabecalho=FuncaoForm(),
         formulario_novo_item_repertorio=ItemRepertorioForm(),
         formulario_ensaio=EnsaioForm(prefix="ensaio"),
+        formulario_anexo=_form_anexo(escala),
+        anexos=_anexos_visiveis(escala, eh_dono),
         ensaios=escala.ensaios,
         hoje=_hoje_brasilia(),
         acao_form=AcaoForm(),
@@ -473,6 +481,7 @@ def excluir_funcao(funcao_id):
 
     nome = funcao.nome
     escala_nome = funcao.escala.nome
+    Anexo.objects(funcao_id=funcao.id).delete()
     funcao.delete()
 
     flash(f'Funcao "{nome}" removida de {escala_nome}.', "success")
@@ -691,6 +700,15 @@ def mover_membro(funcao_id):
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
 
+def _destino_apos_status(escala_id):
+    """Volta pra "Minha escala" quando o status foi alterado de la (campo
+    voltar); so aceita esse caminho interno, nunca um endereco externo."""
+    voltar = request.form.get("voltar") or ""
+    if voltar.startswith("/minha-escala") and "//" not in voltar:
+        return redirect(voltar)
+    return redirect(url_for("escala.detalhe", escala_id=escala_id))
+
+
 @bp.route("/funcao/<int:funcao_id>/status", methods=["POST"])
 @login_required
 def atualizar_status(funcao_id):
@@ -711,7 +729,7 @@ def atualizar_status(funcao_id):
 
     if funcao.membro_id is None:
         flash("Essa funcao nao tem ninguem escalado.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=escala_id))
+        return _destino_apos_status(escala_id)
 
     comunidade_id = funcao.escala.ministerio.comunidade_id
     form = StatusForm()
@@ -722,7 +740,7 @@ def atualizar_status(funcao_id):
 
     if not form.validate_on_submit():
         flash("Status invalido.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=escala_id))
+        return _destino_apos_status(escala_id)
 
     status_anterior = funcao.status
     status_novo = form.status.data
@@ -753,7 +771,7 @@ def atualizar_status(funcao_id):
                 mensagem += f" Motivo: {funcao.troca_motivo}"
         _notificar_lideres_do_ministerio(funcao.escala, titulo, mensagem, tipo=status_novo)
 
-    return redirect(url_for("escala.detalhe", escala_id=escala_id))
+    return _destino_apos_status(escala_id)
 
 
 @bp.route("/funcao/<int:funcao_id>/troca/aprovar", methods=["POST"])
@@ -1442,3 +1460,96 @@ def excluir_ensaio(ensaio_id):
     ensaio.delete()
     flash(f"Ensaio de {descricao} removido.", "success")
     return _voltar_pros_ensaios(escala)
+
+
+# --- Materiais (anexos) da escala, ver models.Anexo ------------------------
+
+def _funcoes_da_conta(escala):
+    email = (current_user.email or "").lower()
+    return [
+        f for f in escala.funcoes
+        if f.membro_id and f.membro and (f.membro.email or "").lower() == email
+    ]
+
+
+def _anexos_visiveis(escala, pode_gerenciar):
+    """Lider ve todos; os demais veem os da equipe toda + os das proprias funcoes."""
+    anexos = list(Anexo.objects(escala_id=escala.id).exclude("conteudo").order_by("criado_em"))
+    if pode_gerenciar:
+        return anexos
+    minhas = {f.id for f in _funcoes_da_conta(escala)}
+    return [a for a in anexos if a.funcao_id is None or a.funcao_id in minhas]
+
+
+def _form_anexo(escala):
+    form = AnexoForm(prefix="anexo")
+    form.funcao_id.choices = [(0, "Toda a equipe")] + [
+        (f.id, f.nome) for f in escala.funcoes if f.tipo != TIPO_SUBCABECALHO
+    ]
+    return form
+
+
+def _voltar_pros_materiais(escala):
+    return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#materiais")
+
+
+@bp.route("/<int:escala_id>/anexos", methods=["POST"])
+@login_required
+def adicionar_anexo(escala_id):
+    # Limite so desta rota (o resto do site segue com 2 MB): ler o corpo
+    # acima disso cai no handler de 413 (ver app/errors.py).
+    request.max_content_length = TAMANHO_MAXIMO_ANEXO + 512 * 1024
+    escala = _escala_do_usuario_ou_404(escala_id)
+    form = _form_anexo(escala)
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel anexar o arquivo.", "danger")
+        return _voltar_pros_materiais(escala)
+
+    arquivo = form.arquivo.data
+    nome = os.path.basename((arquivo.filename or "arquivo").replace("\\", "/"))[:200]
+    extensao = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
+    conteudo = arquivo.read()
+    Anexo(
+        escala_id=escala.id,
+        funcao_id=form.funcao_id.data or None,
+        nome_arquivo=nome,
+        tipo=TIPOS_ANEXO[extensao],
+        tamanho=len(conteudo),
+        conteudo=conteudo,
+        enviado_por_id=current_user.id,
+    ).save()
+    flash(f'"{nome}" anexado.', "success")
+    return _voltar_pros_materiais(escala)
+
+
+@bp.route("/anexo/<int:anexo_id>")
+@login_required
+def baixar_anexo(anexo_id):
+    """Quem pode ver a escala, ou quem esta escalado nela, abre o arquivo."""
+    anexo = primeiro_ou_404(Anexo.objects(id=anexo_id))
+    escala = primeiro_ou_404(Escala.objects(id=anexo.escala_id))
+    if not _funcoes_da_conta(escala):
+        _escala_visivel_ou_404(escala.id)
+    resposta = send_file(
+        io.BytesIO(anexo.conteudo),
+        mimetype=anexo.tipo,
+        as_attachment=not anexo.abre_no_navegador,
+        download_name=anexo.nome_arquivo,
+    )
+    resposta.headers["X-Content-Type-Options"] = "nosniff"
+    return resposta
+
+
+@bp.route("/anexo/<int:anexo_id>/excluir", methods=["POST"])
+@login_required
+def excluir_anexo(anexo_id):
+    anexo = primeiro_ou_404(Anexo.objects(id=anexo_id).exclude("conteudo"))
+    escala = _escala_do_usuario_ou_404(anexo.escala_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return _voltar_pros_materiais(escala)
+    nome = anexo.nome_arquivo
+    Anexo.objects(id=anexo.id).delete()
+    flash(f'"{nome}" removido.', "success")
+    return _voltar_pros_materiais(escala)

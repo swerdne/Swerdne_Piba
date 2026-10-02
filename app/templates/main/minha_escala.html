@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}Minha escala{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    @keyframes me-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
+    @keyframes me-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
+    .me-blob { animation: me-blob-a 20s ease-in-out infinite; will-change: transform; }
+    .me-blob-2 { animation: me-blob-b 24s ease-in-out infinite; will-change: transform; }
+    .me-dias { scrollbar-width: none; }
+    .me-dias::-webkit-scrollbar { display: none; }
+    @media (prefers-reduced-motion: reduce) { .me-blob, .me-blob-2 { animation: none; } }
+</style>
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'] %}
+{% set DIAS_LONGOS = ['Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'] %}
+
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl me-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl me-blob-2 -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <h1 class="font-extrabold text-2xl tracking-tight {{ tema.text_primary }} truncate">Minha escala</h1>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 pt-2 pb-8 max-w-xl lg:max-w-3xl mx-auto space-y-5">
+
+        {% if dias %}
+        <!-- Barra de dias em que a pessoa esta escalada -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">{{ "Dias anteriores" if ver_anteriores else "Seus proximos dias" }}</p>
+                {% if ver_anteriores %}
+                <a href="{{ url_for('main.minha_escala') }}" class="text-xs font-semibold {{ tema.accent_text }}">Ver proximos</a>
+                {% elif tem_anteriores %}
+                <a href="{{ url_for('main.minha_escala', anteriores=1) }}" class="text-xs font-semibold {{ tema.accent_text }}">Ver anteriores</a>
+                {% endif %}
+            </div>
+            <div class="me-dias flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {% for e in dias %}
+                {% set ativo = selecionada and e.id == selecionada.id %}
+                <a href="{{ url_for('main.minha_escala', escala=e.id, anteriores=(1 if ver_anteriores else none)) }}"
+                   class="shrink-0 w-[4.5rem] rounded-2xl text-center py-2 border transition {{ tema.accent_bg ~ ' text-white border-transparent shadow-md' if ativo else tema.card_bg ~ ' ' ~ tema.card_border ~ ' ' ~ tema.text_primary }}">
+                    <p class="text-[10px] font-bold uppercase {{ 'text-white/80' if ativo else tema.text_secondary }}">{{ DIAS[e.data.weekday()] if e.data else 'sem' }}</p>
+                    <p class="text-xl font-extrabold leading-tight">{{ e.data.day if e.data else '?' }}</p>
+                    <p class="text-[10px] {{ 'text-white/80' if ativo else tema.text_secondary }} truncate px-1">{{ meses[e.data.month - 1][:3] if e.data else 'data' }}</p>
+                    {% if e.cancelada %}<span class="block mx-auto mt-0.5 w-1.5 h-1.5 rounded-full bg-red-500"></span>{% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if selecionada %}
+        <!-- Resumo do dia -->
+        <div class="rounded-3xl p-6 text-white space-y-1.5"
+             style="background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 10px 24px -6px rgba(79,70,229,0.35);">
+            <p class="text-xs font-semibold uppercase tracking-wide text-indigo-200">{{ ministerio.nome }}{% if selecionada.departamento|lower != ministerio.nome|lower %} &middot; {{ selecionada.departamento }}{% endif %}</p>
+            <h2 class="text-2xl font-extrabold tracking-tight">{{ selecionada.nome }}</h2>
+            <p class="text-sm text-indigo-100">
+                {% if selecionada.data %}
+                {{ DIAS_LONGOS[selecionada.data.weekday()] }}, {{ selecionada.data.day }} de {{ meses[selecionada.data.month - 1] }}
+                {% else %}Sem data definida{% endif %}
+                {% if selecionada.horario %} &middot; {{ selecionada.horario.strftime('%H:%M') }}{% if selecionada.horario_fim %} as {{ selecionada.horario_fim.strftime('%H:%M') }}{% endif %}{% endif %}
+            </p>
+            {% if selecionada.cancelada %}
+            <p class="inline-flex items-center gap-1.5 mt-2 text-xs font-bold bg-white text-red-600 rounded-full px-3 py-1">
+                <i class="fa-solid fa-ban"></i>Escala cancelada -- voce nao precisa comparecer
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- Sua funcao e status -->
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }}">
+            <p class="px-4 pt-3.5 pb-2.5 text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">
+                {{ "Suas funcoes" if minhas_funcoes|length > 1 else "Sua funcao" }}
+            </p>
+            {% for funcao in minhas_funcoes %}
+            {% set form = formularios_status[funcao.id] %}
+            <div class="px-4 py-3.5 space-y-2.5">
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-lg font-extrabold {{ tema.text_primary }}">{{ funcao.nome }}</p>
+                    <span class="flex items-center gap-1.5 text-xs font-semibold {{ tema.text_secondary }} shrink-0">
+                        <span class="w-2 h-2 rounded-full {{ status_cores.get(funcao.status or 'nao_notificado', 'bg-gray-500') }}"></span>
+                        {{ status_labels.get(funcao.status or 'nao_notificado') }}
+                    </span>
+                </div>
+                {% if not selecionada.cancelada %}
+                <form method="POST" action="{{ url_for('escala.atualizar_status', funcao_id=funcao.id) }}" class="space-y-2">
+                    {{ form.hidden_tag() }}
+                    <input type="hidden" name="voltar" value="{{ request.full_path }}">
+                    <label class="block text-xs {{ tema.text_secondary }}">Atualizar minha presenca</label>
+                    {{ form.status(data_status_select=funcao.id,
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    <div class="hidden space-y-2" data-troca-campos="{{ funcao.id }}">
+                        {{ form.troca_sugestao_membro_id(id=("troca_sugestao_" ~ funcao.id),
+                            class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary) }}
+                        {{ form.troca_motivo(id=("troca_motivo_" ~ funcao.id), rows="2", placeholder="Motivo (opcional)",
+                            class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder) }}
+                        <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
+                            Pedir troca
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="grid gap-5 lg:grid-cols-2 lg:items-start">
+            <!-- Materiais: da equipe toda + os da propria funcao -->
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden">
+                <p class="flex items-center gap-2 px-4 py-3 text-sm font-semibold {{ tema.text_primary }} border-b {{ tema.card_border }}">
+                    <i class="fa-solid fa-paperclip {{ tema.text_secondary }}"></i>Materiais
+                </p>
+                {% if anexos %}
+                <div class="divide-y {{ tema.divide }}">
+                    {% for anexo in anexos %}
+                    <a href="{{ url_for('escala.baixar_anexo', anexo_id=anexo.id) }}" target="_blank" rel="noopener"
+                       class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
+                        <div class="w-10 h-10 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
+                            <i class="fa-solid {{ anexo.icone }}"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ anexo.nome_arquivo }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">
+                                {% if anexo.funcao_id %}<span class="font-semibold {{ tema.accent_text }}">Pra voce &middot; {{ nomes_funcao[anexo.funcao_id] }}</span>{% else %}Toda a equipe{% endif %}
+                                &middot; {{ anexo.tamanho_legivel }}
+                            </p>
+                        </div>
+                        <i class="fa-solid {{ 'fa-arrow-up-right-from-square' if anexo.abre_no_navegador else 'fa-download' }} text-xs {{ tema.text_secondary }}"></i>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="px-4 py-4 text-sm {{ tema.text_secondary }}">Nenhum material pra esse dia ainda.</p>
+                {% endif %}
+            </div>
+
+            <div class="space-y-5">
+                <!-- Ensaios -->
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden">
+                    <p class="flex items-center gap-2 px-4 py-3 text-sm font-semibold {{ tema.text_primary }} border-b {{ tema.card_border }}">
+                        <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Ensaios
+                    </p>
+                    {% if ensaios %}
+                    <div class="divide-y {{ tema.divide }}">
+                        {% for ensaio in ensaios %}
+                        <div class="flex items-center gap-3 px-4 py-3 {{ 'opacity-60' if ensaio.data < hoje }}">
+                            <div class="w-11 shrink-0 text-center rounded-xl py-1 {{ 'bg-red-500/10 text-red-500' if ensaio.cancelado else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
+                                <p class="text-[10px] font-bold uppercase leading-none">{{ DIAS[ensaio.data.weekday()] }}</p>
+                                <p class="text-base font-extrabold leading-tight">{{ ensaio.data.day }}</p>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold {{ tema.text_primary }} truncate">
+                                    {% if ensaio.horario %}{{ ensaio.horario.strftime('%H:%M') }}{% if ensaio.horario_fim %} as {{ ensaio.horario_fim.strftime('%H:%M') }}{% endif %}{% else %}Horario a definir{% endif %}
+                                </p>
+                                {% if ensaio.local %}<p class="text-xs {{ tema.text_secondary }} truncate"><i class="fa-solid fa-location-dot mr-1"></i>{{ ensaio.local }}</p>{% endif %}
+                            </div>
+                            {% if ensaio.cancelado %}
+                            <span class="text-[10px] font-semibold uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelado</span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="px-4 py-4 text-sm {{ tema.text_secondary }}">Nenhum ensaio marcado.</p>
+                    {% endif %}
+                </div>
+
+                {% if repertorio %}
+                <!-- Repertorio -->
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden">
+                    <p class="flex items-center gap-2 px-4 py-3 text-sm font-semibold {{ tema.text_primary }} border-b {{ tema.card_border }}">
+                        <i class="fa-solid fa-list-ol {{ tema.text_secondary }}"></i>Repertorio
+                    </p>
+                    <ol class="divide-y {{ tema.divide }}">
+                        {% for item in repertorio %}
+                        <li class="flex items-center gap-3 px-4 py-2.5">
+                            <span class="text-xs font-bold {{ tema.text_secondary }} w-4 text-right shrink-0">{{ loop.index }}</span>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm {{ tema.text_primary }} truncate">{{ item.nome_musica }}{% if item.tom %} <span class="text-xs {{ tema.text_secondary }}">&middot; Tom {{ item.tom }}</span>{% endif %}</p>
+                            </div>
+                            {% if item.link %}
+                            <a href="{{ item.link }}" target="_blank" rel="noopener" class="text-xs {{ tema.accent_text }} shrink-0" aria-label="Abrir link da musica">
+                                <i class="fa-solid fa-link"></i>
+                            </a>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <a href="{{ url_for('escala.detalhe', escala_id=selecionada.id) }}"
+           class="block text-center border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-semibold py-3 rounded-full transition">
+            Ver escala completa
+        </a>
+
+        {% elif not ver_anteriores and tem_anteriores %}
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
+            <i class="fa-solid fa-calendar-check text-3xl {{ tema.text_secondary }}"></i>
+            <p class="text-sm {{ tema.text_secondary }} mt-3">Voce nao tem nenhuma escala por vir.</p>
+            <a href="{{ url_for('main.minha_escala', anteriores=1) }}" class="inline-block mt-3 text-sm font-semibold {{ tema.accent_text }}">Ver dias anteriores</a>
+        </div>
+        {% else %}
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
+            <i class="fa-solid fa-calendar-check text-3xl {{ tema.text_secondary }}"></i>
+            <p class="text-sm {{ tema.text_secondary }} mt-3">Voce ainda nao esta escalado em nenhuma escala.</p>
+            <p class="text-xs {{ tema.text_secondary }} mt-1">Quando o lider te escalar, o dia aparece aqui com tudo o que voce precisa.</p>
+        </div>
+        {% endif %}
+    </main>
+    {{ nav_inferior(tema, 'minha') }}
+    </div>
+</div>
+
+<script>
+    // Mesmo comportamento da tela da escala: escolher "Troca solicitada"
+    // abre os campos de troca; qualquer outro status ja envia.
+    document.querySelectorAll('[data-status-select]').forEach(function (select) {
+        select.addEventListener('change', function () {
+            var campos = document.querySelector('[data-troca-campos="' + select.getAttribute('data-status-select') + '"]');
+            if (select.value === 'troca_solicitada') {
+                if (campos) campos.classList.remove('hidden');
+            } else {
+                if (campos) campos.classList.add('hidden');
+                select.form.submit();
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -344,6 +344,7 @@ class Escala(SequentialIdDocument):
             Funcao.objects(escala_id=self.id),
             ItemRepertorio.objects(escala_id=self.id),
             Ensaio.objects(escala_id=self.id),
+            Anexo.objects(escala_id=self.id),
         ]
 
     @property
@@ -602,3 +603,64 @@ def ensaios_do_mes_por_dia(inicio, fim, ministerio_ids):
         if escala is not None:
             por_dia.setdefault(ensaio.data, []).append((ensaio, escala, escala.cor))
     return por_dia, list(escalas.values())
+
+
+# Extensoes aceitas como material de uma escala (cifra, partitura, letra,
+# roteiro...) e o tipo servido no download.
+TIPOS_ANEXO = {
+    "pdf": "application/pdf",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "txt": "text/plain; charset=utf-8",
+    "doc": "application/msword",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+TAMANHO_MAXIMO_ANEXO = 10 * 1024 * 1024
+
+
+class Anexo(SequentialIdDocument):
+    """Material de uma Escala (cifra, partitura, roteiro...). funcao_id
+    preenchido = so pra quem esta naquela funcao (ex: cifra de baixo pro
+    Baixo); None = pra toda a equipe. O arquivo fica no proprio documento
+    (Mongo, sobrevive a deploy) -- listagens usam .exclude("conteudo")."""
+
+    meta = {"collection": "escala_anexos"}
+    _nome_sequencia = "escala_anexos"
+
+    escala_id = mongoengine.IntField(required=True)
+    funcao_id = mongoengine.IntField()
+    nome_arquivo = mongoengine.StringField(required=True, max_length=200)
+    tipo = mongoengine.StringField(required=True, max_length=120)
+    tamanho = mongoengine.IntField(default=0)
+    conteudo = mongoengine.BinaryField(required=True)
+    enviado_por_id = mongoengine.IntField()
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def funcao(self):
+        return Funcao.objects(id=self.funcao_id).first() if self.funcao_id else None
+
+    @property
+    def extensao(self):
+        return self.nome_arquivo.rsplit(".", 1)[-1].lower() if "." in self.nome_arquivo else ""
+
+    @property
+    def icone(self):
+        return {
+            "pdf": "fa-file-pdf", "png": "fa-file-image", "jpg": "fa-file-image", "jpeg": "fa-file-image",
+            "txt": "fa-file-lines", "doc": "fa-file-word", "docx": "fa-file-word",
+        }.get(self.extensao, "fa-file")
+
+    @property
+    def tamanho_legivel(self):
+        if self.tamanho >= 1024 * 1024:
+            return f"{self.tamanho / (1024 * 1024):.1f} MB".replace(".", ",")
+        return f"{max(1, round(self.tamanho / 1024))} KB"
+
+    @property
+    def abre_no_navegador(self):
+        return self.extensao in ("pdf", "png", "jpg", "jpeg", "txt")
+
+    def __repr__(self):
+        return f"<Anexo {self.nome_arquivo!r} da escala {self.escala_id}>"
