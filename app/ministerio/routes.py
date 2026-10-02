@@ -790,6 +790,10 @@ def salvar_louvor_musica(musica_id):
         flash("Nao foi possivel salvar a cifra.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
     musica.cifra_louvor = form.cifra_louvor.data or None
+    tom_novo = (form.tom.data or "").strip()
+    if tom_novo and tom_novo != musica.tom:
+        musica.tom = tom_novo
+        return _salvar_musica(musica, "louvor", f"Cifra salva no tom {tom_novo}.")
     return _salvar_musica(musica, "louvor", "Versao do louvor (cifra) salva.")
 
 

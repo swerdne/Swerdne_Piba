@@ -34,6 +34,9 @@ from app.escala.models import (
     Anexo,
     Musica,
     blocos_da_letra,
+    transpor_cifra,
+    semitons_entre,
+    prefere_bemol,
     TIPOS_ANEXO,
     TAMANHO_MAXIMO_ANEXO,
     DEPARTAMENTOS,
@@ -1630,12 +1633,21 @@ def folha_repertorio(escala_id, tipo):
     itens = []
     for item in escala.repertorio:
         musica = item.musica
+        tom = item.tom or (musica.tom if musica else None)
+        cifra = musica.cifra_louvor if musica else None
+        tom_original = None
+        # Tom do dia diferente do tom cadastrado: a cifra ja sai transposta.
+        semitons = semitons_entre(musica.tom, tom) if musica and cifra else None
+        if semitons:
+            cifra = transpor_cifra(cifra, semitons, prefere_bemol(tom))
+            tom_original = musica.tom
         itens.append({
             "item": item,
             "musica": musica,
-            "tom": item.tom or (musica.tom if musica else None),
+            "tom": tom,
+            "tom_original": tom_original,
             "blocos": blocos_da_letra(musica.letra_projecao) if musica else [],
-            "cifra": musica.cifra_louvor if musica else None,
+            "cifra": cifra,
         })
     return render_template(
         "escala/folha_repertorio.html",

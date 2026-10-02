@@ -742,3 +742,117 @@ def eh_funcao_de_projecao(nome_funcao):
     Pelo nome da funcao, sem acento: Projecao, Midia, Datashow, Telao..."""
     nome = unicodedata.normalize("NFD", nome_funcao or "").encode("ascii", "ignore").decode().lower()
     return any(p in nome for p in _PALAVRAS_PROJECAO)
+
+
+# --- Transposicao de cifras (mesma logica em static/js/transpor.js) ---------
+
+_NOTAS_SUSTENIDO = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+_NOTAS_BEMOL = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+_INDICE_NOTA = {**{n: i for i, n in enumerate(_NOTAS_SUSTENIDO)},
+                **{n: i for i, n in enumerate(_NOTAS_BEMOL)},
+                "Cb": 11, "B#": 0, "E#": 5, "Fb": 4}
+# Tons que se escrevem com bemol (maiores: F Bb Eb Ab Db; menores: Dm Gm Cm Fm Bbm Ebm).
+_MAIORES_BEMOL = {5, 10, 3, 8, 1}
+_MENORES_BEMOL = {2, 7, 0, 5, 10, 3}
+
+_SUFIXO = r"(?:maj|min|dim|aug|sus|add|m|M|º|°|\+|-|\d|\(|\)|[#b](?=\d)|,)*"
+_TOKEN_ACORDE = re.compile(r"^(\(?)([A-G][#b]?)(" + _SUFIXO + r")(?:/([A-G][#b]?))?([)\],.]*)$")
+_ROTULO_INICIAL = re.compile(r"^\s*(?:\[[^\]]*\]|[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ ]*\d*\s*:)")
+_MARCAS_OK = re.compile(r"^(?:\|+|-+|/|%|\(?\d*x\d*\)?|\(?\d+x?\)?)$", re.I)
+_TOM = re.compile(r"^\s*([A-G][#b]?)(m(?!aj))?")
+
+
+def _ler_tom(tom):
+    m = _TOM.match(tom or "")
+    if not m:
+        return None
+    return _INDICE_NOTA[m.group(1)], bool(m.group(2)), m.group(1)
+
+
+def prefere_bemol(tom):
+    """Se o tom se escreve com bemol (Bb, Eb...) ou sustenido (F#, C#...)."""
+    lido = _ler_tom(tom)
+    if lido is None:
+        return False
+    indice, menor, nota = lido
+    if len(nota) == 2:
+        return nota[1] == "b"
+    return indice in (_MENORES_BEMOL if menor else _MAIORES_BEMOL)
+
+
+def transpor_tom(tom, semitons):
+    lido = _ler_tom(tom)
+    if lido is None:
+        return tom
+    indice, menor, _ = lido
+    novo = (indice + semitons) % 12
+    bemol = novo in (_MENORES_BEMOL if menor else _MAIORES_BEMOL)
+    return (_NOTAS_BEMOL if bemol else _NOTAS_SUSTENIDO)[novo] + ("m" if menor else "")
+
+
+def semitons_entre(de, para):
+    """Quantos semitons (0..11) do tom `de` pro tom `para`; None se nao der pra ler."""
+    a, b = _ler_tom(de), _ler_tom(para)
+    if a is None or b is None:
+        return None
+    return (b[0] - a[0]) % 12
+
+
+def _transpor_nota(nota, semitons, bemol):
+    return (_NOTAS_BEMOL if bemol else _NOTAS_SUSTENIDO)[(_INDICE_NOTA[nota] + semitons) % 12]
+
+
+def _transpor_token(token, semitons, bemol):
+    m = _TOKEN_ACORDE.match(token)
+    if not m:
+        return token
+    antes, raiz, sufixo, baixo, depois = m.groups()
+    novo = antes + _transpor_nota(raiz, semitons, bemol) + sufixo
+    if baixo:
+        novo += "/" + _transpor_nota(baixo, semitons, bemol)
+    return novo + depois
+
+
+def eh_linha_de_acordes(linha):
+    """Linha so de acordes (pode ter rotulo tipo "Intro:"/"[Solo]" na frente e
+    marcas como | ou x2) -- as linhas de letra ficam intactas."""
+    resto = _ROTULO_INICIAL.sub("", linha, count=1)
+    acordes = 0
+    for token in resto.split():
+        if _TOKEN_ACORDE.match(token):
+            acordes += 1
+        elif not _MARCAS_OK.match(token):
+            return False
+    return acordes > 0
+
+
+def _transpor_linha(linha, semitons, bemol):
+    # Mantem cada acorde em cima da mesma silaba: se o acorde novo ficou maior
+    # ou menor, compensa nos espacos que vem depois dele.
+    saida, sobra = [], 0
+    for parte in re.split(r"(\s+)", linha):
+        if not parte:
+            continue
+        if parte.isspace():
+            if sobra:
+                tamanho = len(parte) - sobra
+                sobra = 0
+                if tamanho < 1:
+                    sobra, tamanho = 1 - tamanho, 1
+                parte = " " * tamanho
+            saida.append(parte)
+            continue
+        nova = _transpor_token(parte, semitons, bemol)
+        sobra += len(nova) - len(parte)
+        saida.append(nova)
+    return "".join(saida)
+
+
+def transpor_cifra(texto, semitons, bemol=False):
+    """Sobe/desce todos os acordes da cifra `semitons` semitons."""
+    if not texto or not semitons % 12:
+        return texto
+    return "\n".join(
+        _transpor_linha(linha, semitons, bemol) if eh_linha_de_acordes(linha) else linha
+        for linha in texto.replace("\r\n", "\n").split("\n")
+    )

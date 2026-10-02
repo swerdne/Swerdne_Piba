@@ -112,16 +112,42 @@
                     <p class="text-sm font-semibold {{ tema.text_primary }}">Cifra para o louvor</p>
                     <p class="text-xs {{ tema.text_secondary }}">Acordes na linha de cima, letra embaixo -- a fonte e monoespacada, entao o alinhamento fica igual na folha.</p>
                 </div>
+                <div data-transpor="#cifra_louvor" data-tom="{{ musica.tom or '' }}" data-transpor-campo="#tom_transposto" data-transpor-aviso="#aviso_transposto"
+                     class="flex flex-wrap items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-3 py-2.5">
+                    <span class="text-xs font-semibold {{ tema.text_secondary }}"><i class="fa-solid fa-arrows-up-down mr-1"></i>Tom</span>
+                    <button type="button" data-transpor-passo="-1" title="Descer meio tom"
+                            class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">-&frac12;</button>
+                    <select data-transpor-tom aria-label="Converter para o tom"
+                            class="{{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-2.5 py-2 text-sm font-semibold {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"></select>
+                    <span data-transpor-rotulo class="text-sm font-semibold {{ tema.text_primary }}"></span>
+                    <button type="button" data-transpor-passo="1" title="Subir meio tom"
+                            class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">+&frac12;</button>
+                    <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Voltar ao original</button>
+                </div>
+                {{ form_louvor.tom(id="tom_transposto") }}
                 {{ form_louvor.cifra_louvor(rows="18", wrap="off", spellcheck="false", class_="w-full mu-mono whitespace-pre overflow-x-auto " ~ CAMPO,
                     placeholder="Intro: G  D  Em  C\n\n[Verso 1]\nG              D\nPrimeira linha da letra\n...") }}
-                <div class="flex justify-end">
-                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">
+                <div class="flex items-center justify-end gap-3">
+                    <p id="aviso_transposto" class="hidden text-xs {{ tema.text_secondary }} mr-auto">Salve pra guardar a cifra (e o tom da musica) no tom novo.</p>
+                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition shrink-0">
                         Salvar cifra
                     </button>
                 </div>
             </form>
             {% elif musica.cifra_louvor %}
-            <pre class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-sm {{ tema.text_primary }} overflow-x-auto">{{ musica.cifra_louvor }}</pre>
+            <div data-transpor="#cifra_leitura" data-tom="{{ musica.tom or '' }}" 
+                 class="flex flex-wrap items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-3 py-2.5">
+                <span class="text-xs font-semibold {{ tema.text_secondary }}"><i class="fa-solid fa-arrows-up-down mr-1"></i>Tom</span>
+                <button type="button" data-transpor-passo="-1" title="Descer meio tom"
+                        class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">-&frac12;</button>
+                <select data-transpor-tom aria-label="Converter para o tom"
+                        class="{{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-2.5 py-2 text-sm font-semibold {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"></select>
+                <span data-transpor-rotulo class="text-sm font-semibold {{ tema.text_primary }}"></span>
+                <button type="button" data-transpor-passo="1" title="Subir meio tom"
+                        class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">+&frac12;</button>
+                <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Voltar ao original</button>
+            </div>
+            <pre id="cifra_leitura" class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-sm {{ tema.text_primary }} overflow-x-auto">{{ musica.cifra_louvor }}</pre>
             {% else %}
             <p class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl p-6 text-center text-sm {{ tema.text_secondary }}">A cifra ainda nao foi preenchida.</p>
             {% endif %}
@@ -208,4 +234,5 @@
         }
     })();
 </script>
+<script src="{{ url_for('static', filename='js/transpor.js') }}"></script>
 {% endblock %}

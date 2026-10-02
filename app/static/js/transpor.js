@@ -1,0 +1,170 @@
+// Transposicao de cifras na tela -- mesma logica de app/escala/models.py
+// (transpor_cifra/transpor_tom), pra o resultado bater com a folha impressa.
+(function () {
+    var SUST = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    var BEMOL = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    var INDICE = { 'Cb': 11, 'B#': 0, 'E#': 5, 'Fb': 4 };
+    SUST.forEach(function (n, i) { INDICE[n] = i; });
+    BEMOL.forEach(function (n, i) { INDICE[n] = i; });
+    var MAIORES_BEMOL = [5, 10, 3, 8, 1];
+    var MENORES_BEMOL = [2, 7, 0, 5, 10, 3];
+
+    var SUFIXO = '(?:maj|min|dim|aug|sus|add|m|M|º|°|\\+|-|\\d|\\(|\\)|[#b](?=\\d)|,)*';
+    var TOKEN = new RegExp('^(\\(?)([A-G][#b]?)(' + SUFIXO + ')(?:/([A-G][#b]?))?([)\\],.]*)$');
+    var ROTULO = /^\s*(?:\[[^\]]*\]|[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ ]*\d*\s*:)/;
+    var MARCAS = /^(?:\|+|-+|\/|%|\(?\d*x\d*\)?|\(?\d+x?\)?)$/i;
+    var TOM = /^\s*([A-G][#b]?)(m(?!aj))?/;
+
+    function mod12(n) { return ((n % 12) + 12) % 12; }
+
+    function lerTom(tom) {
+        var m = TOM.exec(tom || '');
+        return m ? { indice: INDICE[m[1]], menor: !!m[2], nota: m[1] } : null;
+    }
+
+    function prefereBemol(tom) {
+        var t = lerTom(tom);
+        if (!t) return false;
+        if (t.nota.length === 2) return t.nota[1] === 'b';
+        return (t.menor ? MENORES_BEMOL : MAIORES_BEMOL).indexOf(t.indice) !== -1;
+    }
+
+    function transporTom(tom, semitons) {
+        var t = lerTom(tom);
+        if (!t) return tom;
+        var novo = mod12(t.indice + semitons);
+        var bemol = (t.menor ? MENORES_BEMOL : MAIORES_BEMOL).indexOf(novo) !== -1;
+        return (bemol ? BEMOL : SUST)[novo] + (t.menor ? 'm' : '');
+    }
+
+    function nota(n, s, bemol) { return (bemol ? BEMOL : SUST)[mod12(INDICE[n] + s)]; }
+
+    function token(t, s, bemol) {
+        var m = TOKEN.exec(t);
+        if (!m) return t;
+        var novo = m[1] + nota(m[2], s, bemol) + m[3];
+        if (m[4]) novo += '/' + nota(m[4], s, bemol);
+        return novo + m[5];
+    }
+
+    function ehLinhaDeAcordes(linha) {
+        var resto = linha.replace(ROTULO, '');
+        var tokens = resto.split(/\s+/).filter(Boolean);
+        var acordes = 0;
+        for (var i = 0; i < tokens.length; i++) {
+            if (TOKEN.test(tokens[i])) acordes++;
+            else if (!MARCAS.test(tokens[i])) return false;
+        }
+        return acordes > 0;
+    }
+
+    function linha(l, s, bemol) {
+        var saida = '', sobra = 0;
+        l.split(/(\s+)/).forEach(function (parte) {
+            if (!parte) return;
+            if (/^\s+$/.test(parte)) {
+                if (sobra) {
+                    var tamanho = parte.length - sobra;
+                    sobra = 0;
+                    if (tamanho < 1) { sobra = 1 - tamanho; tamanho = 1; }
+                    parte = new Array(tamanho + 1).join(' ');
+                }
+                saida += parte;
+                return;
+            }
+            var nova = token(parte, s, bemol);
+            sobra += nova.length - parte.length;
+            saida += nova;
+        });
+        return saida;
+    }
+
+    function cifra(texto, s, bemol) {
+        if (!texto || !mod12(s)) return texto;
+        return texto.replace(/\r\n/g, '\n').split('\n').map(function (l) {
+            return ehLinhaDeAcordes(l) ? linha(l, s, bemol) : l;
+        }).join('\n');
+    }
+
+    // Sem tom cadastrado: decide bemol/sustenido pelo que a cifra ja usa.
+    function bemolPeloTexto(texto) {
+        var b = (texto.match(/\b[A-G]b/g) || []).length;
+        var s = (texto.match(/\b[A-G]#/g) || []).length;
+        return b > s;
+    }
+
+    window.Transpor = { cifra: cifra, tom: transporTom, prefereBemol: prefereBemol, lerTom: lerTom, bemolPeloTexto: bemolPeloTexto };
+
+    // Liga os controles: [data-transpor] envolve os botoes; o alvo e um
+    // textarea (lider, edita e salva) ou um <pre> (so leitura).
+    document.querySelectorAll('[data-transpor]').forEach(function (caixa) {
+        var alvo = document.querySelector(caixa.getAttribute('data-transpor'));
+        if (!alvo) return;
+        var ehCampo = alvo.tagName === 'TEXTAREA';
+        var ler = function () { return ehCampo ? alvo.value : alvo.textContent; };
+        var escrever = function (t) { if (ehCampo) alvo.value = t; else alvo.textContent = t; };
+        var tomOriginal = caixa.getAttribute('data-tom') || '';
+        var textoOriginal = ler();
+        var tomAtual = tomOriginal;
+        var deslocamento = 0;
+        var seletor = caixa.querySelector('[data-transpor-tom]');
+        var rotulo = caixa.querySelector('[data-transpor-rotulo]');
+        var campoTom = document.querySelector(caixa.getAttribute('data-transpor-campo') || '_');
+        var aviso = document.querySelector(caixa.getAttribute('data-transpor-aviso') || '_');
+        var original = caixa.querySelector('[data-transpor-original]');
+
+        if (seletor && lerTom(tomOriginal)) {
+            for (var i = 0; i < 12; i++) {
+                var opcao = document.createElement('option');
+                opcao.value = String(i);
+                opcao.textContent = transporTom(tomOriginal, i) + (i === 0 ? ' (original)' : '');
+                seletor.appendChild(opcao);
+            }
+        } else if (seletor) {
+            seletor.classList.add('hidden');
+        }
+
+        function atualizar() {
+            var d = mod12(deslocamento);
+            if (seletor) seletor.value = String(d);
+            if (rotulo) {
+                rotulo.textContent = lerTom(tomOriginal)
+                    ? '' : (d ? (deslocamento > 0 ? '+' : '') + (deslocamento) + ' semitom' + (Math.abs(deslocamento) > 1 ? 's' : '') : 'Tom original');
+            }
+            if (original) original.classList.toggle('hidden', d === 0);
+            if (campoTom) campoTom.value = d && lerTom(tomOriginal) ? tomAtual : '';
+            if (aviso) aviso.classList.toggle('hidden', d === 0);
+        }
+
+        function mover(passo) {
+            var texto = ler();
+            var novoTom = lerTom(tomOriginal) ? transporTom(tomOriginal, mod12(deslocamento + passo)) : '';
+            var bemol = novoTom ? prefereBemol(novoTom) : bemolPeloTexto(texto);
+            escrever(cifra(texto, passo, bemol));
+            deslocamento += passo;
+            tomAtual = novoTom;
+            atualizar();
+        }
+
+        caixa.querySelectorAll('[data-transpor-passo]').forEach(function (botao) {
+            botao.addEventListener('click', function () { mover(parseInt(botao.getAttribute('data-transpor-passo'), 10)); });
+        });
+        if (seletor) {
+            seletor.addEventListener('change', function () {
+                var alvoD = parseInt(seletor.value, 10);
+                var passo = mod12(alvoD - mod12(deslocamento));
+                if (passo > 6) passo -= 12;
+                mover(passo);
+            });
+        }
+        if (original) {
+            original.addEventListener('click', function () {
+                escrever(textoOriginal);
+                deslocamento = 0;
+                tomAtual = tomOriginal;
+                atualizar();
+            });
+        }
+        atualizar();
+    });
+})();

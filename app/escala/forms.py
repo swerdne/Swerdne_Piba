@@ -1,7 +1,7 @@
 """Formularios Flask-WTF do modulo escala."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
-from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField
+from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField, HiddenField
 from wtforms.validators import DataRequired, Length, Optional
 
 from app.escala.models import DEPARTAMENTOS, CORES_DISPONIVEIS, TIPOS_ANEXO, TAMANHO_MAXIMO_ANEXO
@@ -129,6 +129,8 @@ class LetraProjecaoForm(FlaskForm):
 
 class CifraLouvorForm(FlaskForm):
     cifra_louvor = TextAreaField("Cifra para o louvor", validators=[Optional(), Length(max=30000)])
+    # Preenchido pelo transpositor da tela quando a cifra muda de tom.
+    tom = HiddenField(validators=[Optional(), Length(max=10)])
     submit = SubmitField("Salvar cifra")
 
 

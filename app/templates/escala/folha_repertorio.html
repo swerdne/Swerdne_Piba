@@ -65,7 +65,7 @@
         <h2>{{ loop.index }}. {{ it.item.nome_musica }}{% if it.item.momento %} - {{ it.item.momento }}{% endif %}</h2>
         <p class="obs">
             {% if tipo == 'cifras' and it.musica and it.musica.artista %}{{ it.musica.artista }} &middot; {% endif %}
-            Observacoes: {% if it.tom %}TOM {{ it.tom }}{% else %}-{% endif %}
+            Observacoes: {% if it.tom %}TOM {{ it.tom }}{% if tipo == 'cifras' and it.tom_original %} (transposta do original em {{ it.tom_original }}){% endif %}{% else %}-{% endif %}
         </p>
         {% if tipo == 'projecao' %}
             {% if it.blocos %}

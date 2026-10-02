@@ -169,7 +169,7 @@ def test_folhas_de_projecao_e_cifras(logged_in_client, app, db):
         assert "OBSERVACOES GERAIS" in projecao and "Ministracao livre no fim" in projecao
 
         cifras = logged_in_client.get(f"/escala/{escala.id}/repertorio/cifras").data.decode("utf-8")
-        assert "G        D" in cifras and "Grande e o Senhor" in cifras
+        assert "A        E" in cifras and "Grande e o Senhor" in cifras  # tom do dia A
 
 
 def test_folha_fechada_pra_quem_nao_e_da_equipe(logged_in_client, outro_logged_in_client, app, db):
@@ -210,3 +210,51 @@ def test_minha_escala_entrega_a_versao_da_funcao(logged_in_client, app, db):
         html = logged_in_client.get("/minha-escala").data.decode("utf-8")
         assert f"/escala/{escala.id}/repertorio/projecao" in html
         assert f"/escala/{escala.id}/repertorio/cifras" not in html
+
+
+# --- Transposicao de tom -----------------------------------------------------
+
+def test_transpor_cifra_mantem_letra_e_alinhamento():
+    from app.escala.models import transpor_cifra
+    cifra = "Intro: G  D/F#  Em7 | x2\n[Verso 1]\nG              D\nA graca de Deus\n"
+    assert transpor_cifra(cifra, 2) == (
+        "Intro: A  E/G#  F#m7 | x2\n[Verso 1]\nA              E\nA graca de Deus\n"
+    )
+    # Bemol quando o tom pede (G -> Bb), e o acorde maior "come" espaco depois dele.
+    assert transpor_cifra("G   C9\nletra", 3, bemol=True) == "Bb  Eb9\nletra"
+
+
+def test_transpor_tom_escolhe_a_grafia_do_tom():
+    from app.escala.models import transpor_tom, semitons_entre
+    assert transpor_tom("G", 3) == "Bb"
+    assert transpor_tom("D", 4) == "F#"
+    assert transpor_tom("Am", 5) == "Dm"
+    assert transpor_tom("F#m", 1) == "Gm"
+    assert semitons_entre("G", "A") == 2 and semitons_entre("G", "Gm") == 0
+    assert semitons_entre(None, "A") is None
+
+
+def test_salvar_cifra_transposta_atualiza_o_tom(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
+                              data={"cifra_louvor": "A        E", "tom": "A"})
+        musica.reload()
+        assert musica.tom == "A" and musica.cifra_louvor == "A        E"
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        assert "data-transpor" in html and "js/transpor.js" in html
+
+
+def test_folha_de_cifras_sai_no_tom_do_dia(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, escala = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)  # tom G
+        _preencher(logged_in_client, musica)
+        logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
+                              data={"banco-musica_id": musica.id, "banco-momento": "", "banco-tom": "A"})
+        cifras = logged_in_client.get(f"/escala/{escala.id}/repertorio/cifras").data.decode("utf-8")
+        assert "A        E\nGrande e o Senhor" in cifras
+        assert "transposta do original em G" in cifras
+        musica.reload()
+        assert musica.cifra_louvor == CIFRA  # o banco continua no tom original
