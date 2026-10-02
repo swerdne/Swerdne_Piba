@@ -1,5 +1,7 @@
 """Paginas de erro estilizadas (404, 403, 500 e fallback generico pra outros codigos)."""
-from flask import render_template
+from urllib.parse import urlsplit
+
+from flask import render_template, flash, redirect, request, url_for
 from werkzeug.exceptions import HTTPException
 
 from .extensions import db
@@ -124,6 +126,21 @@ def registrar_error_handlers(app):
             frases=_FRASES_429,
             icone="fa-hourglass-half",
         ), 429
+
+    @app.errorhandler(413)
+    def arquivo_grande_demais(error):
+        """Upload acima de MAX_CONTENT_LENGTH: o Flask recusa a requisicao
+        inteira antes do formulario validar, entao a mensagem de tamanho do
+        FileSize nunca chegava a aparecer -- caia na pagina de erro. Volta
+        pra mesma tela com o aviso (so referrer do proprio site)."""
+        flash("A imagem deve ter no maximo 2 MB.", "danger")
+        destino = url_for("main.dashboard")
+        origem = urlsplit(request.referrer or "")
+        if origem.path and origem.netloc in ("", request.host):
+            destino = origem.path + ("?" + origem.query if origem.query else "")
+        if destino.rstrip("/").endswith("/dashboard"):
+            destino += "#config"
+        return redirect(destino)
 
     @app.errorhandler(HTTPException)
     def erro_http_generico(error):

@@ -897,3 +897,38 @@ def test_usuario_nao_consegue_excluir_evento_de_outra_conta(logged_in_client, ou
 def test_eventos_sem_login_redireciona(client):
     response = client.get("/comunidade/1/eventos", follow_redirects=False)
     assert response.status_code == 302
+
+
+def test_upload_acima_do_limite_volta_pro_form_com_aviso(logged_in_client, app, db):
+    """Foto de celular (> 2 MB) estourava MAX_CONTENT_LENGTH e caia na
+    pagina "Erro 413" -- agora volta pra mesma tela com a mensagem."""
+    import io
+    grande = io.BytesIO(b"\xff\xd8\xff\xe0" + b"0" * (3 * 1024 * 1024))
+    with app.app_context():
+        resposta = logged_in_client.post(
+            "/comunidade/nova",
+            data={"nome": "Igreja X", "imagem": (grande, "IMG_0001.JPG")},
+            content_type="multipart/form-data",
+            headers={"Referer": "http://localhost/comunidade/nova"},
+        )
+        assert resposta.status_code == 302
+        assert resposta.headers["Location"].endswith("/comunidade/nova")
+
+        html = logged_in_client.get("/comunidade/nova").data.decode("utf-8")
+        assert "A imagem deve ter no maximo 2 MB." in html
+        assert Comunidade.objects(nome="Igreja X").first() is None
+
+
+def test_upload_de_imagem_pequena_na_comunidade_funciona(logged_in_client, app, db):
+    import io
+    with open("app/static/img/icon-192.png", "rb") as f:
+        png = io.BytesIO(f.read())
+    with app.app_context():
+        resposta = logged_in_client.post(
+            "/comunidade/nova",
+            data={"nome": "Igreja Y", "imagem": (png, "logo.png")},
+            content_type="multipart/form-data",
+        )
+        assert resposta.status_code == 302
+        comunidade = Comunidade.objects(nome="Igreja Y").first()
+        assert comunidade.imagem.startswith("/static/uploads/comunidades/")

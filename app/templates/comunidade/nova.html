@@ -66,7 +66,7 @@
 
             <div>
                 {{ form.imagem.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
-                {{ form.imagem(class_=tema.text_secondary ~ " w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600") }}
+                {{ form.imagem(accept="image/png, image/jpeg", data_reduzir_imagem="1", class_=tema.text_secondary ~ " w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600") }}
                 <p class="text-xs {{ tema.text_secondary }} mt-1">JPG ou PNG, ate 2 MB.</p>
                 {% for erro in form.imagem.errors %}
                     <p class="text-xs text-red-400 mt-1">{{ erro }}</p>

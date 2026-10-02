@@ -491,3 +491,87 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
         });
     });
 });
+
+// Reduz fotos antes do upload (input[type=file][data-reduzir-imagem]).
+// Foto de celular costuma ter 3-12 MB e o servidor recusa qualquer
+// requisicao acima de 2 MB (MAX_CONTENT_LENGTH) -- sem isso, escolher uma
+// foto tirada na hora quebrava a criacao/edicao de Comunidade e Ministerio.
+// Redimensiona pro lado maior ter no maximo LADO_MAX px e recomprime
+// (PNG continua PNG, pra manter transparencia de logo; se ainda passar do
+// limite vira JPEG). Ao terminar dispara "imagem:pronta" no input (detail =
+// arquivo final) -- quem quiser mostrar preview escuta esse evento em vez
+// de "change", que dispara antes da reducao acabar.
+(function () {
+    var LADO_MAX = 1024;
+    var LIMITE = 2 * 1024 * 1024;
+    var JA_PEQUENO = 300 * 1024;
+
+    function exportar(canvas, tipo, nomeBase) {
+        return new Promise(function (resolve) {
+            canvas.toBlob(function (blob) {
+                if (!blob) { resolve(null); return; }
+                var extensao = tipo === 'image/png' ? '.png' : '.jpg';
+                resolve(new File([blob], nomeBase + extensao, { type: tipo }));
+            }, tipo, 0.85);
+        });
+    }
+
+    function reduzir(arquivo) {
+        return new Promise(function (resolve, reject) {
+            var url = URL.createObjectURL(arquivo);
+            var img = new Image();
+            img.onload = function () {
+                URL.revokeObjectURL(url);
+                var escala = Math.min(1, LADO_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(img.naturalWidth * escala));
+                canvas.height = Math.max(1, Math.round(img.naturalHeight * escala));
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                var nomeBase = (arquivo.name || 'imagem').replace(/\.[^.]+$/, '') || 'imagem';
+                var tipo = arquivo.type === 'image/png' ? 'image/png' : 'image/jpeg';
+                exportar(canvas, tipo, nomeBase).then(function (resultado) {
+                    if (resultado && resultado.size > LIMITE && tipo === 'image/png') {
+                        return exportar(canvas, 'image/jpeg', nomeBase);
+                    }
+                    return resultado;
+                }).then(function (resultado) {
+                    if (resultado) resolve(resultado); else reject();
+                });
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); reject(); };
+            img.src = url;
+        });
+    }
+
+    document.querySelectorAll('input[type="file"][data-reduzir-imagem]').forEach(function (input) {
+        input.addEventListener('change', function () {
+            var arquivo = input.files && input.files[0];
+            if (!arquivo) return;
+
+            function pronto(final) {
+                input.dispatchEvent(new CustomEvent('imagem:pronta', { detail: final }));
+            }
+
+            var jaServe = arquivo.size <= JA_PEQUENO &&
+                (arquivo.type === 'image/jpeg' || arquivo.type === 'image/png');
+            if (jaServe || typeof DataTransfer === 'undefined') { pronto(arquivo); return; }
+
+            var botoes = input.form ? input.form.querySelectorAll('[type="submit"]') : [];
+            Array.prototype.forEach.call(botoes, function (b) { b.disabled = true; });
+
+            reduzir(arquivo).then(function (novo) {
+                var transferencia = new DataTransfer();
+                transferencia.items.add(novo);
+                input.files = transferencia.files;
+                pronto(novo);
+            }).catch(function () {
+                // Formato que o navegador nao decodifica (ex: HEIC fora do
+                // Safari): segue o original e o servidor responde com a
+                // mensagem de formato invalido.
+                pronto(arquivo);
+            }).then(function () {
+                Array.prototype.forEach.call(botoes, function (b) { b.disabled = false; });
+            });
+        });
+    });
+})();

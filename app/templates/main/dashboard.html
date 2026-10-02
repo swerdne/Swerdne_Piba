@@ -31,7 +31,7 @@
 <svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
 {% endmacro %}
 
-{% from "_macros.html" import nav_inferior, nome_marca with context %}
+{% from "_macros.html" import nav_inferior, nome_marca, sino_avisos with context %}
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} overflow-hidden">
 
@@ -44,29 +44,24 @@
 
     <main class="max-w-xl mx-auto px-5 pt-5 pb-8">
 
-        <!-- ===================== INICIO ===================== -->
-        <section data-painel="inicio" class="space-y-6">
-
-            <div class="flex items-center gap-2.5">
-                <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-7 h-7 object-contain shrink-0">
+        <!-- Cabecalho comum as 3 abas: logo + nome na esquerda, sino na mesma linha -->
+        <header class="flex items-center justify-between gap-4 mb-6">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-9 h-9 object-contain shrink-0">
                 <div class="leading-tight">
-                    {{ nome_marca(tema.text_primary, "text-sm") }}
+                    {{ nome_marca(tema.text_primary, "text-base") }}
                     <span class="block text-[10px] {{ tema.text_secondary }}">By Swerdne</span>
                 </div>
             </div>
+            {{ sino_avisos(tema, "w-11 h-11") }}
+        </header>
 
-            <div class="flex items-center justify-between gap-4">
-                <div class="min-w-0">
-                    <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }} truncate">{{ saudacao }}, {{ primeiro_nome }}</h1>
-                    <p class="text-sm {{ tema.text_secondary }} mt-0.5">Bem-vindo de volta ao TyBenson</p>
-                </div>
-                <button type="button" data-ir-painel="avisos" aria-label="Avisos"
-                        class="relative w-11 h-11 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_primary }} flex items-center justify-center shrink-0 transition hover:shadow-md">
-                    {{ icone_sino("w-5 h-5") }}
-                    {% if notificacoes_nao_lidas %}
-                    <span class="absolute top-2 right-2.5 w-2.5 h-2.5 rounded-full bg-orange-500"></span>
-                    {% endif %}
-                </button>
+        <!-- ===================== INICIO ===================== -->
+        <section data-painel="inicio" class="space-y-6">
+
+            <div class="min-w-0">
+                <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }} truncate">{{ saudacao }}, {{ primeiro_nome }}</h1>
+                <p class="text-sm {{ tema.text_secondary }} mt-0.5">Bem-vindo de volta ao TyBenson</p>
             </div>
 
             <!-- Proxima escala -->
@@ -210,7 +205,7 @@
             <form method="POST" action="{{ url_for('main.salvar_foto_perfil') }}" enctype="multipart/form-data"
                   id="form-foto" class="hidden {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
                 {{ foto_form.hidden_tag() }}
-                {{ foto_form.foto(id="input-foto", accept="image/png, image/jpeg", class_="block w-full text-sm " ~ tema.text_secondary) }}
+                {{ foto_form.foto(id="input-foto", accept="image/png, image/jpeg", data_reduzir_imagem="1", class_="block w-full text-sm " ~ tema.text_secondary) }}
                 {% for erro in foto_form.foto.errors %}
                     <p class="text-xs text-red-600">{{ erro }}</p>
                 {% endfor %}
@@ -454,20 +449,11 @@
         var form = document.getElementById('form-foto');
         if (!input) return;
 
-        input.addEventListener('change', function () {
-            var arquivo = input.files && input.files[0];
+        // Escuta "imagem:pronta" (main.js) em vez de "change": a foto ja
+        // chega reduzida pra caber no limite de 2 MB do servidor.
+        input.addEventListener('imagem:pronta', function (evento) {
+            var arquivo = evento.detail;
             if (!arquivo) return;
-
-            if (['image/jpeg', 'image/png'].indexOf(arquivo.type) === -1) {
-                alert('Envie apenas arquivos JPG ou PNG.');
-                input.value = '';
-                return;
-            }
-            if (arquivo.size > 2 * 1024 * 1024) {
-                alert('A imagem deve ter no maximo 2 MB.');
-                input.value = '';
-                return;
-            }
 
             var leitor = new FileReader();
             leitor.onload = function (evento) {
