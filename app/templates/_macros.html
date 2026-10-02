@@ -68,3 +68,9 @@ recarregar (ver main/dashboard.html); nas outras telas sao links normais.
     </div>
 </nav>
 {% endmacro %}
+
+{% macro nome_marca(cor_ty, classes="") %}
+{# "Ty" neutro + "Benson" no gradiente azul->ciano da logo, igual a arte de
+referencia. cor_ty: classe de cor do "Ty" (branco em fundo escuro). #}
+<span class="font-marca font-bold tracking-tight whitespace-nowrap {{ classes }}"><span class="{{ cor_ty }}">Ty</span><span style="background-image:linear-gradient(90deg,#2f76f2 0%,#3fa0ee 50%,#6ae4db 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent">Benson</span></span>
+{% endmacro %}

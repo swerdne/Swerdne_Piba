@@ -31,7 +31,7 @@
 <svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
 {% endmacro %}
 
-{% from "_macros.html" import nav_inferior with context %}
+{% from "_macros.html" import nav_inferior, nome_marca with context %}
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} overflow-hidden">
 
@@ -50,7 +50,7 @@
             <div class="flex items-center gap-2.5">
                 <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-7 h-7 object-contain shrink-0">
                 <div class="leading-tight">
-                    <span class="font-marca text-sm font-bold tracking-tight {{ tema.text_primary }}">TyBenson</span>
+                    {{ nome_marca(tema.text_primary, "text-sm") }}
                     <span class="block text-[10px] {{ tema.text_secondary }}">By Swerdne</span>
                 </div>
             </div>

@@ -19,6 +19,7 @@
 </style>
 {% endblock %}
 
+{% from "_macros.html" import nome_marca %}
 {% block content %}
 <div class="relative min-h-screen flex flex-col items-center justify-center gap-8 px-4 py-10 overflow-hidden bg-gray-950">
     <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-indigo-600/30 blur-3xl auth-blob"></div>
@@ -26,7 +27,7 @@
 
     <div class="relative flex items-center gap-2.5 auth-in auth-in-0">
         <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="h-8 w-8 object-contain">
-        <span class="font-marca text-xl font-bold tracking-tight text-white">TyBenson</span>
+        {{ nome_marca("text-white", "text-xl") }}
     </div>
 
     <div class="relative w-full max-w-md bg-gray-900/80 backdrop-blur border border-gray-800 rounded-2xl shadow-xl shadow-black/40 p-8 auth-in auth-in-1">
