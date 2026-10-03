@@ -3,12 +3,24 @@ UsuarioMinisterio) -- hierarquia Super Admin > Admin da Comunidade > Lider de
 Ministerio > Membro, concedida sempre via convite por e-mail aceito (exceto
 o admin automatico de quem cria a comunidade).
 """
+import pytest
+
 from app.auth.models import User
 from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import UsuarioMinisterio
 from app.convites.models import Convite, STATUS_PENDENTE, STATUS_ACEITO, STATUS_RECUSADO
 from tests.conftest import sessao_isolada
 from tests.test_escala import _criar_comunidade, _criar_ministerio, _criar_escala, _funcao_por_nome
+
+
+@pytest.fixture
+def outro_logged_in_client(outro_logged_in_client):
+    """Este arquivo testa o fluxo de CONVITE (aceitar/recusar). Conta ja
+    existente sem a preferencia de privacidade ligada entra direto, sem
+    convite (ver app/convites/adicao.py e tests/test_adicao_direta.py) --
+    entao aqui o bruno exige aprovacao, pra continuar recebendo convite."""
+    User.objects(email="bruno@example.com").update(set__exige_aprovacao_grupos=True)
+    return outro_logged_in_client
 
 
 def _registrar(cliente, username, email):

@@ -310,6 +310,26 @@
                 </form>
             </div>
 
+            <!-- Privacidade: adicao direta a grupos (ver app/convites/adicao.py) -->
+            <div>
+                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Privacidade</h2>
+                <form method="POST" action="{{ url_for('main.salvar_privacidade') }}"
+                      class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                    {{ privacidade_form.hidden_tag() }}
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        {{ privacidade_form.exige_aprovacao_grupos(class_="mt-1 w-4 h-4 shrink-0") }}
+                        <span>
+                            <span class="block text-sm font-semibold {{ tema.text_primary }}">Exigir minha aprovacao antes de ser adicionado(a) a um grupo</span>
+                            <span class="block text-xs {{ tema.text_secondary }} mt-1">
+                                Desligado: admins e lideres podem te adicionar direto a uma Comunidade ou Ministerio (voce recebe um aviso).
+                                Ligado: voce recebe um convite e decide se aceita. Vale so pra novas adicoes -- voce nao sai de nenhum grupo em que ja esta.
+                            </span>
+                        </span>
+                    </label>
+                    {{ privacidade_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
+                </form>
+            </div>
+
             <!-- Seguranca -->
             <div>
                 <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Seguranca</h2>

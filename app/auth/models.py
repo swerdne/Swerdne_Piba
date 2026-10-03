@@ -33,6 +33,13 @@ class User(UserMixin, SequentialIdDocument):
     # por comunidade).
     tutorial_comunidade_visto = mongoengine.BooleanField(default=False)
 
+    # Preferencia de privacidade (aba Configuracoes): desligada (padrao),
+    # admin/lider adiciona a conta direto numa Comunidade/Ministerio, sem
+    # aceite; ligada, toda adicao vira um Convite que a pessoa aceita ou
+    # recusa. So vale pra adicoes futuras -- nunca remove de grupo nenhum.
+    # Ver app/convites/adicao.py.
+    exige_aprovacao_grupos = mongoengine.BooleanField(default=False)
+
     # Acesso total a plataforma (gerencia qualquer Comunidade/Ministerio,
     # bypassa toda checagem de posse/papel) -- NUNCA atribuivel por convite
     # comum (ver app/convites/CLAUDE.md), so pelo comando

@@ -27,8 +27,8 @@ from app.escala.models import (
     ensaios_do_mes_por_dia,
 )
 from app.convites.forms import ConvidarForm
-from app.convites.models import Convite, criar_ou_reenviar_convite
-from app.convites.routes import _enviar_email_de_convite
+from app.convites.models import Convite
+from app.convites.adicao import adicionar_ou_convidar
 
 
 def _eh_admin_da_comunidade(comunidade, usuario):
@@ -818,13 +818,12 @@ def papeis(comunidade_id):
     form.papel.choices = [(p, p.capitalize()) for p in PAPEIS_COMUNIDADE]
 
     if form.validate_on_submit():
-        convite = criar_ou_reenviar_convite(
-            escopo_tipo="comunidade", escopo_id=comunidade.id,
-            papel=form.papel.data, email=form.email.data,
-            convidado_por_id=current_user.id,
+        # Direto ou por convite, conforme a preferencia de privacidade da
+        # pessoa -- ver app/convites/adicao.py.
+        mensagem, categoria = adicionar_ou_convidar(
+            "comunidade", comunidade, form.papel.data, form.email.data, current_user
         )
-        _enviar_email_de_convite(convite)
-        flash(f"Convite enviado para {convite.email}.", "success")
+        flash(mensagem, categoria)
         return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
 
     papeis_atuais = list(

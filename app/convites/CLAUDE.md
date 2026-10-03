@@ -30,9 +30,18 @@ Hierarquia (do maior pro menor alcance):
 
 ## Fluxo de envio (`comunidade.routes.papeis` / `ministerio.routes.papeis`)
 
-`GET/POST /comunidade/<id>/papeis` e `GET/POST /ministerio/<id>/papeis` — cada um no blueprint dono do escopo (não em `app/convites`, que só cuida do lado de quem recebe). Listam papéis atuais + convites pendentes, e no POST chamam `criar_ou_reenviar_convite(...)` + `_enviar_email_de_convite(convite)` (`app/convites/routes.py`, compartilhada pelos dois — e-mail simples com o link `convites.ver_convite`; falha de envio nunca quebra a request, mesmo padrão de `app/emailing.py` em todo o projeto — o convite já foi salvo, só avisa que o e-mail pode não ter chegado e mostra o link pra compartilhar manualmente).
+`GET/POST /comunidade/<id>/papeis` e `GET/POST /ministerio/<id>/papeis` — cada um no blueprint dono do escopo (não em `app/convites`, que só cuida do lado de quem recebe). Listam papéis atuais + convites pendentes, e no POST chamam `adicao.adicionar_ou_convidar(...)` (ver "Adição direta x convite" abaixo), que, quando cai em convite, usa `criar_ou_reenviar_convite(...)` + `_enviar_email_de_convite(convite)` (`app/convites/routes.py`, compartilhada pelos dois — e-mail simples com o link `convites.ver_convite`; falha de envio nunca quebra a request, mesmo padrão de `app/emailing.py` em todo o projeto — o convite já foi salvo, só avisa que o e-mail pode não ter chegado e mostra o link pra compartilhar manualmente).
 
 `remover_papel`/`cancelar_convite` (em cada blueprint) — um líder (não-admin) só remove papéis que ele mesmo poderia conceder (`membro`), mesma checagem de `papeis_permitidos` do envio — não pode expulsar outro líder.
+
+### Adição direta x convite (`app/convites/adicao.py`)
+
+O formulário de Papéis se chama "Adicionar pessoa" e decide sozinho (`decidir_modo`) entre:
+- **Adição direta** (padrão): e-mail de uma conta existente, que ainda não tem papel nesse escopo e **não** ligou `User.exige_aprovacao_grupos` → cria a linha de papel na hora (no Ministério, também dá `membro` na Comunidade se a pessoa não tinha nada lá, igual ao link de acesso direto), apaga convite pendente antigo pro mesmo escopo+e-mail e avisa a pessoa (sino `tipo="adicionado_grupo"` + e-mail em thread de fundo, pra não segurar a resposta).
+- **Convite** (fluxo de sempre, com aceite): e-mail sem conta (`sem_conta`), conta com a preferência ligada (`exige_aprovacao`), ou conta que já está no escopo com OUTRO papel (`muda_papel` — adição direta nunca troca/rebaixa papel sem aceite).
+- Já está com o mesmo papel → só avisa, não faz nada.
+
+A preferência fica em Configurações (`main.salvar_privacidade`, `POST /perfil/privacidade`), padrão desligada, e só vale pra adições futuras (nunca remove de grupo). Transparência pra quem adiciona: `GET /convite/verificar-adicao` (só admin/líder do escopo, 404 pros demais; devolve só `modo`/`motivo`, nunca dados da conta) alimenta o aviso ao vivo do formulário (`main.js`, `form[data-verificar-adicao-url]`), que troca o botão entre "Adicionar" e "Enviar convite"; o flash final também diz explicitamente se a pessoa entrou ou só foi convidada. Testes: `tests/test_adicao_direta.py` (e `tests/test_papeis.py` sobrescreve `outro_logged_in_client` com a preferência ligada, pra continuar exercitando o fluxo de convite).
 
 ## Fluxo de recebimento (`app/convites/routes.py`)
 

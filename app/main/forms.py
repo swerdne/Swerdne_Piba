@@ -1,7 +1,7 @@
 """Formularios Flask-WTF do modulo main."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
-from wtforms import StringField, TextAreaField, SubmitField, RadioField, PasswordField
+from wtforms import BooleanField, StringField, TextAreaField, SubmitField, RadioField, PasswordField
 from wtforms.validators import DataRequired, Length, EqualTo
 
 from app.main.themes import THEMES
@@ -32,6 +32,11 @@ class TemaForm(FlaskForm):
         validators=[DataRequired()],
     )
     submit = SubmitField("Salvar tema")
+
+
+class PrivacidadeForm(FlaskForm):
+    exige_aprovacao_grupos = BooleanField("Exigir minha aprovacao antes de ser adicionado(a) a um grupo")
+    submit = SubmitField("Salvar privacidade")
 
 
 class NomeForm(FlaskForm):

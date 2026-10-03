@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from app.extensions import db, limiter
 from app.main import bp
-from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm
+from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm, PrivacidadeForm
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
 from app.imagens import ImagemArmazenada, salvar_imagem, remover_imagem
@@ -34,6 +34,7 @@ _ICONE_POR_TIPO = {
     "cancelamento": "fa-ban",
     "ensaio_cancelado": "fa-calendar-xmark",
     "novo_membro": "fa-user-plus",
+    "adicionado_grupo": "fa-people-group",
 }
 _ICONE_PADRAO = "fa-bell"
 
@@ -240,6 +241,7 @@ def dashboard():
     tema_form = TemaForm(tema=current_user.theme)
     senha_form = TrocarSenhaForm()
     nome_form = NomeForm(nome=nome_completo)
+    privacidade_form = PrivacidadeForm(exige_aprovacao_grupos=current_user.exige_aprovacao_grupos)
     acao_form = AcaoForm()
 
     notificacoes = list(
@@ -288,6 +290,7 @@ def dashboard():
         senha_form=senha_form,
         tem_senha=bool(current_user.password_hash),
         nome_form=nome_form,
+        privacidade_form=privacidade_form,
         acao_form=acao_form,
         notificacoes=notificacoes,
         notificacoes_nao_lidas=notificacoes_nao_lidas,
@@ -355,6 +358,28 @@ def salvar_tema():
     return redirect(url_for("main.dashboard") + "#config")
 
 
+@bp.route("/perfil/privacidade", methods=["POST"])
+@login_required
+def salvar_privacidade():
+    """Liga/desliga User.exige_aprovacao_grupos -- so muda como FUTURAS
+    adicoes a Comunidade/Ministerio funcionam (direto ou por convite, ver
+    app/convites/adicao.py); nunca tira a pessoa de grupo nenhum."""
+    form = PrivacidadeForm()
+
+    if not form.validate_on_submit():
+        flash("Nao foi possivel salvar a preferencia de privacidade.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    current_user.exige_aprovacao_grupos = bool(form.exige_aprovacao_grupos.data)
+    current_user.save()
+
+    if current_user.exige_aprovacao_grupos:
+        flash("Pronto! A partir de agora, voce so entra em grupos depois de aceitar o convite.", "success")
+    else:
+        flash("Pronto! Admins e lideres podem adicionar voce direto aos grupos.", "success")
+    return redirect(url_for("main.dashboard") + "#config")
+
+
 @bp.route("/perfil/senha", methods=["POST"])
 @login_required
 @limiter.limit("10 per hour", methods=["POST"])
@@ -412,6 +437,7 @@ def baixar_dados():
         "usuario": current_user.username,
         "foto_perfil": current_user.foto_perfil,
         "tema": current_user.theme,
+        "exige_aprovacao_para_grupos": bool(current_user.exige_aprovacao_grupos),
         "login_google_vinculado": bool(current_user.google_id),
         "login_senha_vinculado": bool(current_user.password_hash),
     }

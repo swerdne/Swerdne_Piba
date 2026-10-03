@@ -70,8 +70,8 @@
         </div>
 
         <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Convidar por e-mail</h2>
-            <form method="POST" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Adicionar pessoa</h2>
+            <form method="POST" data-verificar-adicao-url="{{ url_for('convites.verificar_adicao', escopo_tipo='comunidade', escopo_id=comunidade.id) }}" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
                 {{ form.hidden_tag() }}
                 <div class="grid sm:grid-cols-[1fr_auto] gap-3">
                     <div>
@@ -85,8 +85,10 @@
                     </div>
                 </div>
                 <p class="text-xs {{ tema.text_secondary }}">
-                    Nao precisa ja ter conta na plataforma -- o convite fica pendente ate ser aceito.
+                    Quem ja tem conta entra na hora. Se a pessoa ainda nao tem conta, ou ativou
+                    "exigir minha aprovacao" nas configuracoes dela, vai um convite por e-mail e ela so entra depois de aceitar.
                 </p>
+                <p data-aviso-adicao class="hidden text-xs font-semibold"></p>
                 {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-4 py-2 rounded-full transition") }}
             </form>
         </div>

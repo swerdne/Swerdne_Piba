@@ -6,7 +6,7 @@ ver app/convites/CLAUDE.md pro fluxo completo.
 """
 from datetime import datetime, timezone
 
-from flask import render_template, redirect, url_for, flash, session
+from flask import abort, jsonify, render_template, redirect, request, url_for, flash, session
 from flask_login import login_required, current_user
 
 from app.db_utils import primeiro_ou_404
@@ -38,6 +38,41 @@ def _enviar_email_de_convite(convite):
             f"Compartilhe o link manualmente: {link}",
             "danger",
         )
+
+
+@bp.route("/verificar-adicao")
+@login_required
+def verificar_adicao():
+    """Pre-visualizacao do formulario de Papeis (comunidade/ministerio): diz,
+    ANTES de enviar, se a pessoa vai entrar na hora ou receber um convite
+    (ver app/convites/adicao.py) -- pra quem adiciona nao achar que alguem
+    ja entrou quando so foi convidado. So pra quem pode adicionar naquele
+    escopo (404 pros demais, mesmo padrao do projeto); devolve so o modo,
+    nunca dados da conta."""
+    from app.comunidade.models import Comunidade
+    from app.comunidade.routes import _eh_admin_da_comunidade
+    from app.ministerio.models import Ministerio
+    from app.ministerio.routes import _eh_lider_do_ministerio
+    from app.convites.adicao import decidir_modo
+
+    escopo_tipo = request.args.get("escopo_tipo")
+    escopo_id = request.args.get("escopo_id", type=int)
+    if escopo_tipo == "comunidade":
+        escopo = primeiro_ou_404(Comunidade.objects(id=escopo_id))
+        pode = _eh_admin_da_comunidade(escopo, current_user)
+    elif escopo_tipo == "ministerio":
+        escopo = primeiro_ou_404(Ministerio.objects(id=escopo_id))
+        pode = _eh_lider_do_ministerio(escopo, current_user)
+    else:
+        abort(404)
+    if not pode:
+        abort(404)
+
+    email = (request.args.get("email") or "").strip()
+    if "@" not in email:
+        return jsonify({"modo": None})
+    modo, _usuario, motivo = decidir_modo(escopo_tipo, escopo, email, request.args.get("papel"))
+    return jsonify({"modo": modo, "motivo": motivo})
 
 
 @bp.route("/<token>")

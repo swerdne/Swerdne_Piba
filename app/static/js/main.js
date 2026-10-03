@@ -575,3 +575,62 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
         });
     });
 })();
+
+/* Formulario "Adicionar pessoa" (Papeis da Comunidade/Ministerio): avisa,
+   ANTES de enviar, se a pessoa entra na hora ou recebe um convite -- ver
+   app/convites/adicao.py e convites.routes.verificar_adicao. O botao muda
+   de texto junto, pra ninguem achar que alguem ja entrou quando so foi
+   convidado. Sem resposta (offline/erro), o form continua funcionando
+   normal; a mensagem final vem do servidor de qualquer jeito. */
+(function () {
+    var MENSAGENS = {
+        adicionar: ['A pessoa ja tem conta e vai entrar na hora.', 'text-green-500', 'Adicionar'],
+        ja_faz_parte: ['Essa pessoa ja faz parte com esse papel.', 'text-amber-500', 'Adicionar'],
+        sem_conta: ['A pessoa ainda nao tem conta: vai um convite por e-mail, e ela so entra depois de se cadastrar e aceitar.', 'text-amber-500', 'Enviar convite'],
+        exige_aprovacao: ['Essa pessoa exige aprovacao pra entrar em grupos: vai um convite, e ela so entra depois de aceitar.', 'text-amber-500', 'Enviar convite'],
+        muda_papel: ['Essa pessoa ja faz parte com outro papel: vai um convite, e a mudanca so vale depois que ela aceitar.', 'text-amber-500', 'Enviar convite']
+    };
+
+    document.querySelectorAll('form[data-verificar-adicao-url]').forEach(function (form) {
+        var email = form.querySelector('input[name="email"]');
+        var papel = form.querySelector('select[name="papel"]');
+        var aviso = form.querySelector('[data-aviso-adicao]');
+        var botao = form.querySelector('[type="submit"]');
+        if (!email || !aviso) return;
+        var espera = null;
+        var ultimaConsulta = 0;
+
+        function limpar() {
+            aviso.classList.add('hidden');
+            if (botao) botao.value = 'Adicionar';
+        }
+
+        function verificar() {
+            var valor = email.value.trim();
+            if (valor.indexOf('@') < 1) { limpar(); return; }
+            var consulta = ++ultimaConsulta;
+            var url = form.getAttribute('data-verificar-adicao-url') +
+                '&email=' + encodeURIComponent(valor) +
+                '&papel=' + encodeURIComponent(papel ? papel.value : '');
+            fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (dados) {
+                    if (consulta !== ultimaConsulta) return; // resposta velha
+                    var chave = dados && (dados.modo === 'convite' ? dados.motivo : dados.modo);
+                    var info = chave && MENSAGENS[chave];
+                    if (!info) { limpar(); return; }
+                    aviso.textContent = info[0];
+                    aviso.classList.remove('hidden', 'text-green-500', 'text-amber-500');
+                    aviso.classList.add(info[1]);
+                    if (botao) botao.value = info[2];
+                })
+                .catch(limpar);
+        }
+
+        email.addEventListener('input', function () {
+            clearTimeout(espera);
+            espera = setTimeout(verificar, 400);
+        });
+        if (papel) papel.addEventListener('change', verificar);
+    });
+})();

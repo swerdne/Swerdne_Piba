@@ -10,7 +10,7 @@ class ConvidarForm(FlaskForm):
     ministerio.routes._papeis_convidaveis_no_ministerio)."""
     email = StringField("E-mail", validators=[DataRequired(), Email(), Length(max=120)])
     papel = SelectField("Papel", choices=[], validators=[DataRequired()])
-    submit = SubmitField("Enviar convite")
+    submit = SubmitField("Adicionar")
 
 
 class AcaoForm(FlaskForm):
