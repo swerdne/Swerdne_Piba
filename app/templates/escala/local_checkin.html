@@ -9,7 +9,6 @@
 <style>
     #local-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
     #mapa-leaflet { height: 400px; border-radius: 1rem; }
-    .leaflet-control-attribution { display: none; }
 </style>
 {% endblock %}
 
@@ -87,7 +86,7 @@
             <div data-mapa class="space-y-2">
                 <p class="text-sm font-semibold {{ tema.text_primary }}">2. Toque no mapa para marcar o local</p>
                 <div id="mapa-leaflet" class="rounded-2xl border {{ tema.card_border }} bg-gray-100"></div>
-                <p class="text-xs {{ tema.text_secondary }}">Aproxime o mapa, toque no ponto exato da igreja e, se precisar, arraste o marcador. O círculo mostra até onde o check-in é aceito.</p>
+                <p class="text-xs {{ tema.text_secondary }}">Aproxime até ver as ruas, toque no ponto exato da igreja e, se precisar, arraste o marcador. O círculo mostra até onde o check-in é aceito.</p>
             </div>
 
             <div>
@@ -129,6 +128,7 @@
     var mapaDiv = document.getElementById('mapa-leaflet');
     var urlBusca = {{ url_for('main.buscar_local') | tojson }};
 
+    var ZOOM_PRA_MARCAR = 16;
     var mapaLeaflet = null;
     var marcador = null;
     var circulo = null;
@@ -147,21 +147,40 @@
 
         mapaLeaflet = L.map(mapaDiv).setView(temPonto ? [latVal, lngVal] : [-14.235, -51.925], temPonto ? 18 : 4);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '',
+            attribution: '&copy; OpenStreetMap',
             maxZoom: 19
         }).addTo(mapaLeaflet);
+        mapaLeaflet.attributionControl.setPrefix(false);
 
         if (temPonto) adicionarMarcador(latVal, lngVal);
+        else centralizarOndeEstou();
 
         mapaLeaflet.on('click', function (e) {
-            adicionarMarcador(e.latlng.lat, e.latlng.lng);
-            avisar('Localização marcada. Confira e salve.');
+            if (mapaLeaflet.getZoom() < ZOOM_PRA_MARCAR) {
+                mapaLeaflet.setView(e.latlng, Math.min(mapaLeaflet.getZoom() + 4, ZOOM_PRA_MARCAR));
+                avisar('Continue aproximando até ver as ruas e toque no ponto exato da igreja.');
+                return;
+            }
+            adicionarMarcador(e.latlng.lat, e.latlng.lng, true);
+            avisar('Local marcado. Confira e salve.');
         });
 
         setTimeout(function () { mapaLeaflet.invalidateSize(); }, 100);
     }
 
-    function adicionarMarcador(latitude, longitude) {
+    // Sem local salvo, abre onde a pessoa esta (so centraliza, nao marca).
+    function centralizarOndeEstou() {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            if (marcador) return;
+            var aqui = [pos.coords.latitude, pos.coords.longitude];
+            L.circleMarker(aqui, { radius: 7, color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1 })
+                .addTo(mapaLeaflet).bindTooltip('Você está aqui');
+            mapaLeaflet.setView(aqui, 17);
+        }, function () {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    }
+
+    function adicionarMarcador(latitude, longitude, manterVisao) {
         if (marcador) mapaLeaflet.removeLayer(marcador);
         if (circulo) mapaLeaflet.removeLayer(circulo);
 
@@ -186,7 +205,7 @@
             weight: 2
         }).addTo(mapaLeaflet);
 
-        mapaLeaflet.setView([latitude, longitude], 18);
+        if (!manterVisao) mapaLeaflet.setView([latitude, longitude], 18);
     }
 
     function atualizarCirculo() {
