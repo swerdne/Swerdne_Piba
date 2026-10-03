@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    [data-lista-retratil] > summary { list-style: none; }
+    [data-lista-retratil] > summary::-webkit-details-marker { display: none; }
+    [data-lista-retratil] .seta-retratil { transition: transform .2s; }
+    [data-lista-retratil][open] .seta-retratil { transform: rotate(180deg); }
 </style>
 {% endblock %}
 
@@ -110,8 +114,11 @@
             </form>
         </div>
 
-        <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Diretorio ({{ diretorio|length }})</h2>
+        <details open data-lista-retratil="diretorio">
+            <summary class="flex items-center justify-between gap-3 cursor-pointer select-none mb-3">
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Diretório ({{ diretorio|length }})</h2>
+                <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-retratil"></i>
+            </summary>
 
             {% if not diretorio %}
             <div class="text-center py-12">
@@ -147,12 +154,13 @@
                 </div>
                 {% endfor %}
             </div>
-        </div>
+        </details>
 
-        <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
-                Contas vinculadas ({{ contas_vinculadas|length }})
-            </h2>
+        <details open data-lista-retratil="contas">
+            <summary class="flex items-center justify-between gap-3 cursor-pointer select-none mb-3">
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Contas vinculadas ({{ contas_vinculadas|length }})</h2>
+                <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-retratil"></i>
+            </summary>
             <p class="text-xs {{ tema.text_secondary }} mb-3">
                 Quem entrou pelo link de convite ou aceitou um convite por e-mail -- diferente do diretorio
                 acima, que e a lista usada pra escalar (pode ter gente sem conta na plataforma).
@@ -187,10 +195,19 @@
                 </div>
                 {% endfor %}
             </div>
-        </div>
+        </details>
 
     </main>
     {{ nav_inferior(tema, 'comunidades') }}
     </div>
 </div>
+<script>
+document.querySelectorAll('[data-lista-retratil]').forEach(function (secao) {
+    var chave = 'membros.lista.' + secao.dataset.listaRetratil;
+    try { if (localStorage.getItem(chave) === 'fechada') secao.open = false; } catch (e) {}
+    secao.addEventListener('toggle', function () {
+        try { localStorage.setItem(chave, secao.open ? 'aberta' : 'fechada'); } catch (e) {}
+    });
+});
+</script>
 {% endblock %}
