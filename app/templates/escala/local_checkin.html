@@ -84,10 +84,10 @@
                 <p data-aviso class="hidden text-xs"></p>
             </div>
 
-            <div data-mapa class="{{ '' if form.latitude.data else 'hidden' }} space-y-2">
-                <p class="text-sm font-semibold {{ tema.text_primary }}">2. Marque o local no mapa</p>
+            <div data-mapa class="space-y-2">
+                <p class="text-sm font-semibold {{ tema.text_primary }}">2. Toque no mapa para marcar o local</p>
                 <div id="mapa-leaflet" class="rounded-2xl border {{ tema.card_border }} bg-gray-100"></div>
-                <p class="text-xs {{ tema.text_secondary }}">Clique no mapa para marcar a localização ou arraste o marcador. O raio em azul mostra a zona de check-in.</p>
+                <p class="text-xs {{ tema.text_secondary }}">Aproxime o mapa, toque no ponto exato da igreja e, se precisar, arraste o marcador. O círculo mostra até onde o check-in é aceito.</p>
             </div>
 
             <div>
@@ -126,7 +126,6 @@
     var busca = form.querySelector('[data-busca-endereco]');
     var resultados = form.querySelector('[data-resultados]');
     var aviso = form.querySelector('[data-aviso]');
-    var mapa = form.querySelector('[data-mapa]');
     var mapaDiv = document.getElementById('mapa-leaflet');
     var urlBusca = {{ url_for('main.buscar_local') | tojson }};
 
@@ -144,17 +143,15 @@
         if (mapaLeaflet) return;
         var latVal = parseFloat(lat.value);
         var lngVal = parseFloat(lng.value);
-        var coordInicial = (isNaN(latVal) || isNaN(lngVal)) ? [-15.8267, -48.0516] : [latVal, lngVal];
+        var temPonto = !isNaN(latVal) && !isNaN(lngVal);
 
-        mapaLeaflet = L.map(mapaDiv).setView(coordInicial, 18);
+        mapaLeaflet = L.map(mapaDiv).setView(temPonto ? [latVal, lngVal] : [-14.235, -51.925], temPonto ? 18 : 4);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '',
             maxZoom: 19
         }).addTo(mapaLeaflet);
 
-        if (!isNaN(latVal) && !isNaN(lngVal)) {
-            adicionarMarcador(latVal, lngVal);
-        }
+        if (temPonto) adicionarMarcador(latVal, lngVal);
 
         mapaLeaflet.on('click', function (e) {
             adicionarMarcador(e.latlng.lat, e.latlng.lng);
@@ -200,18 +197,9 @@
         circulo.setLatLng([pos.lat, pos.lng]);
     }
 
-    function mostrarMapa() {
-        if (mapa.classList.contains('hidden') === false) {
-            setTimeout(inicializarMapa, 100);
-        }
-    }
-
     function escolher(latitude, longitude, rotulo) {
-        lat.value = latitude.toFixed(6);
-        lng.value = longitude.toFixed(6);
         if (rotulo) endereco.value = rotulo;
-        mapa.classList.remove('hidden');
-        mostrarMapa();
+        adicionarMarcador(latitude, longitude);
     }
 
     function buscar() {
@@ -264,9 +252,9 @@
         }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
     });
 
-    raio.addEventListener('change', atualizarCirculo);
+    raio.addEventListener('input', atualizarCirculo);
 
-    mostrarMapa();
+    inicializarMapa();
 })();
 </script>
 {% endblock %}
