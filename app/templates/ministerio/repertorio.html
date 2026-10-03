@@ -280,6 +280,33 @@
                 {% endif %}
             </div>
         </section>
+
+        {% if pode_gerenciar and musicas %}
+        <!-- Zona de perigo: apagar o banco inteiro. Duas confirmacoes: a frase
+             digitada (conferida tambem no servidor) + confirm() do navegador. -->
+        <details class="{{ tema.card_bg }} border border-red-500/30 rounded-3xl shadow-sm overflow-hidden">
+            <summary class="px-4 py-3 text-xs font-semibold text-red-500 cursor-pointer select-none">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>Zona de perigo
+            </summary>
+            <form method="POST" action="{{ url_for('ministerio.apagar_todas_musicas', **banco.args) }}"
+                  data-apagar-todas data-total="{{ musicas|length }}" class="px-4 pb-4 space-y-3">
+                {{ acao_form.hidden_tag() }}
+                <p class="text-sm {{ tema.text_primary }}">
+                    Apagar <span class="font-bold">todas as {{ musicas|length }} musica(s)</span> do {{ banco.titulo|lower }}.
+                    Nao da pra desfazer. Escalas e repertorios que usavam alguma ficam com ela como musica avulsa.
+                </p>
+                <label class="block text-xs {{ tema.text_secondary }}">
+                    Pra confirmar, digite <span class="font-bold text-red-500">{{ frase_apagar_todas }}</span>:
+                    <input type="text" name="confirmacao" autocomplete="off" data-frase="{{ frase_apagar_todas }}"
+                           class="mt-1 w-full {{ CAMPO }}">
+                </label>
+                <button type="submit" disabled data-botao-apagar-todas
+                        class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-trash mr-1"></i>Apagar todas as musicas
+                </button>
+            </form>
+        </details>
+        {% endif %}
     </main>
 
     {% if ministerios_que_lidera %}
@@ -449,6 +476,24 @@
                             resultados.classList.remove('hidden');
                         });
                 }, 300);
+            });
+        }
+
+        // Apagar todas: so libera o botao com a frase certa (1a confirmacao) e
+        // ainda pergunta no navegador antes de enviar (2a confirmacao).
+        var formApagar = document.querySelector('[data-apagar-todas]');
+        if (formApagar) {
+            var campoFrase = formApagar.querySelector('[data-frase]');
+            var botaoApagar = formApagar.querySelector('[data-botao-apagar-todas]');
+            var normalizar = function (t) { return t.trim().replace(/\s+/g, ' ').toUpperCase(); };
+            campoFrase.addEventListener('input', function () {
+                botaoApagar.disabled = normalizar(campoFrase.value) !== campoFrase.getAttribute('data-frase');
+            });
+            formApagar.addEventListener('submit', function (e) {
+                var total = formApagar.getAttribute('data-total');
+                if (!confirm('Tem certeza? Isso apaga TODAS as ' + total + ' musica(s) deste banco e nao da pra desfazer.')) {
+                    e.preventDefault();
+                }
             });
         }
 

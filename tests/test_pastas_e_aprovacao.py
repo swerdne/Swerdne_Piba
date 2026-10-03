@@ -355,3 +355,61 @@ def test_so_quem_gerencia_a_escala_usa_repertorio_pronto(logged_in_client, outro
         resposta = outro_logged_in_client.post(f"/escala/{escala_id}/repertorio/usar-repertorio", data={"repertorio_id": pasta_id})
         assert resposta.status_code == 404
         assert ItemRepertorio.objects(escala_id=escala_id).count() == 0
+
+
+# --- Apagar todas as musicas de um banco (duas confirmacoes) ------------------------
+
+def test_apagar_todas_exige_a_frase_e_apaga_so_aquele_banco(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        cid = comunidade.id
+        for nome in ("Oceanos", "Grande"):
+            logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": nome, "tom": "D"})
+        logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/nova", data={"nome": "Local do Louvor"})
+        oceanos = Musica.objects(nome="Oceanos").first()
+
+        html = logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
+        assert "Apagar todas as musicas" in html and "APAGAR TODAS" in html
+
+        # Sem a frase (ou com ela errada): nada acontece.
+        for frase in ("", "apagar", "APAGAR TUDO"):
+            logged_in_client.post(f"/ministerio/musicas/{cid}/apagar-todas", data={"confirmacao": frase})
+        assert Musica.objects(comunidade_id=cid).count() == 3
+
+        # Uma escala e um repertorio usando a musica nao quebram.
+        escala = _criar_escala(logged_in_client, louvor.id, "Culto")
+        logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
+                              data={"banco-musica_id": oceanos.id, "banco-momento": "", "banco-tom": "E"})
+        _criar_pasta(logged_in_client, cid, "Manha", [oceanos], ministerio_id=louvor.id)
+
+        logged_in_client.post(f"/ministerio/musicas/{cid}/apagar-todas", data={"confirmacao": "  apagar   todas "})
+        assert [m.nome for m in Musica.objects(comunidade_id=cid)] == ["Local do Louvor"]  # banco local intacto
+        item = ItemRepertorio.objects(escala_id=escala.id).first()
+        assert (item.nome_musica, item.tom, item.musica_id) == ("Oceanos", "E", None)
+        pasta = PastaMusicas.objects(nome="Manha").first()
+        assert (pasta.itens[0].nome, pasta.itens[0].musica_id) == ("Oceanos", None)
+        assert logged_in_client.get(f"/ministerio/pastas/{pasta.id}/cifras").status_code == 200
+
+
+def test_apagar_todas_do_banco_local_nao_mexe_no_oficial(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, kids = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oficial"})
+        logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/nova", data={"nome": "Do Louvor"})
+        logged_in_client.post(f"/ministerio/{kids.id}/repertorio/nova", data={"nome": "Do Kids"})
+        logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/apagar-todas", data={"confirmacao": "APAGAR TODAS"})
+        assert sorted(m.nome for m in Musica.objects()) == ["Do Kids", "Oficial"]
+
+
+def test_so_quem_edita_o_banco_apaga_todas(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        cid, lid = comunidade.id, louvor.id
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oficial"})
+        _bruno_lider(lid)
+    with sessao_isolada(app):
+        # Lider ve o banco oficial mas nao tem o botao nem consegue apagar.
+        assert "Apagar todas as musicas" not in outro_logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
+        resposta = outro_logged_in_client.post(f"/ministerio/musicas/{cid}/apagar-todas", data={"confirmacao": "APAGAR TODAS"})
+        assert resposta.status_code == 404
+        assert Musica.objects(nome="Oficial").count() == 1

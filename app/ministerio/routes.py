@@ -915,6 +915,7 @@ def _render_banco(banco):
         ministerios_que_lidera=_ministerios_que_lidera(banco.comunidade),
         repertorios_escalas=_repertorios_das_escalas(banco.comunidade),
         voltar_url=voltar,
+        frase_apagar_todas=FRASE_APAGAR_TODAS,
         form=MusicaForm(),
         acao_form=AcaoForm(),
     )
@@ -1305,6 +1306,45 @@ def excluir_musica(musica_id):
     ItemRepertorio.objects(musica_id=musica.id).update(set__musica_id=None)
     musica.delete()
     flash(f'"{nome}" removida do {banco.titulo.lower()}.', "success")
+    return redirect(_url_do_banco(banco))
+
+
+FRASE_APAGAR_TODAS = "APAGAR TODAS"
+
+
+def _soltar_musicas_apagadas(ids, comunidade_id):
+    """Escalas e repertorios que usavam musicas apagadas nao quebram: o item
+    vira avulso (fica com nome/tom/momento, so perde o vinculo com o banco)."""
+    from app.escala.models import PastaMusicas
+
+    ItemRepertorio.objects(musica_id__in=ids).update(set__musica_id=None)
+    for pasta in PastaMusicas.objects(comunidade_id=comunidade_id, itens__musica_id__in=ids):
+        for item in pasta.itens:
+            if item.musica_id in ids:
+                item.musica_id = None
+        pasta.save()
+
+
+@bp.route("/musicas/<int:comunidade_id>/apagar-todas", methods=["POST"])
+@bp.route("/<int:ministerio_id>/repertorio/apagar-todas", methods=["POST"])
+@login_required
+def apagar_todas_musicas(comunidade_id=None, ministerio_id=None):
+    """Apaga TODAS as musicas de um banco (oficial ou local). Duas
+    confirmacoes: a tela pede um confirm() do navegador E a frase
+    FRASE_APAGAR_TODAS digitada -- conferida de novo aqui, porque o confirm
+    do navegador nao protege contra POST montado a mao."""
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
+    frase = " ".join((request.form.get("confirmacao") or "").split()).upper()
+    if not AcaoForm().validate_on_submit() or frase != FRASE_APAGAR_TODAS:
+        flash(f'Nada foi apagado: pra confirmar, digite exatamente "{FRASE_APAGAR_TODAS}".', "danger")
+        return redirect(_url_do_banco(banco))
+
+    ids = [m.id for m in banco.musicas().only("id")]
+    if ids:
+        _soltar_musicas_apagadas(ids, banco.comunidade.id)
+        Musica.objects(id__in=ids).delete()
+    flash(f"{len(ids)} musica(s) apagada(s) do {banco.titulo.lower()}. "
+          "Escalas e repertorios que usavam alguma ficaram com ela como musica avulsa.", "success")
     return redirect(_url_do_banco(banco))
 
 
