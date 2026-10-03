@@ -162,6 +162,36 @@
                 Pesquise ou toque num tema pra ver as musicas{% if ministerios_que_lidera %} -- e marque as que vao num repertorio (ex: manha, noite){% endif %}.
             </p>
 
+            {% if ministerios_que_lidera %}
+            <!-- Criar repertorio com as marcadas: aparece quando ha musica marcada, na
+                 largura da lista e preso no topo enquanto rola (nao flutua no rodape). -->
+            <form method="POST" action="{{ url_for('ministerio.nova_pasta', comunidade_id=comunidade.id) }}"
+                  data-barra-pasta class="hidden sticky top-2 z-20 {{ tema.card_bg }} border-2 {{ tema.accent_border }} rounded-2xl shadow-lg p-3 space-y-2.5">
+                {{ acao_form.hidden_tag() }}
+                <input type="hidden" name="voltar" value="{{ request.path }}">
+                <div data-ids-selecionados></div>
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-list-ol mr-1 {{ tema.accent_text }}"></i><span data-contagem></span></p>
+                    <div class="flex items-center gap-3 text-xs font-semibold">
+                        <button type="button" data-ver-marcadas-barra class="{{ tema.accent_text }} hover:underline">Ver marcadas</button>
+                        <button type="button" data-limpar-selecao class="{{ tema.text_secondary }} hover:underline">Limpar</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-[11rem_1fr] gap-2">
+                    <select name="ministerio_id" aria-label="Ministerio do repertorio" class="w-full {{ CAMPO }}">
+                        {% for m in ministerios_que_lidera %}
+                        <option value="{{ m.id }}" {{ 'selected' if banco.ministerio and banco.ministerio.id == m.id }}>{{ m.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="nome" required maxlength="120" placeholder="Nome do repertorio (ex: Manha, Noite)"
+                           class="w-full min-w-0 {{ CAMPO }}">
+                </div>
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-plus mr-1"></i>Criar repertorio com as marcadas
+                </button>
+            </form>
+            {% endif %}
+
             <div data-lista-musicas class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
                 {% for m in musicas %}
                 <div data-musica-item
@@ -201,6 +231,20 @@
                 {% endfor %}
             </div>
             <p data-busca-vazia class="hidden text-center text-sm {{ tema.text_secondary }} py-6">Nenhuma musica encontrada.</p>
+            <!-- Mostra a lista aos poucos (ver PAGINA no JS) -->
+            <div data-paginacao class="hidden flex items-center justify-between gap-3">
+                <span data-paginacao-texto class="text-xs {{ tema.text_secondary }}"></span>
+                <div class="flex gap-2">
+                    <button type="button" data-ver-menos
+                            class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_secondary }} transition disabled:opacity-40">
+                        <i class="fa-solid fa-chevron-up mr-1"></i>Ver menos
+                    </button>
+                    <button type="button" data-ver-mais
+                            class="text-xs font-semibold rounded-full px-3 py-1.5 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white transition disabled:opacity-40">
+                        <i class="fa-solid fa-chevron-down mr-1"></i>Ver mais
+                    </button>
+                </div>
+            </div>
             {% else %}
             <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
                 <i class="fa-solid fa-music text-3xl {{ tema.text_secondary }}"></i>
@@ -339,33 +383,6 @@
         {% endif %}
     </main>
 
-    {% if ministerios_que_lidera %}
-    <!-- Barra de selecao (modo Lista): cria o repertorio de um ministerio com as musicas marcadas -->
-    <form method="POST" action="{{ url_for('ministerio.nova_pasta', comunidade_id=comunidade.id) }}"
-          data-barra-pasta class="hidden fixed bottom-0 inset-x-0 z-20 px-4 pb-4">
-        {{ acao_form.hidden_tag() }}
-        <input type="hidden" name="voltar" value="{{ request.path }}">
-        <div data-ids-selecionados></div>
-        <div class="max-w-xl lg:max-w-3xl mx-auto {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-lg p-3 space-y-2">
-            <div class="flex items-center justify-between gap-2">
-                <span data-contagem class="text-xs font-semibold {{ tema.text_secondary }}"></span>
-                <button type="button" data-limpar-selecao class="text-xs font-semibold {{ tema.text_secondary }} hover:underline">Limpar</button>
-            </div>
-            <div class="flex flex-col sm:flex-row gap-2">
-                <select name="ministerio_id" aria-label="Ministerio" class="sm:w-44 {{ CAMPO }}">
-                    {% for m in ministerios_que_lidera %}
-                    <option value="{{ m.id }}" {{ 'selected' if banco.ministerio and banco.ministerio.id == m.id }}>{{ m.nome }}</option>
-                    {% endfor %}
-                </select>
-                <input type="text" name="nome" required maxlength="120" placeholder="Nome do repertorio (ex: Manha, Noite)"
-                       class="flex-1 min-w-0 {{ CAMPO }}">
-                <button type="submit" class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-4 py-2.5 rounded-full transition">
-                    <i class="fa-solid fa-plus mr-1"></i>Criar repertorio
-                </button>
-            </div>
-        </div>
-    </form>
-    {% endif %}
 
     {{ nav_inferior(tema, 'comunidades') }}
     </div>
@@ -373,14 +390,16 @@
 
 <script>
     (function () {
-        // Alternar Lista / Repertorios -- lembrado no navegador; #repertorios na URL abre direto.
-        var botoes = document.querySelectorAll('[data-modo]');
+        var PAGINA = 15;  // musicas mostradas por vez ("Ver mais" mostra mais 15)
+
+        // ---- Alternar Lista / Repertorios (lembrado; #repertorios na URL abre direto)
+        var botoesModo = document.querySelectorAll('[data-modo]');
         var conteudos = document.querySelectorAll('[data-modo-conteudo]');
         var ATIVO = ['{{ tema.accent_bg }}', 'text-white'];
         var INATIVO = ['{{ tema.text_secondary }}'];
-        function mostrar(modo) {
+        function mostrarModo(modo) {
             conteudos.forEach(function (c) { c.classList.toggle('hidden', c.getAttribute('data-modo-conteudo') !== modo); });
-            botoes.forEach(function (b) {
+            botoesModo.forEach(function (b) {
                 var ativo = b.getAttribute('data-modo') === modo;
                 ATIVO.forEach(function (c) { b.classList.toggle(c, ativo); });
                 INATIVO.forEach(function (c) { b.classList.toggle(c, !ativo); });
@@ -388,31 +407,36 @@
             });
             atualizarSelecao();
         }
-        botoes.forEach(function (b) {
+        botoesModo.forEach(function (b) {
             b.addEventListener('click', function () {
                 var modo = b.getAttribute('data-modo');
                 try { localStorage.setItem('banco.modo', modo); } catch (e) {}
-                mostrar(modo);
+                mostrarModo(modo);
             });
         });
 
-        // Selecao de musicas -> barra "Criar repertorio". Fica guardada na aba
-        // do navegador (sessionStorage) por banco: abrir uma musica sem querer
-        // e voltar nao perde o que ja estava marcado.
+        // ---- Selecao de musicas -> bloco "Criar repertorio". Guardada na aba do
+        // navegador (sessionStorage) por banco: abrir uma musica e voltar nao perde.
         var barra = document.querySelector('[data-barra-pasta]');
         var caixaIds = document.querySelector('[data-ids-selecionados]');
         var contagem = document.querySelector('[data-contagem]');
+        var qtdMarcadas = document.querySelector('[data-qtd-marcadas]');
         var CHAVE_SELECAO = 'selecao-banco:' + window.location.pathname;
+        var caixas = document.querySelectorAll('[data-selecionar]');
         var marcadas = [];  // ordem em que foram marcadas = ordem no repertorio
         try { marcadas = JSON.parse(sessionStorage.getItem(CHAVE_SELECAO) || '[]'); } catch (e) { marcadas = []; }
+        var existentes = Array.prototype.map.call(caixas, function (c) { return c.value; });
+        marcadas = marcadas.filter(function (id) { return existentes.indexOf(id) !== -1; });
+
         function guardarSelecao() {
             try { sessionStorage.setItem(CHAVE_SELECAO, JSON.stringify(marcadas)); } catch (e) {}
         }
         function atualizarSelecao() {
+            if (qtdMarcadas) qtdMarcadas.textContent = marcadas.length;
             if (!barra) return;
             var naLista = !document.querySelector('[data-modo-conteudo="lista"]').classList.contains('hidden');
             barra.classList.toggle('hidden', !marcadas.length || !naLista);
-            contagem.textContent = marcadas.length + ' marcada(s)';
+            contagem.textContent = marcadas.length + (marcadas.length === 1 ? ' musica marcada' : ' musicas marcadas');
             caixaIds.innerHTML = '';
             marcadas.forEach(function (id) {
                 var campo = document.createElement('input');
@@ -422,9 +446,6 @@
                 caixaIds.appendChild(campo);
             });
         }
-        var caixas = document.querySelectorAll('[data-selecionar]');
-        var existentes = Array.prototype.map.call(caixas, function (c) { return c.value; });
-        marcadas = marcadas.filter(function (id) { return existentes.indexOf(id) !== -1; });
         caixas.forEach(function (caixa) {
             caixa.checked = marcadas.indexOf(caixa.value) !== -1;
             caixa.addEventListener('change', function () {
@@ -440,15 +461,120 @@
             caixas.forEach(function (c) { c.checked = false; });
             guardarSelecao();
             atualizarSelecao();
-            if (qtdMarcadas) qtdMarcadas.textContent = 0;
+            if (filtro === 'marcadas') filtro = 'nenhum';
             aplicarFiltro();
         });
-        // Criou o repertorio: a selecao ja foi usada.
         if (barra) barra.addEventListener('submit', function () {
-            try { sessionStorage.removeItem(CHAVE_SELECAO); } catch (e) {}
+            try { sessionStorage.removeItem(CHAVE_SELECAO); } catch (e) {}  // a selecao ja foi usada
         });
 
-        // Enviar um repertorio: o form vai pro repertorio escolhido no select.
+        // ---- Lista: escondida ate pesquisar, tocar num tema ou pedir "Ver todas"/
+        // "Ver marcadas"; e mostrada de PAGINA em PAGINA ("Ver mais"/"Ver menos").
+        var busca = document.querySelector('[data-busca-musica]');
+        var listaMusicas = document.querySelector('[data-lista-musicas]');
+        var dica = document.querySelector('[data-lista-dica]');
+        var vazia = document.querySelector('[data-busca-vazia]');
+        var paginacao = document.querySelector('[data-paginacao]');
+        var paginacaoTexto = document.querySelector('[data-paginacao-texto]');
+        var verMais = document.querySelector('[data-ver-mais]');
+        var verMenos = document.querySelector('[data-ver-menos]');
+        var itens = Array.prototype.slice.call(document.querySelectorAll('[data-musica-item]'));
+        var botaoTodas = document.querySelector('[data-ver-todas]');
+        var botaoMarcadas = document.querySelector('[data-ver-marcadas]');
+        var botaoMarcadasBarra = document.querySelector('[data-ver-marcadas-barra]');
+        var botoesTema = document.querySelectorAll('[data-tema]');
+        var filtro = 'nenhum';  // 'nenhum' | 'todas' | 'marcadas'
+        var limite = PAGINA;
+        var semAcento = function (t) { return (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
+
+        function realcar(botao, ativo) {
+            if (!botao) return;
+            ATIVO.forEach(function (c) { botao.classList.toggle(c, ativo); });
+        }
+
+        function aplicarFiltro() {
+            if (!listaMusicas) return;
+            var termo = semAcento(busca ? busca.value.trim() : '');
+            var mostrarLista = !!termo || filtro !== 'nenhum';
+            var combinam = itens.filter(function (item) {
+                if (termo) return semAcento(item.getAttribute('data-texto')).indexOf(termo) !== -1;
+                if (filtro === 'todas') return true;
+                var caixa = item.querySelector('[data-selecionar]');
+                return filtro === 'marcadas' && caixa && caixa.checked;
+            });
+            itens.forEach(function (item) { item.classList.add('hidden'); });
+            if (mostrarLista) combinam.slice(0, limite).forEach(function (item) { item.classList.remove('hidden'); });
+
+            listaMusicas.classList.toggle('hidden', !mostrarLista || !combinam.length);
+            if (dica) dica.classList.toggle('hidden', mostrarLista);
+            if (vazia) vazia.classList.toggle('hidden', !mostrarLista || combinam.length > 0);
+            if (paginacao) {
+                var paginar = mostrarLista && combinam.length > PAGINA;
+                paginacao.classList.toggle('hidden', !paginar);
+                paginacaoTexto.textContent = 'Mostrando ' + Math.min(limite, combinam.length) + ' de ' + combinam.length;
+                verMais.disabled = limite >= combinam.length;
+                verMenos.disabled = limite <= PAGINA;
+            }
+            realcar(botaoTodas, !termo && filtro === 'todas');
+            realcar(botaoMarcadas, !termo && filtro === 'marcadas');
+            botoesTema.forEach(function (b) { realcar(b, !!termo && semAcento(b.getAttribute('data-tema')) === termo); });
+        }
+
+        function trocarFiltro(novo) {
+            if (busca) busca.value = '';
+            filtro = filtro === novo ? 'nenhum' : novo;
+            limite = PAGINA;
+            aplicarFiltro();
+        }
+        if (busca) busca.addEventListener('input', function () { limite = PAGINA; aplicarFiltro(); });
+        if (botaoTodas) botaoTodas.addEventListener('click', function () { trocarFiltro('todas'); });
+        if (botaoMarcadas) botaoMarcadas.addEventListener('click', function () { trocarFiltro('marcadas'); });
+        if (botaoMarcadasBarra) botaoMarcadasBarra.addEventListener('click', function () {
+            if (busca) busca.value = '';
+            filtro = 'marcadas';
+            limite = PAGINA;
+            aplicarFiltro();
+        });
+        botoesTema.forEach(function (b) {
+            b.addEventListener('click', function () {
+                var tema = b.getAttribute('data-tema');
+                busca.value = semAcento(busca.value.trim()) === semAcento(tema) ? '' : tema;
+                limite = PAGINA;
+                aplicarFiltro();
+            });
+        });
+        if (verMais) verMais.addEventListener('click', function () { limite += PAGINA; aplicarFiltro(); });
+        if (verMenos) verMenos.addEventListener('click', function () {
+            limite = Math.max(PAGINA, limite - PAGINA);
+            aplicarFiltro();
+            if (listaMusicas && listaMusicas.scrollIntoView) listaMusicas.scrollIntoView({ block: 'nearest' });
+        });
+
+        // ---- Apagar todas: a lixeira abre a janela; o botao so libera com a frase
+        // certa (1a confirmacao) e ainda pergunta no navegador (2a confirmacao).
+        var dialogApagar = document.querySelector('[data-dialog-apagar]');
+        var abrirApagar = document.querySelector('[data-abrir-apagar]');
+        if (dialogApagar && abrirApagar) {
+            abrirApagar.addEventListener('click', function () { dialogApagar.showModal(); });
+            dialogApagar.querySelector('[data-fechar-apagar]').addEventListener('click', function () { dialogApagar.close(); });
+        }
+        var formApagar = document.querySelector('[data-apagar-todas]');
+        if (formApagar) {
+            var campoFrase = formApagar.querySelector('[data-frase]');
+            var botaoApagar = formApagar.querySelector('[data-botao-apagar-todas]');
+            var normalizar = function (t) { return t.trim().replace(/\s+/g, ' ').toUpperCase(); };
+            campoFrase.addEventListener('input', function () {
+                botaoApagar.disabled = normalizar(campoFrase.value) !== campoFrase.getAttribute('data-frase');
+            });
+            formApagar.addEventListener('submit', function (e) {
+                var total = formApagar.getAttribute('data-total');
+                if (!confirm('Tem certeza? Isso apaga TODAS as ' + total + ' musica(s) deste banco e nao da pra desfazer.')) {
+                    e.preventDefault();
+                }
+            });
+        }
+
+        // ---- Enviar um repertorio (aba Repertorios): o form vai pro repertorio escolhido.
         var formEnviar = document.querySelector('[data-form-enviar]');
         if (formEnviar) {
             formEnviar.addEventListener('submit', function () {
@@ -456,10 +582,12 @@
             });
         }
 
+        // ---- Inicio
         var salvo = null;
         try { salvo = localStorage.getItem('banco.modo'); } catch (e) {}
         var porAncora = window.location.hash === '#repertorios' || window.location.hash === '#pastas';
-        mostrar(porAncora || salvo === 'repertorios' ? 'repertorios' : 'lista');
+        mostrarModo(porAncora || salvo === 'repertorios' ? 'repertorios' : 'lista');
+        aplicarFiltro();
     })();
 </script>
 {% endblock %}

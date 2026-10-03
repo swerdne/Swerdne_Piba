@@ -530,3 +530,23 @@ def test_nada_marcado_nao_envia(logged_in_client, app, db):
         de_fora = _criar_ministerio(logged_in_client, outra.id, nome="De fora")
         _enviar(logged_in_client, f"/ministerio/pastas/{pasta.id}/compartilhar", de_fora.id)
         assert PastaMusicas.objects(id=pasta.id).first().envios == []
+
+
+def test_scripts_essenciais_do_banco_continuam_na_pagina(logged_in_client, app, db):
+    """Guarda contra o que ja aconteceu uma vez: uma edicao do JS da pagina
+    apagou sem querer o filtro da busca e a janela de "Apagar todas" (os
+    testes de rota passavam; so a tela quebrava). Comportamento conferido num
+    navegador simulado -- aqui garante que os pedacos continuam la."""
+    with app.app_context():
+        comunidade, _, _ = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos", "tags": "amor"})
+        html = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
+        for trecho in (
+            "function aplicarFiltro()", "busca.addEventListener('input'",   # busca
+            "data-ver-mais", "data-ver-menos", "var PAGINA = 15",           # ver mais / ver menos
+            "dialogApagar.showModal()", "campoFrase.addEventListener",      # apagar todas
+            "sessionStorage.setItem(CHAVE_SELECAO",                          # selecao guardada
+        ):
+            assert trecho in html, trecho
+        bloco = html[html.index("data-barra-pasta"):][:300]
+        assert "sticky" in bloco and "fixed" not in bloco  # bloco de criar dentro da coluna
