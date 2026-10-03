@@ -1,5 +1,5 @@
 """Importacao em lote de cifras a partir de PDFs gerados por sites (ver
-app/ministerio/importar_pdf.py e ministerio.routes.importar_musicas).
+app/ministerio/importar_cifras.py e ministerio.routes.importar_musicas).
 
 Os PDFs em tests/fixtures imitam "Imprimir > Salvar como PDF" de um site de
 cifra: cabecalho do navegador (data + "Nome - Artista - Site"), rodape (link
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from app.escala.models import Musica
-from app.ministerio.importar_pdf import PdfInvalidoError, extrair_musica
+from app.ministerio.importar_cifras import ArquivoInvalidoError, extrair_musica
 from tests.conftest import sessao_isolada
 from tests.test_escala import _criar_comunidade, _criar_ministerio
 
@@ -55,7 +55,7 @@ def test_varias_paginas_viram_uma_cifra_so_sem_cabecalhos_no_meio():
 
 
 def test_arquivo_que_nao_e_pdf_da_erro_claro():
-    with pytest.raises(PdfInvalidoError):
+    with pytest.raises(ArquivoInvalidoError):
         extrair_musica(b"isto nao e um pdf", "falso.pdf")
 
 
@@ -143,6 +143,132 @@ def test_tela_de_importacao_abre_e_repertorio_tem_o_link(logged_in_client, app, 
         ministerio = _ministerio(logged_in_client)
         tela = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio/importar")
         assert tela.status_code == 200
-        assert "Importar cifras de PDFs" in tela.data.decode("utf-8")
+        assert "Importar cifras de PDF ou Word" in tela.data.decode("utf-8")
         repertorio = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio")
         assert f"/ministerio/{ministerio.id}/repertorio/importar" in repertorio.data.decode("utf-8")
+
+
+# --- Word (.docx) -------------------------------------------------------------
+
+_NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def _run(texto):
+    from xml.sax.saxutils import escape
+    partes = []
+    for i, pedaco in enumerate(texto.split("\t")):
+        if i:
+            partes.append("<w:tab/>")
+        partes.append(f'<w:t xml:space="preserve">{escape(pedaco)}</w:t>')
+    return '<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/></w:rPr>' + "".join(partes) + "</w:r>"
+
+
+def _docx(paragrafos, extra_corpo="", com_cabecalho=True):
+    """Monta um .docx com a mesma estrutura que o Word grava. Cada item de
+    `paragrafos` vira um <w:p>; "\n" dentro dele vira quebra manual
+    (Shift+Enter), "\t" vira tab."""
+    corpo = ""
+    for paragrafo in paragrafos:
+        linhas = paragrafo.split("\n")
+        runs = '<w:r><w:br/></w:r>'.join(_run(l) for l in linhas)
+        corpo += f"<w:p>{runs}</w:p>"
+    documento = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:document xmlns:w="{_NS_W}" '
+        'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">'
+        f"<w:body>{corpo}{extra_corpo}<w:sectPr/></w:body></w:document>"
+    )
+    arquivo = io.BytesIO()
+    import zipfile
+    with zipfile.ZipFile(arquivo, "w", zipfile.ZIP_DEFLATED) as pacote:
+        pacote.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+        pacote.writestr("word/document.xml", documento)
+        if com_cabecalho:
+            # Cabecalho do Word mora em outra parte -- nao pode entrar na cifra.
+            pacote.writestr("word/header1.xml", f'<w:hdr xmlns:w="{_NS_W}"><w:p>{_run("Igreja Exemplo - Louvor")}</w:p></w:hdr>')
+    return arquivo.getvalue()
+
+
+_DOCX_CIFRA = [
+    "Ele Reina",
+    "Ministério Exemplo",
+    "Tom: D",
+    "",
+    "[Intro] D  A  Bm  G",
+    "",
+    "[Verso]",
+    "D              A\n  Ele reina sobre tudo",
+    "Bm\tG\n  Pra sempre reinará",
+]
+
+
+def test_extrai_musica_de_documento_do_word():
+    musica = extrair_musica(_docx(_DOCX_CIFRA), "ele_reina.docx")
+    assert musica["nome"] == "Ele Reina"
+    assert musica["artista"] == "Ministério Exemplo"
+    assert musica["tom"] == "D"
+    assert musica["avisos"] == []
+    cifra = musica["cifra"]
+    assert cifra.startswith("[Intro] D  A  Bm  G")
+    # Quebra manual (Shift+Enter) vira linha nova; espacos preservados.
+    assert "D              A\n  Ele reina sobre tudo" in cifra
+    assert "Bm    G\n  Pra sempre reinará" in cifra  # tab -> 4 espacos
+    assert "Igreja Exemplo" not in cifra  # cabecalho do Word ignorado
+
+
+def test_caixa_de_texto_do_word_nao_sai_duplicada():
+    """Word grava caixa de texto 2x (versao nova + mc:Fallback pra Word antigo)."""
+    caixa = (
+        "<w:p><w:r><mc:AlternateContent><mc:Choice><w:drawing><w:txbxContent>"
+        f"<w:p>{_run('Capotraste na 2a casa')}</w:p>"
+        "</w:txbxContent></w:drawing></mc:Choice><mc:Fallback><w:pict><w:txbxContent>"
+        f"<w:p>{_run('Capotraste na 2a casa')}</w:p>"
+        "</w:txbxContent></w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>"
+    )
+    musica = extrair_musica(_docx(_DOCX_CIFRA, extra_corpo=caixa), "x.docx")
+    assert musica["cifra"].count("Capotraste na 2a casa") == 1
+
+
+def test_doc_antigo_pede_pra_salvar_como_docx():
+    with pytest.raises(ArquivoInvalidoError, match="docx"):
+        extrair_musica(b"\xd0\xcf\x11\xe0 qualquer coisa", "antigo.doc")
+
+
+def test_docx_corrompido_ou_manipulado_da_erro_claro():
+    with pytest.raises(ArquivoInvalidoError):
+        extrair_musica(b"nao e zip", "quebrado.docx")
+    # Zip sem word/document.xml (ex: outro arquivo renomeado pra .docx).
+    falso = io.BytesIO()
+    import zipfile
+    with zipfile.ZipFile(falso, "w") as pacote:
+        pacote.writestr("qualquer.txt", "oi")
+    with pytest.raises(ArquivoInvalidoError):
+        extrair_musica(falso.getvalue(), "falso.docx")
+
+
+def test_rota_extrair_aceita_docx(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        resposta = _extrair(logged_in_client, ministerio.id, _docx(_DOCX_CIFRA), "ele_reina.docx")
+        assert resposta.status_code == 200
+        assert resposta.get_json()["musica"]["nome"] == "Ele Reina"
+        antigo = _extrair(logged_in_client, ministerio.id, b"\xd0\xcf\x11\xe0", "antigo.doc")
+        assert antigo.status_code == 422
+        assert "docx" in antigo.get_json()["erro"]
+
+
+def test_lote_grande_salvo_em_partes_avisa_uma_vez_com_o_total(logged_in_client, app, db):
+    """Pasta inteira chega em partes (ver importar_musicas.html): as partes
+    do meio gravam sem aviso; so a ultima avisa, com o total de todas."""
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        url = f"/ministerio/{ministerio.id}/repertorio/importar/salvar"
+        parte1 = [{"nome": f"Musica {i}"} for i in range(3)]
+        parte2 = [{"nome": "Musica final"}]
+        logged_in_client.post(url, data={"musicas": json.dumps(parte1), "parcial": "1"})
+        logged_in_client.post(url, data={"musicas": json.dumps(parte2), "total": "4"})
+
+        assert Musica.objects(ministerio_id=ministerio.id).count() == 4
+        with logged_in_client.session_transaction() as sessao:
+            avisos = [mensagem for _categoria, mensagem in sessao.get("_flashes", [])]
+        assert avisos == ["4 musica(s) importada(s) para o repertorio."]

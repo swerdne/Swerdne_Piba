@@ -777,11 +777,11 @@ def nova_musica(ministerio_id):
     return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
 
 
-# --- Importacao de cifras em lote a partir de PDFs (ver importar_pdf.py) ---
+# --- Importacao de cifras em lote a partir de PDF/Word (ver importar_cifras.py) ---
 #
 # Tres passos, pra caber qualquer quantidade sem estourar o timeout do
 # servidor nem o limite de 2 MB por requisicao (MAX_CONTENT_LENGTH): a tela
-# manda UM PDF por vez pra `extrair` (so le, nao grava nada), mostra tudo
+# manda UM arquivo por vez pra `extrair` (so le, nao grava nada), mostra tudo
 # pra pessoa revisar/corrigir, e so entao manda o lote revisado pra `salvar`.
 
 _MAX_MUSICAS_POR_LOTE = 200
@@ -805,18 +805,19 @@ def importar_musicas(ministerio_id):
 @login_required
 @limiter.limit("300 per minute")
 def extrair_musica_pdf(ministerio_id):
-    """Le 1 PDF e devolve a musica sugerida em JSON -- nao grava nada."""
-    from app.ministerio.importar_pdf import PdfInvalidoError, extrair_musica
+    """Le 1 arquivo (PDF ou .docx) e devolve a musica sugerida em JSON --
+    nao grava nada."""
+    from app.ministerio.importar_cifras import ArquivoInvalidoError, extrair_musica
 
     ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
     if not AcaoForm().validate_on_submit():
         return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
     arquivo = request.files.get("arquivo")
-    if arquivo is None or not (arquivo.filename or "").lower().endswith(".pdf"):
-        return jsonify({"erro": "Envie um arquivo .pdf."}), 400
+    if arquivo is None or not arquivo.filename:
+        return jsonify({"erro": "Envie um arquivo PDF ou Word (.docx)."}), 400
     try:
         musica = extrair_musica(arquivo.read(), arquivo.filename)
-    except PdfInvalidoError as erro:
+    except ArquivoInvalidoError as erro:
         return jsonify({"erro": str(erro)}), 422
 
     # Aviso de repetida (mesmo nome, sem diferenciar maiuscula) -- a tela ja
@@ -866,7 +867,11 @@ def salvar_musicas_importadas(ministerio_id):
     for musica in novas:
         musica.save()
 
-    flash(f"{len(novas)} musica(s) importada(s) para o repertorio.", "success")
+    # Lote grande chega em partes (ver importar_musicas.html): so a ultima
+    # avisa, com o total de todas -- senao viria 1 aviso por parte.
+    if request.form.get("parcial") != "1":
+        total = request.form.get("total", type=int) or len(novas)
+        flash(f"{total} musica(s) importada(s) para o repertorio.", "success")
     return jsonify({"criadas": len(novas), "destino": url_for("ministerio.repertorio", ministerio_id=ministerio.id)})
 
 

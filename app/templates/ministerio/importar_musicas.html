@@ -21,7 +21,7 @@
             </a>
             <div class="min-w-0">
                 <p class="text-xs {{ tema.text_secondary }} truncate">{{ ministerio.nome }}</p>
-                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Importar cifras de PDFs</h1>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Importar cifras de PDF ou Word</h1>
             </div>
         </div>
         {{ logo_inicio(tema) }}
@@ -32,16 +32,17 @@
 
         <p class="text-sm {{ tema.text_secondary }}">
             No site da cifra (Cifra Club, Cifras, Letras...), use <span class="font-semibold {{ tema.text_primary }}">Imprimir &rarr; Salvar como PDF</span>.
-            Depois escolha aqui quantos PDFs quiser: cada um vira uma musica, e voce confere tudo antes de salvar.
+            Tambem aceita documentos do <span class="font-semibold {{ tema.text_primary }}">Word (.docx)</span>.
+            Escolha aqui quantos arquivos quiser: cada um vira uma musica, e voce confere tudo antes de salvar.
         </p>
 
         <!-- Escolha dos arquivos: clique, arraste ou pasta inteira -->
         <label data-area-soltar
                class="flex flex-col items-center justify-center gap-2 text-center {{ tema.card_bg }} border-2 border-dashed {{ tema.card_border }} rounded-3xl px-4 py-10 cursor-pointer transition">
-            <i class="fa-solid fa-file-pdf text-3xl {{ tema.accent_text }}"></i>
-            <span class="text-sm font-semibold {{ tema.text_primary }}">Clique para escolher os PDFs ou arraste aqui</span>
-            <span class="text-xs {{ tema.text_secondary }}">Varios de uma vez &middot; ate 2 MB cada</span>
-            <input type="file" accept=".pdf,application/pdf" multiple class="hidden" data-entrada-arquivos>
+            <span class="flex items-center gap-2 text-3xl {{ tema.accent_text }}"><i class="fa-solid fa-file-pdf"></i><i class="fa-solid fa-file-word"></i></span>
+            <span class="text-sm font-semibold {{ tema.text_primary }}">Clique para escolher os arquivos ou arraste aqui</span>
+            <span class="text-xs {{ tema.text_secondary }}">PDF ou Word (.docx) &middot; varios de uma vez &middot; ate 2 MB cada</span>
+            <input type="file" accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple class="hidden" data-entrada-arquivos>
         </label>
         <p class="text-center text-xs {{ tema.text_secondary }} -mt-2">
             ou
@@ -53,7 +54,7 @@
 
         <div data-progresso class="hidden {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3">
             <div class="flex items-center justify-between text-xs {{ tema.text_secondary }} mb-2">
-                <span data-progresso-texto>Lendo PDFs...</span>
+                <span data-progresso-texto>Lendo arquivos...</span>
                 <span data-progresso-numeros></span>
             </div>
             <div class="h-1.5 rounded-full bg-black/10 overflow-hidden">
@@ -101,6 +102,9 @@
                 <p data-ja-existe class="hidden text-xs font-semibold text-amber-500">
                     <i class="fa-solid fa-triangle-exclamation mr-1"></i>Ja existe uma musica com esse nome no repertorio -- desmarcada pra nao duplicar.
                 </p>
+                <p data-repetida-no-lote class="hidden text-xs font-semibold text-amber-500">
+                    <i class="fa-solid fa-clone mr-1"></i>Mesmo nome de outro arquivo desta importacao -- desmarcada pra nao duplicar.
+                </p>
                 <ul data-avisos class="text-xs text-amber-500 space-y-0.5"></ul>
                 <details>
                     <summary class="text-xs font-semibold {{ tema.accent_text }} cursor-pointer select-none">Ver / editar cifra</summary>
@@ -109,6 +113,13 @@
                 </details>
             </div>
         </div>
+    </div>
+</template>
+
+<template id="modelo-vaga">
+    <div data-vaga class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 opacity-60">
+        <i class="fa-solid fa-spinner fa-spin {{ tema.text_secondary }}"></i>
+        <p data-arquivo class="text-sm {{ tema.text_secondary }} truncate"></p>
     </div>
 </template>
 
@@ -133,6 +144,8 @@
     var lista = document.querySelector('[data-lista-revisao]');
     var modeloMusica = document.getElementById('modelo-musica');
     var modeloErro = document.getElementById('modelo-erro');
+    var modeloVaga = document.getElementById('modelo-vaga');
+    var MAX_POR_SALVAMENTO = 100;  // o servidor aceita ate 200 por requisicao
     var progresso = document.querySelector('[data-progresso]');
     var barra = document.querySelector('[data-progresso-barra]');
     var textoProgresso = document.querySelector('[data-progresso-texto]');
@@ -158,14 +171,18 @@
         barraSalvar.classList.toggle('hidden', cards.length === 0);
     }
 
-    function mostrarErro(nomeArquivo, mensagem) {
+    function nomeParaComparar(texto) {
+        return (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    }
+
+    function mostrarErro(vaga, nomeArquivo, mensagem) {
         var no = modeloErro.content.cloneNode(true);
         no.querySelector('[data-arquivo]').textContent = nomeArquivo;
         no.querySelector('[data-erro]').textContent = mensagem;
-        lista.appendChild(no);
+        vaga.replaceWith(no);
     }
 
-    function mostrarMusica(nomeArquivo, musica) {
+    function mostrarMusica(vaga, nomeArquivo, musica) {
         var no = modeloMusica.content.cloneNode(true);
         var card = no.querySelector('[data-card]');
         card.querySelector('[data-arquivo]').textContent = nomeArquivo;
@@ -181,16 +198,26 @@
         if (musica.ja_existe) {
             card.querySelector('[data-ja-existe]').classList.remove('hidden');
             card.querySelector('[data-incluir]').checked = false;
+        } else {
+            // Mesma musica 2x na pasta (ex: em subpastas diferentes): so a 1a fica marcada.
+            var nome = nomeParaComparar(musica.nome);
+            var repetida = Array.prototype.some.call(lista.querySelectorAll('[data-card]'), function (outro) {
+                return nomeParaComparar(outro.querySelector('[data-campo="nome"]').value) === nome;
+            });
+            if (repetida) {
+                card.querySelector('[data-repetida-no-lote]').classList.remove('hidden');
+                card.querySelector('[data-incluir]').checked = false;
+            }
         }
         card.querySelector('[data-incluir]').addEventListener('change', atualizarResumo);
-        lista.appendChild(no);
+        vaga.replaceWith(no);
     }
 
     function atualizarProgresso() {
         progresso.classList.remove('hidden');
         barra.style.width = (total ? Math.round(feitos * 100 / total) : 0) + '%';
         numerosProgresso.textContent = feitos + ' de ' + total;
-        textoProgresso.textContent = feitos < total ? 'Lendo PDFs...' : 'Pronto! Confira abaixo e importe.';
+        textoProgresso.textContent = feitos < total ? 'Lendo arquivos...' : 'Pronto! Confira abaixo e importe.';
     }
 
     function proximo() {
@@ -207,9 +234,11 @@
         proximo();
     }
 
-    function ler(arquivo) {
+    function ler(tarefa) {
+        var arquivo = tarefa.arquivo;
+        var vaga = tarefa.vaga;
         if (arquivo.size > LIMITE_BYTES) {
-            mostrarErro(arquivo.name, 'Arquivo acima de 2 MB.');
+            mostrarErro(vaga, arquivo.name, 'Arquivo acima de 2 MB.');
             ativos++;
             concluir();
             return;
@@ -219,23 +248,73 @@
         dados.append('csrf_token', csrf);
         dados.append('arquivo', arquivo, arquivo.name);
         fetch(URL_EXTRAIR, { method: 'POST', body: dados, credentials: 'same-origin' })
-            .then(function (r) { return r.json().catch(function () { return { erro: 'Erro ao ler o PDF (' + r.status + ').' }; }); })
+            .then(function (r) { return r.json().catch(function () { return { erro: 'Erro ao ler o arquivo (' + r.status + ').' }; }); })
             .then(function (resposta) {
-                if (resposta.musica) mostrarMusica(arquivo.name, resposta.musica);
-                else mostrarErro(arquivo.name, resposta.erro || 'Nao foi possivel ler este PDF.');
+                if (resposta.musica) mostrarMusica(vaga, arquivo.name, resposta.musica);
+                else mostrarErro(vaga, arquivo.name, resposta.erro || 'Nao foi possivel ler este arquivo.');
             })
-            .catch(function () { mostrarErro(arquivo.name, 'Falha de conexao -- tente de novo.'); })
+            .catch(function () { mostrarErro(vaga, arquivo.name, 'Falha de conexao -- tente de novo.'); })
             .then(concluir);
     }
 
+    function caminho(arquivo) {
+        return arquivo.caminhoNaPasta || arquivo.webkitRelativePath || arquivo.name;
+    }
+
     function adicionarArquivos(arquivos) {
-        var pdfs = Array.prototype.filter.call(arquivos, function (a) { return /\.pdf$/i.test(a.name); });
-        if (!pdfs.length) return;
-        pdfs.sort(function (a, b) { return a.name.localeCompare(b.name); });
-        fila = fila.concat(pdfs);
-        total += pdfs.length;
+        // .doc antigo entra de proposito: o servidor responde explicando como converter.
+        // Fora: arquivo temporario do Word (~$...) e oculto (.DS_Store, ._ do Mac).
+        var aceitos = Array.prototype.filter.call(arquivos, function (a) {
+            return /\.(pdf|docx?)$/i.test(a.name) && !/^(~\$|\.)/.test(a.name);
+        });
+        if (!aceitos.length) return;
+        // Ordem alfabetica pelo caminho (pasta/subpasta/arquivo); cada arquivo
+        // ganha sua vaga ja nessa ordem, mesmo os lidos em paralelo terminando
+        // fora de ordem.
+        aceitos.sort(function (a, b) { return caminho(a).localeCompare(caminho(b), 'pt-BR', { numeric: true }); });
+        aceitos.forEach(function (arquivo) {
+            var no = modeloVaga.content.cloneNode(true);
+            var vaga = no.querySelector('[data-vaga]');
+            vaga.querySelector('[data-arquivo]').textContent = 'Lendo ' + caminho(arquivo) + '...';
+            lista.appendChild(no);
+            fila.push({ arquivo: arquivo, vaga: vaga });
+        });
+        total += aceitos.length;
         atualizarProgresso();
         proximo();
+    }
+
+    // Pasta arrastada: o navegador entrega so a "entrada" da pasta -- percorre
+    // ela (e subpastas) pra achar os arquivos de dentro.
+    function arquivosDaEntrada(entrada, prefixo) {
+        if (!entrada) return Promise.resolve([]);
+        if (entrada.isFile) {
+            return new Promise(function (resolver) {
+                entrada.file(function (arquivo) {
+                    arquivo.caminhoNaPasta = prefixo + arquivo.name;
+                    resolver([arquivo]);
+                }, function () { resolver([]); });
+            });
+        }
+        if (!entrada.isDirectory) return Promise.resolve([]);
+        var leitor = entrada.createReader();
+        var filhos = [];
+        return new Promise(function (resolver) {
+            // readEntries devolve em lotes (~100): chama ate vir vazio.
+            (function lerLote() {
+                leitor.readEntries(function (lote) {
+                    if (!lote.length) { resolver(filhos); return; }
+                    filhos = filhos.concat(Array.prototype.slice.call(lote));
+                    lerLote();
+                }, function () { resolver(filhos); });
+            })();
+        }).then(function (entradas) {
+            return Promise.all(entradas.map(function (filho) {
+                return arquivosDaEntrada(filho, prefixo + entrada.name + '/');
+            }));
+        }).then(function (listas) {
+            return [].concat.apply([], listas);
+        });
     }
 
     document.querySelectorAll('[data-entrada-arquivos]').forEach(function (entrada) {
@@ -251,7 +330,17 @@
     ['dragleave', 'drop'].forEach(function (tipo) {
         areaSoltar.addEventListener(tipo, function (e) { e.preventDefault(); areaSoltar.classList.remove('ring-2'); });
     });
-    areaSoltar.addEventListener('drop', function (e) { adicionarArquivos(e.dataTransfer.files); });
+    areaSoltar.addEventListener('drop', function (e) {
+        var itens = e.dataTransfer.items;
+        if (!itens || !itens.length || typeof itens[0].webkitGetAsEntry !== 'function') {
+            adicionarArquivos(e.dataTransfer.files);
+            return;
+        }
+        // As entradas precisam ser pegas AGORA -- depois do evento o navegador as descarta.
+        var entradas = Array.prototype.map.call(itens, function (item) { return item.webkitGetAsEntry(); });
+        Promise.all(entradas.map(function (entrada) { return arquivosDaEntrada(entrada, ''); }))
+            .then(function (listas) { adicionarArquivos([].concat.apply([], listas)); });
+    });
 
     marcarTodas.addEventListener('change', function () {
         lista.querySelectorAll('[data-card] [data-incluir]').forEach(function (c) { c.checked = marcarTodas.checked; });
@@ -273,20 +362,38 @@
             return;
         }
         botaoSalvar.disabled = true;
-        var dados = new FormData();
-        dados.append('csrf_token', csrf);
-        dados.append('musicas', JSON.stringify(musicas));
-        fetch(URL_SALVAR, { method: 'POST', body: dados, credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (resposta) {
-                if (resposta.destino) { window.location = resposta.destino; return; }
-                alert(resposta.erro || 'Nao foi possivel importar.');
-                botaoSalvar.disabled = false;
-            })
-            .catch(function () {
-                alert('Falha de conexao -- nada foi salvo. Tente de novo.');
-                botaoSalvar.disabled = false;
-            });
+        // Em partes (lote grande de uma pasta inteira): cada parte e uma
+        // requisicao curta; so a ultima mostra o aviso final com o total.
+        var partes = [];
+        for (var i = 0; i < musicas.length; i += MAX_POR_SALVAMENTO) {
+            partes.push(musicas.slice(i, i + MAX_POR_SALVAMENTO));
+        }
+        var salvas = 0;
+
+        function falhar(mensagem) {
+            alert((salvas ? salvas + ' musica(s) ja foram salvas. ' : 'Nada foi salvo. ') + mensagem);
+            if (salvas) { window.location.reload(); return; }
+            botaoSalvar.disabled = false;
+        }
+
+        (function salvarParte(indice) {
+            var dados = new FormData();
+            dados.append('csrf_token', csrf);
+            dados.append('musicas', JSON.stringify(partes[indice]));
+            var ultima = indice === partes.length - 1;
+            if (!ultima) dados.append('parcial', '1');
+            else dados.append('total', String(salvas + partes[indice].length));
+            fetch(URL_SALVAR, { method: 'POST', body: dados, credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (resposta) {
+                    if (!resposta.destino) { falhar(resposta.erro || 'Nao foi possivel importar.'); return; }
+                    salvas += resposta.criadas;
+                    resumo.textContent = 'Salvando... ' + salvas + ' de ' + musicas.length;
+                    if (ultima) window.location = resposta.destino;
+                    else salvarParte(indice + 1);
+                })
+                .catch(function () { falhar('Falha de conexao -- tente de novo.'); });
+        })(0);
     });
 })();
 </script>
