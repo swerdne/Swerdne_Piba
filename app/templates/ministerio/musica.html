@@ -70,12 +70,19 @@
             {% if pode_gerenciar %}
             <form method="POST" action="{{ url_for('ministerio.salvar_projecao_musica', musica_id=musica.id) }}"
                   data-guardar-rascunho="musica-{{ musica.id }}-projecao" data-aba-do-form="projecao"
+                  {{ 'data-espelhar-cifra' if projecao_espelha }}
                   class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
                 {{ form_projecao.hidden_tag() }}
                 <div>
                     <p class="text-sm font-semibold {{ tema.text_primary }}">Letra para projecao</p>
                     <p class="text-xs {{ tema.text_secondary }}">Sem acordes. Use <span class="font-mono">[VERSO 1]</span>, <span class="font-mono">[REFRAO]</span>, <span class="font-mono">[PONTE]</span> numa linha sozinha; linha em branco separa os slides.</p>
                 </div>
+                <!-- Espelho da cifra (ver ministerio.routes.projecao_espelha_cifra): enquanto
+                     ninguem ajustar a projecao a mao, ela se monta sozinha da aba Louvor. -->
+                <p data-nota-espelho class="{{ '' if projecao_espelha else 'hidden' }} text-xs rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} px-3 py-2">
+                    <i class="fa-solid fa-link mr-1"></i>Montada sozinha a partir da cifra (aba Louvor) -- e salva junto quando voce salva a cifra.
+                    Se editar aqui, ela passa a ser sua e deixa de acompanhar a cifra.
+                </p>
                 {% if projecao_tem_acordes %}
                 <p data-aviso-acordes class="text-xs rounded-xl bg-amber-500/10 text-amber-700 px-3 py-2">
                     <i class="fa-solid fa-triangle-exclamation mr-1"></i>Essa letra tem linhas de acordes -- no telao elas aparecem como texto. Use <span class="font-semibold">Limpar acordes</span> e salve.
@@ -111,19 +118,27 @@
             </form>
             {% endif %}
 
-            {% if blocos %}
+            {% if blocos or pode_gerenciar %}
+            <!-- Previa no molde da folha de projecao (templates/escala/folha_repertorio.html):
+                 caixa com 2 colunas, rotulos e refrao em negrito. Pra quem edita, o JS
+                 redesenha a cada letra digitada (data-previa-projecao). -->
             <div class="space-y-2">
-                <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">Como fica no telao</p>
-                <div class="grid sm:grid-cols-2 gap-2">
+                <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">Como fica na folha de projecao</p>
+                <div data-previa-projecao
+                     class="bg-white text-gray-900 border-2 border-gray-900 rounded-lg px-4 py-1 columns-1 sm:columns-2 gap-8"
+                     style="column-rule: 1.5px solid #111827;">
                     {% for bloco in blocos %}
-                    <div class="rounded-2xl bg-slate-900 text-white p-4 text-center flex flex-col justify-center min-h-[7rem]">
-                        {% if bloco.rotulo %}<p class="text-[10px] font-bold tracking-widest text-indigo-300 mb-1.5">{{ bloco.rotulo|upper }}</p>{% endif %}
-                        {% for linha in bloco.linhas %}<p class="text-sm font-semibold leading-snug uppercase">{{ linha }}</p>{% endfor %}
+                    {% set eh_refrao = bloco.rotulo and ('REFR' in bloco.rotulo|upper or 'CORO' in bloco.rotulo|upper) %}
+                    <div class="break-inside-avoid my-3">
+                        {% if bloco.rotulo %}<p class="text-[13px] mb-2">[{{ bloco.rotulo|upper }}]</p>{% endif %}
+                        {% for linha in bloco.linhas %}<p class="text-sm uppercase leading-snug {{ 'font-extrabold' if eh_refrao }}">{{ linha }}</p>{% endfor %}
                     </div>
+                    {% else %}
+                    <p class="text-sm text-gray-500 py-2">A letra aparece aqui conforme voce escreve a cifra ou a projecao.</p>
                     {% endfor %}
                 </div>
             </div>
-            {% elif not pode_gerenciar %}
+            {% else %}
             <p class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl p-6 text-center text-sm {{ tema.text_secondary }}">A versao de projecao ainda nao foi preenchida.</p>
             {% endif %}
         </section>
@@ -327,6 +342,94 @@
                     .catch(function () { window.alert('Nao foi possivel gerar o rascunho agora.'); });
             });
         });
+
+        // Previa no molde da folha de projecao, redesenhada a partir do editor.
+        var previa = document.querySelector('[data-previa-projecao]');
+        function desenharPrevia(texto) {
+            if (!previa) return;
+            var blocos = [], atual = null;
+            (texto || '').replace(/\r\n/g, '\n').split('\n').forEach(function (linha) {
+                var rotulo = /^\s*\[(.+?)\]\s*$/.exec(linha);
+                if (rotulo) { atual = { rotulo: rotulo[1].trim(), linhas: [] }; blocos.push(atual); }
+                else if (!linha.trim()) { if (atual && atual.linhas.length) atual = null; }
+                else {
+                    if (!atual) { atual = { rotulo: null, linhas: [] }; blocos.push(atual); }
+                    atual.linhas.push(linha.trim());
+                }
+            });
+            previa.textContent = '';
+            if (!blocos.length) {
+                var vazio = document.createElement('p');
+                vazio.className = 'text-sm text-gray-500 py-2';
+                vazio.textContent = 'A letra aparece aqui conforme voce escreve a cifra ou a projecao.';
+                previa.appendChild(vazio);
+                return;
+            }
+            blocos.forEach(function (bloco) {
+                var refrao = bloco.rotulo && /REFR|CORO/i.test(bloco.rotulo);
+                var div = document.createElement('div');
+                div.className = 'break-inside-avoid my-3';
+                if (bloco.rotulo) {
+                    var r = document.createElement('p');
+                    r.className = 'text-[13px] mb-2';
+                    r.textContent = '[' + bloco.rotulo.toUpperCase() + ']';
+                    div.appendChild(r);
+                }
+                bloco.linhas.forEach(function (l) {
+                    var p = document.createElement('p');
+                    p.className = 'text-sm uppercase leading-snug' + (refrao ? ' font-extrabold' : '');
+                    p.textContent = l;
+                    div.appendChild(p);
+                });
+                previa.appendChild(div);
+            });
+        }
+        if (editorProjecao) {
+            editorProjecao.addEventListener('input', function () { desenharPrevia(editorProjecao.value); });
+        }
+
+        // Espelho: enquanto a projecao for so o reflexo da cifra, cada mudanca na
+        // cifra (aba Louvor) remonta a projecao na hora -- pelo mesmo gerador do
+        // servidor (rascunho_projecao). Editar a projecao a mao desliga.
+        var formProjecao = editorProjecao ? editorProjecao.form : null;
+        var campoCifra = document.getElementById('cifra_louvor');
+        var notaEspelho = document.querySelector('[data-nota-espelho]');
+        var espelhando = !!(formProjecao && formProjecao.hasAttribute('data-espelhar-cifra') && campoCifra);
+        var esperaEspelho = null, pedidoEspelho = 0;
+        function espelhar() {
+            if (!espelhando) return;
+            var meu = ++pedidoEspelho;
+            var dados = new FormData();
+            var csrfEspelho = formProjecao.querySelector('[name=csrf_token]');
+            if (csrfEspelho) dados.append('csrf_token', csrfEspelho.value);
+            dados.append('texto', campoCifra.value);
+            fetch({{ url_for('ministerio.rascunho_projecao', musica_id=musica.id)|tojson }}, { method: 'POST', body: dados, credentials: 'same-origin' })
+                .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                .then(function (resposta) {
+                    if (meu !== pedidoEspelho || !espelhando) return;
+                    // Sem disparar 'input': nao conta como edicao a mao nem vira rascunho.
+                    editorProjecao.value = resposta.texto;
+                    desenharPrevia(resposta.texto);
+                })
+                .catch(function () {});
+        }
+        if (espelhando) {
+            campoCifra.addEventListener('input', function () {
+                clearTimeout(esperaEspelho);
+                esperaEspelho = setTimeout(espelhar, 400);
+            });
+            if (campoCifra.form) campoCifra.form.addEventListener('rascunho:restaurado', espelhar);
+            editorProjecao.addEventListener('input', function () {  // qualquer edicao (digitar ou os botoes) desliga
+                espelhando = false;
+                if (notaEspelho) {
+                    notaEspelho.innerHTML = '';
+                    var icone = document.createElement('i');
+                    icone.className = 'fa-solid fa-pen mr-1';
+                    notaEspelho.appendChild(icone);
+                    notaEspelho.appendChild(document.createTextNode('Ajustada a mao: nao acompanha mais a cifra. Salve a projecao pra manter.'));
+                }
+            });
+        }
 
         var maiusculas = document.querySelector('[data-maiusculas]');
         if (maiusculas) {

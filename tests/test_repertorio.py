@@ -401,3 +401,72 @@ def test_formularios_da_musica_guardam_rascunho_por_tom(logged_in_client, app, d
         assert "js/rascunho.js" in html and "data-rascunho-descartar" in html
         html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}?tom=D").data.decode("utf-8")
         assert f'data-guardar-rascunho="musica-{musica.id}-louvor-D"' in html
+
+
+# --- Projecao espelhando a cifra ----------------------------------------------------
+
+def _projecao_espelhando(html):
+    """O form da projecao tem o atributo (o JS da pagina tambem cita o nome)."""
+    return re.search(r"data-espelhar-cifra\s+class=", html) is not None
+
+
+def test_projecao_se_monta_da_cifra_e_acompanha_ate_ser_editada(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        logged_in_client.post(f"/ministerio/{ministerio.id}/repertorio/nova", data={"nome": "Feita a mao", "tom": "G"})
+        musica = Musica.objects(nome="Feita a mao").first()
+        assert _projecao_espelhando(logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8"))
+
+        # 1a cifra: projecao vazia se monta sozinha (sem acordes, maiusculas, slides de 4).
+        cifra = "C Em D G\nDe um coracao cantando\nG\nEm resposta a Ti\nEm\nHa uma cancao\nD\nMe render a Ti\nC\nEm adoracao"
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": cifra, "tom": ""})
+        projecao = Musica.objects(id=musica.id).first().letra_projecao
+        assert projecao == "DE UM CORACAO CANTANDO\nEM RESPOSTA A TI\nHA UMA CANCAO\nME RENDER A TI\n\nEM ADORACAO"
+
+        # Cifra muda e a projecao ainda era so o reflexo: acompanha.
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
+                              data={"cifra_louvor": cifra + "\nG\nPra sempre", "tom": ""})
+        assert Musica.objects(id=musica.id).first().letra_projecao.endswith("EM ADORACAO\nPRA SEMPRE")
+
+        # Ajustada a mao: nunca mais e sobrescrita pela cifra.
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/projecao", data={"letra_projecao": "[VERSO 1]\nMINHA VERSAO"})
+        assert not _projecao_espelhando(logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8"))
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": "G\nOutra letra", "tom": ""})
+        assert Musica.objects(id=musica.id).first().letra_projecao == "[VERSO 1]\nMINHA VERSAO"
+
+
+def test_previa_da_projecao_no_formato_da_folha(logged_in_client, app, db):
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/projecao", data={"letra_projecao": LETRA})
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        assert "Como fica na folha de projecao" in html and "data-previa-projecao" in html
+        previa = html[html.index("data-previa-projecao"):]
+        assert "[REFRAO]" in previa and 'font-extrabold">SANTO, SANTO' in previa  # refrao em negrito
+
+
+def test_scripts_do_espelho_continuam_na_tela_da_musica(logged_in_client, app, db):
+    """Comportamento conferido num navegador simulado; aqui so garante que o
+    JS do espelho e da previa nao some numa edicao futura da pagina."""
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        musica = _nova_musica(logged_in_client, ministerio.id)
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        for trecho in ("function espelhar()", "function desenharPrevia(", "campoCifra.addEventListener('input'"):
+            assert trecho in html, trecho
+
+
+def test_musica_antiga_com_projecao_no_formato_antigo_tambem_espelha(logged_in_client, app, db):
+    """Projecao gerada antes da quebra em slides de 4 linhas (um bloco so)
+    ainda conta como reflexo da cifra -- nao como ajuste a mao."""
+    from app.escala.models import projecao_da_cifra
+    with app.app_context():
+        _, ministerio, _ = _montar(logged_in_client)
+        cifra = "G\nUm\nD\nDois\nC\nTres\nG\nQuatro\nD\nCinco"
+        musica = Musica(comunidade_id=ministerio.comunidade_id, ministerio_id=ministerio.id, oficial=False, nome="Antiga",
+                        cifra_louvor=cifra, letra_projecao="UM\nDOIS\nTRES\nQUATRO\nCINCO")
+        musica.save()
+        assert _projecao_espelhando(logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8"))
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": cifra + "\nG\nSeis", "tom": ""})
+        assert Musica.objects(id=musica.id).first().letra_projecao == projecao_da_cifra(cifra + "\nG\nSeis")

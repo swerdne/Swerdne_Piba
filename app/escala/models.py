@@ -1062,7 +1062,7 @@ def _sem_acorde_inline(linha):
     )
 
 
-def projecao_da_cifra(texto):
+def projecao_da_cifra(texto, linhas_por_slide=None):
     """Gera o RASCUNHO da letra de projecao a partir de uma cifra: tira as
     linhas de acordes e tablaturas, poe os rotulos no padrao [VERSO 1]/
     [REFRAO], passa a letra pra maiusculas e separa os slides por linha em
@@ -1090,9 +1090,17 @@ def projecao_da_cifra(texto):
     for bloco in blocos:
         if not bloco["linhas"]:
             continue  # rotulo sem letra (intro, solo...)
-        cabeca = [f"[{bloco['rotulo']}]"] if bloco["rotulo"] else []
-        partes.append("\n".join(cabeca + bloco["linhas"]))
+        # Slide de no maximo LINHAS_POR_SLIDE linhas: cifra digitada sem linha
+        # em branco viraria a letra inteira num slide so. O rotulo fica no 1o.
+        linhas = bloco["linhas"]
+        tamanho = linhas_por_slide or LINHAS_POR_SLIDE
+        for inicio in range(0, len(linhas), tamanho):
+            cabeca = [f"[{bloco['rotulo']}]"] if bloco["rotulo"] and inicio == 0 else []
+            partes.append("\n".join(cabeca + linhas[inicio:inicio + tamanho]))
     return "\n\n".join(partes)
+
+
+LINHAS_POR_SLIDE = 4
 
 
 def tem_acordes(texto):

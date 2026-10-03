@@ -861,6 +861,37 @@ def _palavras_chave_se_faltar(musica):
     return tags
 
 
+def projecao_espelha_cifra(musica):
+    """A letra de projecao ainda e so o reflexo da cifra (vazia ou igual ao
+    que a cifra gera) -- ninguem a ajustou a mao. Enquanto for, ela segue a
+    cifra sozinha (aqui no salvar e ao vivo na tela, ver musica.html)."""
+    return _eh_reflexo_da_cifra(musica.letra_projecao, musica.cifra_louvor)
+
+
+def _eh_reflexo_da_cifra(projecao, cifra):
+    """Projecao vazia ou igual ao que a cifra gera -- no formato atual (slides
+    de 4 linhas) ou no antigo (sem quebrar slides), que e como estao as
+    musicas importadas/geradas antes dessa mudanca."""
+    atual = (projecao or "").strip()
+    if not atual:
+        return True
+    cifra = cifra or ""
+    return atual in (projecao_da_cifra(cifra).strip(), projecao_da_cifra(cifra, linhas_por_slide=10 ** 6).strip())
+
+
+def _espelhar_projecao(musica, cifra_antiga):
+    """Depois de trocar a cifra original: se a projecao era so o reflexo da
+    cifra ANTIGA (ou estava vazia), remonta da nova. Projecao ajustada a mao
+    nunca e mexida. Devolve True se remontou."""
+    if not _eh_reflexo_da_cifra(musica.letra_projecao, cifra_antiga):
+        return False
+    nova = projecao_da_cifra(musica.cifra_louvor or "") or None
+    if nova == musica.letra_projecao:
+        return False
+    musica.letra_projecao = nova
+    return True
+
+
 def _texto_tags_novas(tags):
     return f" Palavras-chave: {', '.join(tags)}." if tags else ""
 
@@ -1142,11 +1173,12 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
         if atualizar_id.isdigit():
             existente = banco.musicas().filter(id=int(atualizar_id)).first()
             if existente is not None:
+                cifra_antiga = existente.cifra_louvor
                 existente.cifra_louvor = cifra or existente.cifra_louvor
                 existente.tom = existente.tom or tom
                 existente.artista = existente.artista or str(item.get("artista") or "").strip()[:120] or None
-                if not existente.letra_projecao and existente.cifra_louvor:
-                    existente.letra_projecao = projecao_da_cifra(existente.cifra_louvor) or None
+                # Projecao que so espelhava a cifra antiga (ou vazia) segue a nova.
+                _espelhar_projecao(existente, cifra_antiga)
                 if not existente.tags:
                     existente.tags = _tags_do_texto(str(item.get("tags") or ""))
                 existente.atualizada_em = datetime.now(timezone.utc)
@@ -1205,6 +1237,7 @@ def musica(musica_id):
         tom_aberto=tom_aberto,
         aberta_eh_original=aberta_eh_original,
         projecao_tem_acordes=tem_acordes(musica.letra_projecao),
+        projecao_espelha=projecao_espelha_cifra(musica) and aberta_eh_original,
         blocos=blocos_da_letra(musica.letra_projecao),
         acao_form=AcaoForm(),
     )
@@ -1260,8 +1293,11 @@ def salvar_louvor_musica(musica_id):
         return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
     tom = (form.tom.data or "").strip()
     if musica.eh_tom_original(tom):
+        cifra_antiga = musica.cifra_louvor
         musica.cifra_louvor = form.cifra_louvor.data or None
         tags_novas = _texto_tags_novas(_palavras_chave_se_faltar(musica))
+        if _espelhar_projecao(musica, cifra_antiga):
+            tags_novas = " Projecao montada a partir da cifra." + tags_novas
         # Musica sem tom cadastrado: identifica pelos acordes (so preenche o
         # vazio -- nunca troca um tom que alguem ja informou).
         if not musica.tom and not tom:
