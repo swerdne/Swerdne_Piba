@@ -133,7 +133,7 @@
                     <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe
                 </button>
             </form>
-            {% if not escala.plantao_turno_id and not escala.turno_plantao_origem_id and (escala.funcoes | selectattr('membro_id') | list) %}
+            {% if not escala.plantao_turno_id and not escala.turno_plantao_origem_id and (funcoes | selectattr('membro_id') | list) %}
             <a href="{{ url_for('plantao.nova', ministerio_id=escala.ministerio_id, escala_id=escala.id) }}"
                class="flex-1 flex items-center justify-center {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-full transition">
                 <i class="fa-solid fa-arrows-rotate mr-2"></i>Criar turno de rodizio com esta equipe
@@ -150,13 +150,17 @@
         {% endif %}
 
         <!-- Ensaios: dias de ensaio antes do evento; cada um pode ser cancelado sozinho -->
-        <div id="ensaios" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden scroll-mt-4">
-            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b {{ tema.card_border }}">
+        <div id="ensaios" data-retratil="ensaios" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden scroll-mt-4">
+            <div data-retratil-cabecalho role="button" tabindex="0" aria-expanded="false" aria-controls="ensaios-corpo" class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none">
                 <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
                     <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Ensaios
                 </span>
-                {% if ensaios %}<span class="text-xs {{ tema.text_secondary }}">{{ ensaios|length }}</span>{% endif %}
+                <span class="flex items-center gap-3">
+                    {% if ensaios %}<span class="text-xs {{ tema.text_secondary }}">{{ ensaios|length }}</span>{% endif %}
+                    <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }}" data-retratil-seta aria-hidden="true"></i>
+                </span>
             </div>
+            <div data-retratil-corpo id="ensaios-corpo"><div class="border-t {{ tema.card_border }}">
 
             {% if ensaios %}
             <ul class="divide-y {{ tema.divide }}">
@@ -243,16 +247,21 @@
                 </button>
             </form>
             {% endif %}
+            </div></div>
         </div>
 
         <!-- Materiais: arquivos da equipe toda ou de uma funcao especifica -->
-        <div id="materiais" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden scroll-mt-4">
-            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b {{ tema.card_border }}">
+        <div id="materiais" data-retratil="materiais" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden scroll-mt-4">
+            <div data-retratil-cabecalho role="button" tabindex="0" aria-expanded="false" aria-controls="materiais-corpo" class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none">
                 <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
                     <i class="fa-solid fa-paperclip {{ tema.text_secondary }}"></i>Materiais
                 </span>
-                {% if anexos %}<span class="text-xs {{ tema.text_secondary }}">{{ anexos|length }}</span>{% endif %}
+                <span class="flex items-center gap-3">
+                    {% if anexos %}<span class="text-xs {{ tema.text_secondary }}">{{ anexos|length }}</span>{% endif %}
+                    <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }}" data-retratil-seta aria-hidden="true"></i>
+                </span>
             </div>
+            <div data-retratil-corpo id="materiais-corpo"><div class="border-t {{ tema.card_border }}">
 
             {% if anexos %}
             <ul class="divide-y {{ tema.divide }}">
@@ -305,13 +314,14 @@
                 </button>
             </form>
             {% endif %}
+            </div></div>
         </div>
 
         <!-- Grid da escala -->
         <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
             <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr]">
 
-                {% for funcao in escala.funcoes %}
+                {% for funcao in funcoes %}
                 {% if funcao.eh_subcabecalho %}
                 <div class="sm:col-span-2 bg-gray-800/80 px-3 sm:px-4 py-2 border-t border-gray-700 {{ 'border-t-0' if loop.first else '' }} flex items-center justify-between gap-2">
                     <span class="text-xs font-semibold text-gray-300 uppercase tracking-wide truncate" data-funcao-nome="{{ funcao.id }}">
@@ -450,7 +460,7 @@
                             </div>
                             {% endif %}
 
-                            {% if escala.funcoes|length > 1 %}
+                            {% if funcoes|length > 1 %}
                             <form method="POST" action="{{ url_for('escala.mover_membro', funcao_id=funcao.id) }}" class="flex items-center gap-1 shrink-0">
                                 {{ formularios_mover[funcao.id].hidden_tag() }}
                                 {{ formularios_mover[funcao.id].destino_funcao_id(
@@ -529,7 +539,7 @@
                                 <p class="px-3 py-2.5 text-xs {{ tema.text_secondary }}">Diretorio da comunidade vazio.</p>
                                 {% endif %}
                                 <div class="border-t {{ tema.card_border }} py-1">
-                                    <a href="{{ url_for('comunidade.membros', comunidade_id=escala.ministerio.comunidade_id, proximo=request.path) }}"
+                                    <a href="{{ url_for('comunidade.membros', comunidade_id=comunidade_id, proximo=request.path) }}"
                                        class="flex items-center gap-2.5 px-3 py-2.5 text-sm {{ tema.text_primary }} {{ tema.card_bg_hover }} transition">
                                         <i class="fa-solid fa-address-book w-4 text-center {{ tema.text_secondary }}"></i>
                                         Adicionar novo membro ao diretorio
@@ -603,18 +613,24 @@
         </div>
 
         {% if escala.departamento == 'Louvor' %}
-        <div id="repertorio" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden scroll-mt-20">
-            <div class="{{ tema.card_bg }} px-4 py-3 border-b {{ tema.card_border }} flex items-center justify-between gap-2">
+        {% set repertorio = escala.repertorio %}
+        <div id="repertorio" data-retratil="repertorio" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden scroll-mt-20">
+            <div data-retratil-cabecalho role="button" tabindex="0" aria-expanded="false" aria-controls="repertorio-corpo" class="{{ tema.card_bg }} px-4 py-3 flex items-center justify-between gap-2 cursor-pointer select-none">
                 <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
                     <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Repertorio
                 </span>
-                <a href="{{ url_for('ministerio.repertorio', ministerio_id=escala.ministerio_id) }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
-                    Banco de musicas <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                </a>
+                <span class="flex items-center gap-3">
+                    <a href="{{ url_for('ministerio.repertorio', ministerio_id=escala.ministerio_id) }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                        Banco de musicas <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                    </a>
+                    {% if repertorio %}<span class="text-xs {{ tema.text_secondary }}">{{ repertorio|length }}</span>{% endif %}
+                    <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }}" data-retratil-seta aria-hidden="true"></i>
+                </span>
             </div>
-            {% if escala.repertorio %}
+            <div data-retratil-corpo id="repertorio-corpo"><div class="border-t {{ tema.card_border }}">
+            {% if repertorio %}
             <ol class="divide-y {{ tema.divide }}">
-                {% for item in escala.repertorio %}
+                {% for item in repertorio %}
                 <li class="flex items-center justify-between gap-3 px-4 py-2.5">
                     <span class="text-xs font-bold {{ tema.text_secondary }} w-4 text-right shrink-0">{{ loop.index }}</span>
                     <div class="min-w-0 flex-1">
@@ -699,6 +715,7 @@
             {% elif escala.observacoes_repertorio %}
             <p class="border-t {{ tema.card_border }} px-4 py-3 text-xs {{ tema.text_secondary }} whitespace-pre-line"><span class="font-semibold">Observacoes:</span> {{ escala.observacoes_repertorio }}</p>
             {% endif %}
+            </div></div>
         </div>
         {% endif %}
 
@@ -806,6 +823,71 @@
     </div>
 </div>
 
+<style>
+    /* Secoes retrateis (ensaios, materiais, repertorio): grid 1fr <-> 0fr anima
+       a altura real do conteudo sem medir nada em JS. Sem JS, nada fecha. */
+    [data-retratil-corpo] { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .25s ease; }
+    [data-retratil-corpo] > div { min-height: 0; overflow: hidden; }
+    [data-retratil].fechado [data-retratil-corpo] { grid-template-rows: 0fr; }
+    [data-retratil].fechado [data-retratil-corpo] > div { visibility: hidden; transition: visibility 0s .25s; }
+    [data-retratil-seta] { transition: transform .25s ease; }
+    [data-retratil]:not(.fechado) [data-retratil-seta] { transform: rotate(180deg); }
+    [data-retratil].sem-animacao [data-retratil-corpo],
+    [data-retratil].sem-animacao [data-retratil-corpo] > div,
+    [data-retratil].sem-animacao [data-retratil-seta] { transition: none; }
+    @media (prefers-reduced-motion: reduce) {
+        [data-retratil-corpo], [data-retratil-seta] { transition: none; }
+    }
+</style>
+<script>
+/* As secoes retrateis (ensaios, materiais, repertorio) comecam recolhidas; cada um abre/fecha
+   sozinho (independentes) e o navegador lembra a escolha (localStorage,
+   vale pra qualquer escala). Uma ancora na URL (#ensaios, #materiais,
+   #repertorio -- usada pelos redirects depois de adicionar algo) sempre
+   abre a secao correspondente, senao a pessoa nao veria o que acabou de
+   adicionar. */
+(function () {
+    function lerPreferencia(chave) {
+        try { return localStorage.getItem('escala.secao.' + chave); } catch (e) { return null; }
+    }
+    function salvarPreferencia(chave, aberto) {
+        try { localStorage.setItem('escala.secao.' + chave, aberto ? '1' : '0'); } catch (e) {}
+    }
+
+    document.querySelectorAll('[data-retratil]').forEach(function (secao) {
+        var chave = secao.getAttribute('data-retratil');
+        var cabecalho = secao.querySelector('[data-retratil-cabecalho]');
+        if (!cabecalho) return;
+
+        function definir(aberto) {
+            secao.classList.toggle('fechado', !aberto);
+            cabecalho.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        }
+
+        // Estado inicial sem animacao (senao a pagina "fecha" na frente da pessoa ao carregar).
+        secao.classList.add('sem-animacao');
+        definir(lerPreferencia(chave) === '1' || window.location.hash === '#' + secao.id);
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () { secao.classList.remove('sem-animacao'); });
+        });
+
+        function alternar(evento) {
+            // Link dentro do cabecalho (ex: "Banco de musicas") segue normal.
+            if (evento.target.closest('a, button, form, input, select')) return;
+            var abrir = secao.classList.contains('fechado');
+            definir(abrir);
+            salvarPreferencia(chave, abrir);
+        }
+        cabecalho.addEventListener('click', alternar);
+        cabecalho.addEventListener('keydown', function (evento) {
+            if (evento.key === 'Enter' || evento.key === ' ') {
+                evento.preventDefault();
+                alternar(evento);
+            }
+        });
+    });
+})();
+</script>
 <script>
     // Atribuicao em lote: escolhe a pessoa de varias funcoes vazias sem
     // recarregar a cada uma -- so no final, ao clicar "Confirmar
