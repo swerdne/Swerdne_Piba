@@ -857,6 +857,9 @@ class PastaMusicas(SequentialIdDocument):
     escala_id = mongoengine.IntField()
     itens = mongoengine.EmbeddedDocumentListField(ItemPasta)
     compartilhada_com = mongoengine.EmbeddedDocumentListField(CompartilhamentoPasta)
+    # Historico legivel dos envios ("Louvor - Teclado: 3 pessoas, 12/10") --
+    # ver ministerio/compartilhamento.py.
+    envios = mongoengine.ListField(mongoengine.StringField(max_length=200))
 
     @property
     def comunidade(self):
@@ -1186,27 +1189,14 @@ def detectar_tom(texto):
 
 # --- Lista de tons (dropdown dos formularios, ver escala.forms.TomField) ------
 
-_NOME_NOTA_PT = {
-    "C": "Dó", "C#": "Dó#", "Db": "Réb", "D": "Ré", "D#": "Ré#", "Eb": "Mib", "E": "Mi",
-    "F": "Fá", "F#": "Fá#", "Gb": "Solb", "G": "Sol", "G#": "Sol#", "Ab": "Láb",
-    "A": "Lá", "A#": "Lá#", "Bb": "Sib", "B": "Si",
-}
-# Uma grafia por nota -- a mais usada em cifra de louvor (Bb, nao A#; F#, nao Gb).
+# Na tela aparece so a cifra do tom (G, F#m...), sem o nome em portugues.
 _TONS_MAIORES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 _TONS_MENORES = ["Cm", "C#m", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "G#m", "Am", "Bbm", "Bm"]
 _TOM_COMPLETO = re.compile(r"^[A-G][#b]?m?$")
 
 
-def rotulo_do_tom(tom):
-    """"G" -> "G — Sol", "F#m" -> "F#m — Fá# menor"."""
-    menor = tom.endswith("m")
-    nota = tom[:-1] if menor else tom
-    nome = _NOME_NOTA_PT.get(nota, nota)
-    return f"{tom} — {nome}{' menor' if menor else ''}"
-
-
-TONS_MAIORES = [(t, rotulo_do_tom(t)) for t in _TONS_MAIORES]
-TONS_MENORES = [(t, rotulo_do_tom(t)) for t in _TONS_MENORES]
+TONS_MAIORES = [(t, t) for t in _TONS_MAIORES]
+TONS_MENORES = [(t, t) for t in _TONS_MENORES]
 TONS = [t for t, _ in TONS_MAIORES + TONS_MENORES]
 
 
@@ -1242,5 +1232,30 @@ def itens_para_folha(entradas):
             "tom_original": tom_original,
             "blocos": blocos_da_letra(musica.letra_projecao) if musica else [],
             "cifra": cifra,
+            "cifra_html": cifra_em_html(cifra) if cifra else None,
         })
     return itens
+
+
+def cifra_em_html(texto):
+    """Cifra pronta pra <pre>, com cada acorde das linhas de acordes num
+    <span class="acorde"> (cor forte + negrito, ver folha_repertorio.html e
+    static/css/input.css). Todo o resto e escapado; espacos e quebras ficam
+    iguais, pra nao mexer no alinhamento. Mesma logica de
+    static/js/transpor.js (colorirCifra), usada na tela."""
+    from markupsafe import Markup, escape
+
+    saida = []
+    for linha in (texto or "").replace("\r\n", "\n").split("\n"):
+        if not eh_linha_de_acordes(linha):
+            saida.append(str(escape(linha)))
+            continue
+        pedacos = []
+        for pedaco in re.split(r"(\s+)", linha):
+            if pedaco and not pedaco.isspace() and _TOKEN_ACORDE.match(pedaco):
+                pedacos.append(f'<span class="acorde">{escape(pedaco)}</span>')
+            else:
+                pedacos.append(str(escape(pedaco)))
+        saida.append("".join(pedacos))
+    return Markup("\n".join(saida))
+

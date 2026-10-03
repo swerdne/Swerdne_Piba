@@ -65,3 +65,5 @@
   opacity: 1;
 }
 
+/* Acordes destacados na cifra (static/js/transpor.js e escala.models.cifra_em_html). */
+.acorde { color: #f97316; font-weight: 700; }

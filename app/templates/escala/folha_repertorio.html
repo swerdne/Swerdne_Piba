@@ -23,13 +23,40 @@
     .bloco { margin: 0 0 12px; break-inside: avoid; }
     .rotulo { font-size: 12px; font-weight: 700; color: #4338ca; margin: 0 0 2px; }
     .linha { font-size: 14px; line-height: 1.45; text-transform: uppercase; margin: 0; }
-    pre { font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.4;
+    pre { font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace; font-size: 15px; line-height: 1.45;
           white-space: pre-wrap; margin: 8px 0 0; }
+    /* Acordes em cor forte e negrito (a fonte da cifra inteira e que e maior:
+       acorde maior que a letra quebraria o alinhamento em fonte monoespacada). */
+    .acorde { color: #ea580c; font-weight: 700; }
+    @media print { .acorde { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     .vazio { font-size: 13px; color: #9ca3af; font-style: italic; }
     .gerais { border-top: 2px solid #111827; padding-top: 10px; margin-top: 10px; }
     .gerais h3 { font-size: 14px; margin: 0 0 4px; }
     .gerais p { font-size: 13px; white-space: pre-line; margin: 0; }
     .quebra { break-before: page; }
+
+    /* ---- Folha de PROJECAO: formato do modelo do ministerio (Google Docs) ---- */
+    .proj-titulo { text-align: center; font-size: 20px; font-weight: 800; text-transform: uppercase; margin: 0 0 12px; }
+    .proj-separador { border: 0; border-top: 1.5px solid #9ca3af; margin: 0 0 20px; }
+    .proj-culto { text-align: center; margin: 0 0 22px; font-size: 17px; font-weight: 800; }
+    .proj-culto mark { background: #f8d0cf; color: #111827; padding: 2px 8px; }
+    .proj-culto .nome { text-transform: uppercase; }
+    .proj-musica { margin: 0 0 30px; }
+    .proj-nome { text-align: center; font-size: 15px; font-weight: 800; margin: 0 0 12px; }
+    .proj-info { margin: 0 0 12px 22px; padding: 0; font-size: 14px; }
+    .proj-info li { margin: 0 0 4px; }
+    .proj-info mark { color: #111827; padding: 1px 4px; }
+    .amarelo { background: #fdecc8; }
+    .verde { background: #d5f0d8; }
+    .proj-letra { border: 1.5px solid #111827; column-count: 2; column-gap: 24px; column-rule: 1.5px solid #111827;
+                  padding: 4px 12px; }
+    .proj-letra .bloco { break-inside: avoid; margin: 12px 0; }
+    .proj-letra .rotulo { font-size: 14px; font-weight: 400; color: #111827; margin: 0 0 12px; }
+    .proj-letra .linha { font-size: 15px; line-height: 1.3; text-transform: uppercase; margin: 0; }
+    .proj-letra .refrao .linha { font-weight: 800; }
+    .proj-letra .vazio { column-span: all; }
+    @media (max-width: 640px) { .proj-letra { column-count: 1; column-rule: none; } }
+    @media print { mark, .proj-letra { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     @media (max-width: 640px) { .folha { margin: 0; padding: 20px 16px; box-shadow: none; } }
     @media print {
         body { background: #fff; }
@@ -47,6 +74,38 @@
 </div>
 
 <div class="folha">
+    {% if tipo == 'projecao' %}
+    {# Formato do modelo de projecao do ministerio -- ver o .proj-* no <style>. #}
+    <h1 class="proj-titulo">&#127926; {{ titulo }} &#127926;</h1>
+    <hr class="proj-separador">
+    {% if culto_nome or subtitulo %}
+    <p class="proj-culto"><mark>&#9728;&#65039; <span class="nome">{{ culto_nome or subtitulo }}</span>{% if culto_horario %} &ndash; {{ culto_horario }}{% endif %}</mark></p>
+    {% endif %}
+
+    {% for it in itens %}
+    <section class="proj-musica">
+        <h2 class="proj-nome">{{ loop.index }}. [{{ it.nome|upper }}]{% if it.momento %} - {{ it.momento }}{% endif %}</h2>
+        <ul class="proj-info">
+            <li><mark class="amarelo">&#9888;&#65039; Observa&ccedil;&otilde;es:{% if it.tom %} TOM {{ it.tom }}{% endif %}</mark></li>
+            <li><mark class="verde">&#127908; Letra:</mark></li>
+        </ul>
+        <div class="proj-letra">
+            {% for bloco in it.blocos %}
+            {% set eh_refrao = bloco.rotulo and ('REFR' in bloco.rotulo|upper or 'CORO' in bloco.rotulo|upper) %}
+            <div class="bloco {{ 'refrao' if eh_refrao }}">
+                {% if bloco.rotulo %}<p class="rotulo">[{{ bloco.rotulo|upper }}]</p>{% endif %}
+                {% for linha in bloco.linhas %}<p class="linha">{{ linha }}</p>{% endfor %}
+            </div>
+            {% else %}
+            <p class="vazio">{{ 'Letra de projecao ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
+            {% endfor %}
+        </div>
+    </section>
+    {% else %}
+    <p class="vazio">{{ vazio }}</p>
+    {% endfor %}
+
+    {% else %}
     <h1>{{ titulo }}</h1>
     <p class="sub">{{ subtitulo }}</p>
 
@@ -60,32 +119,20 @@
     </ol>
 
     {% for it in itens %}
-    <section class="musica {{ 'quebra' if tipo == 'cifras' and not loop.first }}">
+    <section class="musica {{ 'quebra' if not loop.first }}">
         <h2>{{ loop.index }}. {{ it.nome }}{% if it.momento %} - {{ it.momento }}{% endif %}</h2>
         <p class="obs">
-            {% if tipo == 'cifras' and it.musica and it.musica.artista %}{{ it.musica.artista }} &middot; {% endif %}
-            Observacoes: {% if it.tom %}TOM {{ it.tom }}{% if tipo == 'cifras' and it.tom_original %} (transposta do original em {{ it.tom_original }}){% endif %}{% else %}-{% endif %}
+            {% if it.musica and it.musica.artista %}{{ it.musica.artista }} &middot; {% endif %}
+            Observacoes: {% if it.tom %}TOM {{ it.tom }}{% if it.tom_original %} (transposta do original em {{ it.tom_original }}){% endif %}{% else %}-{% endif %}
         </p>
-        {% if tipo == 'projecao' %}
-            {% if it.blocos %}
-                {% for bloco in it.blocos %}
-                <div class="bloco">
-                    {% if bloco.rotulo %}<p class="rotulo">[{{ bloco.rotulo|upper }}]</p>{% endif %}
-                    {% for linha in bloco.linhas %}<p class="linha">{{ linha }}</p>{% endfor %}
-                </div>
-                {% endfor %}
-            {% else %}
-            <p class="vazio">{{ 'Letra de projecao ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
-            {% endif %}
+        {% if it.cifra %}
+        <pre>{{ it.cifra_html }}</pre>
         {% else %}
-            {% if it.cifra %}
-            <pre>{{ it.cifra }}</pre>
-            {% else %}
-            <p class="vazio">{{ 'Cifra ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
-            {% endif %}
+        <p class="vazio">{{ 'Cifra ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
         {% endif %}
     </section>
     {% endfor %}
+    {% endif %}
     {% endif %}
 
     {% if observacoes %}

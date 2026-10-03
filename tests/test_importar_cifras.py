@@ -329,8 +329,9 @@ def test_campo_de_tom_e_um_dropdown_com_os_24_tons(logged_in_client, app, db):
         ministerio = _ministerio(logged_in_client)
         html = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio", follow_redirects=True).data.decode("utf-8")
         assert re.search(r'<select [^>]*name="tom"', html)
-        assert '<option value="F#m">F#m — Fá# menor</option>' in html
-        assert '<option value="Bb">Bb — Sib</option>' in html
+        # So a cifra do tom, sem o nome em portugues.
+        assert '<option value="F#m">F#m</option>' in html and '<option value="Bb">Bb</option>' in html
+        assert "Sol" not in html.split('name="tom"')[1].split("</select>")[0]
         assert '<optgroup label="">' not in html  # opcao vazia solta no topo
 
 

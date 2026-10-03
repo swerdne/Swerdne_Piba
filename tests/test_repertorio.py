@@ -1,5 +1,6 @@
 """Banco de musicas do ministerio (versao de projecao x versao do louvor) e
 como ele chega nas escalas: folha de projecao, cifras e "Minha escala"."""
+import re
 from datetime import date, timedelta
 
 from app.escala.models import (
@@ -175,14 +176,19 @@ def test_folhas_de_projecao_e_cifras(logged_in_client, app, db):
         data_curta = Escala.objects(id=escala.id).first().data.strftime("%d.%m.%y")
         assert f"Escala Louvor &ndash; [{data_curta}]" in projecao
         assert "18:00h" in projecao
-        assert "1. Grande e o Senhor - Abertura" in projecao
+        # Formato do modelo de projecao: "1. [NOME] - Momento", Observacoes e Letra destacadas.
+        assert "1. [GRANDE E O SENHOR] - Abertura" in projecao
+        assert "Observa&ccedil;&otilde;es: TOM A" in projecao and "Letra:" in projecao
+        assert 'class="proj-letra"' in projecao
         assert "TOM A" in projecao
         assert "[VERSO 1]" in projecao and "DIGNO DE LOUVOR" in projecao
         assert "G        D" not in projecao  # projecao nao leva cifra
         assert "OBSERVACOES GERAIS" in projecao and "Ministracao livre no fim" in projecao
 
         cifras = logged_in_client.get(f"/escala/{escala.id}/repertorio/cifras").data.decode("utf-8")
-        assert "A        E" in cifras and "Grande e o Senhor" in cifras  # tom do dia A
+        # Tom do dia A, acordes destacados (cor forte) na folha.
+        assert '<span class="acorde">A</span>        <span class="acorde">E</span>' in cifras
+        assert "Grande e o Senhor" in cifras
 
 
 def test_folha_fechada_pra_quem_nao_e_da_equipe(logged_in_client, outro_logged_in_client, app, db):
@@ -378,7 +384,7 @@ def test_folha_de_cifras_sai_no_tom_do_dia(logged_in_client, app, db):
         logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
                               data={"banco-musica_id": musica.id, "banco-momento": "", "banco-tom": "A"})
         cifras = logged_in_client.get(f"/escala/{escala.id}/repertorio/cifras").data.decode("utf-8")
-        assert "A        E\nGrande e o Senhor" in cifras
+        assert "A        E\nGrande e o Senhor" in re.sub(r"<[^>]+>", "", cifras)  # sem as tags dos acordes coloridos
         assert "transposta do original em G" in cifras
         musica.reload()
         assert musica.cifra_louvor == CIFRA  # o banco continua no tom original

@@ -428,6 +428,7 @@ def detalhe(escala_id):
         formulario_anexo=_form_anexo(escala, funcoes),
         formulario_item_banco=_form_item_banco(escala),
         repertorios_prontos=_repertorios_pra_escala(escala) if eh_dono else [],
+        opcoes_envio=_opcoes_envio(escala) if eh_dono else [],
         formulario_observacoes=ObservacoesRepertorioForm(observacoes_repertorio=escala.observacoes_repertorio),
         anexos=_anexos_visiveis(escala, eh_dono, funcoes),
         ensaios=escala.ensaios,
@@ -1654,6 +1655,11 @@ def adicionar_musica_do_banco(escala_id):
     return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
 
 
+def _opcoes_envio(escala):
+    from app.ministerio.compartilhamento import opcoes_de_envio
+    return opcoes_de_envio(escala.ministerio.comunidade_id, current_user.id)
+
+
 def _repertorios_pra_escala(escala):
     """[(nome do grupo, [repertorios])] que a escala pode usar: os do proprio
     ministerio primeiro, depois os dos outros ministerios da comunidade."""
@@ -1708,32 +1714,38 @@ def usar_repertorio_pronto(escala_id):
     return voltar
 
 
-@bp.route("/<int:escala_id>/repertorio/pasta", methods=["POST"])
+@bp.route("/<int:escala_id>/repertorio/compartilhar", methods=["POST"])
 @login_required
-def repertorio_para_pasta(escala_id):
-    """Copia o repertorio da escala (com o tom do dia e o momento de cada
-    musica) pra uma pasta do banco e abre ela no ponto de compartilhar -- e
-    assim que se envia o repertorio de um culto pra qualquer pessoa."""
+def compartilhar_repertorio(escala_id):
+    """Envia o repertorio desta escala pra um ministerio inteiro ou pra uma
+    funcao dele, sem sair da tela. Por baixo guarda uma copia no banco
+    (repertorio do ministerio da escala, com o tom do dia) -- sempre a
+    mesma copia por escala, atualizada a cada envio, pra nao acumular
+    repetidos."""
+    from app.ministerio.routes import _mensagem_de_envio, _ministerio_e_funcao_do_form, enviar_repertorio
+
     escala = _escala_do_usuario_ou_404(escala_id)
-    if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+    voltar = redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
     itens = escala.repertorio
+    comunidade_id = escala.ministerio.comunidade_id
+    ministerio_destino, funcao = _ministerio_e_funcao_do_form(comunidade_id)
+    if not AcaoForm().validate_on_submit() or ministerio_destino is None:
+        flash("Escolha o ministerio (e, se quiser, a funcao) que vai receber.", "danger")
+        return voltar
     if not itens:
         flash("O repertorio desta escala ainda esta vazio.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+        return voltar
+
     data_curta = escala.data.strftime("%d/%m") if escala.data else ""
-    pasta = PastaMusicas(
-        comunidade_id=escala.ministerio.comunidade_id,
-        ministerio_id=escala.ministerio_id,
-        nome=f"{escala.nome} {data_curta}".strip()[:120],
-        criada_por_id=current_user.id,
-        escala_id=escala.id,
-        itens=[ItemPasta(musica_id=i.musica_id, nome=i.nome_musica, tom=i.tom, momento=i.momento) for i in itens],
+    pasta = PastaMusicas.objects(escala_id=escala.id).first() or PastaMusicas(
+        comunidade_id=comunidade_id, criada_por_id=current_user.id, escala_id=escala.id,
     )
+    pasta.ministerio_id = escala.ministerio_id
+    pasta.nome = f"{escala.nome} {data_curta}".strip()[:120]
+    pasta.itens = [ItemPasta(musica_id=i.musica_id, nome=i.nome_musica, tom=i.tom, momento=i.momento) for i in itens]
     pasta.save()
-    flash("Repertorio salvo no banco. Escolha abaixo pra quem enviar.", "success")
-    return redirect(url_for("ministerio.pasta", pasta_id=pasta.id) + "#compartilhar")
+    flash(*_mensagem_de_envio(pasta, ministerio_destino, funcao, enviar_repertorio(pasta, ministerio_destino, funcao)))
+    return voltar
 
 
 @bp.route("/<int:escala_id>/repertorio/observacoes", methods=["POST"])
@@ -1773,6 +1785,8 @@ def folha_repertorio(escala_id, tipo):
             if escala.horario else escala.nome
         ),
         voltar_url=url_for("escala.detalhe", escala_id=escala.id),
+        culto_nome=escala.nome,
+        culto_horario=escala.horario.strftime("%H:%M") + "h" if escala.horario else None,
         observacoes=escala.observacoes_repertorio,
         vazio="Nenhuma musica no repertorio desta escala.",
     )

@@ -215,7 +215,7 @@
                         class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">+&frac12;</button>
                 <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Desfazer</button>
             </div>
-            <pre id="cifra_leitura" class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-sm {{ tema.text_primary }} overflow-x-auto">{{ form_louvor.cifra_louvor.data }}</pre>
+            <pre id="cifra_leitura" data-colorir-acordes class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-base leading-relaxed {{ tema.text_primary }} overflow-x-auto">{{ form_louvor.cifra_louvor.data }}</pre>
             {% else %}
             <p class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl p-6 text-center text-sm {{ tema.text_secondary }}">A cifra ainda nao foi preenchida.</p>
             {% endif %}

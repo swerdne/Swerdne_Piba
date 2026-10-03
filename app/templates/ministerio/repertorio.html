@@ -6,6 +6,7 @@
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "ministerio/_envio.html" import campos_envio %}
 {% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
 {% set CHIP = "shrink-0 text-xs font-semibold rounded-full px-3 py-1.5 border transition" %}
 
@@ -118,7 +119,15 @@
                 <button type="button" data-modo="repertorios" role="tab"
                         class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list-ol mr-1"></i>Repertorios</button>
             </div>
-            <span class="text-xs {{ tema.text_secondary }}">{{ musicas|length }} musica(s)</span>
+            <div class="flex items-center gap-2">
+                <span class="text-xs {{ tema.text_secondary }}">{{ musicas|length }} musica(s)</span>
+                {% if pode_gerenciar and musicas %}
+                <button type="button" data-abrir-apagar title="Apagar todas as musicas deste banco" aria-label="Apagar todas as musicas"
+                        class="flex items-center gap-1 text-xs font-semibold text-red-500 border border-red-500/30 rounded-full px-2.5 py-1 hover:bg-red-500/10 transition">
+                    <i class="fa-solid fa-trash"></i><span class="hidden sm:inline">Apagar todas</span>
+                </button>
+                {% endif %}
+            </div>
         </div>
 
         <!-- ===== Modo Lista ===== -->
@@ -129,11 +138,31 @@
                 <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tom ou tema (ex: cruz)"
                        class="w-full pl-10 {{ CAMPO }}">
             </div>
-            {% if ministerios_que_lidera %}
-            <p class="text-xs {{ tema.text_secondary }}">Marque as musicas pra montar um repertorio (ex: manha, noite). A selecao fica guardada mesmo se voce abrir uma musica e voltar.</p>
-            {% endif %}
+            <!-- A lista fica escondida (nao ocupa a tela) ate pesquisar, tocar num
+                 tema ou pedir "Ver todas"/"Ver marcadas" -- ver filtro no JS abaixo. -->
+            <div class="flex flex-wrap gap-1.5">
+                <button type="button" data-ver-todas
+                        class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_secondary }} transition">
+                    <i class="fa-solid fa-list mr-1"></i>Ver todas ({{ musicas|length }})
+                </button>
+                {% if ministerios_que_lidera %}
+                <button type="button" data-ver-marcadas
+                        class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_secondary }} transition">
+                    <i class="fa-solid fa-check-square mr-1"></i>Ver marcadas (<span data-qtd-marcadas>0</span>)
+                </button>
+                {% endif %}
+                {% for tema_musica in temas_populares %}
+                <button type="button" data-tema="{{ tema_musica }}"
+                        class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_secondary }} transition">
+                    {{ tema_musica }}
+                </button>
+                {% endfor %}
+            </div>
+            <p data-lista-dica class="text-xs {{ tema.text_secondary }} hidden">
+                Pesquise ou toque num tema pra ver as musicas{% if ministerios_que_lidera %} -- e marque as que vao num repertorio (ex: manha, noite){% endif %}.
+            </p>
 
-            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
+            <div data-lista-musicas class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
                 {% for m in musicas %}
                 <div data-musica-item
                      data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
@@ -188,7 +217,6 @@
             <form method="POST" data-form-enviar
                   class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2.5">
                 {{ acao_form.hidden_tag() }}
-                <input type="hidden" name="usuario_id" data-usuario-escolhido>
                 <input type="hidden" name="voltar" value="{{ request.path }}#repertorios">
                 <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-paper-plane mr-1 {{ tema.accent_text }}"></i>Enviar um repertorio</p>
                 <select data-repertorio-escolhido aria-label="Repertorio" class="w-full {{ CAMPO }}">
@@ -200,11 +228,10 @@
                     </optgroup>
                     {% endfor %}
                 </select>
-                <input type="search" data-busca-pessoa autocomplete="off" placeholder="Pra quem? Buscar por nome ou e-mail"
-                       data-url="{{ url_for('ministerio.buscar_pessoa_para_enviar', comunidade_id=comunidade.id) }}"
-                       class="w-full {{ CAMPO }}">
-                <div data-resultados class="hidden border {{ tema.card_border }} rounded-xl overflow-hidden divide-y {{ tema.divide }}"></div>
-                <p class="text-xs {{ tema.text_secondary }}">Quem recebe ve o repertorio na tela inicial e baixa as cifras -- mesmo sendo de outro ministerio.</p>
+                {{ campos_envio(opcoes_envio, banco.ministerio.id if banco.ministerio else None, tema, CAMPO) }}
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-paper-plane mr-1"></i>Enviar
+                </button>
             </form>
             {% endif %}
 
@@ -282,30 +309,33 @@
         </section>
 
         {% if pode_gerenciar and musicas %}
-        <!-- Zona de perigo: apagar o banco inteiro. Duas confirmacoes: a frase
-             digitada (conferida tambem no servidor) + confirm() do navegador. -->
-        <details class="{{ tema.card_bg }} border border-red-500/30 rounded-3xl shadow-sm overflow-hidden">
-            <summary class="px-4 py-3 text-xs font-semibold text-red-500 cursor-pointer select-none">
-                <i class="fa-solid fa-triangle-exclamation mr-1"></i>Zona de perigo
-            </summary>
+        <!-- Apagar o banco inteiro (aberta pela lixeira ao lado do contador). Duas
+             confirmacoes: a frase digitada (conferida tambem no servidor) + confirm()
+             do navegador. -->
+        <dialog data-dialog-apagar class="m-auto w-[min(28rem,calc(100%-2rem))] rounded-3xl p-0 border border-red-500/30 {{ tema.card_bg }} {{ tema.text_primary }} backdrop:bg-black/60">
             <form method="POST" action="{{ url_for('ministerio.apagar_todas_musicas', **banco.args) }}"
-                  data-apagar-todas data-total="{{ musicas|length }}" class="px-4 pb-4 space-y-3">
+                  data-apagar-todas data-total="{{ musicas|length }}" class="p-5 space-y-3">
                 {{ acao_form.hidden_tag() }}
-                <p class="text-sm {{ tema.text_primary }}">
-                    Apagar <span class="font-bold">todas as {{ musicas|length }} musica(s)</span> do {{ banco.titulo|lower }}.
-                    Nao da pra desfazer. Escalas e repertorios que usavam alguma ficam com ela como musica avulsa.
+                <p class="text-base font-bold text-red-500"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Apagar todas as musicas?</p>
+                <p class="text-sm">
+                    Isso apaga <span class="font-bold">as {{ musicas|length }} musica(s)</span> do {{ banco.titulo|lower }} e nao da pra desfazer.
+                    Escalas e repertorios que usavam alguma ficam com ela como musica avulsa.
                 </p>
                 <label class="block text-xs {{ tema.text_secondary }}">
                     Pra confirmar, digite <span class="font-bold text-red-500">{{ frase_apagar_todas }}</span>:
                     <input type="text" name="confirmacao" autocomplete="off" data-frase="{{ frase_apagar_todas }}"
                            class="mt-1 w-full {{ CAMPO }}">
                 </label>
-                <button type="submit" disabled data-botao-apagar-todas
-                        class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
-                    <i class="fa-solid fa-trash mr-1"></i>Apagar todas as musicas
-                </button>
+                <div class="flex gap-2">
+                    <button type="button" data-fechar-apagar
+                            class="flex-1 border {{ tema.card_border }} text-sm font-semibold py-2.5 rounded-full hover:bg-black/5 transition">Cancelar</button>
+                    <button type="submit" disabled data-botao-apagar-todas
+                            class="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-trash mr-1"></i>Apagar todas
+                    </button>
+                </div>
             </form>
-        </details>
+        </dialog>
         {% endif %}
     </main>
 
@@ -343,24 +373,6 @@
 
 <script>
     (function () {
-        // Busca (modo Lista)
-        var busca = document.querySelector('[data-busca-musica]');
-        if (busca) {
-            var semAcento = function (t) { return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
-            var itens = document.querySelectorAll('[data-musica-item]');
-            var vazia = document.querySelector('[data-busca-vazia]');
-            busca.addEventListener('input', function () {
-                var termo = semAcento(busca.value.trim());
-                var visiveis = 0;
-                itens.forEach(function (item) {
-                    var ok = !termo || semAcento(item.getAttribute('data-texto')).indexOf(termo) !== -1;
-                    item.classList.toggle('hidden', !ok);
-                    if (ok) visiveis++;
-                });
-                vazia.classList.toggle('hidden', visiveis > 0);
-            });
-        }
-
         // Alternar Lista / Repertorios -- lembrado no navegador; #repertorios na URL abre direto.
         var botoes = document.querySelectorAll('[data-modo]');
         var conteudos = document.querySelectorAll('[data-modo-conteudo]');
@@ -428,72 +440,19 @@
             caixas.forEach(function (c) { c.checked = false; });
             guardarSelecao();
             atualizarSelecao();
+            if (qtdMarcadas) qtdMarcadas.textContent = 0;
+            aplicarFiltro();
         });
         // Criou o repertorio: a selecao ja foi usada.
         if (barra) barra.addEventListener('submit', function () {
             try { sessionStorage.removeItem(CHAVE_SELECAO); } catch (e) {}
         });
 
-        // Enviar um repertorio: busca a pessoa e manda pro repertorio escolhido.
+        // Enviar um repertorio: o form vai pro repertorio escolhido no select.
         var formEnviar = document.querySelector('[data-form-enviar]');
         if (formEnviar) {
-            var buscaPessoa = formEnviar.querySelector('[data-busca-pessoa]');
-            var resultados = formEnviar.querySelector('[data-resultados]');
-            var escolhido = formEnviar.querySelector('[data-usuario-escolhido]');
-            var seletor = formEnviar.querySelector('[data-repertorio-escolhido]');
-            var espera = null, consulta = 0;
-            buscaPessoa.addEventListener('input', function () {
-                clearTimeout(espera);
-                var termo = buscaPessoa.value.trim();
-                if (termo.length < 2) { resultados.innerHTML = ''; resultados.classList.add('hidden'); return; }
-                espera = setTimeout(function () {
-                    var minha = ++consulta;
-                    fetch(buscaPessoa.getAttribute('data-url') + '?q=' + encodeURIComponent(termo), { credentials: 'same-origin' })
-                        .then(function (r) { return r.ok ? r.json() : []; })
-                        .then(function (pessoas) {
-                            if (minha !== consulta) return;
-                            resultados.innerHTML = '';
-                            if (!pessoas.length) {
-                                var nada = document.createElement('p');
-                                nada.className = 'px-3 py-2 text-xs {{ tema.text_secondary }}';
-                                nada.textContent = 'Ninguem encontrado com esse nome ou e-mail.';
-                                resultados.appendChild(nada);
-                            }
-                            pessoas.forEach(function (p) {
-                                var botao = document.createElement('button');
-                                botao.type = 'button';
-                                botao.className = 'w-full text-left px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.card_bg_hover }} transition';
-                                botao.textContent = p.label;
-                                botao.addEventListener('click', function () {
-                                    var nomeRepertorio = seletor.options[seletor.selectedIndex].text;
-                                    if (!confirm('Enviar "' + nomeRepertorio + '" para ' + p.label + '?')) return;
-                                    escolhido.value = p.id;
-                                    formEnviar.action = seletor.value;
-                                    formEnviar.submit();
-                                });
-                                resultados.appendChild(botao);
-                            });
-                            resultados.classList.remove('hidden');
-                        });
-                }, 300);
-            });
-        }
-
-        // Apagar todas: so libera o botao com a frase certa (1a confirmacao) e
-        // ainda pergunta no navegador antes de enviar (2a confirmacao).
-        var formApagar = document.querySelector('[data-apagar-todas]');
-        if (formApagar) {
-            var campoFrase = formApagar.querySelector('[data-frase]');
-            var botaoApagar = formApagar.querySelector('[data-botao-apagar-todas]');
-            var normalizar = function (t) { return t.trim().replace(/\s+/g, ' ').toUpperCase(); };
-            campoFrase.addEventListener('input', function () {
-                botaoApagar.disabled = normalizar(campoFrase.value) !== campoFrase.getAttribute('data-frase');
-            });
-            formApagar.addEventListener('submit', function (e) {
-                var total = formApagar.getAttribute('data-total');
-                if (!confirm('Tem certeza? Isso apaga TODAS as ' + total + ' musica(s) deste banco e nao da pra desfazer.')) {
-                    e.preventDefault();
-                }
+            formEnviar.addEventListener('submit', function () {
+                formEnviar.action = formEnviar.querySelector('[data-repertorio-escolhido]').value;
             });
         }
 

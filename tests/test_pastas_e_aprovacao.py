@@ -158,20 +158,117 @@ def test_repertorio_dos_cultos_aparece_como_pasta_automatica(logged_in_client, a
         assert "Culto de Domingo" in html and "Oceanos" in html
 
 
-def test_repertorio_da_escala_vira_pasta_com_tom_do_dia(logged_in_client, app, db):
+def _escalar_conta(cliente, comunidade_id, escala, nome_funcao, nome, email):
+    """Poe uma conta (pelo e-mail) escalada numa funcao da escala -- e assim
+    que ela passa a contar como "quem serve nessa funcao" do ministerio."""
+    from app.escala.models import Funcao, Membro
+
+    membro = Membro.objects(comunidade_id=comunidade_id, email=email).first()
+    if membro is None:
+        membro = Membro(comunidade_id=comunidade_id, nome=nome, email=email)
+        membro.save()
+    funcao = Funcao.objects(escala_id=escala.id, nome=nome_funcao).first()
+    funcao.membro_id = membro.id
+    funcao.save()
+
+
+def _carla():
+    carla = User.objects(email="carla@example.com").first()
+    if carla is None:
+        carla = User(email="carla@example.com", username="carla", name="Carla", email_confirmado=True)
+        carla.save()
+    return carla
+
+
+def _enviar(cliente, url, ministerio_id, funcao="", **extra):
+    return cliente.post(url, data={"ministerio_id": ministerio_id, "funcao": funcao, **extra})
+
+
+def test_escala_compartilha_repertorio_com_um_ministerio_inteiro(logged_in_client, outro_logged_in_client, app, db):
     with app.app_context():
-        comunidade, louvor, _ = _igreja(logged_in_client)
+        comunidade, louvor, kids = _igreja(logged_in_client)
         logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos", "tom": "D"})
         musica = Musica.objects(nome="Oceanos").first()
         escala = _criar_escala(logged_in_client, louvor.id, "Culto")
         logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
                               data={"banco-musica_id": musica.id, "banco-momento": "Abertura", "banco-tom": "E"})
-        resposta = logged_in_client.post(f"/escala/{escala.id}/repertorio/pasta", data={})
+        UsuarioMinisterio(usuario_id=_bruno().id, ministerio_id=kids.id, papel="membro").save()
+
+        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+        assert "Compartilhar este repertorio" in html and "data-envio" in html
+
+        resposta = _enviar(logged_in_client, f"/escala/{escala.id}/repertorio/compartilhar", kids.id)
+        assert resposta.headers["Location"].endswith(f"/escala/{escala.id}#repertorio")  # nao sai da escala
         pasta = PastaMusicas.objects(escala_id=escala.id).first()
-        assert resposta.headers["Location"].endswith(f"/ministerio/pastas/{pasta.id}#compartilhar")
         item = pasta.itens[0]
         assert (item.musica_id, item.tom, item.momento) == (musica.id, "E", "Abertura")
         assert pasta.ministerio_id == louvor.id
+        assert pasta.compartilhamento_de(_bruno().id) is not None
+        assert "Kids (todo o ministerio): 1 pessoa(s)" in pasta.envios[0]
+
+        # Enviar de novo nao cria outra copia no banco.
+        _enviar(logged_in_client, f"/escala/{escala.id}/repertorio/compartilhar", kids.id)
+        assert PastaMusicas.objects(escala_id=escala.id).count() == 1
+
+
+def test_compartilhar_so_com_quem_serve_numa_funcao(logged_in_client, outro_logged_in_client, app, db):
+    """Bruno toca teclado e Carla bateria no Louvor: mandar pra funcao
+    "Teclado" chega so no Bruno; pro ministerio inteiro, nos dois."""
+    with sessao_isolada(app):
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        cid, lid = comunidade.id, louvor.id
+        escala = _criar_escala(logged_in_client, lid, "Culto")
+        _escalar_conta(logged_in_client, cid, escala, "Teclado", "Bruno", "bruno@example.com")
+        _escalar_conta(logged_in_client, cid, escala, "Bateria", "Carla", _carla().email)
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oceanos", "tom": "D"})
+        _criar_pasta(logged_in_client, cid, "Noite", [Musica.objects(nome="Oceanos").first()], ministerio_id=lid)
+        pasta_id = PastaMusicas.objects(nome="Noite").first().id
+
+        tela = logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
+        assert '"nome": "Teclado", "pessoas": 1' in tela  # opcoes de envio com a contagem
+
+        _enviar(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", lid, "teclado")  # sem diferenciar maiuscula
+        pasta = PastaMusicas.objects(id=pasta_id).first()
+        assert pasta.compartilhamento_de(_bruno().id) is not None
+        assert pasta.compartilhamento_de(_carla().id) is None
+
+        _enviar(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", lid)
+        assert PastaMusicas.objects(id=pasta_id).first().compartilhamento_de(_carla().id) is not None
+
+    with sessao_isolada(app):
+        inicio = outro_logged_in_client.get("/dashboard").data.decode("utf-8")
+        assert "Repertorios para voce" in inicio and "Noite" in inicio and "Novo" in inicio
+        assert Notificacao.objects(usuario_id=_bruno().id, tipo="repertorio_compartilhado").count() == 2
+        assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}/cifras").status_code == 200
+        assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}/projecao").status_code == 200
+        assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}").status_code == 200  # abrir marca como visto
+        assert PastaMusicas.objects(id=pasta_id).first().compartilhamento_de(_bruno().id).visto_em is not None
+        # Quem so recebeu nao edita nem reenvia.
+        assert outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/renomear", data={"nome": "X"}).status_code == 404
+        assert _enviar(outro_logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", lid).status_code == 404
+
+
+def test_funcao_sem_ninguem_com_conta_nao_envia_nada(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos"})
+        _criar_pasta(logged_in_client, comunidade.id, "Noite", [Musica.objects(nome="Oceanos").first()], ministerio_id=louvor.id)
+        pasta = PastaMusicas.objects(nome="Noite").first()
+        _enviar(logged_in_client, f"/ministerio/pastas/{pasta.id}/compartilhar", louvor.id, "Violao")
+        pasta = PastaMusicas.objects(id=pasta.id).first()
+        assert pasta.compartilhada_com == [] and pasta.envios == []
+
+
+def test_busca_de_pessoa_por_email_nao_existe_mais(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos"})
+        _criar_pasta(logged_in_client, comunidade.id, "Noite", [Musica.objects(nome="Oceanos").first()], ministerio_id=louvor.id)
+        pasta_id = PastaMusicas.objects(nome="Noite").first().id
+        assert logged_in_client.get(f"/ministerio/pastas/{pasta_id}/buscar-usuario?q=bru").status_code == 404
+        assert logged_in_client.get(f"/ministerio/musicas/{comunidade.id}/buscar-pessoa?q=bru").status_code == 404
+        tela = logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
+        assert "Buscar por nome ou e-mail" not in tela
 
 
 def test_folha_da_pasta_sai_no_tom_guardado(logged_in_client, app, db):
@@ -185,47 +282,8 @@ def test_folha_da_pasta_sai_no_tom_guardado(logged_in_client, app, db):
         logged_in_client.post(f"/ministerio/pastas/{pasta.id}/remover/0", data={})
         logged_in_client.post(f"/ministerio/pastas/{pasta.id}/adicionar", data={"musica_id": musica.id, "tom": "A"})
         folha = logged_in_client.get(f"/ministerio/pastas/{pasta.id}/cifras").data.decode("utf-8")
-        assert "A  E\nGrande e o Senhor" in folha and "Imprimir / PDF" in folha
-
-
-# --- Compartilhamento com qualquer conta ---------------------------------------------
-
-def test_compartilhar_com_pessoa_de_outra_comunidade(logged_in_client, outro_logged_in_client, app, db):
-    """Bruno nao e de nenhuma comunidade da Ana: recebe a pasta, ve na tela
-    inicial (como nova), abre, baixa -- mas nao edita nem ve o banco."""
-    with sessao_isolada(app):
-        comunidade, _, _ = _igreja(logged_in_client)
-        cid = comunidade.id
-        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oceanos", "tom": "D"})
-        musica = Musica.objects(nome="Oceanos").first()
-        _criar_pasta(logged_in_client, cid, "Culto Jovem", [musica])
-        pasta_id = PastaMusicas.objects(nome="Culto Jovem").first().id
-
-    with sessao_isolada(app):
-        # Antes de receber: nada.
-        assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}").status_code == 404
-
-    with sessao_isolada(app):
-        busca = logged_in_client.get(f"/ministerio/pastas/{pasta_id}/buscar-usuario?q=bru").get_json()
-        assert busca == [{"id": _bruno().id, "label": "bruno (bruno@example.com)"}] or busca[0]["id"] == _bruno().id
-        logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar", data={"usuario_id": _bruno().id})
-
-    with sessao_isolada(app):
-        inicio = outro_logged_in_client.get("/dashboard").data.decode("utf-8")
-        assert "Repertorios para voce" in inicio and "Culto Jovem" in inicio and "Novo" in inicio
-        assert Notificacao.objects(usuario_id=_bruno().id, tipo="repertorio_compartilhado").count() == 1
-
-        tela = outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}")
-        assert tela.status_code == 200 and "Oceanos" in tela.data.decode("utf-8")
-        assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}/cifras").status_code == 200
-        assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}/projecao").status_code == 200
-        # Abriu: deixa de ser "novo".
-        assert PastaMusicas.objects(id=pasta_id).first().compartilhamento_de(_bruno().id).visto_em is not None
-        assert ">Novo<" not in outro_logged_in_client.get("/dashboard").data.decode("utf-8")
-        # So leitura: nao edita a pasta, nao compartilha adiante, nao ve o banco.
-        assert outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/renomear", data={"nome": "X"}).status_code == 404
-        assert outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar", data={"usuario_id": 1}).status_code == 404
-        assert outro_logged_in_client.get(f"/ministerio/musicas/{cid}").status_code == 404
+        assert '<span class="acorde">A</span>  <span class="acorde">E</span>\nGrande e o Senhor' in folha
+        assert "Imprimir / PDF" in folha
 
 
 def test_lider_do_ministerio_dono_edita_e_envia_lider_de_outro_so_ve(logged_in_client, outro_logged_in_client, app, db):
@@ -236,12 +294,12 @@ def test_lider_do_ministerio_dono_edita_e_envia_lider_de_outro_so_ve(logged_in_c
         _criar_pasta(logged_in_client, cid, "Manha", [Musica.objects(nome="Oceanos").first()], ministerio_id=lid)
         pasta_id = PastaMusicas.objects(nome="Manha").first().id
         _bruno_lider(kid)  # lider do Kids, nao do Louvor
-        ana_id = User.objects(email="ana@example.com").first().id
+        UsuarioMinisterio(usuario_id=_carla().id, ministerio_id=kid, papel="membro").save()
 
     with sessao_isolada(app):
         html = outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
         assert "Manha" in html and 'id="compartilhar"' not in html
-        assert outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar", data={"usuario_id": ana_id}).status_code == 404
+        assert _enviar(outro_logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", kid).status_code == 404
         assert outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/excluir", data={}).status_code == 404
         # Nao cria repertorio em ministerio que nao lidera.
         outro_logged_in_client.post(f"/ministerio/musicas/{cid}/pastas/nova",
@@ -253,8 +311,8 @@ def test_lider_do_ministerio_dono_edita_e_envia_lider_de_outro_so_ve(logged_in_c
     with sessao_isolada(app):
         html = outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
         assert 'id="compartilhar"' in html and "Renomear, mudar de ministerio ou excluir" in html
-        outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar", data={"usuario_id": ana_id})
-        assert PastaMusicas.objects(id=pasta_id).first().compartilhamento_de(ana_id) is not None
+        _enviar(outro_logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", kid)
+        assert PastaMusicas.objects(id=pasta_id).first().compartilhamento_de(_carla().id) is not None
 
 
 def test_repertorios_da_manha_e_da_noite_agrupados_por_ministerio(logged_in_client, app, db):
@@ -277,20 +335,17 @@ def test_repertorios_da_manha_e_da_noite_agrupados_por_ministerio(logged_in_clie
 
 def test_enviar_pelo_quadro_do_banco_volta_pro_banco(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
-        comunidade, louvor, _ = _igreja(logged_in_client)
+        comunidade, louvor, kids = _igreja(logged_in_client)
         cid = comunidade.id
         logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oceanos"})
         _criar_pasta(logged_in_client, cid, "Noite", [Musica.objects(nome="Oceanos").first()], ministerio_id=louvor.id)
         pasta_id = PastaMusicas.objects(nome="Noite").first().id
-        pessoas = logged_in_client.get(f"/ministerio/musicas/{cid}/buscar-pessoa?q=bruno").get_json()
-        assert [p["id"] for p in pessoas] == [_bruno().id]
-        resposta = logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar",
-                                         data={"usuario_id": _bruno().id, "voltar": f"/ministerio/musicas/{cid}#repertorios"})
+        UsuarioMinisterio(usuario_id=_bruno().id, ministerio_id=kids.id, papel="membro").save()
+        resposta = _enviar(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", kids.id,
+                           voltar=f"/ministerio/musicas/{cid}#repertorios")
         assert resposta.headers["Location"].endswith(f"/ministerio/musicas/{cid}#repertorios")
     with sessao_isolada(app):
         assert "Noite" in outro_logged_in_client.get("/dashboard").data.decode("utf-8")
-        # Quem nao lidera nada na comunidade nao usa a busca.
-        assert outro_logged_in_client.get(f"/ministerio/musicas/{cid}/buscar-pessoa?q=ana").status_code == 404
 
 
 def test_selecao_guardada_e_quadradinho_com_area_de_clique(logged_in_client, app, db):
@@ -413,3 +468,16 @@ def test_so_quem_edita_o_banco_apaga_todas(logged_in_client, outro_logged_in_cli
         resposta = outro_logged_in_client.post(f"/ministerio/musicas/{cid}/apagar-todas", data={"confirmacao": "APAGAR TODAS"})
         assert resposta.status_code == 404
         assert Musica.objects(nome="Oficial").count() == 1
+
+
+def test_banco_mostra_atalhos_de_tema_e_lixeira_no_topo(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, _, _ = _igreja(logged_in_client)
+        for nome, tags in (("Rude Cruz", "cruz"), ("A Cruz", "cruz, amor"), ("Amor", "amor")):
+            logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": nome, "tags": tags})
+        html = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
+        assert 'data-tema="cruz"' in html and 'data-tema="amor"' in html
+        assert "Ver todas (3)" in html and "data-ver-marcadas" in html
+        # Lixeira ao lado do contador (antes do conteudo), abrindo a janela de confirmacao.
+        assert html.index("data-abrir-apagar") < html.index("data-lista-musicas")
+        assert "<dialog data-dialog-apagar" in html

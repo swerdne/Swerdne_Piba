@@ -1,0 +1,24 @@
+{# Campos de "pra quem enviar o repertorio": um ministerio inteiro ou uma
+   funcao dele (ver app/ministerio/compartilhamento.py). O 2o select e
+   preenchido pelo JS (static/js/main.js, [data-envio]) conforme o ministerio
+   escolhido, com quantas pessoas recebem; o botao de enviar do form fica
+   desligado quando ninguem receberia. #}
+{% macro campos_envio(opcoes, ministerio_padrao, tema, CAMPO) %}
+<div data-envio data-opcoes='{{ opcoes|tojson }}' class="space-y-2">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label class="block">
+            <span class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Ministerio</span>
+            <select name="ministerio_id" data-envio-ministerio class="w-full {{ CAMPO }}">
+                {% for o in opcoes %}
+                <option value="{{ o.id }}" {{ 'selected' if ministerio_padrao and o.id == ministerio_padrao }}>{{ o.nome }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="block">
+            <span class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Pra quem</span>
+            <select name="funcao" data-envio-destino class="w-full {{ CAMPO }}"></select>
+        </label>
+    </div>
+    <p data-envio-resumo class="text-xs {{ tema.text_secondary }}"></p>
+</div>
+{% endmacro %}

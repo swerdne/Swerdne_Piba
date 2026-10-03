@@ -879,11 +879,29 @@ def _repertorios_por_ministerio(comunidade, ministerios):
     return grupos
 
 
+def _temas_populares(musicas, limite=10):
+    """Palavras-chave mais usadas no banco -- viram atalhos de busca na tela
+    (a lista de musicas fica escondida ate a pessoa pesquisar/escolher)."""
+    from collections import Counter
+    from app.escala.temas import _sem_acento
+
+    contagem, grafia = Counter(), {}
+    for musica in musicas:
+        for tag in musica.tags or []:
+            chave = _sem_acento(tag)
+            contagem[chave] += 1
+            grafia.setdefault(chave, tag)
+    return [grafia[chave] for chave, _ in contagem.most_common(limite)]
+
+
 def _render_banco(banco):
     from app.escala.banco_musicas import preencher_palavras_chave_da_comunidade, sugestoes_dos_ministerios
 
+    from app.ministerio.compartilhamento import opcoes_de_envio
+
     # Musica sem palavras-chave ganha as dela sozinha (uma vez por musica).
     preencher_palavras_chave_da_comunidade(banco.comunidade.id)
+    lidera = _ministerios_que_lidera(banco.comunidade)
     musicas = list(banco.musicas().only(
         "id", "nome", "artista", "tom", "tags", "letra_projecao", "cifra_louvor"
     ).order_by("nome"))
@@ -912,9 +930,11 @@ def _render_banco(banco):
         sugestoes=sugestoes,
         ministerios=ministerios,
         repertorios=_repertorios_por_ministerio(banco.comunidade, ministerios),
-        ministerios_que_lidera=_ministerios_que_lidera(banco.comunidade),
+        ministerios_que_lidera=lidera,
+        opcoes_envio=opcoes_de_envio(banco.comunidade.id, current_user.id) if lidera else [],
         repertorios_escalas=_repertorios_das_escalas(banco.comunidade),
         voltar_url=voltar,
+        temas_populares=_temas_populares(musicas),
         frase_apagar_todas=FRASE_APAGAR_TODAS,
         form=MusicaForm(),
         acao_form=AcaoForm(),
@@ -1469,10 +1489,13 @@ def pasta(pasta_id):
 
     ids_pessoas = [c.usuario_id for c in pasta.compartilhada_com] + [pasta.criada_por_id]
     pessoas = {u.id: u for u in User.objects(id__in=ids_pessoas)}
+    from app.ministerio.compartilhamento import opcoes_de_envio
+
     lidera = _ministerios_que_lidera(pasta.comunidade) if pode_editar else []
     return render_template(
         "ministerio/pasta.html",
         pasta=pasta,
+        opcoes_envio=opcoes_de_envio(pasta.comunidade_id, current_user.id) if pode_compartilhar else [],
         ministerios_que_lidera=lidera,
         itens=itens,
         da_comunidade=da_comunidade,
@@ -1544,90 +1567,70 @@ def excluir_pasta(pasta_id):
     return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade_id) + "#repertorios")
 
 
-@bp.route("/pastas/<int:pasta_id>/buscar-usuario")
-@login_required
-def buscar_usuario_pasta(pasta_id):
-    """Busca contas (qualquer comunidade/ministerio) pra compartilhar --
-    mesmo formato de escala.buscar_usuario: so id + rotulo, nada sensivel."""
-    from mongoengine.queryset.visitor import Q
-    from app.auth.models import User
+def enviar_repertorio(pasta, ministerio, funcao):
+    """Manda o repertorio pra um ministerio inteiro ou pra quem serve numa
+    funcao dele (ver ministerio/compartilhamento.py): cada conta ganha leitura
+    + o repertorio na tela inicial + aviso no sino. Devolve quantas pessoas
+    receberam. Reenviar pra quem ja tinha volta a marcar como novo."""
+    from app.escala.models import CompartilhamentoPasta
+    from app.ministerio.compartilhamento import descricao_do_envio, destinatarios
+    from app.notificacoes import Notificacao
 
-    _, _, pode_compartilhar = _pasta_ou_404(pasta_id)
-    if not pode_compartilhar:
-        abort(404)
-    termo = request.args.get("q", "").strip()
-    if len(termo) < 2:
-        return jsonify([])
-    usuarios = User.objects(
-        Q(name__icontains=termo) | Q(username__icontains=termo) | Q(email__icontains=termo)
-    ).order_by("name").limit(8)
-    return jsonify([
-        {"id": u.id, "label": f"{u.name or u.username or u.email} ({u.email})"}
-        for u in usuarios if u.id != current_user.id
-    ])
+    pessoas = destinatarios(ministerio, funcao, current_user.id)
+    agora = datetime.now(timezone.utc)
+    for pessoa in pessoas:
+        existente = pasta.compartilhamento_de(pessoa.id)
+        if existente is not None:
+            existente.enviado_por_id, existente.enviado_em, existente.visto_em = current_user.id, agora, None
+        else:
+            pasta.compartilhada_com.append(CompartilhamentoPasta(usuario_id=pessoa.id, enviado_por_id=current_user.id))
+    if pessoas:
+        pasta.envios.append(
+            f"{descricao_do_envio(ministerio, funcao)}: {len(pessoas)} pessoa(s), {agora.strftime('%d/%m/%Y')}"[:200]
+        )
+    pasta.save()
+
+    remetente = current_user.name or current_user.username or current_user.email
+    for pessoa in pessoas:
+        Notificacao(
+            usuario_id=pessoa.id, tipo="repertorio_compartilhado",
+            titulo=f'{remetente} enviou o repertorio "{pasta.nome}"'[:120],
+            mensagem=f'Repertorio "{pasta.nome}" ({len(pasta.itens)} musica(s)) pra {descricao_do_envio(ministerio, funcao)}. '
+                     "Abra pela tela inicial pra ver e baixar as cifras.",
+        ).save()
+    return len(pessoas)
 
 
-@bp.route("/musicas/<int:comunidade_id>/buscar-pessoa")
-@login_required
-def buscar_pessoa_para_enviar(comunidade_id):
-    """Mesma busca de buscar_usuario_pasta, pro quadro "Enviar um repertorio"
-    do banco (a pessoa escolhe o repertorio na hora) -- so pra quem lidera
-    algum ministerio da comunidade (ou e admin)."""
-    from mongoengine.queryset.visitor import Q
-    from app.auth.models import User
+def _ministerio_e_funcao_do_form(comunidade_id):
+    """(ministerio, funcao) escolhidos no formulario de envio -- so ministerio
+    da mesma comunidade."""
+    ministerio = Ministerio.objects(id=request.form.get("ministerio_id", type=int), comunidade_id=comunidade_id).first()
+    return ministerio, (request.form.get("funcao") or "").strip()[:80]
 
-    banco = _banco_ou_404(comunidade_id=comunidade_id)
-    if not _ministerios_que_lidera(banco.comunidade):
-        abort(404)
-    termo = request.args.get("q", "").strip()
-    if len(termo) < 2:
-        return jsonify([])
-    usuarios = User.objects(
-        Q(name__icontains=termo) | Q(username__icontains=termo) | Q(email__icontains=termo)
-    ).order_by("name").limit(8)
-    return jsonify([
-        {"id": u.id, "label": f"{u.name or u.username or u.email} ({u.email})"}
-        for u in usuarios if u.id != current_user.id
-    ])
+
+def _mensagem_de_envio(pasta, ministerio, funcao, quantos):
+    from app.ministerio.compartilhamento import descricao_do_envio
+
+    if not quantos:
+        return (f"Ninguem com conta em {descricao_do_envio(ministerio, funcao)} pra receber -- nada foi enviado.", "danger")
+    return (f'Repertorio "{pasta.nome}" enviado pra {quantos} pessoa(s) -- {descricao_do_envio(ministerio, funcao)}. '
+            "Aparece na tela inicial de cada uma.", "success")
 
 
 @bp.route("/pastas/<int:pasta_id>/compartilhar", methods=["POST"])
 @login_required
 def compartilhar_pasta(pasta_id):
-    from app.auth.models import User
-    from app.escala.models import CompartilhamentoPasta
-    from app.notificacoes import Notificacao
-
     pasta, _, pode_compartilhar = _pasta_ou_404(pasta_id)
     if not pode_compartilhar:
         abort(404)
-    destino = User.objects(id=request.form.get("usuario_id", type=int)).first()
-    if not AcaoForm().validate_on_submit() or destino is None or destino.id == current_user.id:
-        flash("Escolha na busca a pessoa que vai receber o repertorio.", "danger")
-        return _voltar_pra_pasta(pasta, "#compartilhar")
-
-    existente = pasta.compartilhamento_de(destino.id)
-    if existente is not None:
-        # Reenvio: volta a aparecer como novo na tela inicial dela.
-        existente.enviado_por_id = current_user.id
-        existente.enviado_em = datetime.now(timezone.utc)
-        existente.visto_em = None
-    else:
-        pasta.compartilhada_com.append(CompartilhamentoPasta(usuario_id=destino.id, enviado_por_id=current_user.id))
-    pasta.save()
-
-    remetente = current_user.name or current_user.username or current_user.email
-    Notificacao(
-        usuario_id=destino.id, tipo="repertorio_compartilhado",
-        titulo=f'{remetente} compartilhou "{pasta.nome}"'[:120],
-        mensagem=f'{remetente} enviou o repertorio "{pasta.nome}" ({len(pasta.itens)} musica(s)). '
-                 "Abra pela tela inicial pra ver e baixar as cifras.",
-    ).save()
-    flash(f'Repertorio "{pasta.nome}" enviado para {destino.name or destino.email}. Aparece na tela inicial da pessoa.', "success")
+    ministerio, funcao = _ministerio_e_funcao_do_form(pasta.comunidade_id)
     voltar = request.form.get("voltar") or ""
-    if voltar.startswith("/") and not voltar.startswith("//"):
-        return redirect(voltar)  # enviado pelo quadro "Enviar um repertorio" do banco
-    return _voltar_pra_pasta(pasta, "#compartilhar")
+    destino = redirect(voltar) if voltar.startswith("/") and not voltar.startswith("//") else _voltar_pra_pasta(pasta, "#compartilhar")
+    if not AcaoForm().validate_on_submit() or ministerio is None:
+        flash("Escolha o ministerio (e, se quiser, a funcao) que vai receber.", "danger")
+        return destino
+    flash(*_mensagem_de_envio(pasta, ministerio, funcao, enviar_repertorio(pasta, ministerio, funcao)))
+    return destino
 
 
 @bp.route("/pastas/<int:pasta_id>/<any(projecao, cifras):tipo>")

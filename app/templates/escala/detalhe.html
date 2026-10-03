@@ -19,6 +19,7 @@
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "ministerio/_envio.html" import campos_envio %}
 {% block content %}
 <div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -669,15 +670,21 @@
                    class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 transition">
                     <i class="fa-solid fa-guitar"></i>Cifras
                 </a>
-                {% if eh_dono %}
-                <!-- Vira uma pasta do banco e abre la no ponto de compartilhar (ver escala.routes.repertorio_para_pasta) -->
-                <form method="POST" action="{{ url_for('escala.repertorio_para_pasta', escala_id=escala.id) }}" class="col-span-2">
-                    {{ acao_form.hidden_tag() }}
-                    <button type="submit"
-                            class="w-full flex items-center justify-center gap-2 border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold py-2.5 rounded-xl hover:bg-black/5 transition">
+                {% if eh_dono and opcoes_envio %}
+                <!-- Envia pra um ministerio inteiro ou uma funcao dele, sem sair daqui (ver escala.routes.compartilhar_repertorio) -->
+                <details class="col-span-2 group border {{ tema.card_border }} rounded-xl overflow-hidden">
+                    <summary class="flex items-center justify-center gap-2 {{ tema.text_primary }} text-sm font-semibold py-2.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden hover:bg-black/5 transition">
                         <i class="fa-solid fa-share-nodes"></i>Compartilhar este repertorio
-                    </button>
-                </form>
+                        <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition group-open:rotate-180"></i>
+                    </summary>
+                    <form method="POST" action="{{ url_for('escala.compartilhar_repertorio', escala_id=escala.id) }}" class="border-t {{ tema.card_border }} p-3 space-y-3">
+                        {{ acao_form.hidden_tag() }}
+                        {{ campos_envio(opcoes_envio, escala.ministerio_id, tema, (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring)) }}
+                        <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-paper-plane mr-1"></i>Enviar repertorio
+                        </button>
+                    </form>
+                </details>
                 {% endif %}
             </div>
             {% else %}

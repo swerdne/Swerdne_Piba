@@ -634,3 +634,65 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
         if (papel) papel.addEventListener('change', verificar);
     });
 })();
+
+/* Formulario "pra quem enviar o repertorio" (templates/ministerio/_envio.html):
+   ao trocar o ministerio, lista "Todo o ministerio" + as funcoes dele, cada
+   uma com quantas pessoas recebem; sem ninguem pra receber, o botao de
+   enviar do form fica desligado. */
+(function () {
+    document.querySelectorAll('[data-envio]').forEach(function (caixa) {
+        var opcoes = [];
+        try { opcoes = JSON.parse(caixa.getAttribute('data-opcoes') || '[]'); } catch (e) { opcoes = []; }
+        var ministerio = caixa.querySelector('[data-envio-ministerio]');
+        var destino = caixa.querySelector('[data-envio-destino]');
+        var resumo = caixa.querySelector('[data-envio-resumo]');
+        var form = caixa.closest('form');
+        var botoes = form ? form.querySelectorAll('[type="submit"]') : [];
+
+        function pessoas(n) { return n + (n === 1 ? ' pessoa' : ' pessoas'); }
+
+        function atual() {
+            var id = parseInt(ministerio.value, 10);
+            return opcoes.filter(function (o) { return o.id === id; })[0];
+        }
+
+        function atualizarResumo() {
+            var m = atual();
+            var n = 0;
+            if (m) {
+                if (!destino.value) n = m.pessoas;
+                else (m.funcoes || []).forEach(function (f) { if (f.nome === destino.value) n = f.pessoas; });
+            }
+            resumo.textContent = n
+                ? 'Vai pra ' + pessoas(n) + ' -- aparece na tela inicial de cada uma.'
+                : 'Ninguem com conta pra receber aqui ainda.';
+            Array.prototype.forEach.call(botoes, function (b) { b.disabled = !n; });
+        }
+
+        function montarDestinos() {
+            var m = atual();
+            destino.innerHTML = '';
+            if (!m) { atualizarResumo(); return; }
+            var todo = document.createElement('option');
+            todo.value = '';
+            todo.textContent = 'Todo o ministerio (' + pessoas(m.pessoas) + ')';
+            destino.appendChild(todo);
+            if ((m.funcoes || []).length) {
+                var grupo = document.createElement('optgroup');
+                grupo.label = 'So uma funcao';
+                m.funcoes.forEach(function (f) {
+                    var op = document.createElement('option');
+                    op.value = f.nome;
+                    op.textContent = f.nome + ' (' + pessoas(f.pessoas) + ')';
+                    grupo.appendChild(op);
+                });
+                destino.appendChild(grupo);
+            }
+            atualizarResumo();
+        }
+
+        ministerio.addEventListener('change', montarDestinos);
+        destino.addEventListener('change', atualizarResumo);
+        montarDestinos();
+    });
+})();

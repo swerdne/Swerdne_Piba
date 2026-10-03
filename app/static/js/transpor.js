@@ -94,7 +94,29 @@
         return b > s;
     }
 
-    window.Transpor = { cifra: cifra, tom: transporTom, prefereBemol: prefereBemol, lerTom: lerTom, bemolPeloTexto: bemolPeloTexto };
+    // Acordes em <span class="acorde"> (cor forte, ver static/css/input.css) --
+    // monta com nos de texto, nunca innerHTML com o texto da cifra. Mesma
+    // logica de escala.models.cifra_em_html (folha impressa).
+    function colorirCifra(pre, texto) {
+        pre.textContent = '';
+        texto.replace(/\r\n/g, '\n').split('\n').forEach(function (linha, n) {
+            if (n) pre.appendChild(document.createTextNode('\n'));
+            if (!ehLinhaDeAcordes(linha)) { pre.appendChild(document.createTextNode(linha)); return; }
+            linha.split(/(\s+)/).forEach(function (pedaco) {
+                if (pedaco && !/^\s+$/.test(pedaco) && TOKEN.test(pedaco)) {
+                    var span = document.createElement('span');
+                    span.className = 'acorde';
+                    span.textContent = pedaco;
+                    pre.appendChild(span);
+                } else if (pedaco) {
+                    pre.appendChild(document.createTextNode(pedaco));
+                }
+            });
+        });
+    }
+    document.querySelectorAll('pre[data-colorir-acordes]').forEach(function (pre) { colorirCifra(pre, pre.textContent); });
+
+    window.Transpor = { cifra: cifra, tom: transporTom, prefereBemol: prefereBemol, lerTom: lerTom, bemolPeloTexto: bemolPeloTexto, colorir: colorirCifra };
 
     // Liga os controles: [data-transpor] envolve os botoes; o alvo e um
     // textarea (lider, edita e salva) ou um <pre> (so leitura).
@@ -103,7 +125,11 @@
         if (!alvo) return;
         var ehCampo = alvo.tagName === 'TEXTAREA';
         var ler = function () { return ehCampo ? alvo.value : alvo.textContent; };
-        var escrever = function (t) { if (ehCampo) alvo.value = t; else alvo.textContent = t; };
+        var escrever = function (t) {
+            if (ehCampo) alvo.value = t;
+            else if (alvo.hasAttribute('data-colorir-acordes')) colorirCifra(alvo, t);
+            else alvo.textContent = t;
+        };
         var tomOriginal = caixa.getAttribute('data-tom') || '';
         var textoOriginal = ler();
         var tomAtual = tomOriginal;

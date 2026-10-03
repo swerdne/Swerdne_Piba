@@ -6,6 +6,7 @@
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "ministerio/_envio.html" import campos_envio %}
 {% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
 
 {% block content %}
@@ -110,21 +111,29 @@
             <div>
                 <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-paper-plane mr-1 {{ tema.accent_text }}"></i>Enviar este repertorio</p>
                 <p class="text-xs {{ tema.text_secondary }} mt-0.5">
-                    Envie pra qualquer pessoa cadastrada, de qualquer ministerio. O repertorio aparece na tela inicial dela, com as cifras pra baixar.
+                    Escolha um ministerio inteiro ou so quem serve numa funcao dele (ex: Teclado, Projecao). Cada pessoa ve o repertorio na tela inicial, com as cifras pra baixar.
                 </p>
             </div>
-            <form method="POST" action="{{ url_for('ministerio.compartilhar_pasta', pasta_id=pasta.id) }}" data-form-compartilhar class="relative">
+            <form method="POST" action="{{ url_for('ministerio.compartilhar_pasta', pasta_id=pasta.id) }}" class="space-y-3">
                 {{ acao_form.hidden_tag() }}
-                <input type="hidden" name="usuario_id" data-usuario-escolhido>
-                <input type="search" data-busca-pessoa autocomplete="off" placeholder="Buscar por nome ou e-mail"
-                       data-url="{{ url_for('ministerio.buscar_usuario_pasta', pasta_id=pasta.id) }}"
-                       class="w-full {{ CAMPO }}">
-                <div data-resultados class="hidden mt-2 border {{ tema.card_border }} rounded-xl overflow-hidden divide-y {{ tema.divide }}"></div>
+                {{ campos_envio(opcoes_envio, pasta.ministerio_id, tema, CAMPO) }}
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-paper-plane mr-1"></i>Enviar
+                </button>
             </form>
+
+            {% if pasta.envios %}
+            <div>
+                <p class="text-xs font-semibold {{ tema.text_secondary }} mb-1.5">Envios feitos</p>
+                <ul class="space-y-1 text-sm {{ tema.text_primary }}">
+                    {% for envio in pasta.envios|reverse %}<li><i class="fa-solid fa-paper-plane text-[10px] mr-1 {{ tema.text_secondary }}"></i>{{ envio }}</li>{% endfor %}
+                </ul>
+            </div>
+            {% endif %}
 
             {% if pasta.compartilhada_com %}
             <div>
-                <p class="text-xs font-semibold {{ tema.text_secondary }} mb-1.5">Ja enviada para</p>
+                <p class="text-xs font-semibold {{ tema.text_secondary }} mb-1.5">Quem ja recebeu</p>
                 <ul class="space-y-1">
                     {% for c in pasta.compartilhada_com %}
                     {% set pessoa = pessoas.get(c.usuario_id) %}
@@ -170,51 +179,4 @@
     </div>
 </div>
 
-<script>
-    (function () {
-        var busca = document.querySelector('[data-busca-pessoa]');
-        if (!busca) return;
-        var form = document.querySelector('[data-form-compartilhar]');
-        var escolhido = document.querySelector('[data-usuario-escolhido]');
-        var resultados = document.querySelector('[data-resultados]');
-        var espera = null, consulta = 0;
-
-        function limpar() { resultados.innerHTML = ''; resultados.classList.add('hidden'); }
-
-        busca.addEventListener('input', function () {
-            clearTimeout(espera);
-            var termo = busca.value.trim();
-            if (termo.length < 2) { limpar(); return; }
-            espera = setTimeout(function () {
-                var minha = ++consulta;
-                fetch(busca.getAttribute('data-url') + '?q=' + encodeURIComponent(termo), { credentials: 'same-origin' })
-                    .then(function (r) { return r.ok ? r.json() : []; })
-                    .then(function (pessoas) {
-                        if (minha !== consulta) return;
-                        resultados.innerHTML = '';
-                        if (!pessoas.length) {
-                            var nada = document.createElement('p');
-                            nada.className = 'px-3 py-2 text-xs {{ tema.text_secondary }}';
-                            nada.textContent = 'Ninguem encontrado com esse nome ou e-mail.';
-                            resultados.appendChild(nada);
-                        }
-                        pessoas.forEach(function (p) {
-                            var botao = document.createElement('button');
-                            botao.type = 'button';
-                            botao.className = 'w-full text-left px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.card_bg_hover }} transition';
-                            botao.textContent = p.label;
-                            botao.addEventListener('click', function () {
-                                if (!confirm('Enviar este repertorio para ' + p.label + '?')) return;
-                                escolhido.value = p.id;
-                                form.submit();
-                            });
-                            resultados.appendChild(botao);
-                        });
-                        resultados.classList.remove('hidden');
-                    })
-                    .catch(limpar);
-            }, 300);
-        });
-    })();
-</script>
 {% endblock %}
