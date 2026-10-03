@@ -846,10 +846,44 @@ def _repertorios_das_escalas(comunidade, limite=20):
     return grupos[:limite]
 
 
-def _render_banco(banco):
-    from app.escala.banco_musicas import sugestoes_dos_ministerios
+def _palavras_chave_se_faltar(musica):
+    """Musica sem palavras-chave ganha as de tema pela letra/cifra (ver
+    escala/temas.py) -- nunca troca tag que alguem escreveu. Devolve as
+    tags novas (lista vazia se nao mudou nada)."""
+    from app.escala.temas import sugerir_tags
+
+    if musica.tags:
+        return []
+    tags = sugerir_tags(musica.nome, letra=musica.letra_projecao, cifra=musica.cifra_louvor)
+    if tags:
+        musica.tags = tags
+        musica.palavras_chave_verificadas = True
+    return tags
+
+
+def _texto_tags_novas(tags):
+    return f" Palavras-chave: {', '.join(tags)}." if tags else ""
+
+
+def _repertorios_por_ministerio(comunidade, ministerios):
+    """[(nome do grupo, [repertorios])] na ordem dos ministerios; os antigos
+    sem ministerio vao pro fim, em "Sem ministerio"."""
     from app.escala.models import PastaMusicas
 
+    por_ministerio = {}
+    for pasta in PastaMusicas.objects(comunidade_id=comunidade.id).order_by("nome"):
+        por_ministerio.setdefault(pasta.ministerio_id, []).append(pasta)
+    grupos = [(m, por_ministerio[m.id]) for m in ministerios if m.id in por_ministerio]
+    if None in por_ministerio:
+        grupos.append((None, por_ministerio[None]))
+    return grupos
+
+
+def _render_banco(banco):
+    from app.escala.banco_musicas import preencher_palavras_chave_da_comunidade, sugestoes_dos_ministerios
+
+    # Musica sem palavras-chave ganha as dela sozinha (uma vez por musica).
+    preencher_palavras_chave_da_comunidade(banco.comunidade.id)
     musicas = list(banco.musicas().only(
         "id", "nome", "artista", "tom", "tags", "letra_projecao", "cifra_louvor"
     ).order_by("nome"))
@@ -877,12 +911,12 @@ def _render_banco(banco):
         musicas=musicas,
         sugestoes=sugestoes,
         ministerios=ministerios,
-        pastas=list(PastaMusicas.objects(comunidade_id=banco.comunidade.id).order_by("-criada_em")),
+        repertorios=_repertorios_por_ministerio(banco.comunidade, ministerios),
+        ministerios_que_lidera=_ministerios_que_lidera(banco.comunidade),
         repertorios_escalas=_repertorios_das_escalas(banco.comunidade),
         voltar_url=voltar,
         form=MusicaForm(),
         acao_form=AcaoForm(),
-        sem_tags=sum(1 for m in musicas if not m.tags),
     )
 
 
@@ -899,38 +933,6 @@ def repertorio(ministerio_id):
     """Banco LOCAL do ministerio (mesmo endereco de quando cada ministerio
     tinha o seu banco -- links antigos continuam caindo no lugar certo)."""
     return _render_banco(_banco_ou_404(ministerio_id=ministerio_id))
-
-
-@bp.route("/musicas/<int:comunidade_id>/gerar-palavras-chave", methods=["POST"])
-@bp.route("/<int:ministerio_id>/repertorio/gerar-palavras-chave", methods=["POST"])
-@login_required
-def gerar_palavras_chave(comunidade_id=None, ministerio_id=None):
-    """Preenche as tags de tema (escala/temas.py) so das musicas do banco que
-    ainda nao tem nenhuma -- nunca mexe em tag que alguem ja escreveu."""
-    from app.escala.temas import sugerir_tags
-
-    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
-    if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
-        return redirect(_url_do_banco(banco))
-
-    preenchidas = sem_tema = 0
-    for musica in banco.musicas():
-        if musica.tags:
-            continue
-        tags = sugerir_tags(musica.nome, letra=musica.letra_projecao, cifra=musica.cifra_louvor)
-        if tags:
-            musica.tags = tags
-            musica.save()
-            preenchidas += 1
-        else:
-            sem_tema += 1
-
-    mensagem = f"{preenchidas} musica(s) ganharam palavras-chave."
-    if sem_tema:
-        mensagem += f" {sem_tema} ficaram sem: letra curta ou sem tema claro -- da pra pôr a mao em Dados da musica."
-    flash(mensagem, "success")
-    return redirect(_url_do_banco(banco))
 
 
 @bp.route("/musicas/<int:comunidade_id>/nova", methods=["POST"])
@@ -950,6 +952,9 @@ def nova_musica(comunidade_id=None, ministerio_id=None):
         tags=_tags_do_texto(form.tags.data),
         link=(form.link.data or "").strip() or None,
     )
+    # Sem letra ainda: tenta so pelo titulo; a cifra/letra salva depois completa.
+    _palavras_chave_se_faltar(musica)
+    musica.palavras_chave_verificadas = False
     musica.save()
     flash(f'"{musica.nome}" cadastrada. Cole a cifra aqui no Louvor; na aba Projecao, '
           '"Gerar da cifra" monta a letra sem acordes.', "success")
@@ -1109,6 +1114,7 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
             artista=str(item.get("artista") or "").strip()[:120] or None,
             tom=str(item.get("tom") or "").strip()[:10] or None,
             tags=_tags_do_texto(str(item.get("tags") or "")),
+            palavras_chave_verificadas=True,  # revisadas no card da importacao
             cifra_louvor=cifra,
             letra_projecao=projecao_da_cifra(cifra) or None if cifra else None,
         ))
@@ -1179,6 +1185,7 @@ def salvar_info_musica(musica_id):
     musica.artista = (form.artista.data or "").strip() or None
     musica.tom = (form.tom.data or "").strip() or None
     musica.tags = _tags_do_texto(form.tags.data)
+    musica.palavras_chave_verificadas = True  # tags agora sao escolha da pessoa
     musica.link = (form.link.data or "").strip() or None
     return _salvar_musica(musica, "info", "Dados da musica salvos.")
 
@@ -1193,7 +1200,8 @@ def salvar_projecao_musica(musica_id):
         flash("Nao foi possivel salvar a letra de projecao.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#projecao")
     musica.letra_projecao = form.letra_projecao.data or None
-    return _salvar_musica(musica, "projecao", "Versao de projecao salva.")
+    novas = _palavras_chave_se_faltar(musica)
+    return _salvar_musica(musica, "projecao", "Versao de projecao salva." + _texto_tags_novas(novas))
 
 
 @bp.route("/repertorio/<int:musica_id>/louvor", methods=["POST"])
@@ -1208,6 +1216,7 @@ def salvar_louvor_musica(musica_id):
     tom = (form.tom.data or "").strip()
     if musica.eh_tom_original(tom):
         musica.cifra_louvor = form.cifra_louvor.data or None
+        tags_novas = _texto_tags_novas(_palavras_chave_se_faltar(musica))
         # Musica sem tom cadastrado: identifica pelos acordes (so preenche o
         # vazio -- nunca troca um tom que alguem ja informou).
         if not musica.tom and not tom:
@@ -1217,9 +1226,9 @@ def salvar_louvor_musica(musica_id):
                 return _salvar_musica(
                     musica, "louvor",
                     f"Cifra original salva. Tom {identificado} identificado pelos acordes -- "
-                    "se nao for esse, corrija em Dados da musica.",
+                    "se nao for esse, corrija em Dados da musica." + tags_novas,
                 )
-        return _salvar_musica(musica, "louvor", "Cifra original salva.")
+        return _salvar_musica(musica, "louvor", "Cifra original salva." + tags_novas)
     # Outro tom: vira (ou atualiza) uma versao separada -- a original fica intacta.
     versao = musica.versao_no_tom(tom)
     if versao is None:
@@ -1275,15 +1284,22 @@ def excluir_musica(musica_id):
     return redirect(_url_do_banco(banco))
 
 
-# --- Pastas de musicas (modo "Pastas" do banco) e compartilhamento ------------
+# --- Repertorios (aba "Repertorios" do banco) e envio pra outras pessoas -----
 #
-# Uma PastaMusicas (escala/models.py) agrupa musicas -- montada a partir da
-# selecao no banco ou copiada do repertorio de uma escala. Quem pode:
+# Um repertorio (PastaMusicas, escala/models.py -- o nome da classe ficou do
+# 1o desenho, "pasta") e uma lista com nome de musicas de um MINISTERIO (ex:
+# "Repertorio da manha" e "da noite" do Louvor) -- montado marcando musicas
+# no banco ou copiado do repertorio de uma escala. As rotas continuam em
+# /pastas/... (so URL interna). Quem pode:
 # - VER (e baixar as folhas): qualquer pessoa da comunidade, ou quem recebeu
-#   a pasta compartilhada (de qualquer comunidade/ministerio).
-# - EDITAR (renomear, por/tirar musica, excluir): quem criou ou admin.
-# - COMPARTILHAR: quem pode editar ou lider de algum ministerio da comunidade.
-# Quem recebe ve a pasta na tela inicial (main.dashboard) ate abrir.
+#   o repertorio (de qualquer comunidade/ministerio).
+# - CRIAR / EDITAR / ENVIAR: lider do ministerio dono, admin, ou quem criou.
+# Quem recebe ve na tela inicial (main.dashboard) ate abrir.
+
+def _ministerios_que_lidera(comunidade):
+    """Ministerios da comunidade em que a conta pode criar repertorio
+    (admin da comunidade lidera todos)."""
+    return [m for m in _ministerios_da_comunidade(comunidade.id) if _eh_lider_do_ministerio(m, current_user)]
 
 def _pasta_ou_404(pasta_id):
     """(pasta, pode_editar, pode_compartilhar)."""
@@ -1297,13 +1313,13 @@ def _pasta_ou_404(pasta_id):
     da_comunidade = _pode_ver_banco(comunidade, current_user)
     if not da_comunidade and pasta.compartilhamento_de(current_user.id) is None:
         abort(404)
+    ministerio = pasta.ministerio
     pode_editar = da_comunidade and (
-        pasta.criada_por_id == current_user.id or _eh_admin_da_comunidade(comunidade, current_user)
+        pasta.criada_por_id == current_user.id
+        or _eh_admin_da_comunidade(comunidade, current_user)
+        or (ministerio is not None and _eh_lider_do_ministerio(ministerio, current_user))
     )
-    pode_compartilhar = pode_editar or (da_comunidade and any(
-        _eh_lider_do_ministerio(m, current_user) for m in Ministerio.objects(comunidade_id=comunidade.id)
-    ))
-    return pasta, pode_editar, pode_compartilhar
+    return pasta, pode_editar, pode_editar
 
 
 def _pasta_editavel_ou_404(pasta_id):
@@ -1325,7 +1341,8 @@ def _musicas_por_id(ids):
 @bp.route("/musicas/<int:comunidade_id>/pastas/nova", methods=["POST"])
 @login_required
 def nova_pasta(comunidade_id):
-    """Cria a pasta com as musicas marcadas no modo Lista do banco."""
+    """Cria o repertorio (de um ministerio que a conta lidera) com as musicas
+    marcadas no modo Lista do banco."""
     from app.escala.models import ItemPasta, PastaMusicas
 
     banco = _banco_ou_404(comunidade_id=comunidade_id)
@@ -1338,17 +1355,22 @@ def nova_pasta(comunidade_id):
     nome = (request.form.get("nome") or "").strip()[:120]
     ids = [int(i) for i in request.form.getlist("musica_id") if i.isdigit()]
     musicas = list(Musica.objects(id__in=ids, comunidade_id=banco.comunidade.id)) if ids else []
+    lidera = {m.id: m for m in _ministerios_que_lidera(banco.comunidade)}
+    ministerio = lidera.get(request.form.get("ministerio_id", type=int))
+    if ministerio is None:
+        flash("Escolha um ministerio que voce lidera pra guardar o repertorio.", "danger")
+        return redirect(voltar)
     if not nome or not musicas:
-        flash("De um nome pra pasta e marque pelo menos uma musica.", "danger")
+        flash("De um nome pro repertorio e marque pelo menos uma musica.", "danger")
         return redirect(voltar)
     ordem = {musica_id: posicao for posicao, musica_id in enumerate(ids)}
     musicas.sort(key=lambda m: ordem[m.id])
     pasta = PastaMusicas(
-        comunidade_id=banco.comunidade.id, nome=nome, criada_por_id=current_user.id,
+        comunidade_id=banco.comunidade.id, ministerio_id=ministerio.id, nome=nome, criada_por_id=current_user.id,
         itens=[ItemPasta(musica_id=m.id, nome=m.nome, tom=m.tom) for m in musicas],
     )
     pasta.save()
-    flash(f'Pasta "{pasta.nome}" criada com {len(musicas)} musica(s).', "success")
+    flash(f'Repertorio "{pasta.nome}" criado no {ministerio.nome} com {len(musicas)} musica(s).', "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -1383,9 +1405,11 @@ def pasta(pasta_id):
 
     ids_pessoas = [c.usuario_id for c in pasta.compartilhada_com] + [pasta.criada_por_id]
     pessoas = {u.id: u for u in User.objects(id__in=ids_pessoas)}
+    lidera = _ministerios_que_lidera(pasta.comunidade) if pode_editar else []
     return render_template(
         "ministerio/pasta.html",
         pasta=pasta,
+        ministerios_que_lidera=lidera,
         itens=itens,
         da_comunidade=da_comunidade,
         pode_editar=pode_editar,
@@ -1411,7 +1435,7 @@ def adicionar_na_pasta(pasta_id):
     tom = (request.form.get("tom") or "").strip()[:10] or musica.tom
     pasta.itens.append(ItemPasta(musica_id=musica.id, nome=musica.nome, tom=tom))
     pasta.save()
-    flash(f'"{musica.nome}" adicionada a pasta.', "success")
+    flash(f'"{musica.nome}" adicionada ao repertorio.', "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -1423,7 +1447,7 @@ def remover_da_pasta(pasta_id, indice):
         nome = pasta.itens[indice].nome
         del pasta.itens[indice]
         pasta.save()
-        flash(f'"{nome}" saiu da pasta.', "success")
+        flash(f'"{nome}" saiu do repertorio.', "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -1434,8 +1458,12 @@ def renomear_pasta(pasta_id):
     nome = (request.form.get("nome") or "").strip()[:120]
     if AcaoForm().validate_on_submit() and nome:
         pasta.nome = nome
+        # Trocar de ministerio: so pra um que a conta tambem lidera.
+        novo = {m.id: m for m in _ministerios_que_lidera(pasta.comunidade)}.get(request.form.get("ministerio_id", type=int))
+        if novo is not None:
+            pasta.ministerio_id = novo.id
         pasta.save()
-        flash("Pasta renomeada.", "success")
+        flash("Repertorio atualizado.", "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -1448,8 +1476,8 @@ def excluir_pasta(pasta_id):
         return _voltar_pra_pasta(pasta)
     comunidade_id, nome = pasta.comunidade_id, pasta.nome
     pasta.delete()
-    flash(f'Pasta "{nome}" excluida. As musicas continuam no banco.', "success")
-    return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade_id))
+    flash(f'Repertorio "{nome}" excluido. As musicas continuam no banco.', "success")
+    return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade_id) + "#repertorios")
 
 
 @bp.route("/pastas/<int:pasta_id>/buscar-usuario")
@@ -1475,6 +1503,30 @@ def buscar_usuario_pasta(pasta_id):
     ])
 
 
+@bp.route("/musicas/<int:comunidade_id>/buscar-pessoa")
+@login_required
+def buscar_pessoa_para_enviar(comunidade_id):
+    """Mesma busca de buscar_usuario_pasta, pro quadro "Enviar um repertorio"
+    do banco (a pessoa escolhe o repertorio na hora) -- so pra quem lidera
+    algum ministerio da comunidade (ou e admin)."""
+    from mongoengine.queryset.visitor import Q
+    from app.auth.models import User
+
+    banco = _banco_ou_404(comunidade_id=comunidade_id)
+    if not _ministerios_que_lidera(banco.comunidade):
+        abort(404)
+    termo = request.args.get("q", "").strip()
+    if len(termo) < 2:
+        return jsonify([])
+    usuarios = User.objects(
+        Q(name__icontains=termo) | Q(username__icontains=termo) | Q(email__icontains=termo)
+    ).order_by("name").limit(8)
+    return jsonify([
+        {"id": u.id, "label": f"{u.name or u.username or u.email} ({u.email})"}
+        for u in usuarios if u.id != current_user.id
+    ])
+
+
 @bp.route("/pastas/<int:pasta_id>/compartilhar", methods=["POST"])
 @login_required
 def compartilhar_pasta(pasta_id):
@@ -1487,7 +1539,7 @@ def compartilhar_pasta(pasta_id):
         abort(404)
     destino = User.objects(id=request.form.get("usuario_id", type=int)).first()
     if not AcaoForm().validate_on_submit() or destino is None or destino.id == current_user.id:
-        flash("Escolha na busca a pessoa que vai receber a pasta.", "danger")
+        flash("Escolha na busca a pessoa que vai receber o repertorio.", "danger")
         return _voltar_pra_pasta(pasta, "#compartilhar")
 
     existente = pasta.compartilhamento_de(destino.id)
@@ -1507,7 +1559,10 @@ def compartilhar_pasta(pasta_id):
         mensagem=f'{remetente} enviou o repertorio "{pasta.nome}" ({len(pasta.itens)} musica(s)). '
                  "Abra pela tela inicial pra ver e baixar as cifras.",
     ).save()
-    flash(f"Pasta compartilhada com {destino.name or destino.email}. Ela aparece na tela inicial da pessoa.", "success")
+    flash(f'Repertorio "{pasta.nome}" enviado para {destino.name or destino.email}. Aparece na tela inicial da pessoa.', "success")
+    voltar = request.form.get("voltar") or ""
+    if voltar.startswith("/") and not voltar.startswith("//"):
+        return redirect(voltar)  # enviado pelo quadro "Enviar um repertorio" do banco
     return _voltar_pra_pasta(pasta, "#compartilhar")
 
 

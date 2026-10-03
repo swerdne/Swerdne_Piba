@@ -757,6 +757,12 @@ class Musica(SequentialIdDocument):
     # Admin escondeu esta musica local da lista "Sugestoes dos ministerios"
     # (nao quis aprovar) -- ela continua no banco local normalmente.
     sugestao_dispensada = mongoengine.BooleanField(default=False)
+    # As palavras-chave de tema (tags) ja foram preenchidas automaticamente
+    # pela letra, ou alguem mexeu nelas a mao -- o preenchimento automatico
+    # do banco (banco_musicas.preencher_palavras_chave_da_comunidade) nao
+    # volta nesta musica. Salvar cifra/letra numa musica SEM tags ainda
+    # preenche (ver ministerio.routes._palavras_chave_se_faltar).
+    palavras_chave_verificadas = mongoengine.BooleanField(default=False)
     nome = mongoengine.StringField(required=True, max_length=150)
     artista = mongoengine.StringField(max_length=120)
     tom = mongoengine.StringField(max_length=10)
@@ -827,8 +833,10 @@ class CompartilhamentoPasta(mongoengine.EmbeddedDocument):
 
 
 class PastaMusicas(SequentialIdDocument):
-    """Um grupo de musicas (repertorio de um culto, uma selecao...) -- modo
-    "Pastas" do banco de musicas. Montada a mao a partir do banco ou copiada
+    """Um REPERTORIO com nome (ex: "Repertorio da manha", "da noite") de um
+    MINISTERIO -- aba "Repertorios" do banco de musicas. (O nome da classe
+    ficou do 1o desenho, quando se chamava "pasta"; na tela e sempre
+    "repertorio".) Montada a mao a partir do banco ou copiada
     do repertorio de uma escala (com o tom do dia de cada musica). Pode ser
     compartilhada com qualquer conta da plataforma, que ganha acesso de
     LEITURA a ela e as folhas (cifras/projecao) pra baixar -- mesmo sem ser
@@ -838,6 +846,9 @@ class PastaMusicas(SequentialIdDocument):
     _nome_sequencia = "pastas_musicas"
 
     comunidade_id = mongoengine.IntField(required=True)
+    # Ministerio dono (quem lidera ele cria/edita/envia). None so nos criados
+    # antes de existir esse campo -- aparecem como "Sem ministerio".
+    ministerio_id = mongoengine.IntField()
     nome = mongoengine.StringField(required=True, max_length=120)
     criada_por_id = mongoengine.IntField(required=True)
     criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
@@ -851,6 +862,13 @@ class PastaMusicas(SequentialIdDocument):
     def comunidade(self):
         from app.comunidade.models import Comunidade
         return Comunidade.objects(id=self.comunidade_id).first()
+
+    @property
+    def ministerio(self):
+        if not self.ministerio_id:
+            return None
+        from app.ministerio.models import Ministerio
+        return Ministerio.objects(id=self.ministerio_id).first()
 
     def compartilhamento_de(self, usuario_id):
         return next((c for c in self.compartilhada_com if c.usuario_id == usuario_id), None)

@@ -513,23 +513,55 @@ def test_importacao_sugere_e_salva_palavras_chave(logged_in_client, app, db):
         assert Musica.objects(comunidade_id=ministerio.comunidade_id, nome="Vou crer").first().tags == ["fé", "cruz"]
 
 
-def test_gerar_palavras_chave_so_preenche_musica_sem_tags(logged_in_client, app, db):
+def test_musicas_sem_palavras_chave_recebem_ao_abrir_o_banco(logged_in_client, app, db):
+    """Sem botao: abrir o banco ja da as palavras-chave a quem nao tem,
+    uma vez por musica, sem mexer em tag que alguem escreveu."""
     with app.app_context():
         ministerio = _ministerio(logged_in_client)
+        cid = ministerio.comunidade_id
         letra = "Rude cruz se erigiu\nMas contemplo esta cruz"
-        sem = Musica(comunidade_id=ministerio.comunidade_id, nome="Rude Cruz", letra_projecao=letra)
+        sem = Musica(comunidade_id=cid, nome="Rude Cruz", letra_projecao=letra)
         sem.save()
-        com = Musica(comunidade_id=ministerio.comunidade_id, nome="Outra", letra_projecao=letra, tags=["abertura"])
+        com = Musica(comunidade_id=cid, nome="Outra", letra_projecao=letra, tags=["abertura"])
         com.save()
-        logged_in_client.post(f"/ministerio/musicas/{ministerio.comunidade_id}/gerar-palavras-chave", data={})
+        local = Musica(comunidade_id=cid, ministerio_id=ministerio.id, oficial=False, nome="Local", letra_projecao=letra)
+        local.save()
 
+        html = logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
+        assert "Gerar palavras-chave" not in html
         assert Musica.objects(id=sem.id).first().tags == ["cruz"]
+        assert Musica.objects(id=local.id).first().tags == ["cruz"]  # banco local tambem
         assert Musica.objects(id=com.id).first().tags == ["abertura"]  # nunca mexe no que ja tinha
 
+        # Alguem apagou as tags a mao: abrir o banco de novo nao poe de volta.
+        logged_in_client.post(f"/ministerio/repertorio/{sem.id}/info", data={"nome": "Rude Cruz", "tags": ""})
+        logged_in_client.get(f"/ministerio/musicas/{cid}")
+        assert Musica.objects(id=sem.id).first().tags == []
 
-def test_gerar_palavras_chave_so_pra_quem_gerencia(logged_in_client, outro_logged_in_client, app, db):
-    with sessao_isolada(app):
-        ministerio_id = _ministerio(logged_in_client).id
-    with sessao_isolada(app):
-        resposta = outro_logged_in_client.post(f"/ministerio/{ministerio_id}/repertorio/gerar-palavras-chave", data={})
-        assert resposta.status_code == 404
+
+def test_salvar_cifra_ou_letra_de_musica_sem_tags_preenche(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        cid = ministerio.comunidade_id
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Sem tema no nome"})
+        musica = Musica.objects(nome="Sem tema no nome").first()
+        assert musica.tags == []
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
+                              data={"cifra_louvor": "G  D\nTua graça me alcançou\nC  G\nGraça sem fim", "tom": "G"})
+        assert Musica.objects(id=musica.id).first().tags == ["graça"]
+
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Outra sem tema"})
+        outra = Musica.objects(nome="Outra sem tema").first()
+        logged_in_client.post(f"/ministerio/repertorio/{outra.id}/projecao",
+                              data={"letra_projecao": "TEU AMOR ME ALCANÇOU\nAMOR SEM FIM"})
+        assert Musica.objects(id=outra.id).first().tags == ["amor"]
+
+
+def test_nova_musica_com_tema_no_titulo_ja_ganha_palavra_chave(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{ministerio.comunidade_id}/nova", data={"nome": "Rude Cruz"})
+        assert Musica.objects(nome="Rude Cruz").first().tags == ["cruz"]
+        # Com tags escritas, nada muda.
+        logged_in_client.post(f"/ministerio/musicas/{ministerio.comunidade_id}/nova", data={"nome": "A Cruz", "tags": "ceia"})
+        assert Musica.objects(nome="A Cruz").first().tags == ["ceia"]

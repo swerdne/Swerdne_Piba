@@ -77,18 +77,6 @@
             <i class="fa-solid fa-file-import"></i>Importar varias cifras (PDF ou Word)
             <i class="fa-solid fa-chevron-right text-xs ml-auto"></i>
         </a>
-        {% if sem_tags %}
-        <form method="POST" action="{{ url_for('ministerio.gerar_palavras_chave', **banco.args) }}"
-              class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm px-4 py-3">
-            {{ acao_form.hidden_tag() }}
-            <p class="flex-1 text-xs {{ tema.text_secondary }}">
-                {{ sem_tags }} musica(s) sem palavras-chave. O app le a letra e sugere temas (amor, cruz, graça...) pra facilitar a busca.
-            </p>
-            <button type="submit" class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-4 py-2 rounded-full transition">
-                <i class="fa-solid fa-tags mr-1"></i>Gerar palavras-chave
-            </button>
-        </form>
-        {% endif %}
         {% endif %}
 
         {% if sugestoes %}
@@ -122,13 +110,13 @@
         </section>
         {% endif %}
 
-        <!-- Modo de exibicao: lista de musicas ou agrupadas em pastas (lembrado no navegador) -->
+        <!-- Modo de exibicao: lista de musicas ou repertorios por ministerio (lembrado no navegador) -->
         <div class="flex items-center justify-between gap-3">
             <div class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Modo de exibicao">
                 <button type="button" data-modo="lista" role="tab"
                         class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list mr-1"></i>Lista</button>
-                <button type="button" data-modo="pastas" role="tab"
-                        class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-folder mr-1"></i>Pastas</button>
+                <button type="button" data-modo="repertorios" role="tab"
+                        class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list-ol mr-1"></i>Repertorios</button>
             </div>
             <span class="text-xs {{ tema.text_secondary }}">{{ musicas|length }} musica(s)</span>
         </div>
@@ -141,15 +129,22 @@
                 <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tom ou tema (ex: cruz)"
                        class="w-full pl-10 {{ CAMPO }}">
             </div>
-            <p class="text-xs {{ tema.text_secondary }}">Marque musicas pra montar uma pasta (ex: o repertorio de um culto).</p>
+            {% if ministerios_que_lidera %}
+            <p class="text-xs {{ tema.text_secondary }}">Marque as musicas pra montar um repertorio (ex: manha, noite). A selecao fica guardada mesmo se voce abrir uma musica e voltar.</p>
+            {% endif %}
 
             <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
                 {% for m in musicas %}
                 <div data-musica-item
                      data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
-                     class="flex items-center gap-3 pl-4 {{ tema.card_bg_hover }} transition">
-                    <input type="checkbox" data-selecionar value="{{ m.id }}" aria-label="Selecionar {{ m.nome }}" class="w-4 h-4 shrink-0">
-                    <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="flex flex-1 min-w-0 items-center gap-3 pr-4 py-3">
+                     class="flex items-center {{ tema.card_bg_hover }} transition">
+                    {% if ministerios_que_lidera %}
+                    <!-- Area de clique grande em volta do quadradinho: errar por pouco nao abre a musica -->
+                    <label class="self-stretch flex items-center pl-4 pr-3 cursor-pointer shrink-0">
+                        <input type="checkbox" data-selecionar value="{{ m.id }}" aria-label="Selecionar {{ m.nome }}" class="w-5 h-5 cursor-pointer">
+                    </label>
+                    {% endif %}
+                    <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="flex flex-1 min-w-0 items-center gap-3 pr-4 py-3 {{ '' if ministerios_que_lidera else 'pl-4' }}">
                         <div class="w-11 h-11 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0 font-extrabold text-sm">
                             {{ m.tom or '-' }}
                         </div>
@@ -185,37 +180,65 @@
             {% endif %}
         </section>
 
-        <!-- ===== Modo Pastas ===== -->
-        <section data-modo-conteudo="pastas" id="pastas" class="hidden space-y-5 scroll-mt-4">
+        <!-- ===== Modo Repertorios ===== -->
+        <section data-modo-conteudo="repertorios" id="repertorios" class="hidden space-y-5 scroll-mt-4">
+            {% if ministerios_que_lidera and repertorios %}
+            {% set lidera_ids = ministerios_que_lidera|map(attribute='id')|list %}
+            <!-- Enviar: escolhe o repertorio (do ministerio) e a pessoa, de qualquer ministerio/comunidade -->
+            <form method="POST" data-form-enviar
+                  class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2.5">
+                {{ acao_form.hidden_tag() }}
+                <input type="hidden" name="usuario_id" data-usuario-escolhido>
+                <input type="hidden" name="voltar" value="{{ request.path }}#repertorios">
+                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-paper-plane mr-1 {{ tema.accent_text }}"></i>Enviar um repertorio</p>
+                <select data-repertorio-escolhido aria-label="Repertorio" class="w-full {{ CAMPO }}">
+                    {% for ministerio, lista in repertorios if (ministerio and ministerio.id in lidera_ids) or (not ministerio and lidera_ids|length == ministerios|length) %}
+                    <optgroup label="{{ ministerio.nome if ministerio else 'Sem ministerio' }}">
+                        {% for r in lista %}
+                        <option value="{{ url_for('ministerio.compartilhar_pasta', pasta_id=r.id) }}">{{ r.nome }} ({{ r.itens|length }})</option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endfor %}
+                </select>
+                <input type="search" data-busca-pessoa autocomplete="off" placeholder="Pra quem? Buscar por nome ou e-mail"
+                       data-url="{{ url_for('ministerio.buscar_pessoa_para_enviar', comunidade_id=comunidade.id) }}"
+                       class="w-full {{ CAMPO }}">
+                <div data-resultados class="hidden border {{ tema.card_border }} rounded-xl overflow-hidden divide-y {{ tema.divide }}"></div>
+                <p class="text-xs {{ tema.text_secondary }}">Quem recebe ve o repertorio na tela inicial e baixa as cifras -- mesmo sendo de outro ministerio.</p>
+            </form>
+            {% endif %}
+
+            {% for ministerio, lista in repertorios %}
             <div>
-                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Pastas da comunidade</h2>
-                {% if pastas %}
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">
+                    {{ ministerio.nome if ministerio else 'Sem ministerio' }}
+                </h2>
                 <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
-                    {% for p in pastas %}
-                    <a href="{{ url_for('ministerio.pasta', pasta_id=p.id) }}" class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
-                        <div class="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-folder"></i>
+                    {% for r in lista %}
+                    <a href="{{ url_for('ministerio.pasta', pasta_id=r.id) }}" class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
+                        <div class="w-11 h-11 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-list-ol"></i>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ p.nome }}</p>
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ r.nome }}</p>
                             <p class="text-xs {{ tema.text_secondary }} truncate">
-                                {{ p.itens|length }} musica(s){% if p.compartilhada_com %} &middot; compartilhada com {{ p.compartilhada_com|length }}{% endif %}
+                                {{ r.itens|length }} musica(s){% if r.compartilhada_com %} &middot; enviado pra {{ r.compartilhada_com|length }}{% endif %}
                             </p>
                         </div>
                         <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }}"></i>
                     </a>
                     {% endfor %}
                 </div>
-                {% else %}
-                <p class="text-sm {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-4">
-                    Nenhuma pasta ainda. No modo <span class="font-semibold">Lista</span>, marque as musicas e use "Criar pasta" --
-                    ou, numa escala, "Compartilhar este repertorio".
-                </p>
-                {% endif %}
             </div>
+            {% else %}
+            <p class="text-sm {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-4">
+                Nenhum repertorio ainda. Na aba <span class="font-semibold">Lista</span>, marque as musicas e use "Criar repertorio"
+                (ex: "Manha" e "Noite") -- ou, numa escala, "Compartilhar este repertorio".
+            </p>
+            {% endfor %}
 
             <div>
-                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Repertorios dos cultos</h2>
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Repertorios das escalas</h2>
                 {% if repertorios_escalas %}
                 <div class="space-y-2">
                     {% for g in repertorios_escalas %}
@@ -259,21 +282,33 @@
         </section>
     </main>
 
-    <!-- Barra de selecao (modo Lista): cria pasta com as musicas marcadas -->
+    {% if ministerios_que_lidera %}
+    <!-- Barra de selecao (modo Lista): cria o repertorio de um ministerio com as musicas marcadas -->
     <form method="POST" action="{{ url_for('ministerio.nova_pasta', comunidade_id=comunidade.id) }}"
           data-barra-pasta class="hidden fixed bottom-0 inset-x-0 z-20 px-4 pb-4">
         {{ acao_form.hidden_tag() }}
         <input type="hidden" name="voltar" value="{{ request.path }}">
         <div data-ids-selecionados></div>
-        <div class="max-w-xl lg:max-w-3xl mx-auto {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-lg px-3 py-2.5 flex items-center gap-2">
-            <span data-contagem class="text-xs font-semibold {{ tema.text_secondary }} shrink-0"></span>
-            <input type="text" name="nome" required maxlength="120" placeholder="Nome da pasta (ex: Culto 12/10)"
-                   class="flex-1 min-w-0 {{ CAMPO }}">
-            <button type="submit" class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-4 py-2.5 rounded-full transition">
-                <i class="fa-solid fa-folder-plus mr-1"></i>Criar pasta
-            </button>
+        <div class="max-w-xl lg:max-w-3xl mx-auto {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-lg p-3 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+                <span data-contagem class="text-xs font-semibold {{ tema.text_secondary }}"></span>
+                <button type="button" data-limpar-selecao class="text-xs font-semibold {{ tema.text_secondary }} hover:underline">Limpar</button>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <select name="ministerio_id" aria-label="Ministerio" class="sm:w-44 {{ CAMPO }}">
+                    {% for m in ministerios_que_lidera %}
+                    <option value="{{ m.id }}" {{ 'selected' if banco.ministerio and banco.ministerio.id == m.id }}>{{ m.nome }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" name="nome" required maxlength="120" placeholder="Nome do repertorio (ex: Manha, Noite)"
+                       class="flex-1 min-w-0 {{ CAMPO }}">
+                <button type="submit" class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-4 py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-plus mr-1"></i>Criar repertorio
+                </button>
+            </div>
         </div>
     </form>
+    {% endif %}
 
     {{ nav_inferior(tema, 'comunidades') }}
     </div>
@@ -299,7 +334,7 @@
             });
         }
 
-        // Alternar Lista / Pastas -- lembrado no navegador; #pastas na URL abre direto as pastas.
+        // Alternar Lista / Repertorios -- lembrado no navegador; #repertorios na URL abre direto.
         var botoes = document.querySelectorAll('[data-modo]');
         var conteudos = document.querySelectorAll('[data-modo-conteudo]');
         var ATIVO = ['{{ tema.accent_bg }}', 'text-white'];
@@ -322,12 +357,20 @@
             });
         });
 
-        // Selecao de musicas -> barra "Criar pasta"
+        // Selecao de musicas -> barra "Criar repertorio". Fica guardada na aba
+        // do navegador (sessionStorage) por banco: abrir uma musica sem querer
+        // e voltar nao perde o que ja estava marcado.
         var barra = document.querySelector('[data-barra-pasta]');
         var caixaIds = document.querySelector('[data-ids-selecionados]');
         var contagem = document.querySelector('[data-contagem]');
-        var marcadas = [];  // ordem em que foram marcadas = ordem na pasta
+        var CHAVE_SELECAO = 'selecao-banco:' + window.location.pathname;
+        var marcadas = [];  // ordem em que foram marcadas = ordem no repertorio
+        try { marcadas = JSON.parse(sessionStorage.getItem(CHAVE_SELECAO) || '[]'); } catch (e) { marcadas = []; }
+        function guardarSelecao() {
+            try { sessionStorage.setItem(CHAVE_SELECAO, JSON.stringify(marcadas)); } catch (e) {}
+        }
         function atualizarSelecao() {
+            if (!barra) return;
             var naLista = !document.querySelector('[data-modo-conteudo="lista"]').classList.contains('hidden');
             barra.classList.toggle('hidden', !marcadas.length || !naLista);
             contagem.textContent = marcadas.length + ' marcada(s)';
@@ -340,17 +383,79 @@
                 caixaIds.appendChild(campo);
             });
         }
-        document.querySelectorAll('[data-selecionar]').forEach(function (caixa) {
+        var caixas = document.querySelectorAll('[data-selecionar]');
+        var existentes = Array.prototype.map.call(caixas, function (c) { return c.value; });
+        marcadas = marcadas.filter(function (id) { return existentes.indexOf(id) !== -1; });
+        caixas.forEach(function (caixa) {
+            caixa.checked = marcadas.indexOf(caixa.value) !== -1;
             caixa.addEventListener('change', function () {
                 marcadas = marcadas.filter(function (id) { return id !== caixa.value; });
                 if (caixa.checked) marcadas.push(caixa.value);
+                guardarSelecao();
                 atualizarSelecao();
             });
         });
+        var limpar = document.querySelector('[data-limpar-selecao]');
+        if (limpar) limpar.addEventListener('click', function () {
+            marcadas = [];
+            caixas.forEach(function (c) { c.checked = false; });
+            guardarSelecao();
+            atualizarSelecao();
+        });
+        // Criou o repertorio: a selecao ja foi usada.
+        if (barra) barra.addEventListener('submit', function () {
+            try { sessionStorage.removeItem(CHAVE_SELECAO); } catch (e) {}
+        });
+
+        // Enviar um repertorio: busca a pessoa e manda pro repertorio escolhido.
+        var formEnviar = document.querySelector('[data-form-enviar]');
+        if (formEnviar) {
+            var buscaPessoa = formEnviar.querySelector('[data-busca-pessoa]');
+            var resultados = formEnviar.querySelector('[data-resultados]');
+            var escolhido = formEnviar.querySelector('[data-usuario-escolhido]');
+            var seletor = formEnviar.querySelector('[data-repertorio-escolhido]');
+            var espera = null, consulta = 0;
+            buscaPessoa.addEventListener('input', function () {
+                clearTimeout(espera);
+                var termo = buscaPessoa.value.trim();
+                if (termo.length < 2) { resultados.innerHTML = ''; resultados.classList.add('hidden'); return; }
+                espera = setTimeout(function () {
+                    var minha = ++consulta;
+                    fetch(buscaPessoa.getAttribute('data-url') + '?q=' + encodeURIComponent(termo), { credentials: 'same-origin' })
+                        .then(function (r) { return r.ok ? r.json() : []; })
+                        .then(function (pessoas) {
+                            if (minha !== consulta) return;
+                            resultados.innerHTML = '';
+                            if (!pessoas.length) {
+                                var nada = document.createElement('p');
+                                nada.className = 'px-3 py-2 text-xs {{ tema.text_secondary }}';
+                                nada.textContent = 'Ninguem encontrado com esse nome ou e-mail.';
+                                resultados.appendChild(nada);
+                            }
+                            pessoas.forEach(function (p) {
+                                var botao = document.createElement('button');
+                                botao.type = 'button';
+                                botao.className = 'w-full text-left px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.card_bg_hover }} transition';
+                                botao.textContent = p.label;
+                                botao.addEventListener('click', function () {
+                                    var nomeRepertorio = seletor.options[seletor.selectedIndex].text;
+                                    if (!confirm('Enviar "' + nomeRepertorio + '" para ' + p.label + '?')) return;
+                                    escolhido.value = p.id;
+                                    formEnviar.action = seletor.value;
+                                    formEnviar.submit();
+                                });
+                                resultados.appendChild(botao);
+                            });
+                            resultados.classList.remove('hidden');
+                        });
+                }, 300);
+            });
+        }
 
         var salvo = null;
         try { salvo = localStorage.getItem('banco.modo'); } catch (e) {}
-        mostrar(window.location.hash === '#pastas' ? 'pastas' : (salvo === 'pastas' ? 'pastas' : 'lista'));
+        var porAncora = window.location.hash === '#repertorios' || window.location.hash === '#pastas';
+        mostrar(porAncora || salvo === 'repertorios' ? 'repertorios' : 'lista');
     })();
 </script>
 {% endblock %}

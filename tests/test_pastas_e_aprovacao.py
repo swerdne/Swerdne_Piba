@@ -111,12 +111,17 @@ def test_excluir_ministerio_leva_so_o_banco_local_dele(logged_in_client, app, db
         assert [m.nome for m in Musica.objects(comunidade_id=comunidade.id)] == ["Oficial"]
 
 
-# --- Visualizacao Lista / Pastas e criacao de pasta --------------------------------
+# --- Visualizacao Lista / Repertorios e criacao de repertorio ----------------------
 
-def _criar_pasta(cliente, comunidade_id, nome, musicas):
+def _criar_pasta(cliente, comunidade_id, nome, musicas, ministerio_id=None):
+    """Cria um repertorio (PastaMusicas) -- por padrao no 1o ministerio (Louvor)."""
+    from app.ministerio.models import Ministerio
+
+    if ministerio_id is None:
+        ministerio_id = Ministerio.objects(comunidade_id=comunidade_id).order_by("id").first().id
     return cliente.post(
         f"/ministerio/musicas/{comunidade_id}/pastas/nova",
-        data={"nome": nome, "musica_id": [str(m.id) for m in musicas]},
+        data={"nome": nome, "ministerio_id": ministerio_id, "musica_id": [str(m.id) for m in musicas]},
     )
 
 
@@ -124,8 +129,8 @@ def test_banco_tem_alternancia_lista_e_pastas(logged_in_client, app, db):
     with app.app_context():
         comunidade, _, _ = _igreja(logged_in_client)
         html = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
-        assert 'data-modo="lista"' in html and 'data-modo="pastas"' in html
-        assert 'data-modo-conteudo="pastas"' in html and "Repertorios dos cultos" in html
+        assert 'data-modo="lista"' in html and 'data-modo="repertorios"' in html
+        assert 'data-modo-conteudo="repertorios"' in html and "Repertorios das escalas" in html
 
 
 def test_cria_pasta_com_as_musicas_marcadas_na_ordem(logged_in_client, app, db):
@@ -166,6 +171,7 @@ def test_repertorio_da_escala_vira_pasta_com_tom_do_dia(logged_in_client, app, d
         assert resposta.headers["Location"].endswith(f"/ministerio/pastas/{pasta.id}#compartilhar")
         item = pasta.itens[0]
         assert (item.musica_id, item.tom, item.momento) == (musica.id, "E", "Abertura")
+        assert pasta.ministerio_id == louvor.id
 
 
 def test_folha_da_pasta_sai_no_tom_guardado(logged_in_client, app, db):
@@ -222,21 +228,78 @@ def test_compartilhar_com_pessoa_de_outra_comunidade(logged_in_client, outro_log
         assert outro_logged_in_client.get(f"/ministerio/musicas/{cid}").status_code == 404
 
 
-def test_lider_compartilha_mas_so_dono_ou_admin_edita_a_pasta(logged_in_client, outro_logged_in_client, app, db):
+def test_lider_do_ministerio_dono_edita_e_envia_lider_de_outro_so_ve(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
-        comunidade, louvor, _ = _igreja(logged_in_client)
-        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos"})
-        _criar_pasta(logged_in_client, comunidade.id, "Da Ana", [Musica.objects(nome="Oceanos").first()])
-        pasta_id = PastaMusicas.objects(nome="Da Ana").first().id
-        _bruno_lider(louvor.id)
+        comunidade, louvor, kids = _igreja(logged_in_client)
+        cid, lid, kid = comunidade.id, louvor.id, kids.id
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oceanos"})
+        _criar_pasta(logged_in_client, cid, "Manha", [Musica.objects(nome="Oceanos").first()], ministerio_id=lid)
+        pasta_id = PastaMusicas.objects(nome="Manha").first().id
+        _bruno_lider(kid)  # lider do Kids, nao do Louvor
         ana_id = User.objects(email="ana@example.com").first().id
 
     with sessao_isolada(app):
         html = outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
-        assert 'id="compartilhar"' in html and "Renomear ou excluir" not in html
+        assert "Manha" in html and 'id="compartilhar"' not in html
+        assert outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar", data={"usuario_id": ana_id}).status_code == 404
         assert outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/excluir", data={}).status_code == 404
+        # Nao cria repertorio em ministerio que nao lidera.
+        outro_logged_in_client.post(f"/ministerio/musicas/{cid}/pastas/nova",
+                                    data={"nome": "Intruso", "ministerio_id": lid, "musica_id": [str(Musica.objects(nome="Oceanos").first().id)]})
+        assert PastaMusicas.objects(nome="Intruso").count() == 0
+
+    with sessao_isolada(app):
+        _bruno_lider(lid)  # agora tambem lidera o Louvor
+    with sessao_isolada(app):
+        html = outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
+        assert 'id="compartilhar"' in html and "Renomear, mudar de ministerio ou excluir" in html
         outro_logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar", data={"usuario_id": ana_id})
         assert PastaMusicas.objects(id=pasta_id).first().compartilhamento_de(ana_id) is not None
+
+
+def test_repertorios_da_manha_e_da_noite_agrupados_por_ministerio(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, kids = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos"})
+        musica = Musica.objects(nome="Oceanos").first()
+        _criar_pasta(logged_in_client, comunidade.id, "Manha", [musica], ministerio_id=louvor.id)
+        _criar_pasta(logged_in_client, comunidade.id, "Noite", [musica], ministerio_id=louvor.id)
+        _criar_pasta(logged_in_client, comunidade.id, "Kids domingo", [musica], ministerio_id=kids.id)
+        assert {p.nome: p.ministerio_id for p in PastaMusicas.objects()} == {
+            "Manha": louvor.id, "Noite": louvor.id, "Kids domingo": kids.id,
+        }
+        html = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
+        # Quadro de envio lista os repertorios por ministerio.
+        assert "Enviar um repertorio" in html
+        assert '<optgroup label="Louvor">' in html and '<optgroup label="Kids">' in html
+        assert "Kids domingo" in html[html.index('<optgroup label="Kids">'):]
+
+
+def test_enviar_pelo_quadro_do_banco_volta_pro_banco(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        cid = comunidade.id
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oceanos"})
+        _criar_pasta(logged_in_client, cid, "Noite", [Musica.objects(nome="Oceanos").first()], ministerio_id=louvor.id)
+        pasta_id = PastaMusicas.objects(nome="Noite").first().id
+        pessoas = logged_in_client.get(f"/ministerio/musicas/{cid}/buscar-pessoa?q=bruno").get_json()
+        assert [p["id"] for p in pessoas] == [_bruno().id]
+        resposta = logged_in_client.post(f"/ministerio/pastas/{pasta_id}/compartilhar",
+                                         data={"usuario_id": _bruno().id, "voltar": f"/ministerio/musicas/{cid}#repertorios"})
+        assert resposta.headers["Location"].endswith(f"/ministerio/musicas/{cid}#repertorios")
+    with sessao_isolada(app):
+        assert "Noite" in outro_logged_in_client.get("/dashboard").data.decode("utf-8")
+        # Quem nao lidera nada na comunidade nao usa a busca.
+        assert outro_logged_in_client.get(f"/ministerio/musicas/{cid}/buscar-pessoa?q=ana").status_code == 404
+
+
+def test_selecao_guardada_e_quadradinho_com_area_de_clique(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, _, _ = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos"})
+        html = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
+        assert "sessionStorage" in html and "selecao-banco:" in html
+        assert '<label class="self-stretch flex items-center pl-4 pr-3 cursor-pointer shrink-0">' in html
 
 
 def test_excluir_comunidade_apaga_as_pastas(logged_in_client, app, db):

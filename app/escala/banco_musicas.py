@@ -150,3 +150,29 @@ def unificar_banco_da_comunidade(comunidade_id):
         Musica.objects(id__in=ids_saem).delete()
 
     return len(pendentes)
+
+
+# --- Palavras-chave de tema automaticas -----------------------------------------
+
+def preencher_palavras_chave_da_comunidade(comunidade_id):
+    """Da as palavras-chave de tema (escala/temas.py) a toda musica da
+    comunidade (oficial e local) que ainda nao tem nenhuma -- roda ao abrir o
+    banco, uma vez por musica (palavras_chave_verificadas). Nunca mexe em
+    tag que alguem escreveu. Devolve quantas ganharam tags."""
+    from app.escala.temas import sugerir_tags
+
+    pendentes = list(
+        Musica.objects(comunidade_id=comunidade_id, palavras_chave_verificadas__ne=True)
+        .only("id", "nome", "tags", "letra_projecao", "cifra_louvor")
+    )
+    preenchidas = 0
+    for musica in pendentes:
+        mudancas = {"set__palavras_chave_verificadas": True}
+        if not musica.tags:
+            tags = sugerir_tags(musica.nome, letra=musica.letra_projecao, cifra=musica.cifra_louvor)
+            if tags:
+                mudancas["set__tags"] = tags
+                preenchidas += 1
+        Musica.objects(id=musica.id).update(**mudancas)
+    return preenchidas
+

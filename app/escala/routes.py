@@ -1670,13 +1670,14 @@ def repertorio_para_pasta(escala_id):
     data_curta = escala.data.strftime("%d/%m") if escala.data else ""
     pasta = PastaMusicas(
         comunidade_id=escala.ministerio.comunidade_id,
+        ministerio_id=escala.ministerio_id,
         nome=f"{escala.nome} {data_curta}".strip()[:120],
         criada_por_id=current_user.id,
         escala_id=escala.id,
         itens=[ItemPasta(musica_id=i.musica_id, nome=i.nome_musica, tom=i.tom, momento=i.momento) for i in itens],
     )
     pasta.save()
-    flash("Repertorio salvo como pasta. Escolha abaixo com quem compartilhar.", "success")
+    flash("Repertorio salvo no banco. Escolha abaixo pra quem enviar.", "success")
     return redirect(url_for("ministerio.pasta", pasta_id=pasta.id) + "#compartilhar")
 
 
