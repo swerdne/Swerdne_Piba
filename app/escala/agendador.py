@@ -11,7 +11,7 @@ seguem pelo MESMO fluxo de notificacao abaixo. Nao existe mais um scheduler
 separado para o plantao.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -19,11 +19,13 @@ logger = logging.getLogger(__name__)
 
 INTERVALO_VERIFICACAO_MINUTOS = 15
 _JANELA = timedelta(minutes=15)
+_dia_alertas_faltas = None
 
 
 def _verificar_e_notificar(app):
     from app.escala.models import Escala
     from app.escala.routes import enviar_notificacoes_da_escala
+    from app.escala.estatisticas import verificar_faltas_seguidas
     from app.plantao.sincronizacao import sincronizar_todos_os_turnos_ativos
 
     with app.app_context():
@@ -60,6 +62,14 @@ def _verificar_e_notificar(app):
                     escala.save()
         except Exception:
             logger.exception("Tick do agendador falhou -- sync/notificacoes deste ciclo foram pulados.")
+
+        global _dia_alertas_faltas
+        if _dia_alertas_faltas != date.today():
+            try:
+                verificar_faltas_seguidas()
+                _dia_alertas_faltas = date.today()
+            except Exception:
+                logger.exception("Alerta de faltas seguidas falhou -- tenta de novo no proximo tick.")
 
 
 def iniciar_agendador(app):

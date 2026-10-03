@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+{% block title %}Estatísticas de comparecimento{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #estat-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    .estat-grafico { position: relative; height: 240px; }
+</style>
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+
+{% macro chegada(minutos) -%}
+    {%- if minutos is none -%}—
+    {%- elif minutos < 0 -%}{{ -minutos }} min antes
+    {%- elif minutos == 0 -%}no horário
+    {%- else -%}{{ minutos }} min depois
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro cor_taxa(taxa) -%}
+    {%- if taxa is none -%}{{ tema.text_secondary }}
+    {%- elif taxa >= 85 -%}text-emerald-500
+    {%- elif taxa >= 65 -%}text-amber-500
+    {%- else -%}text-red-500
+    {%- endif -%}
+{%- endmacro %}
+
+{% set CARD = tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-3xl shadow-sm" %}
+{% set CAMPO = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+
+{% block content %}
+<div id="estat-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ voltar_url }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ titulo }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">Estatísticas de comparecimento</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-4 pb-24 max-w-5xl mx-auto space-y-4">
+
+        <form method="GET" class="flex flex-col sm:flex-row gap-3 sm:items-center" data-filtros>
+            {% if ministerios %}
+            <select name="ministerio" class="{{ CAMPO }} sm:w-64" onchange="this.form.submit()" aria-label="Ministério">
+                <option value="">Todos os ministérios</option>
+                {% for m in ministerios %}
+                <option value="{{ m.id }}" {{ 'selected' if selecionado and selecionado.id == m.id }}>{{ m.nome }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <input type="hidden" name="periodo" value="{{ periodo }}">
+            <nav class="flex gap-1.5 overflow-x-auto" aria-label="Período">
+                {% for chave, (rotulo, _) in periodos.items() %}
+                <a href="{{ url_tela(periodo=chave, ministerio=selecionado.id if selecionado else None) }}"
+                   {% if chave == periodo %}aria-current="page"{% endif %}
+                   class="shrink-0 text-xs font-semibold px-3.5 py-2 rounded-full border transition
+                          {{ (tema.accent_bg ~ ' text-white border-transparent') if chave == periodo else (tema.card_bg ~ ' ' ~ tema.card_border ~ ' ' ~ tema.text_secondary ~ ' ' ~ tema.card_bg_hover) }}">
+                    {{ rotulo }}
+                </a>
+                {% endfor %}
+            </nav>
+        </form>
+
+        {% if not dados %}
+        <div class="{{ CARD }} p-6 text-center text-sm {{ tema.text_secondary }}">Esta comunidade ainda não tem ministérios.</div>
+        {% else %}
+        {% set k = dados.kpis %}
+        <p class="text-xs {{ tema.text_secondary }}">
+            De {{ dados.inicio.strftime('%d/%m/%Y') }} a {{ dados.fim.strftime('%d/%m/%Y') }} (dias já encerrados).
+        </p>
+
+        {% if not k.escalados %}
+        <div class="{{ CARD }} p-6 space-y-2">
+            <p class="font-semibold">Ainda não há presenças registradas neste período.</p>
+            <p class="text-sm {{ tema.text_secondary }}">
+                As estatísticas começam a aparecer quando a equipe faz check-in no local (ou o líder marca a presença) nas escalas.
+                {% if k.sem_registro %}{{ k.sem_registro }} escala{{ 's' if k.sem_registro > 1 }} do período não {{ 'tiveram' if k.sem_registro > 1 else 'teve' }} nenhuma presença registrada.{% endif %}
+            </p>
+        </div>
+        {% else %}
+
+        {# ---- Cards numericos ---- #}
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Totais">
+            <div class="{{ CARD }} p-4">
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Comparecimento</p>
+                <p class="text-3xl font-extrabold mt-1 {{ cor_taxa(k.taxa) }}">{{ k.taxa }}%</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{{ k.presencas }} de {{ k.escalados }} escalados</p>
+            </div>
+            <div class="{{ CARD }} p-4">
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Check-ins</p>
+                <p class="text-3xl font-extrabold mt-1">{{ k.checkins }}</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{% set pelo_lider = k.presencas - k.checkins %}{% if pelo_lider %}+ {{ pelo_lider }} marcado{{ 's' if pelo_lider > 1 }} pelo líder{% else %}todas as presenças{% endif %}</p>
+            </div>
+            <div class="{{ CARD }} p-4">
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Faltas</p>
+                <p class="text-3xl font-extrabold mt-1 {{ 'text-red-500' if k.faltas else '' }}">{{ k.faltas }}</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{{ k.trocas }} troca{{ 's' if k.trocas != 1 }} pedida{{ 's' if k.trocas != 1 }}</p>
+            </div>
+            <div class="{{ CARD }} p-4">
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Escalas</p>
+                <p class="text-3xl font-extrabold mt-1">{{ k.escalas }}</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{% if k.sem_registro %}{{ k.sem_registro }} sem registro (fora da conta){% else %}com presença registrada{% endif %}</p>
+            </div>
+        </section>
+
+        {# ---- Evolucao ---- #}
+        <section class="{{ CARD }} p-5">
+            <h2 class="font-bold">Comparecimento ao longo do tempo</h2>
+            <p class="text-xs {{ tema.text_secondary }} mb-3">Escalados x presentes x check-ins, por {{ 'mês' if periodo in ['6m', '1a'] else 'semana' }}.</p>
+            <div class="estat-grafico"><canvas id="grafico-evolucao" aria-label="Gráfico de comparecimento ao longo do tempo" role="img"></canvas></div>
+        </section>
+
+        <div class="grid lg:grid-cols-2 gap-4">
+            {# ---- Pontualidade ---- #}
+            {% set p = dados.pontualidade %}
+            <section class="{{ CARD }} p-5 space-y-3">
+                <div>
+                    <h2 class="font-bold">Horário de chegada</h2>
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        Tolerância: até {{ tolerancias | join(' / ') }} min de atraso conta como no horário.
+                    </p>
+                </div>
+                {% if p.total %}
+                <p class="text-sm">
+                    Em média, a equipe chega
+                    <span class="font-bold {{ 'text-emerald-500' if p.media <= 0 else ('text-amber-500' if p.media <= tolerancias[-1] else 'text-red-500') }}">{{ chegada(p.media) }}</span>
+                    {% if p.media != 0 %}do horário{% endif %}.
+                    <span class="{{ tema.text_secondary }}">({{ p.total }} check-in{{ 's' if p.total > 1 }})</span>
+                </p>
+                <div class="grid grid-cols-3 gap-2">
+                    {% for chave, rotulo, cor in [('adiantado', 'Adiantados', 'text-emerald-500'), ('no_horario', 'No horário', 'text-sky-500'), ('atrasado', 'Atrasados', 'text-red-500')] %}
+                    {% set f = p.faixas[chave] %}
+                    <div class="rounded-2xl border {{ tema.card_border }} p-3">
+                        <p class="text-xs font-semibold {{ tema.text_secondary }}">{{ rotulo }}</p>
+                        <p class="text-2xl font-extrabold {{ cor }}">{{ f.percentual or 0 }}%</p>
+                        <p class="text-[11px] {{ tema.text_secondary }} leading-snug">{{ f.quantidade }} vez{{ 'es' if f.quantidade != 1 }}{% if f.quantidade %}<br>média: {{ chegada(f.media) }}{% endif %}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm {{ tema.text_secondary }}">Ainda sem check-ins em escalas com horário definido.</p>
+                {% endif %}
+            </section>
+
+            {# ---- Ranking ---- #}
+            <section class="{{ CARD }} p-5">
+                <h2 class="font-bold">Ranking de assiduidade</h2>
+                <p class="text-xs {{ tema.text_secondary }} mb-3">Quem mais compareceu (mínimo de 3 escalas no período).</p>
+                {% if dados.ranking %}
+                <ol class="space-y-2">
+                    {% for pessoa in dados.ranking %}
+                    <li class="flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0
+                                     {{ ['bg-amber-400 text-amber-950', 'bg-gray-300 text-gray-800', 'bg-orange-400 text-orange-950'][loop.index0] if loop.index0 < 3 else (tema.secondary_bg ~ ' ' ~ tema.text_secondary) }}">{{ loop.index }}</span>
+                        <span class="flex-1 min-w-0 truncate text-sm font-semibold">{{ pessoa.nome }}</span>
+                        <span class="text-xs {{ tema.text_secondary }}">{{ pessoa.presencas }}/{{ pessoa.escalas }}</span>
+                        <span class="text-sm font-bold {{ cor_taxa(pessoa.taxa) }} w-12 text-right">{{ pessoa.taxa }}%</span>
+                    </li>
+                    {% endfor %}
+                </ol>
+                {% else %}
+                <p class="text-sm {{ tema.text_secondary }}">Ninguém tem 3 escalas no período ainda.</p>
+                {% endif %}
+            </section>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-4">
+            <section class="{{ CARD }} p-5">
+                <h2 class="font-bold">Por função</h2>
+                <p class="text-xs {{ tema.text_secondary }} mb-3">Taxa de comparecimento de cada função (menor primeiro).</p>
+                <div class="estat-grafico" style="height: {{ [160, 44 * dados.por_funcao | length + 40] | max }}px"><canvas id="grafico-funcao" role="img" aria-label="Comparecimento por função"></canvas></div>
+            </section>
+            <section class="{{ CARD }} p-5">
+                <h2 class="font-bold">Por dia da semana</h2>
+                <p class="text-xs {{ tema.text_secondary }} mb-3">Comparecimento e faltas em cada dia com escala.</p>
+                <div class="estat-grafico"><canvas id="grafico-dia" role="img" aria-label="Comparecimento por dia da semana"></canvas></div>
+            </section>
+        </div>
+
+        {# ---- Por pessoa ---- #}
+        <section class="{{ CARD }} p-5 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                <div>
+                    <h2 class="font-bold">Por pessoa</h2>
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        {% if dados.alerta %}<i class="fa-solid fa-triangle-exclamation text-red-500"></i> = {{ dados.alerta }} ou mais faltas seguidas. {% endif %}Chegada = média em relação ao horário da escala.
+                    </p>
+                </div>
+                <label class="flex items-center gap-2 text-xs {{ tema.text_secondary }}">
+                    Ordenar
+                    <select data-ordenar class="{{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                        <option value="taxa:desc">Maior comparecimento</option>
+                        <option value="taxa:asc">Menor comparecimento</option>
+                        <option value="faltas:desc">Mais faltas</option>
+                        <option value="chegada:desc">Chega mais tarde</option>
+                        <option value="atrasos:desc">Mais atrasos</option>
+                        <option value="trocas:desc">Mais trocas</option>
+                        <option value="nome:asc">Nome</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="hidden sm:grid grid-cols-12 gap-2 px-3 text-[11px] font-semibold uppercase tracking-wide {{ tema.text_secondary }}">
+                <span class="col-span-4">Pessoa</span>
+                <span class="col-span-2 text-right">Comparecimento</span>
+                <span class="col-span-1 text-right">Faltas</span>
+                <span class="col-span-3 text-right">Chegada</span>
+                <span class="col-span-2 text-right">Trocas</span>
+            </div>
+            <ul class="divide-y {{ tema.divide }}" data-lista-pessoas>
+                {% for pessoa in dados.pessoas %}
+                <li class="grid grid-cols-12 gap-x-2 gap-y-1 items-center px-3 py-3"
+                    data-taxa="{{ pessoa.taxa if pessoa.taxa is not none else -1 }}" data-faltas="{{ pessoa.faltas }}"
+                    data-chegada="{{ pessoa.chegada_media if pessoa.chegada_media is not none else -9999 }}"
+                    data-atrasos="{{ pessoa.atrasos }}" data-trocas="{{ pessoa.trocas }}" data-nome="{{ pessoa.nome | lower }}">
+                    <div class="col-span-8 sm:col-span-4 min-w-0">
+                        <p class="text-sm font-semibold truncate">
+                            {% if pessoa.em_alerta %}<i class="fa-solid fa-triangle-exclamation text-red-500" title="{{ pessoa.faltas_seguidas }} faltas seguidas"></i>{% endif %}
+                            {{ pessoa.nome }}
+                        </p>
+                        <p class="text-xs {{ tema.text_secondary }}">{{ pessoa.presencas }} de {{ pessoa.escalas }} · {{ pessoa.checkins }} check-in{{ 's' if pessoa.checkins != 1 }}</p>
+                    </div>
+                    <div class="col-span-4 sm:col-span-2 text-right">
+                        <p class="text-base font-extrabold {{ cor_taxa(pessoa.taxa) }}">{{ pessoa.taxa ~ '%' if pessoa.taxa is not none else '—' }}</p>
+                        <div class="h-1.5 rounded-full {{ tema.secondary_bg }} mt-1 overflow-hidden"><div class="h-full rounded-full {{ tema.accent_bg }}" style="width: {{ pessoa.taxa or 0 }}%"></div></div>
+                    </div>
+                    <p class="col-span-3 sm:col-span-1 text-xs sm:text-sm sm:text-right"><span class="sm:hidden {{ tema.text_secondary }}">Faltas: </span><span class="{{ 'text-red-500 font-bold' if pessoa.faltas else '' }}">{{ pessoa.faltas }}</span></p>
+                    <p class="col-span-6 sm:col-span-3 text-xs sm:text-sm sm:text-right"><span class="sm:hidden {{ tema.text_secondary }}">Chegada: </span>{{ chegada(pessoa.chegada_media) }}{% if pessoa.atrasos %} <span class="text-red-500">({{ pessoa.atrasos }} atraso{{ 's' if pessoa.atrasos > 1 }})</span>{% endif %}</p>
+                    <p class="col-span-3 sm:col-span-2 text-xs sm:text-sm text-right"><span class="sm:hidden {{ tema.text_secondary }}">Trocas: </span>{{ pessoa.trocas }}</p>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        {% if form %}
+        <section id="ajustes" class="{{ CARD }} p-5">
+            <h2 class="font-bold">Ajustes</h2>
+            <form method="POST" class="grid sm:grid-cols-2 gap-4 mt-3">
+                {{ form.hidden_tag() }}
+                <div>
+                    {{ form.tolerancia_atraso_min.label(class_="block text-sm font-semibold mb-1") }}
+                    {{ form.tolerancia_atraso_min(class_=CAMPO, type="number", min="0", max="60", inputmode="numeric") }}
+                    <p class="text-xs {{ tema.text_secondary }} mt-1">Chegar até esse tempo depois do horário ainda conta como "no horário".</p>
+                    {% for erro in form.tolerancia_atraso_min.errors %}<p class="text-xs text-red-500 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div>
+                    {{ form.alerta_faltas_seguidas.label(class_="block text-sm font-semibold mb-1") }}
+                    {{ form.alerta_faltas_seguidas(class_=CAMPO, type="number", min="0", max="10", inputmode="numeric") }}
+                    <p class="text-xs {{ tema.text_secondary }} mt-1">Os líderes recebem um aviso no sino. Use 0 para não avisar.</p>
+                    {% for erro in form.alerta_faltas_seguidas.errors %}<p class="text-xs text-red-500 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div class="sm:col-span-2">
+                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">Salvar ajustes</button>
+                </div>
+            </form>
+        </section>
+        {% endif %}
+
+        <details class="text-xs {{ tema.text_secondary }} px-1">
+            <summary class="cursor-pointer font-semibold">Como os números são calculados</summary>
+            <ul class="list-disc pl-5 mt-2 space-y-1">
+                <li>Contam só os dias já encerrados e escalas não canceladas.</li>
+                <li>Escalas sem nenhuma presença registrada ficam fora da conta (por exemplo, as de antes do check-in ou de ministério sem local cadastrado).</li>
+                <li>Comparecimento é o check-in no local ou a presença marcada pelo líder; quem não tem nenhum dos dois conta como falta.</li>
+                <li>O horário de chegada vem só do check-in, em escalas com horário definido. Check-ins a mais de 3 horas do horário ficam fora das médias.</li>
+                <li>As trocas contam os pedidos feitos pelo próprio escalado a partir de outubro de 2026.</li>
+            </ul>
+        </details>
+        {% endif %}
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+
+{% if dados and dados.kpis.escalados %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(function () {
+    var dados = {{ {'serie': dados.serie, 'por_funcao': dados.por_funcao, 'por_dia': dados.por_dia} | tojson }};
+    var escuro = {{ (tema.page_bg == 'bg-gray-950') | tojson }};
+    var corTexto = escuro ? '#9ca3af' : '#6b7280';
+    var corGrade = escuro ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    var anil = escuro ? '#818cf8' : '#4f46e5', verde = '#10b981', cinza = escuro ? '#4b5563' : '#cbd5e1', vermelho = '#ef4444';
+
+    Chart.defaults.color = corTexto;
+    Chart.defaults.font.family = "'Inter', ui-sans-serif, system-ui, sans-serif";
+    Chart.defaults.plugins.legend.labels.boxWidth = 12;
+    Chart.defaults.maintainAspectRatio = false;
+    var eixos = { x: { grid: { color: corGrade } }, y: { grid: { color: corGrade }, beginAtZero: true, ticks: { precision: 0 } } };
+
+    new Chart(document.getElementById('grafico-evolucao'), {
+        type: 'line',
+        data: {
+            labels: dados.serie.rotulos,
+            datasets: [
+                { label: 'Escalados', data: dados.serie.escalados, borderColor: cinza, backgroundColor: cinza, tension: 0.3, borderDash: [5, 4] },
+                { label: 'Presentes', data: dados.serie.presentes, borderColor: anil, backgroundColor: anil, tension: 0.3 },
+                { label: 'Check-ins', data: dados.serie.checkins, borderColor: verde, backgroundColor: verde, tension: 0.3 }
+            ]
+        },
+        options: {
+            interaction: { mode: 'index', intersect: false },
+            scales: eixos,
+            plugins: { tooltip: { callbacks: { footer: function (itens) {
+                var taxa = dados.serie.taxa[itens[0].dataIndex];
+                return taxa === null ? '' : 'Comparecimento: ' + taxa + '%';
+            } } } }
+        }
+    });
+
+    new Chart(document.getElementById('grafico-funcao'), {
+        type: 'bar',
+        data: {
+            labels: dados.por_funcao.map(function (f) { return f.nome; }),
+            datasets: [{
+                label: 'Comparecimento (%)',
+                data: dados.por_funcao.map(function (f) { return f.taxa; }),
+                backgroundColor: dados.por_funcao.map(function (f) { return f.taxa >= 85 ? verde : (f.taxa >= 65 ? '#f59e0b' : vermelho); }),
+                borderRadius: 6
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            scales: { x: { min: 0, max: 100, grid: { color: corGrade }, ticks: { callback: function (v) { return v + '%'; } } }, y: { grid: { display: false } } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) {
+                var f = dados.por_funcao[c.dataIndex];
+                return f.taxa + '% (' + f.presencas + ' de ' + f.escalados + ', ' + f.faltas + ' falta' + (f.faltas === 1 ? '' : 's') + ')';
+            } } } }
+        }
+    });
+
+    new Chart(document.getElementById('grafico-dia'), {
+        type: 'bar',
+        data: {
+            labels: dados.por_dia.map(function (d) { return d.dia; }),
+            datasets: [
+                { label: 'Comparecimento (%)', data: dados.por_dia.map(function (d) { return d.taxa; }), backgroundColor: anil, borderRadius: 6, yAxisID: 'y' },
+                { label: 'Faltas', data: dados.por_dia.map(function (d) { return d.faltas; }), backgroundColor: vermelho, borderRadius: 6, yAxisID: 'y2' }
+            ]
+        },
+        options: {
+            scales: {
+                x: { grid: { display: false } },
+                y: { min: 0, max: 100, grid: { color: corGrade }, ticks: { callback: function (v) { return v + '%'; } } },
+                y2: { position: 'right', beginAtZero: true, grid: { display: false }, ticks: { precision: 0 } }
+            }
+        }
+    });
+
+    var lista = document.querySelector('[data-lista-pessoas]');
+    var seletor = document.querySelector('[data-ordenar]');
+    var CHAVE = 'estatisticas.ordem';
+    function ordenar() {
+        var partes = seletor.value.split(':'), campo = partes[0], sentido = partes[1] === 'asc' ? 1 : -1;
+        var itens = Array.prototype.slice.call(lista.children);
+        itens.sort(function (a, b) {
+            var va = a.dataset[campo], vb = b.dataset[campo];
+            var r = campo === 'nome' ? va.localeCompare(vb, 'pt-BR') : parseFloat(va) - parseFloat(vb);
+            return r * sentido || a.dataset.nome.localeCompare(b.dataset.nome, 'pt-BR');
+        });
+        itens.forEach(function (li) { lista.appendChild(li); });
+        try { localStorage.setItem(CHAVE, seletor.value); } catch (e) {}
+    }
+    try { var salva = localStorage.getItem(CHAVE); if (salva && seletor.querySelector('option[value="' + salva + '"]')) seletor.value = salva; } catch (e) {}
+    seletor.addEventListener('change', ordenar);
+    ordenar();
+})();
+</script>
+{% endif %}
+{% endblock %}

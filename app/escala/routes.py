@@ -33,6 +33,7 @@ from app.escala.models import (
     Escala,
     Funcao,
     Membro,
+    RegistroTroca,
     ItemRepertorio,
     Ensaio,
     Anexo,
@@ -813,6 +814,12 @@ def atualizar_status(funcao_id):
         funcao.troca_sugestao_membro_id = None
 
     funcao.save()
+
+    if eh_proprio_escalado and status_novo == "troca_solicitada" and status_anterior != status_novo:
+        RegistroTroca(
+            ministerio_id=funcao.escala.ministerio_id, escala_id=escala_id,
+            membro_id=funcao.membro_id, funcao_nome=funcao.nome,
+        ).save()
 
     # So notifica lider/admin quando quem mudou foi o PROPRIO escalado (ver
     # _notificar_lideres_do_ministerio) -- se um lider mudou o status de

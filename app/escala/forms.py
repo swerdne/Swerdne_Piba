@@ -2,7 +2,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
 from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField, HiddenField, FloatField, IntegerField
-from wtforms.validators import DataRequired, Length, NumberRange, Optional, ValidationError
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, ValidationError
 from wtforms.widgets import Select
 from markupsafe import Markup
 
@@ -213,3 +213,12 @@ class LocalCheckinForm(FlaskForm):
                                                     NumberRange(min=-180, max=180)])
     raio_checkin_m = IntegerField("Raio aceito (metros)", default=100,
                                   validators=[DataRequired(), NumberRange(min=30, max=2000, message="Use entre 30 e 2000 metros.")])
+
+
+class ConfigEstatisticasForm(FlaskForm):
+    """Ajustes das estatisticas de comparecimento do Ministerio (ver
+    app/escala/estatisticas.py). InputRequired (e nao DataRequired) porque 0 vale."""
+    tolerancia_atraso_min = IntegerField("Tolerância de atraso (minutos)", validators=[
+        InputRequired(message="Informe os minutos."), NumberRange(min=0, max=60, message="Use de 0 a 60 minutos.")])
+    alerta_faltas_seguidas = IntegerField("Avisar o líder após quantas faltas seguidas", validators=[
+        InputRequired(message="Informe o número de faltas."), NumberRange(min=0, max=10, message="Use de 0 a 10 (0 desliga o aviso).")])

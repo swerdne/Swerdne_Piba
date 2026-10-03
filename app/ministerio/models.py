@@ -44,6 +44,12 @@ class Ministerio(SequentialIdDocument):
     longitude = mongoengine.FloatField()
     raio_checkin_m = mongoengine.IntField()
 
+    # Estatisticas de comparecimento (ver app/escala/estatisticas.py) --
+    # vazio = padrao de la. Tolerancia: minutos de atraso que ainda contam
+    # como "no horario". Alerta: faltas seguidas que avisam o lider (0 = nunca).
+    tolerancia_atraso_min = mongoengine.IntField()
+    alerta_faltas_seguidas = mongoengine.IntField()
+
     def gerar_novo_link_convite(self):
         self.token_convite_publico = secrets.token_urlsafe(8)
         return self.token_convite_publico
@@ -98,11 +104,12 @@ class Ministerio(SequentialIdDocument):
         so historico) -- antes de apagar, junta o banco da comunidade, pra
         musica antiga deste ministerio virar oficial em vez de sumir."""
         from app.escala.banco_musicas import unificar_banco_da_comunidade
-        from app.escala.models import Musica
+        from app.escala.models import AlertaFaltas, Musica
 
         unificar_banco_da_comunidade(self.comunidade_id)
         return [
             UsuarioMinisterio.objects(ministerio_id=self.id),
+            AlertaFaltas.objects(ministerio_id=self.id),
             Crianca.objects(ministerio_id=self.id),
             Musica.objects(ministerio_id=self.id, oficial=False),
         ]

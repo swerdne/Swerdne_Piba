@@ -142,7 +142,11 @@ class Membro(SequentialIdDocument):
         return letras.upper() or "?"
 
     def cascade_children(self):
-        return [CicloDisponibilidade.objects(membro_id=self.id)]
+        return [
+            CicloDisponibilidade.objects(membro_id=self.id),
+            RegistroTroca.objects(membro_id=self.id),
+            AlertaFaltas.objects(membro_id=self.id),
+        ]
 
     def __repr__(self):
         return f"<Membro {self.nome}>"
@@ -379,6 +383,7 @@ class Escala(SequentialIdDocument):
             ItemRepertorio.objects(escala_id=self.id),
             Ensaio.objects(escala_id=self.id),
             Anexo.objects(escala_id=self.id),
+            RegistroTroca.objects(escala_id=self.id),
         ]
 
     @property
@@ -486,6 +491,34 @@ class Funcao(SequentialIdDocument):
 
     def __repr__(self):
         return f"<Funcao {self.nome} da escala {self.escala_id}>"
+
+
+class RegistroTroca(SequentialIdDocument):
+    """Cada pedido de troca feito pelo proprio escalado. Funcao.troca_* e
+    zerado quando o lider decide, entao sem isto as estatisticas nao teriam
+    como contar trocas (ver app/escala/estatisticas.py)."""
+
+    meta = {"collection": "escala_registros_troca", "indexes": ["ministerio_id", "membro_id"]}
+    _nome_sequencia = "escala_registros_troca"
+
+    ministerio_id = mongoengine.IntField(required=True)
+    escala_id = mongoengine.IntField(required=True)
+    membro_id = mongoengine.IntField(required=True)
+    funcao_nome = mongoengine.StringField(max_length=80)
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+
+class AlertaFaltas(SequentialIdDocument):
+    """Alerta de faltas seguidas ja enviado: um por sequencia (identificada
+    pela primeira escala dela), pra o agendador nao repetir o aviso."""
+
+    meta = {"collection": "escala_alertas_faltas", "indexes": [("ministerio_id", "membro_id")]}
+    _nome_sequencia = "escala_alertas_faltas"
+
+    ministerio_id = mongoengine.IntField(required=True)
+    membro_id = mongoengine.IntField(required=True)
+    escala_inicio_id = mongoengine.IntField(required=True)
+    criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
 
 class ItemRepertorio(SequentialIdDocument):

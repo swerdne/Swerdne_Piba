@@ -226,6 +226,21 @@ def local_checkin(comunidade_id):
         comunidade, comunidade.nome, url_for("comunidade.detalhe", comunidade_id=comunidade.id),
     )
 
+@bp.route("/<int:comunidade_id>/estatisticas")
+@login_required
+def estatisticas(comunidade_id):
+    """Estatisticas de comparecimento de todos os ministerios (so admin),
+    com filtro por ministerio -- ver app/escala/estatisticas.py."""
+    from app.escala.estatisticas import tela_estatisticas
+    from app.ministerio.models import Ministerio
+
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    ministerios = list(Ministerio.objects(comunidade_id=comunidade.id).order_by("nome"))
+    return tela_estatisticas(
+        ministerios, comunidade.nome, url_for("comunidade.detalhe", comunidade_id=comunidade.id),
+        lambda **args: url_for("comunidade.estatisticas", comunidade_id=comunidade.id, **args),
+    )
+
 
 @bp.route("/<int:comunidade_id>/editar", methods=["GET", "POST"])
 @login_required

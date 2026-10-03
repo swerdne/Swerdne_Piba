@@ -32,6 +32,7 @@ _ICONE_POR_TIPO = {
     "troca_solicitada": "fa-rotate",
     "troca_aprovada": "fa-check-double",
     "troca_recusada": "fa-circle-xmark",
+    "faltas_seguidas": "fa-user-clock",
     "cancelamento": "fa-ban",
     "ensaio_cancelado": "fa-calendar-xmark",
     "novo_membro": "fa-user-plus",

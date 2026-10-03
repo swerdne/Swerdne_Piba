@@ -383,6 +383,20 @@ def local_checkin(ministerio_id):
         ministerio, ministerio.nome, url_for("ministerio.detalhe", ministerio_id=ministerio.id), ministerio=ministerio,
     )
 
+@bp.route("/<int:ministerio_id>/estatisticas", methods=["GET", "POST"])
+@login_required
+def estatisticas(ministerio_id):
+    """Estatisticas de comparecimento do ministerio (lider/admin), ver
+    app/escala/estatisticas.py."""
+    from app.escala.estatisticas import tela_estatisticas
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    return tela_estatisticas(
+        [ministerio], ministerio.nome, url_for("ministerio.detalhe", ministerio_id=ministerio.id),
+        lambda **args: url_for("ministerio.estatisticas", ministerio_id=ministerio.id, **args),
+        ministerio_config=ministerio,
+    )
+
 
 @bp.route("/<int:ministerio_id>/editar", methods=["GET", "POST"])
 @login_required
