@@ -6,7 +6,7 @@ Fica fora dos blueprints porque e usado tanto por quem PRODUZ notificacoes
 from datetime import datetime, timezone
 
 import mongoengine
-from app.db_utils import SequentialIdDocument
+from app.db_utils import SequentialIdDocument, relacao_em_cache
 
 
 class Notificacao(SequentialIdDocument):
@@ -36,7 +36,7 @@ class Notificacao(SequentialIdDocument):
     @property
     def usuario(self):
         from app.auth.models import User
-        return User.objects(id=self.usuario_id).first()
+        return relacao_em_cache(self, "usuario", self.usuario_id, lambda: User.objects(id=self.usuario_id).first())
 
     @property
     def escala(self):

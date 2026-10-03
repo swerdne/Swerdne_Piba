@@ -331,19 +331,23 @@ def marcar_notificacoes_lidas():
     return redirect(url_for("main.dashboard"))
 
 
-@bp.route("/tutorial-comunidade-visto", methods=["POST"])
+@bp.route("/tutorial/<chave>/visto", methods=["POST"])
 @login_required
-def tutorial_comunidade_visto():
-    """Chamado via fetch pelo tutorial guiado (spotlight) de
-    comunidade/detalhe.html quando a pessoa pula ou termina -- marca pra
-    nao aparecer de novo pra essa conta. Sem redirect: e uma acao de
-    fundo, a pagina continua onde estava."""
+def tutorial_visto(chave):
+    """Chamado via fetch pelo tutorial guiado (spotlight, ver
+    app/tutoriais.py) quando a pessoa pula ou termina -- marca pra nao
+    comecar sozinho de novo pra essa conta. Sem redirect: acao de fundo."""
+    from app.tutoriais import TUTORIAIS
+
+    if chave not in TUTORIAIS:
+        abort(404)
     form = AcaoForm()
     if not form.validate_on_submit():
         return jsonify({"ok": False}), 400
-
-    current_user.tutorial_comunidade_visto = True
-    current_user.save()
+    if not current_user.viu_tutorial(chave):
+        # $addToSet: dois tutoriais concluidos ao mesmo tempo (duas abas) nao se sobrescrevem.
+        current_user.update(add_to_set__tutoriais_vistos=chave)
+        current_user.tutoriais_vistos = list(current_user.tutoriais_vistos or []) + [chave]
     return jsonify({"ok": True})
 
 

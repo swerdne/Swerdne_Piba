@@ -343,7 +343,7 @@ def test_rascunho_da_projecao_tira_acordes_sem_gravar(logged_in_client, app, db)
         url = f"/ministerio/repertorio/{musica.id}/rascunho-projecao"
 
         da_cifra = logged_in_client.post(url, data={}).get_json()["texto"]
-        assert da_cifra == "GRANDE E O SENHOR\nDIGNO DE LOUVOR"
+        assert da_cifra == "[VERSO 1]\nGRANDE E O SENHOR\nDIGNO DE LOUVOR"  # cifra sem rotulo: rotulo deduzido
 
         colado = "Intro: G D\n\nVerso 1:\nG      D\nGrande e o   Senhor\n\n[Refrão]\n[C]Santo, [G]santo\nSolo: Em C"
         limpo = logged_in_client.post(url, data={"texto": colado}).get_json()["texto"]
@@ -421,7 +421,7 @@ def test_projecao_se_monta_da_cifra_e_acompanha_ate_ser_editada(logged_in_client
         cifra = "C Em D G\nDe um coracao cantando\nG\nEm resposta a Ti\nEm\nHa uma cancao\nD\nMe render a Ti\nC\nEm adoracao"
         logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": cifra, "tom": ""})
         projecao = Musica.objects(id=musica.id).first().letra_projecao
-        assert projecao == "DE UM CORACAO CANTANDO\nEM RESPOSTA A TI\nHA UMA CANCAO\nME RENDER A TI\n\nEM ADORACAO"
+        assert projecao == "[VERSO 1]\nDE UM CORACAO CANTANDO\nEM RESPOSTA A TI\nHA UMA CANCAO\nME RENDER A TI\n\nEM ADORACAO"
 
         # Cifra muda e a projecao ainda era so o reflexo: acompanha.
         logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
@@ -470,3 +470,23 @@ def test_musica_antiga_com_projecao_no_formato_antigo_tambem_espelha(logged_in_c
         assert _projecao_espelhando(logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8"))
         logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": cifra + "\nG\nSeis", "tom": ""})
         assert Musica.objects(id=musica.id).first().letra_projecao == projecao_da_cifra(cifra + "\nG\nSeis")
+
+
+def test_cifra_sem_rotulos_ganha_verso_e_refrao_deduzidos():
+    """Cifra digitada a mao sem [VERSO]/[REFRAO]: trecho de 2+ linhas que se
+    repete vira [REFRÃO] (a cada vez que volta); o resto, [VERSO n]."""
+    from app.escala.models import projecao_da_cifra
+    cifra = ("G\nSei que e simples\nC\nPra um rei\n"
+             "G\nEm resposta a Ti\nEm\nHa uma cancao\n"
+             "G\nEm resposta a Ti\nEm\nHa uma cancao\n"
+             "D\nNao se envergonhe\n"
+             "G\nEm resposta a Ti\nEm\nHa uma cancao")
+    assert projecao_da_cifra(cifra) == (
+        "[VERSO 1]\nSEI QUE E SIMPLES\nPRA UM REI\n\n"
+        "[REFRÃO]\nEM RESPOSTA A TI\nHA UMA CANCAO\n\n"
+        "[REFRÃO]\nEM RESPOSTA A TI\nHA UMA CANCAO\n\n"
+        "[VERSO 2]\nNAO SE ENVERGONHE\n\n"
+        "[REFRÃO]\nEM RESPOSTA A TI\nHA UMA CANCAO"
+    )
+    # Cifra que ja tem rotulos: mantidos, nada deduzido.
+    assert projecao_da_cifra("[Ponte]\nG\nSanto\n[Refrão]\nD\nDigno") == "[PONTE]\nSANTO\n\n[REFRÃO]\nDIGNO"

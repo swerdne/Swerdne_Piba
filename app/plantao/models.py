@@ -23,7 +23,7 @@ import calendar
 from datetime import date, datetime, timedelta, timezone
 
 import mongoengine
-from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, relacao_em_cache
 
 UNIDADES_RECORRENCIA = ["dia", "semana", "mes", "ano"]
 MODOS_MENSAIS = ["dia_fixo", "enesimo_dia_semana", "ultimo_dia_semana"]
@@ -288,7 +288,7 @@ class TurnoPlantao(SequentialIdDocument):
     @property
     def ministerio(self):
         from app.ministerio.models import Ministerio
-        return Ministerio.objects(id=self.ministerio_id).first()
+        return relacao_em_cache(self, "ministerio", self.ministerio_id, lambda: Ministerio.objects(id=self.ministerio_id).first())
 
     @property
     def escalas_geradas(self):
@@ -386,7 +386,7 @@ class EquipeTurno(SequentialIdDocument):
 
     @property
     def turno(self):
-        return TurnoPlantao.objects(id=self.turno_id).first()
+        return relacao_em_cache(self, "turno", self.turno_id, lambda: TurnoPlantao.objects(id=self.turno_id).first())
 
     @property
     def integrantes(self):
@@ -422,12 +422,12 @@ class EquipeMembro(SequentialIdDocument):
 
     @property
     def equipe(self):
-        return EquipeTurno.objects(id=self.equipe_turno_id).first()
+        return relacao_em_cache(self, "equipe", self.equipe_turno_id, lambda: EquipeTurno.objects(id=self.equipe_turno_id).first())
 
     @property
     def membro(self):
         from app.escala.models import Membro
-        return Membro.objects(id=self.membro_id).first()
+        return relacao_em_cache(self, "membro", self.membro_id, lambda: Membro.objects(id=self.membro_id).first())
 
     def __repr__(self):
         return f"<EquipeMembro {self.membro_id} da equipe {self.equipe_turno_id}>"

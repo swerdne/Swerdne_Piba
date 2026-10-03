@@ -67,3 +67,12 @@
 
 /* Acordes destacados na cifra (static/js/transpor.js e escala.models.cifra_em_html). */
 .acorde { color: #f97316; font-weight: 700; }
+
+/* Manchas de cor do fundo das telas (cores em themes.py: blob_1/2/3). Eram
+   blur-3xl + animacao infinita -- filtro de desfoque grande redesenhado a
+   cada quadro, o que mais travava a rolagem e a troca de pagina no celular.
+   Agora a borda suave vem de uma mascara radial: desenhada uma vez, parada. */
+.fundo-blob {
+  -webkit-mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 100%);
+}

@@ -27,10 +27,12 @@ class User(UserMixin, SequentialIdDocument):
     # Preferencia de aparencia do dashboard (ver app/main/themes.py)
     theme = mongoengine.StringField(default="indigo", max_length=20)
 
-    # Tutorial guiado (spotlight) mostrado na primeira vez que a conta entra
-    # numa tela de detalhe de Comunidade -- ver app/comunidade/routes.py e
-    # app/static/js/tutorial.js. Uma vez so, pra conta inteira (nao repete
-    # por comunidade).
+    # Tutoriais guiados (spotlight) ja vistos -- chaves de app/tutoriais.py
+    # ("comunidade", "ministerio", "escala", "banco"). Cada um comeca sozinho
+    # uma vez so, pra conta inteira (nao repete por comunidade/escala).
+    tutoriais_vistos = mongoengine.ListField(mongoengine.StringField(max_length=40))
+    # Flag do 1o tutorial (so da Comunidade), antes de tutoriais_vistos.
+    # Sem uso: o tutorial da Comunidade foi refeito e aparece de novo uma vez.
     tutorial_comunidade_visto = mongoengine.BooleanField(default=False)
 
     # Preferencia de privacidade (aba Configuracoes): desligada (padrao),
@@ -73,6 +75,9 @@ class User(UserMixin, SequentialIdDocument):
         if not self.password_hash:
             return False
         return check_password_hash(self.password_hash, password)
+
+    def viu_tutorial(self, chave):
+        return chave in (self.tutoriais_vistos or [])
 
     def __repr__(self):
         return f"<User {self.username}>"

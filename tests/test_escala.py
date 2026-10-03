@@ -1291,7 +1291,7 @@ def test_convidado_consegue_ver_mas_nao_escrever_na_escala(logged_in_client, out
         assert resposta_leitura.status_code == 200
         html = resposta_leitura.data.decode("utf-8")
         assert "Convidado" in html
-        assert "Visualizacao" in html
+        assert "Visualização" in html
 
         resposta_escrita = outro_logged_in_client.post(
             f"/escala/{escala_id}/excluir", data={}, follow_redirects=True

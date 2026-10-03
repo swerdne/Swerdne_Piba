@@ -52,6 +52,8 @@ def _tabela_a_partir_do_documento(documento_cls, metadata):
     for nome, campo in documento_cls._fields.items():
         if nome == "id":
             colunas.append(Column("id", Integer, primary_key=True, autoincrement=False))
+        elif isinstance(campo, mongoengine.ListField):
+            continue  # campo criado depois da migracao (ex: User.tutoriais_vistos) -- nao existia no Postgres
         else:
             colunas.append(Column(nome, _tipo_sql_para_campo(campo), nullable=not campo.required))
     return Table(documento_cls._meta["collection"], metadata, *colunas)

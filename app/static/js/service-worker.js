@@ -9,7 +9,10 @@
 // trocado porque, num app mudando rapido, isso fazia correcoes recentes
 // (JS/CSS) so aparecerem depois de 2+ recarregamentos, dando a impressao de
 // "continua quebrado" mesmo com o deploy certo no ar.
-const CACHE_NAME = "piba-swerdne-estaticos-v2";
+// Excecao: arquivo com ?v=<hash> no endereco (app/desempenho.py) nunca muda
+// -- deploy novo gera endereco novo --, entao vem direto do cache, sem rede:
+// e o que deixa a troca de pagina rapida no celular.
+const CACHE_NAME = "piba-swerdne-estaticos-v3";
 
 self.addEventListener("install", function (evento) {
     self.skipWaiting();
@@ -31,6 +34,29 @@ self.addEventListener("fetch", function (evento) {
 
     // So GET de /static/* -- nunca POST, nunca paginas/rotas dinamicas.
     if (evento.request.method !== "GET" || url.pathname.indexOf("/static/") !== 0) {
+        return;
+    }
+
+    if (url.searchParams.has("v")) {
+        evento.respondWith(
+            caches.open(CACHE_NAME).then(function (cache) {
+                return cache.match(evento.request).then(function (guardado) {
+                    return guardado || fetch(evento.request).then(function (resposta) {
+                        if (resposta.ok) {
+                            // Versao nova: apaga as antigas do mesmo arquivo (cache nao cresce a cada deploy).
+                            cache.keys().then(function (chaves) {
+                                chaves.forEach(function (chave) {
+                                    var antiga = new URL(chave.url);
+                                    if (antiga.pathname === url.pathname && antiga.search !== url.search) cache.delete(chave);
+                                });
+                            });
+                            cache.put(evento.request, resposta.clone());
+                        }
+                        return resposta;
+                    });
+                });
+            })
+        );
         return;
     }
 

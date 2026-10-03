@@ -11,7 +11,7 @@
 
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
-    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl -z-0"></div>
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
 
@@ -47,7 +47,11 @@
                 <i class="fa-solid fa-display"></i>Baixar projecao
             </a>
         </div>
-        <p class="text-xs {{ tema.text_secondary }} -mt-3">Abre a folha pronta; use "Imprimir / PDF" pra salvar o arquivo.</p>
+        <a href="{{ url_for('ministerio.baixar_pasta', pasta_id=pasta.id) }}" download
+           class="-mt-2 flex items-center justify-center gap-2 border {{ tema.card_border }} {{ tema.card_bg }} {{ tema.text_primary }} text-sm font-semibold py-3 rounded-2xl {{ tema.card_bg_hover }} transition">
+            <i class="fa-solid fa-file-word"></i>Baixar as músicas em Word (.zip)
+        </a>
+        <p class="text-xs {{ tema.text_secondary }} -mt-3">As folhas abrem prontas: use "Imprimir / PDF" para salvar. O Word traz uma música por arquivo, no tom do repertório.</p>
 
         <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
             {% for it in itens %}

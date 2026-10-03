@@ -73,8 +73,11 @@ class ErroDeMigracao(Exception):
 def _campos_persistidos(documento_cls):
     """Nomes dos campos MongoEngine de verdade (`id` incluso) -- exclui as
     `@property` (usuario/comunidade/escala/etc.), que nunca sao campos
-    armazenados."""
-    return list(documento_cls._fields.keys())
+    armazenados. Listas (ex: User.tutoriais_vistos) nasceram ja no Mongo,
+    depois da migracao -- nao tem coluna no Postgres."""
+    import mongoengine
+
+    return [nome for nome, campo in documento_cls._fields.items() if not isinstance(campo, mongoengine.ListField)]
 
 
 def _validar_schema(tabela, documento_cls, campos):

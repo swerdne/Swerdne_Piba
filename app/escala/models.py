@@ -129,7 +129,7 @@ class Membro(SequentialIdDocument):
     @property
     def comunidade(self):
         from app.comunidade.models import Comunidade
-        return Comunidade.objects(id=self.comunidade_id).first()
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
 
     @property
     def ciclos_disponibilidade(self):
@@ -174,7 +174,7 @@ class CicloDisponibilidade(SequentialIdDocument):
 
     @property
     def membro(self):
-        return Membro.objects(id=self.membro_id).first()
+        return relacao_em_cache(self, "membro", self.membro_id, lambda: Membro.objects(id=self.membro_id).first())
 
     @property
     def segmentos(self):
@@ -226,7 +226,7 @@ class SegmentoCiclo(SequentialIdDocument):
 
     @property
     def ciclo(self):
-        return CicloDisponibilidade.objects(id=self.ciclo_id).first()
+        return relacao_em_cache(self, "ciclo", self.ciclo_id, lambda: CicloDisponibilidade.objects(id=self.ciclo_id).first())
 
     def __repr__(self):
         return f"<SegmentoCiclo {self.nome!r} ({self.duracao_dias}d)>"
@@ -496,11 +496,11 @@ class ItemRepertorio(SequentialIdDocument):
 
     @property
     def escala(self):
-        return Escala.objects(id=self.escala_id).first()
+        return relacao_em_cache(self, "escala", self.escala_id, lambda: Escala.objects(id=self.escala_id).first())
 
     @property
     def musica(self):
-        return Musica.objects(id=self.musica_id).first() if self.musica_id else None
+        return relacao_em_cache(self, "musica", self.musica_id, lambda: Musica.objects(id=self.musica_id).first() if self.musica_id else None)
 
     def __repr__(self):
         return f"<ItemRepertorio {self.nome_musica!r} da escala {self.escala_id}>"
@@ -530,7 +530,7 @@ class Ensaio(SequentialIdDocument):
 
     @property
     def escala(self):
-        return Escala.objects(id=self.escala_id).first()
+        return relacao_em_cache(self, "escala", self.escala_id, lambda: Escala.objects(id=self.escala_id).first())
 
     @property
     def descricao_data(self):
@@ -693,7 +693,7 @@ class Anexo(SequentialIdDocument):
 
     @property
     def funcao(self):
-        return Funcao.objects(id=self.funcao_id).first() if self.funcao_id else None
+        return relacao_em_cache(self, "funcao", self.funcao_id, lambda: Funcao.objects(id=self.funcao_id).first() if self.funcao_id else None)
 
     @property
     def extensao(self):
@@ -778,7 +778,7 @@ class Musica(SequentialIdDocument):
     @property
     def ministerio(self):
         from app.ministerio.models import Ministerio
-        return Ministerio.objects(id=self.ministerio_id).first()
+        return relacao_em_cache(self, "ministerio", self.ministerio_id, lambda: Ministerio.objects(id=self.ministerio_id).first())
 
     def eh_tom_original(self, tom):
         """Sem tom informado, ou mesmo tom (mesma nota e modo) do cadastro."""
@@ -819,7 +819,7 @@ class ItemPasta(mongoengine.EmbeddedDocument):
 
     @property
     def musica(self):
-        return Musica.objects(id=self.musica_id).first() if self.musica_id else None
+        return relacao_em_cache(self, "musica", self.musica_id, lambda: Musica.objects(id=self.musica_id).first() if self.musica_id else None)
 
 
 class CompartilhamentoPasta(mongoengine.EmbeddedDocument):
@@ -864,7 +864,7 @@ class PastaMusicas(SequentialIdDocument):
     @property
     def comunidade(self):
         from app.comunidade.models import Comunidade
-        return Comunidade.objects(id=self.comunidade_id).first()
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
 
     @property
     def ministerio(self):
@@ -1062,12 +1062,52 @@ def _sem_acorde_inline(linha):
     )
 
 
-def projecao_da_cifra(texto, linhas_por_slide=None):
+def _deduzir_rotulos(blocos):
+    """Cifra sem NENHUM rotulo (comum quando e digitada a mao): deduz. Trecho
+    de 2+ linhas seguidas que se repetem na musica vira [REFRÃO]; o resto,
+    [VERSO 1], [VERSO 2]... (na ordem). E so um palpite -- a pessoa ajusta
+    na aba Projecao (o que desliga o espelho)."""
+    from collections import Counter
+
+    contagem = Counter(linha for bloco in blocos for linha in bloco["linhas"])
+    trechos = []  # [eh_refrao, linhas]
+    for bloco in blocos:
+        corridas = []
+        for linha in bloco["linhas"]:
+            repetida = contagem[linha] > 1
+            if corridas and corridas[-1][0] == repetida:
+                corridas[-1][1].append(linha)
+            else:
+                corridas.append([repetida, [linha]])
+        for repetida, linhas in corridas:
+            refrao = repetida and len(linhas) >= 2  # 1 linha repetida sozinha nao e refrao
+            if refrao:
+                # Refrao cantado 2x seguidas: cada vez que a 1a linha volta, e outro [REFRÃO].
+                vezes = [[]]
+                for linha in linhas:
+                    if vezes[-1] and linha == linhas[0]:
+                        vezes.append([])
+                    vezes[-1].append(linha)
+                trechos.extend([True, vez, bloco] for vez in vezes)
+            elif trechos and not trechos[-1][0] and trechos[-1][2] is bloco:
+                trechos[-1][1].extend(linhas)
+            else:
+                trechos.append([False, list(linhas), bloco])
+    rotulados, verso = [], 0
+    for refrao, linhas, _ in trechos:
+        if not refrao:
+            verso += 1
+        rotulados.append({"rotulo": "REFRÃO" if refrao else f"VERSO {verso}", "linhas": linhas})
+    return rotulados
+
+
+def projecao_da_cifra(texto, linhas_por_slide=None, deduzir_rotulos=True):
     """Gera o RASCUNHO da letra de projecao a partir de uma cifra: tira as
     linhas de acordes e tablaturas, poe os rotulos no padrao [VERSO 1]/
     [REFRAO], passa a letra pra maiusculas e separa os slides por linha em
-    branco. Partes so instrumentais (intro, solo) somem. Quem chama decide
-    se usa -- nada aqui grava na musica."""
+    branco (e a cada LINHAS_POR_SLIDE linhas). Cifra sem nenhum rotulo ganha
+    rotulos deduzidos (_deduzir_rotulos). Partes so instrumentais (intro,
+    solo) somem. Quem chama decide se usa -- nada aqui grava na musica."""
     blocos, atual = [], None
     for linha in (texto or "").replace("\r\n", "\n").split("\n"):
         if eh_linha_de_acordes(linha) or _LINHA_DE_TABLATURA.match(linha):
@@ -1086,6 +1126,8 @@ def projecao_da_cifra(texto, linhas_por_slide=None):
             atual = {"rotulo": None, "linhas": []}
             blocos.append(atual)
         atual["linhas"].append(letra.upper())
+    if deduzir_rotulos and blocos and not any(b["rotulo"] for b in blocos):
+        blocos = _deduzir_rotulos(blocos)
     partes = []
     for bloco in blocos:
         if not bloco["linhas"]:

@@ -131,11 +131,11 @@ class UsuarioMinisterio(SequentialIdDocument):
     @property
     def usuario(self):
         from app.auth.models import User
-        return User.objects(id=self.usuario_id).first()
+        return relacao_em_cache(self, "usuario", self.usuario_id, lambda: User.objects(id=self.usuario_id).first())
 
     @property
     def ministerio(self):
-        return Ministerio.objects(id=self.ministerio_id).first()
+        return relacao_em_cache(self, "ministerio", self.ministerio_id, lambda: Ministerio.objects(id=self.ministerio_id).first())
 
     def __repr__(self):
         return f"<UsuarioMinisterio {self.usuario_id} papel={self.papel} do ministerio {self.ministerio_id}>"
@@ -160,7 +160,7 @@ class Crianca(SequentialIdDocument):
 
     @property
     def ministerio(self):
-        return Ministerio.objects(id=self.ministerio_id).first()
+        return relacao_em_cache(self, "ministerio", self.ministerio_id, lambda: Ministerio.objects(id=self.ministerio_id).first())
 
     @property
     def iniciais(self):
@@ -199,17 +199,17 @@ class CheckInCrianca(SequentialIdDocument):
 
     @property
     def crianca(self):
-        return Crianca.objects(id=self.crianca_id).first()
+        return relacao_em_cache(self, "crianca", self.crianca_id, lambda: Crianca.objects(id=self.crianca_id).first())
 
     @property
     def registrado_por(self):
         from app.auth.models import User
-        return User.objects(id=self.registrado_por_id).first()
+        return relacao_em_cache(self, "registrado_por", self.registrado_por_id, lambda: User.objects(id=self.registrado_por_id).first())
 
     @property
     def retirado_por(self):
         from app.auth.models import User
-        return User.objects(id=self.retirado_por_id).first() if self.retirado_por_id else None
+        return relacao_em_cache(self, "retirado_por", self.retirado_por_id, lambda: User.objects(id=self.retirado_por_id).first() if self.retirado_por_id else None)
 
     @property
     def esta_presente(self):

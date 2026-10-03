@@ -8,7 +8,7 @@ import secrets
 from datetime import datetime, timezone
 
 import mongoengine
-from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, delete_cascade
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, delete_cascade, relacao_em_cache
 
 PAPEIS_COMUNIDADE = ("admin", "membro")
 
@@ -99,11 +99,11 @@ class UsuarioComunidade(SequentialIdDocument):
     @property
     def usuario(self):
         from app.auth.models import User
-        return User.objects(id=self.usuario_id).first()
+        return relacao_em_cache(self, "usuario", self.usuario_id, lambda: User.objects(id=self.usuario_id).first())
 
     @property
     def comunidade(self):
-        return Comunidade.objects(id=self.comunidade_id).first()
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
 
     def __repr__(self):
         return f"<UsuarioComunidade {self.usuario_id} papel={self.papel} da comunidade {self.comunidade_id}>"
@@ -130,7 +130,7 @@ class Evento(SequentialIdDocument):
 
     @property
     def comunidade(self):
-        return Comunidade.objects(id=self.comunidade_id).first()
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
 
     def __repr__(self):
         return f"<Evento {self.nome!r} da comunidade {self.comunidade_id}>"

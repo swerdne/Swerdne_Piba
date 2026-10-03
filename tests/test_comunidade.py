@@ -501,21 +501,36 @@ def test_membros_do_diretorio_aparecem_no_select_da_funcao(logged_in_client, app
 
 # --- Tutorial guiado (spotlight) ----------------------------------------------
 
+def _dados_tutorial(html):
+    import json
+    import re
+
+    bloco = re.search(r'<script type="application/json" id="tutorial-dados">(.*?)</script>', html, re.S)
+    assert bloco, "pagina sem o bloco do tutorial"
+    return json.loads(bloco.group(1))
+
+
 def test_tutorial_inicia_sozinho_na_primeira_visita_a_comunidade(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
 
         html = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
-        assert 'id="tutorial-dados"' in html
-        assert '"autoIniciar": true' in html
-        assert "Bem-vindo a sua comunidade" in html
+        dados = _dados_tutorial(html)
+        assert dados["autoIniciar"] is True
+        assert dados["passos"][0]["titulo"] == "Bem-vindo à sua comunidade!"
+        assert dados["urlConcluir"] == "/tutorial/comunidade/visto"
+        # Todo passo com seletor aponta pra um elemento que existe na pagina.
+        for passo in dados["passos"]:
+            if passo["seletor"]:
+                chave = passo["seletor"].split("'")[1]
+                assert f'data-tutorial="{chave}"' in html, chave
 
 
 def test_marcar_tutorial_visto_impede_iniciar_sozinho_mas_dados_continuam_no_html(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
 
-        resposta = logged_in_client.post("/tutorial-comunidade-visto")
+        resposta = logged_in_client.post("/tutorial/comunidade/visto")
         assert resposta.status_code == 200
         assert resposta.get_json() == {"ok": True}
 
@@ -523,13 +538,33 @@ def test_marcar_tutorial_visto_impede_iniciar_sozinho_mas_dados_continuam_no_htm
         # cabecalho depende dele pra funcionar a qualquer momento) -- so o
         # disparo automatico e que fica desligado.
         html = logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode("utf-8")
-        assert 'id="tutorial-dados"' in html
-        assert '"autoIniciar": false' in html
+        assert _dados_tutorial(html)["autoIniciar"] is False
         assert 'data-tutorial-reiniciar' in html
 
 
+def test_tutoriais_sao_independentes_por_tela(logged_in_client, app, db):
+    from app.ministerio.models import Ministerio
+
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        logged_in_client.post(f"/ministerio/comunidade/{comunidade.id}/nova", data={"nome": "Louvor", "descricao": ""})
+        ministerio = Ministerio.objects(nome="Louvor").first()
+
+        logged_in_client.post("/tutorial/comunidade/visto")
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
+        dados = _dados_tutorial(html)
+        assert dados["autoIniciar"] is True  # ver o da comunidade nao marca o do ministerio
+        assert dados["urlConcluir"] == "/tutorial/ministerio/visto"
+        html_banco = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
+        assert _dados_tutorial(html_banco)["urlConcluir"] == "/tutorial/banco/visto"
+
+
+def test_tutorial_desconhecido_da_404(logged_in_client):
+    assert logged_in_client.post("/tutorial/inexistente/visto").status_code == 404
+
+
 def test_tutorial_visto_sem_login_redireciona(client):
-    response = client.post("/tutorial-comunidade-visto", follow_redirects=False)
+    response = client.post("/tutorial/comunidade/visto", follow_redirects=False)
     assert response.status_code == 302
 
 

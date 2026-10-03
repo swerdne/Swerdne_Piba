@@ -1,5 +1,36 @@
 // JavaScript do projeto
-console.log("App carregado.");
+
+// Confirmacao antes de enviar: <form data-confirm-excluir="Pergunta?">. Em
+// atributo (nao onsubmit="return confirm('...')") pra nome com aspas nao
+// quebrar o JS. Registrado antes da trava de duplo envio abaixo, que olha
+// defaultPrevented.
+document.querySelectorAll("form[data-confirm-excluir]").forEach(function (form) {
+    form.addEventListener("submit", function (evento) {
+        if (!window.confirm(form.getAttribute("data-confirm-excluir"))) {
+            evento.preventDefault();
+        }
+    });
+});
+
+// Menu "⋯" do cabecalho (macro menu_acoes em _macros.html): fecha ao tocar
+// fora dele ou com Esc.
+(function () {
+    var menus = document.querySelectorAll("[data-menu-acoes]");
+    if (!menus.length) return;
+    document.addEventListener("click", function (evento) {
+        menus.forEach(function (menu) {
+            if (menu.open && !menu.contains(evento.target)) menu.open = false;
+        });
+    });
+    document.addEventListener("keydown", function (evento) {
+        if (evento.key === "Escape") menus.forEach(function (menu) { menu.open = false; });
+    });
+    menus.forEach(function (menu) {
+        menu.querySelectorAll("[data-tutorial-reiniciar]").forEach(function (item) {
+            item.addEventListener("click", function () { menu.open = false; });
+        });
+    });
+})();
 
 // Evita duplo-envio de formulario (duplo clique, ou clicar de novo por
 // impaciencia enquanto a resposta nao volta -- ex: banco hibernado
@@ -30,7 +61,10 @@ document.querySelectorAll("form").forEach(function (form) {
             // simplesmente nao e enviado (nem da erro, so nao acontece
             // nada). Adiar pro proximo tick deixa o navegador terminar de
             // processar o envio em curso antes de desabilitar o botao.
-            setTimeout(function () { botao.disabled = true; }, 0);
+            setTimeout(function () {
+                botao.disabled = true;
+                botao.setAttribute("data-travado-no-envio", "");
+            }, 0);
         }
     });
 });
@@ -56,6 +90,19 @@ document.querySelectorAll("form").forEach(function (form) {
         setTimeout(function () { barra.style.width = "65%"; }, 500);
         setTimeout(function () { barra.style.width = "80%"; }, 1500);
     }
+
+    // Voltar pelo navegador reaproveita a pagina da memoria (bfcache) do
+    // jeito que ela estava ao sair: barra no meio do caminho e botao de
+    // envio travado. Zera os dois, senao a tela "volta travada".
+    window.addEventListener("pageshow", function (evento) {
+        if (!evento.persisted) return;
+        barra.classList.remove("carregando");
+        barra.style.width = "0%";
+        document.querySelectorAll("[data-travado-no-envio]").forEach(function (botao) {
+            botao.disabled = false;
+            botao.removeAttribute("data-travado-no-envio");
+        });
+    });
 
     document.addEventListener("click", function (evento) {
         var link = evento.target.closest("a[href]");
@@ -329,16 +376,18 @@ if ("serviceWorker" in navigator) {
     });
 })();
 
-// Tutorial guiado (spotlight): generico, funciona em qualquer pagina que
-// tenha um <script type="application/json" id="tutorial-dados"> com
-// {urlConcluir, csrf, passos: [{seletor, titulo, texto}], autoIniciar} --
-// seletor null/ausente = passo centralizado (sem destacar elemento nenhum),
-// usado pro primeiro e ultimo passo. autoIniciar controla se comeca sozinho
-// ao carregar a pagina (1a visita) -- roda de novo a qualquer momento via
-// botao com [data-tutorial-reiniciar] (ver comunidade/detalhe.html).
+// Tutorial guiado (spotlight): funciona em qualquer pagina com
+// <script type="application/json" id="tutorial-dados"> (macro tutorial() em
+// _macros.html; passos em app/tutoriais.py) -- {urlConcluir, csrf, passos:
+// [{seletor, titulo, texto}], autoIniciar}. Seletor null = passo centralizado
+// (boas-vindas/conclusao). Passo cujo elemento nao esta visivel na pagina
+// (ex: botao so de lider) e pulado. Fundo sempre escurecido (inclusive nos
+// passos centralizados, senao o balao fica "solto" em cima do conteudo); no
+// celular o balao ocupa a largura toda e vai pra cima ou pra baixo do
+// elemento destacado, onde couber. Recomeca por [data-tutorial-reiniciar].
 (function () {
     var dadosEl = document.getElementById("tutorial-dados");
-    if (!dadosEl) return; // pagina sem tutorial nenhum
+    if (!dadosEl) return;
 
     var dados;
     try {
@@ -346,133 +395,202 @@ if ("serviceWorker" in navigator) {
     } catch (e) {
         return; // JSON malformado nao deveria travar a pagina inteira
     }
-    var passos = dados.passos || [];
-    if (!passos.length) return;
+    if (!(dados.passos || []).length) return;
+
+    var MARGEM = 16;
+    var aberto = false;
+
+    function visivel(el) {
+        if (!el) return false;
+        var r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+    }
+
+    function passosDaPagina() {
+        return dados.passos.filter(function (passo) {
+            return !passo.seletor || visivel(document.querySelector(passo.seletor));
+        });
+    }
+
+    function botao(texto, primario) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = texto;
+        b.style.cssText = primario
+            ? "background:#4f46e5;color:#fff;border:0;border-radius:999px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;"
+            : "background:none;border:0;color:#9ca3af;font-size:14px;font-weight:500;cursor:pointer;padding:10px 4px;";
+        return b;
+    }
 
     function iniciar() {
-        var passoAtual = 0;
+        if (aberto) return;
+        var passos = passosDaPagina();
+        if (!passos.length) return;
+        aberto = true;
+        var atual = 0;
 
-        var overlay = document.createElement("div");
-        overlay.style.cssText = "position:fixed;inset:0;z-index:9990;background:transparent;";
-
+        // Escurece a tela toda; o recorte em volta do elemento destacado vem
+        // do box-shadow gigante do "destaque".
+        var fundo = document.createElement("div");
+        fundo.style.cssText = "position:fixed;inset:0;z-index:9990;background:rgba(15,23,42,.72);transition:opacity .2s ease;";
         var destaque = document.createElement("div");
         destaque.style.cssText =
-            "position:fixed;z-index:9991;border-radius:14px;pointer-events:none;" +
-            "box-shadow:0 0 0 9999px rgba(15,23,42,.78);" +
-            "transition:top .3s ease,left .3s ease,width .3s ease,height .3s ease,opacity .2s ease;" +
-            "opacity:0;";
-
+            "position:fixed;z-index:9991;border-radius:16px;pointer-events:none;" +
+            "box-shadow:0 0 0 3px rgba(129,140,248,.9),0 0 0 9999px rgba(15,23,42,.72);" +
+            "transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;display:none;";
         var card = document.createElement("div");
-        card.style.cssText =
-            "position:fixed;z-index:9992;max-width:320px;background:#111827;color:#fff;" +
-            "border-radius:16px;padding:18px 20px;box-shadow:0 20px 40px rgba(0,0,0,.4);" +
-            "font:14px/1.5 ui-sans-serif,system-ui,sans-serif;" +
-            "transition:top .3s ease,left .3s ease,opacity .2s ease;";
         card.setAttribute("role", "dialog");
-        card.setAttribute("aria-live", "polite");
+        card.setAttribute("aria-modal", "true");
+        card.style.cssText =
+            "position:fixed;z-index:9992;background:#111827;color:#fff;border:1px solid rgba(255,255,255,.08);" +
+            "border-radius:20px;padding:20px;box-shadow:0 24px 48px rgba(0,0,0,.45);box-sizing:border-box;" +
+            "font:15px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;transition:top .25s ease,opacity .2s ease;";
 
-        document.body.appendChild(overlay);
+        document.body.appendChild(fundo);
         document.body.appendChild(destaque);
         document.body.appendChild(card);
 
         function concluir() {
-            overlay.remove();
+            fundo.remove();
             destaque.remove();
             card.remove();
             document.removeEventListener("keydown", aoTeclar);
-            window.removeEventListener("resize", posicionar);
-
+            window.removeEventListener("resize", reposicionar);
+            aberto = false;
             if (!dados.urlConcluir) return;
             fetch(dados.urlConcluir, {
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: "csrf_token=" + encodeURIComponent(dados.csrf || ""),
-            }).catch(function () { /* melhor esforco -- nao bloqueia a UI se falhar */ });
+            }).catch(function () { /* melhor esforco -- nao bloqueia a UI */ });
         }
 
-        function renderizarCard(passo, indice) {
+        function montarCard(indice) {
+            var passo = passos[indice];
             var ultimo = indice === passos.length - 1;
-            card.innerHTML =
-                '<p style="font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#a5b4fc;margin:0 0 8px;">' +
-                (indice + 1) + " de " + passos.length + '</p>' +
-                '<h3 style="font-size:16px;font-weight:700;margin:0 0 6px;">' + passo.titulo + '</h3>' +
-                '<p style="margin:0 0 16px;color:#d1d5db;">' + passo.texto + '</p>' +
-                '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
-                '<button type="button" data-tutorial-pular style="background:none;border:0;color:#9ca3af;font-size:13px;cursor:pointer;padding:4px 0;">Pular tutorial</button>' +
-                '<button type="button" data-tutorial-proximo style="background:#4f46e5;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">' +
-                (ultimo ? "Concluir" : "Proximo") + '</button>' +
-                '</div>';
+            card.textContent = "";
 
-            card.querySelector("[data-tutorial-pular]").addEventListener("click", concluir);
-            card.querySelector("[data-tutorial-proximo]").addEventListener("click", function () {
-                if (ultimo) { concluir(); return; }
-                passoAtual += 1;
-                irParaPasso(passoAtual);
+            var pontos = document.createElement("div");
+            pontos.style.cssText = "display:flex;gap:6px;margin-bottom:12px;";
+            passos.forEach(function (_, i) {
+                var p = document.createElement("span");
+                p.style.cssText = "height:6px;border-radius:999px;transition:all .2s;" +
+                    (i === indice ? "width:18px;background:#818cf8;" : "width:6px;background:rgba(255,255,255,.25);");
+                pontos.appendChild(p);
             });
+            var titulo = document.createElement("h3");
+            titulo.textContent = passo.titulo;
+            titulo.style.cssText = "font-size:17px;font-weight:700;margin:0 0 6px;line-height:1.3;";
+            var texto = document.createElement("p");
+            texto.textContent = passo.texto;
+            texto.style.cssText = "margin:0 0 16px;color:#d1d5db;";
+
+            var acoes = document.createElement("div");
+            acoes.style.cssText = "display:flex;align-items:center;gap:8px;";
+            var pular = botao(ultimo ? "" : "Pular", false);
+            pular.addEventListener("click", concluir);
+            if (ultimo) pular.style.visibility = "hidden";
+            var espaco = document.createElement("span");
+            espaco.style.flex = "1";
+            acoes.appendChild(pular);
+            acoes.appendChild(espaco);
+            if (indice > 0) {
+                var voltar = botao("Voltar", false);
+                voltar.style.color = "#e5e7eb";
+                voltar.addEventListener("click", function () { irPara(indice - 1); });
+                acoes.appendChild(voltar);
+            }
+            var proximo = botao(ultimo ? "Concluir" : "Próximo", true);
+            proximo.addEventListener("click", function () {
+                if (ultimo) concluir(); else irPara(indice + 1);
+            });
+            acoes.appendChild(proximo);
+
+            card.appendChild(pontos);
+            card.appendChild(titulo);
+            card.appendChild(texto);
+            card.appendChild(acoes);
+            proximo.focus({ preventScroll: true, focusVisible: false });
         }
 
-        function posicionar() {
-            irParaPasso(passoAtual, true);
-        }
-
-        function irParaPasso(indice, semScroll) {
+        function posicionar(indice) {
             var passo = passos[indice];
             var alvo = passo.seletor ? document.querySelector(passo.seletor) : null;
+            var largura = Math.min(360, window.innerWidth - MARGEM * 2);
+            card.style.width = largura + "px";
 
-            function aplicar() {
-                if (alvo) {
-                    var r = alvo.getBoundingClientRect();
-                    var folga = 8;
-                    destaque.style.top = (r.top - folga) + "px";
-                    destaque.style.left = (r.left - folga) + "px";
-                    destaque.style.width = (r.width + folga * 2) + "px";
-                    destaque.style.height = (r.height + folga * 2) + "px";
-                    destaque.style.opacity = "1";
-                } else {
-                    // Passo sem elemento (boas-vindas/conclusao): sem cutout visivel.
-                    destaque.style.opacity = "0";
-                }
-
-                var alturaEstimadaCard = 170;
-                var margem = 16;
-                if (alvo) {
-                    var rr = alvo.getBoundingClientRect();
-                    var caberEmbaixo = rr.bottom + alturaEstimadaCard + margem < window.innerHeight;
-                    card.style.top = (caberEmbaixo ? rr.bottom + margem : Math.max(margem, rr.top - alturaEstimadaCard - margem)) + "px";
-                    var esquerda = Math.min(Math.max(rr.left, margem), window.innerWidth - 320 - margem);
-                    card.style.left = Math.max(margem, esquerda) + "px";
-                    card.style.transform = "none";
-                } else {
-                    card.style.top = "50%";
-                    card.style.left = "50%";
-                    card.style.transform = "translate(-50%,-50%)";
-                }
-
-                renderizarCard(passo, indice);
+            if (!alvo) {
+                destaque.style.display = "none";
+                fundo.style.opacity = "1";
+                card.style.left = (window.innerWidth - largura) / 2 + "px";
+                card.style.top = Math.max(MARGEM, (window.innerHeight - card.offsetHeight) / 2) + "px";
+                return;
             }
+            // Com destaque, o escurecimento vem do box-shadow dele.
+            fundo.style.opacity = "0";
+            var r = alvo.getBoundingClientRect();
+            var folga = 6;
+            // Elemento mais alto que a tela (ex: grade inteira): destaca so a parte visivel.
+            var topo = Math.max(r.top, 8), base = Math.min(r.bottom, window.innerHeight - 8);
+            destaque.style.display = "block";
+            destaque.style.top = (topo - folga) + "px";
+            destaque.style.left = (r.left - folga) + "px";
+            destaque.style.width = (r.width + folga * 2) + "px";
+            destaque.style.height = (base - topo + folga * 2) + "px";
 
-            if (alvo && !semScroll) {
-                alvo.scrollIntoView({ behavior: "smooth", block: "center" });
-                setTimeout(aplicar, 320);
-            } else {
-                aplicar();
-            }
+            var altura = card.offsetHeight;
+            var embaixo = base + folga + 12;
+            var emCima = topo - folga - 12 - altura;
+            var top;
+            if (embaixo + altura <= window.innerHeight - MARGEM) top = embaixo;
+            else if (emCima >= MARGEM) top = emCima;
+            else top = window.innerHeight - altura - MARGEM; // sem espaco: rodape da tela
+            card.style.top = top + "px";
+            var esquerda = r.left + r.width / 2 - largura / 2;
+            card.style.left = Math.min(Math.max(esquerda, MARGEM), window.innerWidth - largura - MARGEM) + "px";
         }
+
+        function irPara(indice) {
+            atual = indice;
+            montarCard(indice);
+            var passo = passos[indice];
+            var alvo = passo.seletor ? document.querySelector(passo.seletor) : null;
+            if (alvo) {
+                var r = alvo.getBoundingClientRect();
+                var cabe = r.top >= 0 && r.bottom <= window.innerHeight;
+                if (!cabe) {
+                    alvo.scrollIntoView({ block: r.height > window.innerHeight * 0.6 ? "start" : "center" });
+                }
+            }
+            posicionar(indice);
+        }
+
+        function reposicionar() { posicionar(atual); }
 
         function aoTeclar(evento) {
             if (evento.key === "Escape") concluir();
+            else if (evento.key === "ArrowRight" && atual < passos.length - 1) irPara(atual + 1);
+            else if (evento.key === "ArrowLeft" && atual > 0) irPara(atual - 1);
         }
 
         document.addEventListener("keydown", aoTeclar);
-        window.addEventListener("resize", posicionar);
-        irParaPasso(0);
+        window.addEventListener("resize", reposicionar);
+        irPara(0);
     }
 
-    if (dados.autoIniciar) iniciar();
+    // Comeca sozinho na 1a visita, depois que a pagina terminou de montar
+    // (fontes/icones mudam o tamanho dos elementos destacados).
+    if (dados.autoIniciar) {
+        if (document.readyState === "complete") setTimeout(iniciar, 250);
+        else window.addEventListener("load", function () { setTimeout(iniciar, 250); });
+    }
 
-    document.querySelectorAll("[data-tutorial-reiniciar]").forEach(function (botao) {
-        botao.addEventListener("click", iniciar);
+    document.querySelectorAll("[data-tutorial-reiniciar]").forEach(function (botaoRever) {
+        botaoRever.addEventListener("click", function () {
+            window.scrollTo(0, 0);
+            iniciar();
+        });
     });
 })();
 

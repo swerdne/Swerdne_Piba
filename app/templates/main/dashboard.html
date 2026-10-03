@@ -4,14 +4,6 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
-    @keyframes db-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
-    @keyframes db-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
-    .db-blob { animation: db-blob-a 20s ease-in-out infinite; will-change: transform; }
-    .db-blob-2 { animation: db-blob-b 24s ease-in-out infinite; will-change: transform; }
-    .db-blob-3 { animation: db-blob-a 17s ease-in-out infinite reverse; will-change: transform; }
-    @media (prefers-reduced-motion: reduce) {
-        .db-blob, .db-blob-2, .db-blob-3 { animation: none; }
-    }
 </style>
 {% endblock %}
 
@@ -35,9 +27,9 @@
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} overflow-hidden">
 
-    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl db-blob -z-0"></div>
-    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl db-blob-2 -z-0"></div>
-    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl db-blob-3 -z-0"></div>
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} fundo-blob -z-0"></div>
 
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
@@ -245,7 +237,7 @@
 
             <div class="flex flex-col items-center gap-2.5">
                 <label for="input-foto" class="relative cursor-pointer" title="Trocar foto">
-                    <img id="preview-foto" src="{{ foto_perfil or '#' }}" alt="Foto de perfil"
+                    <img id="preview-foto" {% if foto_perfil %}src="{{ foto_perfil }}"{% endif %} alt="Foto de perfil"
                          class="w-24 h-24 rounded-full object-cover border {{ tema.card_border }} {{ '' if foto_perfil else 'hidden' }}">
                     <div id="preview-inicial"
                          class="w-24 h-24 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-3xl font-extrabold {{ tema.accent_text }} {{ 'hidden' if foto_perfil else '' }}">

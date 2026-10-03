@@ -21,41 +21,63 @@ def _chave(nome):
     return " ".join(_sem_acento(nome).split())
 
 
-def _pessoas_por_funcao(ministerio):
-    """({chave: {"nome": exibicao, "usuarios": {ids}}}, {ids de quem ja foi escalado})."""
-    ids_escalas = [e.id for e in Escala.objects(ministerio_id=ministerio.id).only("id")]
-    if not ids_escalas:
-        return {}, set()
+def _pessoas_por_funcao_de_varios(ids_ministerios):
+    """{ministerio_id: ({chave: {"nome", "usuarios": {ids}}}, {ids ja escalados})}
+    de varios ministerios de uma vez -- poucas consultas no total, nao
+    algumas por ministerio (a tela de escala/banco/repertorio monta o
+    formulario de envio com todos os ministerios da comunidade)."""
+    resultado = {mid: ({}, set()) for mid in ids_ministerios}
+    ministerio_da_escala = {
+        e.id: e.ministerio_id for e in Escala.objects(ministerio_id__in=list(ids_ministerios)).only("id", "ministerio_id")
+    }
+    if not ministerio_da_escala:
+        return resultado
     funcoes = list(
-        Funcao.objects(escala_id__in=ids_escalas, membro_id__ne=None, tipo__ne=TIPO_SUBCABECALHO).only("nome", "membro_id")
+        Funcao.objects(escala_id__in=list(ministerio_da_escala), membro_id__ne=None, tipo__ne=TIPO_SUBCABECALHO)
+        .only("nome", "membro_id", "escala_id")
     )
     membros = {m.id: (m.email or "").strip().lower()
                for m in Membro.objects(id__in=list({f.membro_id for f in funcoes})).only("id", "email")}
     emails = {e for e in membros.values() if e}
     conta_por_email = {u.email.lower(): u.id for u in User.objects(email__in=list(emails)).only("id", "email")} if emails else {}
 
-    por_funcao, escalados = {}, set()
     for funcao in funcoes:
+        por_funcao, escalados = resultado[ministerio_da_escala[funcao.escala_id]]
         usuario_id = conta_por_email.get(membros.get(funcao.membro_id, ""))
         grupo = por_funcao.setdefault(_chave(funcao.nome), {"nome": funcao.nome.strip(), "usuarios": set()})
         if usuario_id:
             grupo["usuarios"].add(usuario_id)
             escalados.add(usuario_id)
-    return por_funcao, escalados
+    return resultado
+
+
+def _pessoas_por_funcao(ministerio):
+    """({chave: {"nome": exibicao, "usuarios": {ids}}}, {ids de quem ja foi escalado})."""
+    return _pessoas_por_funcao_de_varios([ministerio.id])[ministerio.id]
+
+
+def _papeis_de_varios(ids_ministerios):
+    com_papel = {mid: set() for mid in ids_ministerios}
+    for u in UsuarioMinisterio.objects(ministerio_id__in=list(ids_ministerios)).only("ministerio_id", "usuario_id"):
+        com_papel[u.ministerio_id].add(u.usuario_id)
+    return com_papel
 
 
 def _pessoas_do_ministerio(ministerio, escalados):
-    com_papel = {u.usuario_id for u in UsuarioMinisterio.objects(ministerio_id=ministerio.id).only("usuario_id")}
-    return com_papel | escalados
+    return _papeis_de_varios([ministerio.id])[ministerio.id] | escalados
 
 
 def opcoes_de_envio(comunidade_id, quem_envia_id):
     """Dados pro formulario de envio: [{id, nome, pessoas, funcoes: [{nome,
     pessoas}]}] de cada ministerio da comunidade (contagens sem quem envia)."""
+    ministerios = list(Ministerio.objects(comunidade_id=comunidade_id).only("id", "nome").order_by("nome"))
+    ids = [m.id for m in ministerios]
+    pessoas = _pessoas_por_funcao_de_varios(ids)
+    papeis = _papeis_de_varios(ids)
     opcoes = []
-    for ministerio in Ministerio.objects(comunidade_id=comunidade_id).order_by("nome"):
-        por_funcao, escalados = _pessoas_por_funcao(ministerio)
-        todos = _pessoas_do_ministerio(ministerio, escalados) - {quem_envia_id}
+    for ministerio in ministerios:
+        por_funcao, escalados = pessoas[ministerio.id]
+        todos = (papeis[ministerio.id] | escalados) - {quem_envia_id}
         funcoes = sorted(
             ({"nome": g["nome"], "pessoas": len(g["usuarios"] - {quem_envia_id})} for g in por_funcao.values()),
             key=lambda f: _chave(f["nome"]),

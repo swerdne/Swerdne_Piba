@@ -10,7 +10,7 @@
 
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
-    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl -z-0"></div>
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
 
@@ -160,7 +160,8 @@
     var LIMITE_BYTES = 2 * 1024 * 1024;  // MAX_CONTENT_LENGTH do servidor
     var LEITURAS_AO_MESMO_TEMPO = 3;     // poucas em paralelo: rapido sem sobrecarregar o servidor
 
-    var csrf = document.querySelector('#form-csrf input[name="csrf_token"]').value;
+    var campoCsrf = document.querySelector('#form-csrf input[name="csrf_token"]');
+    var csrf = campoCsrf ? campoCsrf.value : '';
     var lista = document.querySelector('[data-lista-revisao]');
     var modeloMusica = document.getElementById('modelo-musica');
     var modeloErro = document.getElementById('modelo-erro');

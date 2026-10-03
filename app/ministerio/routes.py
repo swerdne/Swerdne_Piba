@@ -876,7 +876,12 @@ def _eh_reflexo_da_cifra(projecao, cifra):
     if not atual:
         return True
     cifra = cifra or ""
-    return atual in (projecao_da_cifra(cifra).strip(), projecao_da_cifra(cifra, linhas_por_slide=10 ** 6).strip())
+    formatos = (
+        projecao_da_cifra(cifra),  # atual: slides de 4 + rotulos deduzidos
+        projecao_da_cifra(cifra, deduzir_rotulos=False),  # versao anterior: sem rotulos deduzidos
+        projecao_da_cifra(cifra, linhas_por_slide=10 ** 6, deduzir_rotulos=False),  # a 1a: um bloco so
+    )
+    return atual in {f.strip() for f in formatos}
 
 
 def _espelhar_projecao(musica, cifra_antiga):
@@ -1402,6 +1407,76 @@ def apagar_todas_musicas(comunidade_id=None, ministerio_id=None):
     flash(f"{len(ids)} musica(s) apagada(s) do {banco.titulo.lower()}. "
           "Escalas e repertorios que usavam alguma ficaram com ela como musica avulsa.", "success")
     return redirect(_url_do_banco(banco))
+
+
+# --- Baixar musicas (Word) -----------------------------------------------------
+# Quem ve o banco (ou o repertorio) baixa: 1 musica = .docx; varias = .zip
+# com um .docx por musica (ver ministerio/exportar_cifras.py). So leitura, por
+# isso GET.
+
+_TIPO_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _arquivo_pra_baixar(dados, nome, tipo):
+    import io
+    from flask import send_file
+
+    resposta = send_file(io.BytesIO(dados), mimetype=tipo, as_attachment=True, download_name=nome)
+    resposta.headers["Cache-Control"] = "private, no-store"
+    return resposta
+
+
+@bp.route("/repertorio/<int:musica_id>/baixar")
+@login_required
+def baixar_musica(musica_id):
+    """?tom=D baixa a versao salva nesse tom (como a tela da musica)."""
+    from app.ministerio.exportar_cifras import docx_da_musica, nome_de_arquivo
+
+    musica, _ = _musica_visivel_ou_404(musica_id)
+    pedido = (request.args.get("tom") or "").strip()
+    versao = None if musica.eh_tom_original(pedido) else musica.versao_no_tom(pedido)
+    dados = docx_da_musica(musica, versao.cifra if versao else None, versao.tom if versao else None)
+    return _arquivo_pra_baixar(dados, nome_de_arquivo(musica.nome, "docx"), _TIPO_DOCX)
+
+
+@bp.route("/musicas/<int:comunidade_id>/baixar")
+@bp.route("/<int:ministerio_id>/repertorio/baixar")
+@login_required
+def baixar_musicas(comunidade_id=None, ministerio_id=None):
+    """Banco inteiro, ou so as marcadas (?ids=1,2,3), num .zip."""
+    from app.ministerio.exportar_cifras import nome_de_arquivo, zip_de_musicas
+
+    banco = _banco_ou_404(comunidade_id, ministerio_id)
+    musicas = banco.musicas()
+    ids = [int(i) for i in (request.args.get("ids") or "").split(",") if i.strip().isdigit()]
+    if ids:
+        musicas = musicas.filter(id__in=ids)
+    musicas = list(musicas.order_by("nome"))
+    if not musicas:
+        flash("Nenhuma música para baixar.", "warning")
+        return redirect(_url_do_banco(banco))
+    nome = f"{banco.titulo} - {banco.comunidade.nome}" if banco.oficial else banco.titulo
+    dados = zip_de_musicas((m, None, None) for m in musicas)
+    return _arquivo_pra_baixar(dados, nome_de_arquivo(nome, "zip"), "application/zip")
+
+
+@bp.route("/pastas/<int:pasta_id>/baixar")
+@login_required
+def baixar_pasta(pasta_id):
+    """Musicas do repertorio num .zip, na ordem (01 - ..., 02 - ...) e no tom
+    guardado em cada item (mesma cifra da folha de cifras)."""
+    from app.escala.models import itens_para_folha
+    from app.ministerio.exportar_cifras import nome_de_arquivo, zip_de_musicas
+
+    pasta, _, _ = _pasta_ou_404(pasta_id)
+    musicas = _musicas_por_id([i.musica_id for i in pasta.itens])
+    itens = itens_para_folha((i.nome, i.momento, musicas.get(i.musica_id), i.tom) for i in pasta.itens)
+    entradas = [(i["musica"], i["cifra"], i["tom"]) for i in itens if i["musica"]]
+    if not entradas:
+        flash("Este repertório não tem músicas do banco para baixar.", "warning")
+        return redirect(url_for("ministerio.pasta", pasta_id=pasta.id))
+    dados = zip_de_musicas(entradas, numerar=True)
+    return _arquivo_pra_baixar(dados, nome_de_arquivo(pasta.nome, "zip"), "application/zip")
 
 
 # --- Repertorios (aba "Repertorios" do banco) e envio pra outras pessoas -----

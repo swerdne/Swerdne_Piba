@@ -5,14 +5,14 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, tutorial with context %}
 {% from "ministerio/_envio.html" import campos_envio %}
 {% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
 {% set CHIP = "shrink-0 text-xs font-semibold rounded-full px-3 py-1.5 border transition" %}
 
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
-    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl -z-0"></div>
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
 
@@ -26,7 +26,13 @@
                 <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">{{ banco.titulo }}</h1>
             </div>
         </div>
-        {{ logo_inicio(tema) }}
+        <div class="flex items-center gap-2 shrink-0">
+            <button type="button" data-tutorial-reiniciar title="Ver tutorial" aria-label="Ver tutorial"
+                    class="w-9 h-9 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_secondary }} flex items-center justify-center transition hover:shadow-md">
+                <i class="fa-solid fa-question"></i>
+            </button>
+            {{ logo_inicio(tema) }}
+        </div>
     </header>
 
     <main class="px-4 sm:px-6 pt-2 pb-28 max-w-xl lg:max-w-3xl mx-auto space-y-5">
@@ -55,6 +61,7 @@
         </p>
 
         {% if pode_gerenciar %}
+        <div data-tutorial="adicionar" class="space-y-3">
         <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden" {% if not musicas %}open{% endif %}>
             <summary class="flex items-center gap-2 px-4 py-3.5 text-sm font-semibold {{ tema.accent_text }} cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
                 <i class="fa-solid fa-plus"></i>Nova musica
@@ -78,6 +85,7 @@
             <i class="fa-solid fa-file-import"></i>Importar varias cifras (PDF ou Word)
             <i class="fa-solid fa-chevron-right text-xs ml-auto"></i>
         </a>
+        </div>
         {% endif %}
 
         {% if sugestoes %}
@@ -113,7 +121,7 @@
 
         <!-- Modo de exibicao: lista de musicas ou repertorios por ministerio (lembrado no navegador) -->
         <div class="flex items-center justify-between gap-3">
-            <div class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Modo de exibicao">
+            <div data-tutorial="modos" class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Modo de exibicao">
                 <button type="button" data-modo="lista" role="tab"
                         class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list mr-1"></i>Lista</button>
                 <button type="button" data-modo="repertorios" role="tab"
@@ -121,6 +129,14 @@
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-xs {{ tema.text_secondary }}">{{ musicas|length }} musica(s)</span>
+                {% if musicas %}
+                <a href="{{ url_for('ministerio.baixar_musicas', **banco.args) }}" download data-baixar data-tutorial="baixar"
+                   data-url-base="{{ url_for('ministerio.baixar_musicas', **banco.args) }}"
+                   title="Baixar em Word (.docx, num .zip)"
+                   class="flex items-center gap-1 text-xs font-semibold {{ tema.accent_text }} border {{ tema.card_border }} rounded-full px-2.5 py-1 {{ tema.card_bg_hover }} transition">
+                    <i class="fa-solid fa-download"></i><span data-baixar-texto>Baixar</span>
+                </a>
+                {% endif %}
                 {% if pode_gerenciar and musicas %}
                 <button type="button" data-abrir-apagar title="Apagar todas as musicas deste banco" aria-label="Apagar todas as musicas"
                         class="flex items-center gap-1 text-xs font-semibold text-red-500 border border-red-500/30 rounded-full px-2.5 py-1 hover:bg-red-500/10 transition">
@@ -133,7 +149,7 @@
         <!-- ===== Modo Lista ===== -->
         <section data-modo-conteudo="lista" class="space-y-3">
             {% if musicas %}
-            <div class="relative">
+            <div class="relative" data-tutorial="busca">
                 <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-sm {{ tema.text_secondary }}"></i>
                 <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tom ou tema (ex: cruz)"
                        class="w-full pl-10 {{ CAMPO }}">
@@ -431,7 +447,17 @@
         function guardarSelecao() {
             try { sessionStorage.setItem(CHAVE_SELECAO, JSON.stringify(marcadas)); } catch (e) {}
         }
+        // "Baixar": com musicas marcadas, baixa so elas.
+        var botaoBaixar = document.querySelector('[data-baixar]');
+        function atualizarBaixar() {
+            if (!botaoBaixar) return;
+            var base = botaoBaixar.getAttribute('data-url-base');
+            botaoBaixar.href = marcadas.length ? base + '?ids=' + marcadas.join(',') : base;
+            botaoBaixar.querySelector('[data-baixar-texto]').textContent =
+                marcadas.length ? 'Baixar ' + marcadas.length + (marcadas.length === 1 ? ' marcada' : ' marcadas') : 'Baixar';
+        }
         function atualizarSelecao() {
+            atualizarBaixar();
             if (qtdMarcadas) qtdMarcadas.textContent = marcadas.length;
             if (!barra) return;
             var naLista = !document.querySelector('[data-modo-conteudo="lista"]').classList.contains('hidden');
@@ -590,4 +616,5 @@
         aplicarFiltro();
     })();
 </script>
+{{ tutorial("banco") }}
 {% endblock %}

@@ -7,25 +7,17 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #escala-rapida { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-    @keyframes es-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
-    @keyframes es-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
-    .es-blob { animation: es-blob-a 20s ease-in-out infinite; will-change: transform; }
-    .es-blob-2 { animation: es-blob-b 24s ease-in-out infinite; will-change: transform; }
-    .es-blob-3 { animation: es-blob-a 17s ease-in-out infinite reverse; will-change: transform; }
-    @media (prefers-reduced-motion: reduce) {
-        .es-blob, .es-blob-2, .es-blob-3 { animation: none; }
-    }
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial with context %}
 {% from "ministerio/_envio.html" import campos_envio %}
 {% block content %}
 <div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
-    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl es-blob -z-0"></div>
-    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl es-blob-2 -z-0"></div>
-    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl es-blob-3 -z-0"></div>
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} fundo-blob -z-0"></div>
 
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
@@ -70,26 +62,28 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
-                {% if eh_dono %}
-                <a href="{{ url_for('escala.editar', escala_id=escala.id) }}"
-                   title="Editar escala" aria-label="Editar escala"
-                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition">
-                    <i class="fa-solid fa-pen"></i>
-                </a>
-                <form method="POST" action="{{ url_for('escala.excluir_escala', escala_id=escala.id) }}"
-                      data-confirm-excluir='Tem certeza que deseja apagar a escala "{{ escala.nome }}"? Essa acao nao pode ser desfeita.'>
-                    {{ acao_form.hidden_tag() }}
-                    <button type="submit" title="Excluir escala" aria-label="Excluir escala"
-                            class="{{ tema.text_secondary }} hover:text-red-400 transition">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </form>
-                {% else %}
-                <span class="text-[11px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Voce foi convidado(a) pra esta escala -- so pode visualizar">
-                    <i class="fa-solid fa-eye"></i> Visualizacao
+            <div class="flex items-center gap-2 shrink-0">
+                {% if not eh_dono %}
+                <span class="hidden sm:inline text-[11px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Você só pode visualizar esta escala">
+                    <i class="fa-solid fa-eye"></i> Visualização
                 </span>
                 {% endif %}
+                {% call menu_acoes(tema) %}
+                    {% if eh_dono %}
+                    {{ item_menu(tema, url_for('escala.editar', escala_id=escala.id), 'fa-pen', 'Editar escala') }}
+                    {% endif %}
+                    {{ item_menu_tutorial(tema) }}
+                    {% if eh_dono %}
+                    <form method="POST" action="{{ url_for('escala.excluir_escala', escala_id=escala.id) }}"
+                          class="border-t {{ tema.card_border }} mt-1.5 pt-1.5"
+                          data-confirm-excluir='Tem certeza que deseja apagar a escala "{{ escala.nome }}"? Essa ação não pode ser desfeita.'>
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" role="menuitem" class="{{ classe_item_menu(tema, perigo=True) }}">
+                            <i class="fa-solid fa-trash w-4 text-center"></i>Excluir escala
+                        </button>
+                    </form>
+                    {% endif %}
+                {% endcall %}
                 {{ logo_inicio(tema) }}
             </div>
         </div>
@@ -127,10 +121,10 @@
         {% else %}
         <!-- Acoes -->
         <div class="flex flex-col sm:flex-row gap-3">
-            <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1">
+            <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1" data-tutorial="notificar">
                 {{ acao_form.hidden_tag() }}
                 <button type="submit"
-                        class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-3 rounded-full transition">
+                        class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-3 rounded-full transition">
                     <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe
                 </button>
             </form>
@@ -319,7 +313,7 @@
         </div>
 
         <!-- Grid da escala -->
-        <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
+        <div data-tutorial="funcoes" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
             <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr]">
 
                 {% for funcao in funcoes %}
@@ -615,7 +609,7 @@
 
         {% if escala.departamento == 'Louvor' %}
         {% set repertorio = escala.repertorio %}
-        <div id="repertorio" data-retratil="repertorio" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden scroll-mt-20">
+        <div id="repertorio" data-retratil="repertorio" data-tutorial="repertorio" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden scroll-mt-20">
             <div data-retratil-cabecalho role="button" tabindex="0" aria-expanded="false" aria-controls="repertorio-corpo" class="{{ tema.card_bg }} px-4 py-3 flex items-center justify-between gap-2 cursor-pointer select-none">
                 <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
                     <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Repertorio
@@ -1139,14 +1133,6 @@
         });
     });
 
-    document.querySelectorAll('[data-confirm-excluir]').forEach(function (form) {
-        form.addEventListener('submit', function (evento) {
-            if (!window.confirm(form.getAttribute('data-confirm-excluir'))) {
-                evento.preventDefault();
-            }
-        });
-    });
-
     document.querySelectorAll('[data-toggle-busca-convidado]').forEach(function (botao) {
         botao.addEventListener('click', function () {
             var id = botao.getAttribute('data-toggle-busca-convidado');
@@ -1332,4 +1318,5 @@
         }
     })();
 </script>
+{{ tutorial("escala") }}
 {% endblock %}

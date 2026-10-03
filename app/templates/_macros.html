@@ -149,3 +149,46 @@ pequenas (os dois simbolos da logo) repetidas em diagonal, bem discretas. #}
     <rect width="100%" height="100%" fill="url(#marca-dagua-padrao)"/>
 </svg>
 {% endmacro %}
+
+
+{% macro menu_acoes(tema, rotulo="Mais opções") %}
+{#
+Acoes da tela (editar, excluir, papeis...) num menu "⋯" no cabecalho, com
+icone + nome -- em vez de varios icones soltos espremendo o titulo no
+celular. <details> abre/fecha sem JS; main.js fecha ao tocar fora ou
+escolher um item. Itens: {% call menu_acoes(tema) %} ... {% endcall %},
+usando item_menu() pra links e, pra formularios (excluir), a classe
+devolvida por classe_item_menu().
+#}
+<details class="relative shrink-0" data-menu-acoes data-tutorial="menu">
+    <summary aria-label="{{ rotulo }}" title="{{ rotulo }}"
+             class="list-none [&::-webkit-details-marker]:hidden cursor-pointer w-9 h-9 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_primary }} flex items-center justify-center transition hover:shadow-md">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
+    </summary>
+    <div class="absolute right-0 top-11 z-40 w-60 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl py-1.5 overflow-hidden" role="menu">
+        {{ caller() }}
+    </div>
+</details>
+{% endmacro %}
+
+{% macro classe_item_menu(tema, perigo=False) -%}
+w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left {{ 'text-red-500 hover:bg-red-500/10' if perigo else tema.text_primary ~ ' ' ~ tema.card_bg_hover }}
+{%- endmacro %}
+
+{% macro item_menu(tema, href, icone, texto) %}
+<a href="{{ href }}" role="menuitem" class="{{ classe_item_menu(tema) }}">
+    <i class="fa-solid {{ icone }} w-4 text-center {{ tema.text_secondary }}"></i>{{ texto }}
+</a>
+{% endmacro %}
+
+{% macro item_menu_tutorial(tema) %}
+<button type="button" role="menuitem" data-tutorial-reiniciar class="{{ classe_item_menu(tema) }}">
+    <i class="fa-solid fa-circle-question w-4 text-center {{ tema.text_secondary }}"></i>Ver tutorial
+</button>
+{% endmacro %}
+
+{% macro tutorial(chave) %}
+{# Dados do tutorial guiado da tela (app/tutoriais.py; motor em main.js).
+Precisa de import "with context" (dados_tutorial vem do context processor). #}
+<script type="application/json" id="tutorial-dados">{{ dados_tutorial(chave) | tojson }}</script>
+{% endmacro %}

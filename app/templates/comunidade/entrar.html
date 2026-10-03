@@ -7,21 +7,14 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #entrar-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-    @keyframes cm-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
-    @keyframes cm-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
-    .cm-blob { animation: cm-blob-a 20s ease-in-out infinite; will-change: transform; }
-    .cm-blob-2 { animation: cm-blob-b 24s ease-in-out infinite; will-change: transform; }
-    @media (prefers-reduced-motion: reduce) {
-        .cm-blob, .cm-blob-2 { animation: none; }
-    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="entrar-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} flex items-center justify-center px-4 overflow-hidden">
 
-    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} blur-3xl cm-blob -z-0"></div>
-    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl cm-blob-2 -z-0"></div>
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
 
     <div class="relative z-10 max-w-md w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-6 text-center space-y-4">
 

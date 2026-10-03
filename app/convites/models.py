@@ -17,7 +17,7 @@ import secrets
 from datetime import datetime, timezone
 
 import mongoengine
-from app.db_utils import SequentialIdDocument
+from app.db_utils import SequentialIdDocument, relacao_em_cache
 
 ESCOPOS = ("comunidade", "ministerio")
 STATUS_PENDENTE = "pendente"
@@ -53,19 +53,19 @@ class Convite(SequentialIdDocument):
     @property
     def convidado_por(self):
         from app.auth.models import User
-        return User.objects(id=self.convidado_por_id).first()
+        return relacao_em_cache(self, "convidado_por", self.convidado_por_id, lambda: User.objects(id=self.convidado_por_id).first())
 
     @property
     def comunidade(self):
         """So valido quando escopo_tipo == 'comunidade' -- ver escopo_nome/escopo_obj."""
         from app.comunidade.models import Comunidade
-        return Comunidade.objects(id=self.escopo_id).first()
+        return relacao_em_cache(self, "comunidade", self.escopo_id, lambda: Comunidade.objects(id=self.escopo_id).first())
 
     @property
     def ministerio(self):
         """So valido quando escopo_tipo == 'ministerio' -- ver escopo_nome/escopo_obj."""
         from app.ministerio.models import Ministerio
-        return Ministerio.objects(id=self.escopo_id).first()
+        return relacao_em_cache(self, "ministerio", self.escopo_id, lambda: Ministerio.objects(id=self.escopo_id).first())
 
     @property
     def escopo_obj(self):

@@ -7,24 +7,16 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-    @keyframes mn-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
-    @keyframes mn-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
-    .mn-blob { animation: mn-blob-a 20s ease-in-out infinite; will-change: transform; }
-    .mn-blob-2 { animation: mn-blob-b 24s ease-in-out infinite; will-change: transform; }
-    .mn-blob-3 { animation: mn-blob-a 17s ease-in-out infinite reverse; will-change: transform; }
-    @media (prefers-reduced-motion: reduce) {
-        .mn-blob, .mn-blob-2, .mn-blob-3 { animation: none; }
-    }
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial with context %}
 {% block content %}
 <div id="ministerio-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
-    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl mn-blob -z-0"></div>
-    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl mn-blob-2 -z-0"></div>
-    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} blur-3xl mn-blob-3 -z-0"></div>
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute bottom-0 left-1/4 w-80 h-80 rounded-full {{ tema.blob_3 }} fundo-blob -z-0"></div>
 
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
@@ -40,39 +32,32 @@
                 {% endif %}
                 <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
-                {% if not ministerio.eh_kids %}
-                <a href="{{ url_for('ministerio.repertorio', ministerio_id=ministerio.id) }}"
-                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" title="Banco de musicas do ministerio" aria-label="Banco de musicas">
-                    <i class="fa-solid fa-music"></i>
-                </a>
-                {% endif %}
-                {% if pode_gerenciar %}
-                {% if ministerio.eh_kids %}
-                <a href="{{ url_for('ministerio.checkin', ministerio_id=ministerio.id) }}"
-                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" title="Check-in de criancas" aria-label="Check-in de criancas">
-                    <i class="fa-solid fa-child-reaching"></i>
-                </a>
-                {% endif %}
-                <a href="{{ url_for('ministerio.papeis', ministerio_id=ministerio.id) }}"
-                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Papeis e convites">
-                    <i class="fa-solid fa-user-group"></i>
-                </a>
-                {% if eh_admin %}
-                <a href="{{ url_for('ministerio.editar', ministerio_id=ministerio.id) }}"
-                   class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Editar ministerio">
-                    <i class="fa-solid fa-pen"></i>
-                </a>
-                <form method="POST" action="{{ url_for('ministerio.excluir_ministerio', ministerio_id=ministerio.id) }}"
-                      onsubmit="return confirm('Tem certeza que deseja apagar o ministerio \'{{ ministerio.nome }}\'? Todas as escalas e turnos de rodizio dele tambem serao apagados. Essa acao nao pode ser desfeita.');">
-                    {{ acao_form.hidden_tag() }}
-                    <button type="submit" title="Excluir ministerio" aria-label="Excluir ministerio"
-                            class="{{ tema.text_secondary }} hover:text-red-400 transition">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </form>
-                {% endif %}
-                {% endif %}
+            <div class="flex items-center gap-2 shrink-0">
+                {% call menu_acoes(tema) %}
+                    {% if not ministerio.eh_kids %}
+                    {{ item_menu(tema, url_for('ministerio.repertorio', ministerio_id=ministerio.id), 'fa-music', 'Banco de músicas') }}
+                    {% endif %}
+                    {% if pode_gerenciar %}
+                    {% if ministerio.eh_kids %}
+                    {{ item_menu(tema, url_for('ministerio.checkin', ministerio_id=ministerio.id), 'fa-child-reaching', 'Check-in de crianças') }}
+                    {% endif %}
+                    {{ item_menu(tema, url_for('ministerio.papeis', ministerio_id=ministerio.id), 'fa-user-group', 'Papéis e convites') }}
+                    {% if eh_admin %}
+                    {{ item_menu(tema, url_for('ministerio.editar', ministerio_id=ministerio.id), 'fa-pen', 'Editar ministério') }}
+                    {% endif %}
+                    {% endif %}
+                    {{ item_menu_tutorial(tema) }}
+                    {% if pode_gerenciar and eh_admin %}
+                    <form method="POST" action="{{ url_for('ministerio.excluir_ministerio', ministerio_id=ministerio.id) }}"
+                          class="border-t {{ tema.card_border }} mt-1.5 pt-1.5"
+                          data-confirm-excluir='Tem certeza que deseja apagar o ministério "{{ ministerio.nome }}"? Todas as escalas e rodízios dele também serão apagados. Essa ação não pode ser desfeita.'>
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" role="menuitem" class="{{ classe_item_menu(tema, perigo=True) }}">
+                            <i class="fa-solid fa-trash w-4 text-center"></i>Excluir ministério
+                        </button>
+                    </form>
+                    {% endif %}
+                {% endcall %}
                 {{ logo_inicio(tema) }}
             </div>
         </div>
@@ -98,7 +83,7 @@
                         </button>
                         {% endif %}
                         {% if pode_gerenciar %}
-                        <a href="{{ url_for('escala.nova', ministerio_id=ministerio.id) }}"
+                        <a href="{{ url_for('escala.nova', ministerio_id=ministerio.id) }}" data-tutorial="nova-escala"
                            class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-full transition shrink-0">
                             <i class="fa-solid fa-plus mr-1"></i>Nova escala
                         </a>
@@ -113,7 +98,7 @@
                 </div>
                 {% endif %}
 
-                <form method="POST" data-selecao-form
+                <form method="POST" data-selecao-form data-tutorial="escalas"
                       data-selecao-confirmar="Excluir as escalas selecionadas? Essa acao nao pode ser desfeita."
                       class="space-y-3">
                     {{ acao_form.hidden_tag() }}
@@ -173,7 +158,7 @@
                     {% endif %}
                 </form>
 
-                <div class="pt-2">
+                <div class="pt-2" data-tutorial="rodizios">
                     <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodizio</h2>
                 </div>
                 <p class="text-xs {{ tema.text_secondary }} -mt-2">
@@ -208,7 +193,7 @@
             </div>
 
             <!-- Calendario -->
-            <div class="{{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-3xl overflow-hidden lg:sticky lg:top-4">
+            <div data-tutorial="calendario" class="{{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-3xl overflow-hidden lg:sticky lg:top-4">
 
                 <!-- Data de hoje por extenso + recolher/expandir -->
                 <div class="flex items-center justify-between px-5 py-4">
@@ -328,4 +313,5 @@
         });
     })();
 </script>
+{{ tutorial("ministerio") }}
 {% endblock %}

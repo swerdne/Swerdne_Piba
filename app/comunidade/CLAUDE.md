@@ -16,12 +16,7 @@ Contexto local. Visão geral do projeto e convenções gerais: [../../CLAUDE.md]
 
 ## Tutorial guiado (spotlight)
 
-`comunidade.detalhe` mostra um tour guiado (destaque com "spotlight" sobre elementos reais da tela, não um modal de slides) na **primeira vez** que a conta abre uma Comunidade — nunca mais depois disso, pra conta inteira (não é por comunidade). Controlado por `User.tutorial_comunidade_visto` (bool, `app/auth/models.py`).
-
-- Passos em `PASSOS_TUTORIAL_COMUNIDADE` (`comunidade/routes.py`), casando por `seletor` CSS com atributos `data-tutorial="..."` no template (`convites`, `membros`, `escalados`, `novo-ministerio`); `seletor: None` = passo centralizado, sem destacar nada (boas-vindas/conclusão).
-- Motor genérico em `app/static/js/main.js` (IIFE sem nome no topo) — lê um `<script type="application/json" id="tutorial-dados">` (**sempre presente** no HTML, mesmo depois de já visto) com `{urlConcluir, csrf, passos, autoIniciar}`. `autoIniciar` (= `not User.tutorial_comunidade_visto`) controla só o disparo automático ao carregar a página — reaproveitável em qualquer outra tela só adicionando esse bloco + atributos `data-tutorial`, sem JS novo por página.
-- Botão "Rever tutorial" (ícone `?`) no cabeçalho — `[data-tutorial-reiniciar]`, sempre visível, dispara o mesmo motor a qualquer momento independente de `autoIniciar`/já ter sido visto.
-- `POST /tutorial-comunidade-visto` (`app/main/routes.py`) marca visto — chamado via `fetch` quando a pessoa clica "Pular"/"Concluir" ou aperta Esc (inclusive numa reexecução manual, idempotente). Usa `generate_csrf()` direto na rota (não o global Jinja `csrf_token()`, que só existe se `CSRFProtect(app)` for registrado globalmente — não é o caso neste projeto, que usa `FlaskForm` por rota).
+O tutorial da Comunidade é um dos tutoriais de tela de `app/tutoriais.py` (chave `"comunidade"`; os outros são `ministerio`, `escala` e `banco`) — ver a seção "Tutoriais guiados" do [CLAUDE.md raiz](../../CLAUDE.md). Aqui só ficam os atributos `data-tutorial="..."` do template (`membros`, `escalados`, `banco`, `calendario`, `convites`, `novo-ministerio`) e o botão `?` (`[data-tutorial-reiniciar]`) no cabeçalho.
 
 ## Regras específicas
 

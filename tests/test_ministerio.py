@@ -396,10 +396,10 @@ def test_icone_checkin_so_aparece_para_ministerio_kids(logged_in_client, app, db
         louvor = _criar_ministerio(logged_in_client, comunidade.id, "Louvor")
 
         html_kids = logged_in_client.get(f"/ministerio/{kids.id}").data.decode("utf-8")
-        assert "Check-in de criancas" in html_kids
+        assert "Check-in de crianças" in html_kids
 
         html_louvor = logged_in_client.get(f"/ministerio/{louvor.id}").data.decode("utf-8")
-        assert "Check-in de criancas" not in html_louvor
+        assert "Check-in de crianças" not in html_louvor
 
 
 def test_cadastrar_crianca_no_checkin(logged_in_client, app, db):

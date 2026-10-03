@@ -69,6 +69,10 @@ def create_app(config_name="default"):
     from .errors import registrar_error_handlers
     registrar_error_handlers(app)
 
+    # Estaticos versionados (?v=hash, cache de 1 ano) + gzip -- ver app/desempenho.py.
+    from .desempenho import registrar_desempenho
+    registrar_desempenho(app)
+
     # Headers de seguranca em toda resposta -- reforcam o que o navegador ja
     # faz por padrao, mas contra ataques comuns que nao dependem de bug no
     # nosso codigo (ex.: um site malicioso te embutindo num <iframe> pra
@@ -143,7 +147,12 @@ def create_app(config_name="default"):
             from .notificacoes import Notificacao
             return Notificacao.objects(usuario_id=current_user.id, lida=False).count()
 
-        return {"tema": obter_tema(chave), "temas": THEMES, "avisos_nao_lidos": avisos_nao_lidos}
+        def dados_tutorial(chave_tutorial):
+            from .tutoriais import dados_do_tutorial
+            return dados_do_tutorial(chave_tutorial, current_user)
+
+        return {"tema": obter_tema(chave), "temas": THEMES, "avisos_nao_lidos": avisos_nao_lidos,
+                "dados_tutorial": dados_tutorial}
 
     # Agendador de notificacoes automaticas (24h/16h antes do evento) -- unico
     # no projeto: cada tick tambem sincroniza os Turnos de Rodizio (materializa

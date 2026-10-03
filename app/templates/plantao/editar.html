@@ -7,13 +7,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #plantao-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-    @keyframes pl-blob-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -30px) scale(1.08); } }
-    @keyframes pl-blob-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 40px) scale(1.05); } }
-    .pl-blob { animation: pl-blob-a 20s ease-in-out infinite; will-change: transform; }
-    .pl-blob-2 { animation: pl-blob-b 24s ease-in-out infinite; will-change: transform; }
-    @media (prefers-reduced-motion: reduce) {
-        .pl-blob, .pl-blob-2 { animation: none; }
-    }
 </style>
 {% endblock %}
 
@@ -21,8 +14,8 @@
 {% block content %}
 <div id="plantao-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
-    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} blur-3xl pl-blob -z-0"></div>
-    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} blur-3xl pl-blob-2 -z-0"></div>
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
 
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
