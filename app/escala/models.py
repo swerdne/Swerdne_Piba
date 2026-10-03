@@ -829,10 +829,17 @@ _INDICE_NOTA = {**{n: i for i, n in enumerate(_NOTAS_SUSTENIDO)},
 _MAIORES_BEMOL = {5, 10, 3, 8, 1}
 _MENORES_BEMOL = {2, 7, 0, 5, 10, 3}
 
-_SUFIXO = r"(?:maj|min|dim|aug|sus|add|m|M|º|°|\+|-|\d|\(|\)|[#b](?=\d)|,)*"
+# no3/omit (C9(no3)), alt, ø (meio-diminuto), Δ (maior com 7M) e "/" seguido
+# de numero (6/9, (b9/#11)) -- o "/" seguido de NOTA continua sendo o baixo.
+_SUFIXO = r"(?:maj|min|dim|aug|sus|add|no|omit|alt|m|M|º|°|ø|Δ|\+|-|\d|\(|\)|[#b](?=\d)|/(?=[#b]?\d)|,)*"
 _TOKEN_ACORDE = re.compile(r"^(\(?)([A-G][#b]?)(" + _SUFIXO + r")(?:/([A-G][#b]?))?([)\],.]*)$")
 _ROTULO_INICIAL = re.compile(r"^\s*(?:\[[^\]]*\]|[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ ]*\d*\s*:)")
-_MARCAS_OK = re.compile(r"^(?:\|+|-+|/|%|\(?\d*x\d*\)?|\(?\d+x?\)?)$", re.I)
+# Marcas que podem aparecer numa linha de acordes sem ser acorde: barras e
+# repeticao (| || |: :|), N.C. (sem acorde), parenteses soltos, reticencias,
+# setas, asterisco, % e "2x"/"(x2)".
+_MARCAS_OK = re.compile(
+    r"^(?:\|+:?|:\|+|:|-+|/|%|\(|\)|\.{2,}|…|->|→|\*+|N\.?C\.?|\(?\d*x\d*\)?|\(?\d+x?\)?)$", re.I
+)
 _TOM = re.compile(r"^\s*([A-G][#b]?)(m(?!aj))?")
 
 
@@ -1013,7 +1020,7 @@ _ACORDE_INLINE = re.compile(r"\[([A-G][^\]\s]*)\]")
 
 def _qualidade(sufixo):
     s = sufixo or ""
-    if s.startswith(("dim", "º", "°")) or "m7b5" in s or "m7(b5)" in s:
+    if s.startswith(("dim", "º", "°", "ø")) or "m7b5" in s or "m7(b5)" in s:
         return "d"
     if s.startswith("m") and not s.startswith("maj"):
         return "m"

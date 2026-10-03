@@ -354,3 +354,126 @@ def test_tom_invalido_e_recusado(logged_in_client, app, db):
         logged_in_client.post(f"/ministerio/{ministerio.id}/repertorio/nova",
                               data={"nome": "Teste", "tom": "F#m"})
         assert Musica.objects(ministerio_id=ministerio.id, nome="Teste").first().tom == "F#m"
+
+
+# --- Reconhecimento de linhas de acordes (escala.models.eh_linha_de_acordes) ---
+#
+# Notacoes reais de sites/cadernos de cifra. Se uma linha de acordes nao for
+# reconhecida, a cifra perde transposicao e o tom nao e identificado; se uma
+# linha de LETRA for confundida com acordes, ela some da projecao. A mesma
+# regra existe em static/js/transpor.js -- mudou aqui, mude la.
+
+_LINHAS_DE_ACORDES = [
+    'C9(no3)  G',
+    'Cadd9  G',
+    'C(add9)  G',
+    'C6/9  G',
+    'C6(9)  G',
+    'A7(b9/#11)  D',
+    'Bø  E7',
+    'Bø7  E7',
+    'CΔ  G',
+    'CΔ7  G',
+    'Cmaj7  G',
+    'C7M  G',
+    'C7+  F',
+    'Dm7(b5)  G7',
+    'Dm7b5  G7',
+    'F#°  G',
+    'F#º7  G',
+    'Ebdim  D',
+    'G7(13)  C',
+    'G13  C',
+    'Asus4  A',
+    'Asus2  A',
+    'A4  A',
+    'A2  A',
+    'E5  A5',
+    'Bb7(#11)  A',
+    'C/E  F',
+    'D/F#  G',
+    'G/B  C',
+    'A/C#  D',
+    'E7/G#  A',
+    'Am7/G  F',
+    'N.C.  G  D',
+    'G  D  N.C.',
+    '|: G  D  Em  C :|',
+    '|| G | D | Em | C ||',
+    '( G  D  Em  C )',
+    'G  D  Em  C ...',
+    'G  D  Em  C  …',
+    'G -> D -> Em',
+    'G → D → Em',
+    'G  D  (2x)',
+    'G  D  x2',
+    'G  D  2x',
+    'G * D * Em',
+    'Intro: G  D  Em  C',
+    '[Intro] G  D  Em  C',
+    'Refrão: C  G  D',
+    'G7M(9)  D/F#  Em7(11)  C7M(9)',
+    'Bb  F/A  Gm7  Eb7M',
+    'E  B/D#  C#m7  A9',
+    'D4(7)  D  A/C#',
+    'G9(11)  Gsus',
+    'Am7(11)  Am7(9)',
+]
+
+_LINHAS_DE_LETRA = [
+    'A Deus seja a glória',
+    'E eu te louvarei',
+    'Agora é tempo',
+    'Dá-me a mão',
+    'Ah ah ah',
+    'E a',
+    'Ele é',
+    'Bem',
+    'Cada dia',
+    'Fé',
+    'De Deus',
+    'Em Ti eu confio',
+    'Deus é fiel',
+    'Grande é o Senhor',
+    'Bendito seja',
+    'Cristo vive',
+    'Glória a Deus',
+    'Aleluia',
+    'Amém',
+    'Ao Rei dos reis',
+    'Dai graças',
+    'Eu e minha casa',
+    'Fé, esperança e amor',
+    'Graça sobre graça',
+    'Em Cristo',
+    'Ao Cordeiro',
+    'Bom é louvar',
+    'Cante ao Senhor',
+    'Diga ao mundo',
+]
+
+
+@pytest.mark.parametrize("linha", _LINHAS_DE_ACORDES)
+def test_reconhece_notacoes_de_acordes(linha):
+    from app.escala.models import eh_linha_de_acordes
+    assert eh_linha_de_acordes(linha)
+
+
+@pytest.mark.parametrize("linha", _LINHAS_DE_LETRA)
+def test_letra_nao_e_confundida_com_acordes(linha):
+    from app.escala.models import eh_linha_de_acordes
+    assert not eh_linha_de_acordes(linha)
+
+
+def test_transpor_preserva_notacoes_especiais():
+    from app.escala.models import transpor_cifra
+    assert transpor_cifra("C6/9  G", 2) == "D6/9  A"          # 6/9 nao e baixo
+    assert transpor_cifra("A7(b9/#11)  D", 2) == "B7(b9/#11)  E"
+    assert transpor_cifra("D/F#  G", 2) == "E/G#  A"          # baixo continua transpondo
+    assert transpor_cifra("N.C.  G  D", 2) == "N.C.  A  E"
+
+
+def test_detecta_tom_com_notacoes_especiais():
+    from app.escala.models import detectar_tom
+    assert detectar_tom("|: Am  Dm7  Bø  E7(b9) :|\nN.C.\nF7M  Dm  E7  Am") == "Am"
+    assert detectar_tom("C9(no3)  G/B  Am7  F6/9\nFΔ  G  C") == "C"

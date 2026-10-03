@@ -9,10 +9,11 @@
     var MAIORES_BEMOL = [5, 10, 3, 8, 1];
     var MENORES_BEMOL = [2, 7, 0, 5, 10, 3];
 
-    var SUFIXO = '(?:maj|min|dim|aug|sus|add|m|M|º|°|\\+|-|\\d|\\(|\\)|[#b](?=\\d)|,)*';
+    // Mesmas regras de app/escala/models.py (_SUFIXO/_MARCAS_OK) -- manter iguais.
+    var SUFIXO = '(?:maj|min|dim|aug|sus|add|no|omit|alt|m|M|º|°|ø|Δ|\\+|-|\\d|\\(|\\)|[#b](?=\\d)|/(?=[#b]?\\d)|,)*';
     var TOKEN = new RegExp('^(\\(?)([A-G][#b]?)(' + SUFIXO + ')(?:/([A-G][#b]?))?([)\\],.]*)$');
     var ROTULO = /^\s*(?:\[[^\]]*\]|[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ ]*\d*\s*:)/;
-    var MARCAS = /^(?:\|+|-+|\/|%|\(?\d*x\d*\)?|\(?\d+x?\)?)$/i;
+    var MARCAS = /^(?:\|+:?|:\|+|:|-+|\/|%|\(|\)|\.{2,}|…|->|→|\*+|N\.?C\.?|\(?\d*x\d*\)?|\(?\d+x?\)?)$/i;
     var TOM = /^\s*([A-G][#b]?)(m(?!aj))?/;
 
     function mod12(n) { return ((n % 12) + 12) % 12; }
