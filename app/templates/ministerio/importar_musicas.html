@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Importar cifras - {{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl -z-0"></div>
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('ministerio.repertorio', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ ministerio.nome }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Importar cifras de PDFs</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 pt-2 pb-32 max-w-xl lg:max-w-3xl mx-auto space-y-5">
+        <form id="form-csrf" class="hidden">{{ acao_form.hidden_tag() }}</form>
+
+        <p class="text-sm {{ tema.text_secondary }}">
+            No site da cifra (Cifra Club, Cifras, Letras...), use <span class="font-semibold {{ tema.text_primary }}">Imprimir &rarr; Salvar como PDF</span>.
+            Depois escolha aqui quantos PDFs quiser: cada um vira uma musica, e voce confere tudo antes de salvar.
+        </p>
+
+        <!-- Escolha dos arquivos: clique, arraste ou pasta inteira -->
+        <label data-area-soltar
+               class="flex flex-col items-center justify-center gap-2 text-center {{ tema.card_bg }} border-2 border-dashed {{ tema.card_border }} rounded-3xl px-4 py-10 cursor-pointer transition">
+            <i class="fa-solid fa-file-pdf text-3xl {{ tema.accent_text }}"></i>
+            <span class="text-sm font-semibold {{ tema.text_primary }}">Clique para escolher os PDFs ou arraste aqui</span>
+            <span class="text-xs {{ tema.text_secondary }}">Varios de uma vez &middot; ate 2 MB cada</span>
+            <input type="file" accept=".pdf,application/pdf" multiple class="hidden" data-entrada-arquivos>
+        </label>
+        <p class="text-center text-xs {{ tema.text_secondary }} -mt-2">
+            ou
+            <label class="font-semibold {{ tema.accent_text }} hover:underline cursor-pointer">
+                escolher uma pasta inteira
+                <input type="file" webkitdirectory multiple class="hidden" data-entrada-arquivos>
+            </label>
+        </p>
+
+        <div data-progresso class="hidden {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3">
+            <div class="flex items-center justify-between text-xs {{ tema.text_secondary }} mb-2">
+                <span data-progresso-texto>Lendo PDFs...</span>
+                <span data-progresso-numeros></span>
+            </div>
+            <div class="h-1.5 rounded-full bg-black/10 overflow-hidden">
+                <div data-progresso-barra class="h-full {{ tema.accent_bg }} transition-all" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div data-cabecalho-revisao class="hidden flex items-center justify-between gap-3">
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Revise antes de salvar</h2>
+            <label class="flex items-center gap-2 text-xs font-semibold {{ tema.text_secondary }} cursor-pointer">
+                <input type="checkbox" data-marcar-todas checked class="w-4 h-4"> Marcar todas
+            </label>
+        </div>
+
+        <div data-lista-revisao class="space-y-3"></div>
+    </main>
+
+    <!-- Barra fixa de salvar -->
+    <div data-barra-salvar class="hidden fixed bottom-0 inset-x-0 z-20 px-4 pb-4">
+        <div class="max-w-xl lg:max-w-3xl mx-auto {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-lg px-4 py-3 flex items-center justify-between gap-3">
+            <span data-resumo-selecao class="text-sm {{ tema.text_secondary }}"></span>
+            <button type="button" data-botao-salvar
+                    class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition disabled:opacity-50">
+                <i class="fa-solid fa-file-import mr-1"></i>Importar
+            </button>
+        </div>
+    </div>
+
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+
+<!-- Modelo de 1 card de revisao (preenchido pelo JS so com value/textContent) -->
+<template id="modelo-musica">
+    <div data-card class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm p-4 space-y-2.5">
+        <div class="flex items-start gap-3">
+            <input type="checkbox" data-incluir checked class="mt-2.5 w-4 h-4 shrink-0" aria-label="Importar esta musica">
+            <div class="flex-1 min-w-0 space-y-2">
+                <p data-arquivo class="text-[11px] {{ tema.text_secondary }} truncate"></p>
+                <input type="text" data-campo="nome" maxlength="150" placeholder="Nome da musica" class="w-full font-semibold {{ CAMPO }}">
+                <div class="grid grid-cols-[1fr_5.5rem] gap-2">
+                    <input type="text" data-campo="artista" maxlength="120" placeholder="Artista / ministerio" class="w-full min-w-0 {{ CAMPO }}">
+                    <input type="text" data-campo="tom" maxlength="10" placeholder="Tom" class="w-full {{ CAMPO }}">
+                </div>
+                <p data-ja-existe class="hidden text-xs font-semibold text-amber-500">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>Ja existe uma musica com esse nome no repertorio -- desmarcada pra nao duplicar.
+                </p>
+                <ul data-avisos class="text-xs text-amber-500 space-y-0.5"></ul>
+                <details>
+                    <summary class="text-xs font-semibold {{ tema.accent_text }} cursor-pointer select-none">Ver / editar cifra</summary>
+                    <textarea data-campo="cifra" rows="14" spellcheck="false"
+                              class="mt-2 w-full font-mono text-xs leading-snug whitespace-pre {{ CAMPO }}"></textarea>
+                </details>
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="modelo-erro">
+    <div class="flex items-start gap-3 {{ tema.card_bg }} border border-red-500/30 rounded-2xl px-4 py-3">
+        <i class="fa-solid fa-circle-xmark text-red-500 mt-0.5"></i>
+        <div class="min-w-0">
+            <p data-arquivo class="text-sm font-semibold {{ tema.text_primary }} truncate"></p>
+            <p data-erro class="text-xs text-red-400"></p>
+        </div>
+    </div>
+</template>
+
+<script>
+(function () {
+    var URL_EXTRAIR = "{{ url_for('ministerio.extrair_musica_pdf', ministerio_id=ministerio.id) }}";
+    var URL_SALVAR = "{{ url_for('ministerio.salvar_musicas_importadas', ministerio_id=ministerio.id) }}";
+    var LIMITE_BYTES = 2 * 1024 * 1024;  // MAX_CONTENT_LENGTH do servidor
+    var LEITURAS_AO_MESMO_TEMPO = 3;     // poucas em paralelo: rapido sem sobrecarregar o servidor
+
+    var csrf = document.querySelector('#form-csrf input[name="csrf_token"]').value;
+    var lista = document.querySelector('[data-lista-revisao]');
+    var modeloMusica = document.getElementById('modelo-musica');
+    var modeloErro = document.getElementById('modelo-erro');
+    var progresso = document.querySelector('[data-progresso]');
+    var barra = document.querySelector('[data-progresso-barra]');
+    var textoProgresso = document.querySelector('[data-progresso-texto]');
+    var numerosProgresso = document.querySelector('[data-progresso-numeros]');
+    var cabecalhoRevisao = document.querySelector('[data-cabecalho-revisao]');
+    var barraSalvar = document.querySelector('[data-barra-salvar]');
+    var resumo = document.querySelector('[data-resumo-selecao]');
+    var botaoSalvar = document.querySelector('[data-botao-salvar]');
+    var marcarTodas = document.querySelector('[data-marcar-todas]');
+    var areaSoltar = document.querySelector('[data-area-soltar]');
+
+    var fila = [];
+    var total = 0;
+    var feitos = 0;
+    var ativos = 0;
+
+    function atualizarResumo() {
+        var cards = lista.querySelectorAll('[data-card]');
+        var marcados = lista.querySelectorAll('[data-card] [data-incluir]:checked').length;
+        resumo.textContent = marcados + ' de ' + cards.length + ' selecionada(s)';
+        botaoSalvar.disabled = marcados === 0 || ativos > 0;
+        cabecalhoRevisao.classList.toggle('hidden', cards.length === 0);
+        barraSalvar.classList.toggle('hidden', cards.length === 0);
+    }
+
+    function mostrarErro(nomeArquivo, mensagem) {
+        var no = modeloErro.content.cloneNode(true);
+        no.querySelector('[data-arquivo]').textContent = nomeArquivo;
+        no.querySelector('[data-erro]').textContent = mensagem;
+        lista.appendChild(no);
+    }
+
+    function mostrarMusica(nomeArquivo, musica) {
+        var no = modeloMusica.content.cloneNode(true);
+        var card = no.querySelector('[data-card]');
+        card.querySelector('[data-arquivo]').textContent = nomeArquivo;
+        ['nome', 'artista', 'tom', 'cifra'].forEach(function (campo) {
+            card.querySelector('[data-campo="' + campo + '"]').value = musica[campo] || '';
+        });
+        var avisos = card.querySelector('[data-avisos]');
+        (musica.avisos || []).forEach(function (aviso) {
+            var li = document.createElement('li');
+            li.textContent = aviso;
+            avisos.appendChild(li);
+        });
+        if (musica.ja_existe) {
+            card.querySelector('[data-ja-existe]').classList.remove('hidden');
+            card.querySelector('[data-incluir]').checked = false;
+        }
+        card.querySelector('[data-incluir]').addEventListener('change', atualizarResumo);
+        lista.appendChild(no);
+    }
+
+    function atualizarProgresso() {
+        progresso.classList.remove('hidden');
+        barra.style.width = (total ? Math.round(feitos * 100 / total) : 0) + '%';
+        numerosProgresso.textContent = feitos + ' de ' + total;
+        textoProgresso.textContent = feitos < total ? 'Lendo PDFs...' : 'Pronto! Confira abaixo e importe.';
+    }
+
+    function proximo() {
+        while (ativos < LEITURAS_AO_MESMO_TEMPO && fila.length) {
+            ler(fila.shift());
+        }
+        atualizarResumo();
+    }
+
+    function concluir() {
+        ativos--;
+        feitos++;
+        atualizarProgresso();
+        proximo();
+    }
+
+    function ler(arquivo) {
+        if (arquivo.size > LIMITE_BYTES) {
+            mostrarErro(arquivo.name, 'Arquivo acima de 2 MB.');
+            ativos++;
+            concluir();
+            return;
+        }
+        ativos++;
+        var dados = new FormData();
+        dados.append('csrf_token', csrf);
+        dados.append('arquivo', arquivo, arquivo.name);
+        fetch(URL_EXTRAIR, { method: 'POST', body: dados, credentials: 'same-origin' })
+            .then(function (r) { return r.json().catch(function () { return { erro: 'Erro ao ler o PDF (' + r.status + ').' }; }); })
+            .then(function (resposta) {
+                if (resposta.musica) mostrarMusica(arquivo.name, resposta.musica);
+                else mostrarErro(arquivo.name, resposta.erro || 'Nao foi possivel ler este PDF.');
+            })
+            .catch(function () { mostrarErro(arquivo.name, 'Falha de conexao -- tente de novo.'); })
+            .then(concluir);
+    }
+
+    function adicionarArquivos(arquivos) {
+        var pdfs = Array.prototype.filter.call(arquivos, function (a) { return /\.pdf$/i.test(a.name); });
+        if (!pdfs.length) return;
+        pdfs.sort(function (a, b) { return a.name.localeCompare(b.name); });
+        fila = fila.concat(pdfs);
+        total += pdfs.length;
+        atualizarProgresso();
+        proximo();
+    }
+
+    document.querySelectorAll('[data-entrada-arquivos]').forEach(function (entrada) {
+        entrada.addEventListener('change', function () {
+            adicionarArquivos(entrada.files);
+            entrada.value = '';
+        });
+    });
+
+    ['dragenter', 'dragover'].forEach(function (tipo) {
+        areaSoltar.addEventListener(tipo, function (e) { e.preventDefault(); areaSoltar.classList.add('ring-2'); });
+    });
+    ['dragleave', 'drop'].forEach(function (tipo) {
+        areaSoltar.addEventListener(tipo, function (e) { e.preventDefault(); areaSoltar.classList.remove('ring-2'); });
+    });
+    areaSoltar.addEventListener('drop', function (e) { adicionarArquivos(e.dataTransfer.files); });
+
+    marcarTodas.addEventListener('change', function () {
+        lista.querySelectorAll('[data-card] [data-incluir]').forEach(function (c) { c.checked = marcarTodas.checked; });
+        atualizarResumo();
+    });
+
+    botaoSalvar.addEventListener('click', function () {
+        var musicas = [];
+        lista.querySelectorAll('[data-card]').forEach(function (card) {
+            if (!card.querySelector('[data-incluir]').checked) return;
+            var item = {};
+            ['nome', 'artista', 'tom', 'cifra'].forEach(function (campo) {
+                item[campo] = card.querySelector('[data-campo="' + campo + '"]').value;
+            });
+            musicas.push(item);
+        });
+        if (musicas.some(function (m) { return !m.nome.trim(); })) {
+            alert('Preencha o nome de todas as musicas marcadas.');
+            return;
+        }
+        botaoSalvar.disabled = true;
+        var dados = new FormData();
+        dados.append('csrf_token', csrf);
+        dados.append('musicas', JSON.stringify(musicas));
+        fetch(URL_SALVAR, { method: 'POST', body: dados, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (resposta) {
+                if (resposta.destino) { window.location = resposta.destino; return; }
+                alert(resposta.erro || 'Nao foi possivel importar.');
+                botaoSalvar.disabled = false;
+            })
+            .catch(function () {
+                alert('Falha de conexao -- nada foi salvo. Tente de novo.');
+                botaoSalvar.disabled = false;
+            });
+    });
+})();
+</script>
+{% endblock %}

@@ -52,6 +52,11 @@
                 </button>
             </form>
         </details>
+        <a href="{{ url_for('ministerio.importar_musicas', ministerio_id=ministerio.id) }}"
+           class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm px-4 py-3.5 text-sm font-semibold {{ tema.accent_text }} {{ tema.card_bg_hover }} transition">
+            <i class="fa-solid fa-file-pdf"></i>Importar varias cifras de PDFs
+            <i class="fa-solid fa-chevron-right text-xs ml-auto"></i>
+        </a>
         {% endif %}
 
         {% if musicas %}

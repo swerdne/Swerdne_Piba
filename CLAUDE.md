@@ -13,6 +13,7 @@ Funcionalidades transversais:
 - **Notificações automáticas** 24h/16h antes do evento (e-mail + SMS + sino in-app), via um único job APScheduler (`app/escala/agendador.py`) — cobre escalas manuais e geradas por rodízio igualmente.
 - **Chatbot** (`/chat`) — atualmente **mockado** por regex (`_REGRAS_CHAT` em `app/main/routes.py`), cobrindo login/cadastro/perfil e também a estrutura do site (Comunidade, Ministério, Escala, Rodízio, convites, notificações, tutorial guiado); sem integração real de IA (é um TODO explícito no código). O widget (botão flutuante + painel + JS) **não é global** — cada página que quer o chat precisa da própria cópia do bloco (painel `#chat-panel` + botão `#chat-fab` + script), hoje em `main/dashboard.html` e `escala/detalhe.html`; um botão flutuante sem esse bloco completo é só decoração e não abre nada (bug já visto uma vez). Ao adicionar o chat numa página nova, copie o bloco inteiro de uma das duas, não só o botão.
 - **Login** tradicional (e-mail/senha) e via **Google OAuth** (Authlib), com mock de OAuth para testes locais sem credenciais reais.
+- **Importação de cifras em PDF** (`/ministerio/<id>/repertorio/importar`) — PDFs gerados por sites de cifra ("Imprimir > Salvar como PDF") viram músicas do banco de repertório em lote: a tela manda 1 PDF por requisição pra `extrair_musica_pdf` (só lê, devolve JSON — evita timeout e o limite de 2 MB), mostra tudo pra revisão (nome/artista/tom/cifra editáveis, repetidas desmarcadas) e só `salvar_musicas_importadas` grava, já gerando a versão de Projeção da cifra. A heurística de extração (cabeçalho/rodapé do navegador, "tom: X", recuo do modo layout) mora em `app/ministerio/importar_pdf.py`; PDFs de exemplo em `tests/fixtures/`. PDF escaneado (sem texto) não é suportado — volta com aviso, sem OCR.
 - **Relatório "Escalados"** por comunidade — quem está escalado em qualquer ministério, com filtros de data/departamento/função.
 - **Tutorial guiado (spotlight)** na primeira vez que a conta abre uma Comunidade — motor genérico reaproveitável em `app/static/js/main.js::iniciarTutorialSpotlight`, ver [app/comunidade/CLAUDE.md](app/comunidade/CLAUDE.md).
 - **PWA instalável** — `app/static/manifest.webmanifest` + `app/static/js/service-worker.js` (servido na raiz via `main.service_worker`, não em `/static/js/`, pro escopo cobrir o site inteiro). O service worker só cacheia assets estáticos (`/static/*`, GET) de propósito — nunca páginas HTML/rotas dinâmicas, pra não arriscar servir dado de uma conta pra outra num aparelho compartilhado. Ícones em `app/static/img/icon-*.png` (normal + versão `maskable` com mais respiro pro Android) e `apple-touch-icon.png` (iOS, sem transparência).
@@ -22,12 +23,12 @@ Não existe sistema de papéis (não há admin/regular user). Autorização é t
 
 ## Stack
 
-- **Backend:** Flask (Application Factory em [app/\_\_init\_\_.py](app/__init__.py)), Flask-SQLAlchemy, Flask-Migrate (Alembic), Flask-Login, Flask-WTF, Flask-Limiter (rate limiting, ver [app/auth/CLAUDE.md](app/auth/CLAUDE.md)), Authlib (OAuth), APScheduler, Twilio (SMS), API HTTP da Resend via `app/emailing.py` (não SMTP — ver o próprio arquivo pra saber por quê).
+- **Backend:** Flask (Application Factory em [app/\_\_init\_\_.py](app/__init__.py)), Flask-SQLAlchemy, Flask-Migrate (Alembic), Flask-Login, Flask-WTF, Flask-Limiter (rate limiting, ver [app/auth/CLAUDE.md](app/auth/CLAUDE.md)), Authlib (OAuth), APScheduler, Twilio (SMS), API HTTP da Resend via `app/emailing.py` (não SMTP — ver o próprio arquivo pra saber por quê). pypdf (leitura de cifras em PDF, ver "Importação de cifras em PDF" acima).
 - **Banco:** SQLite (`dev.db` em dev, `:memory:` em teste). `DATABASE_URL` troca para outro banco em produção.
 - **Frontend:** Server-side rendering com Jinja2 + Tailwind CSS v4 (compilado via `@tailwindcss/cli`, sem framework JS — só `app/static/js/main.js`, mínimo).
 - **Testes:** pytest, com fixtures que sobem um app Flask completo em SQLite in-memory (`tests/conftest.py`).
 
-Não é um repositório git (`git init` ainda não foi rodado neste diretório).
+Repositório git em `meu_projeto/` (remote `origin` no GitHub). Todo push na `main` dispara deploy automático no Azure App Service (`.github/workflows/main_pibaswerdne.yml`, que roda `pip install -r requirements.txt`) -- ou seja, push na `main` = produção.
 
 ## Como rodar localmente
 

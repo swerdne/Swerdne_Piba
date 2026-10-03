@@ -26,8 +26,8 @@ from app.escala.models import (
 )
 from app.escala.forms import MusicaForm, LetraProjecaoForm, CifraLouvorForm
 from app.convites.forms import ConvidarForm
-from app.convites.models import Convite, criar_ou_reenviar_convite
-from app.convites.routes import _enviar_email_de_convite
+from app.convites.models import Convite
+from app.convites.adicao import adicionar_ou_convidar
 
 MESES_PT = [
     "", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
@@ -473,13 +473,12 @@ def papeis(ministerio_id):
             flash("Voce nao tem permissao para conceder esse papel.", "danger")
             return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
-        convite = criar_ou_reenviar_convite(
-            escopo_tipo="ministerio", escopo_id=ministerio.id,
-            papel=form.papel.data, email=form.email.data,
-            convidado_por_id=current_user.id,
+        # Direto ou por convite, conforme a preferencia de privacidade da
+        # pessoa -- ver app/convites/adicao.py.
+        mensagem, categoria = adicionar_ou_convidar(
+            "ministerio", ministerio, form.papel.data, form.email.data, current_user
         )
-        _enviar_email_de_convite(convite)
-        flash(f"Convite enviado para {convite.email}.", "success")
+        flash(mensagem, categoria)
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     papeis_atuais = list(
@@ -776,6 +775,99 @@ def nova_musica(ministerio_id):
     flash(f'"{musica.nome}" cadastrada. Cole a cifra aqui no Louvor; na aba Projecao, '
           '"Gerar da cifra" monta a letra sem acordes.', "success")
     return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
+
+
+# --- Importacao de cifras em lote a partir de PDFs (ver importar_pdf.py) ---
+#
+# Tres passos, pra caber qualquer quantidade sem estourar o timeout do
+# servidor nem o limite de 2 MB por requisicao (MAX_CONTENT_LENGTH): a tela
+# manda UM PDF por vez pra `extrair` (so le, nao grava nada), mostra tudo
+# pra pessoa revisar/corrigir, e so entao manda o lote revisado pra `salvar`.
+
+_MAX_MUSICAS_POR_LOTE = 200
+
+
+def _ministerio_do_repertorio_ou_404(ministerio_id):
+    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
+    if not pode_gerenciar:
+        abort(404)
+    return ministerio
+
+
+@bp.route("/<int:ministerio_id>/repertorio/importar")
+@login_required
+def importar_musicas(ministerio_id):
+    ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
+    return render_template("ministerio/importar_musicas.html", ministerio=ministerio, acao_form=AcaoForm())
+
+
+@bp.route("/<int:ministerio_id>/repertorio/importar/extrair", methods=["POST"])
+@login_required
+@limiter.limit("300 per minute")
+def extrair_musica_pdf(ministerio_id):
+    """Le 1 PDF e devolve a musica sugerida em JSON -- nao grava nada."""
+    from app.ministerio.importar_pdf import PdfInvalidoError, extrair_musica
+
+    ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
+    if not AcaoForm().validate_on_submit():
+        return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
+    arquivo = request.files.get("arquivo")
+    if arquivo is None or not (arquivo.filename or "").lower().endswith(".pdf"):
+        return jsonify({"erro": "Envie um arquivo .pdf."}), 400
+    try:
+        musica = extrair_musica(arquivo.read(), arquivo.filename)
+    except PdfInvalidoError as erro:
+        return jsonify({"erro": str(erro)}), 422
+
+    # Aviso de repetida (mesmo nome, sem diferenciar maiuscula) -- a tela ja
+    # deixa desmarcada, mas a pessoa pode importar mesmo assim.
+    musica["ja_existe"] = Musica.objects(
+        ministerio_id=ministerio.id, nome__iexact=musica["nome"]
+    ).first() is not None
+    return jsonify({"musica": musica})
+
+
+@bp.route("/<int:ministerio_id>/repertorio/importar/salvar", methods=["POST"])
+@login_required
+def salvar_musicas_importadas(ministerio_id):
+    """Grava o lote ja revisado na tela. A versao de Projecao ja sai gerada
+    da cifra (mesmo rascunho do botao "Gerar da cifra"), pra musica ficar
+    pronta pras duas folhas sem mais um passo por musica."""
+    import json
+
+    ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
+    if not AcaoForm().validate_on_submit():
+        return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
+    try:
+        itens = json.loads(request.form.get("musicas") or "[]")
+    except ValueError:
+        return jsonify({"erro": "Dados invalidos."}), 400
+    if not isinstance(itens, list) or not itens:
+        return jsonify({"erro": "Nenhuma musica selecionada."}), 400
+    if len(itens) > _MAX_MUSICAS_POR_LOTE:
+        return jsonify({"erro": f"Importe no maximo {_MAX_MUSICAS_POR_LOTE} musicas por vez."}), 400
+
+    novas = []
+    for item in itens:
+        if not isinstance(item, dict):
+            continue
+        nome = str(item.get("nome") or "").strip()[:150]
+        if not nome:
+            continue
+        cifra = str(item.get("cifra") or "").replace("\r\n", "\n").strip("\n") or None
+        novas.append(Musica(
+            ministerio_id=ministerio.id,
+            nome=nome,
+            artista=str(item.get("artista") or "").strip()[:120] or None,
+            tom=str(item.get("tom") or "").strip()[:10] or None,
+            cifra_louvor=cifra,
+            letra_projecao=projecao_da_cifra(cifra) or None if cifra else None,
+        ))
+    for musica in novas:
+        musica.save()
+
+    flash(f"{len(novas)} musica(s) importada(s) para o repertorio.", "success")
+    return jsonify({"criadas": len(novas), "destino": url_for("ministerio.repertorio", ministerio_id=ministerio.id)})
 
 
 @bp.route("/repertorio/<int:musica_id>")
