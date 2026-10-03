@@ -371,6 +371,19 @@ def calendario(ministerio_id):
     )
 
 
+@bp.route("/<int:ministerio_id>/local-checkin", methods=["GET", "POST"])
+@login_required
+def local_checkin(ministerio_id):
+    """Local proprio do check-in do ministerio (lider/admin); sem ele, vale o
+    da comunidade (ver app/escala/checkin.py)."""
+    from app.escala.local_checkin import tela_local_checkin
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    return tela_local_checkin(
+        ministerio, ministerio.nome, url_for("ministerio.detalhe", ministerio_id=ministerio.id), ministerio=ministerio,
+    )
+
+
 @bp.route("/<int:ministerio_id>/editar", methods=["GET", "POST"])
 @login_required
 def editar(ministerio_id):

@@ -73,6 +73,44 @@
             {% endif %}
         </div>
 
+        <!-- Check-in por localizacao (app/escala/checkin.py): Presente so no local -->
+        {% if not selecionada.cancelada %}
+        <div data-checkin-card class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 {{ 'bg-emerald-500/15 text-emerald-500' if checkin_feito else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
+                    <i class="fa-solid {{ 'fa-circle-check' if checkin_feito else 'fa-location-dot' }} text-lg"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-sm font-bold {{ tema.text_primary }}">Check-in</p>
+                    <p class="text-xs {{ tema.text_secondary }} truncate">
+                        {% if local_checkin and local_checkin.endereco %}{{ local_checkin.endereco }}{% else %}Confirma sua presença no local{% endif %}
+                    </p>
+                </div>
+            </div>
+
+            {% if checkin_feito %}
+            <p class="text-sm font-semibold text-emerald-600">
+                Presença confirmada às {{ checkin_feito.checkin_em | hora_local }}{% if checkin_feito.checkin_distancia_m is not none %}, a {{ checkin_feito.checkin_distancia_m }} m do local{% endif %}.
+            </p>
+            {% elif presente_sem_checkin %}
+            <p class="text-sm font-semibold text-emerald-600">Sua presença foi marcada pelo líder.</p>
+            {% elif motivo_sem_checkin %}
+            <p class="text-xs {{ tema.text_secondary }}">{{ motivo_sem_checkin }} Você vai precisar estar no local{% if local_checkin %} (até {{ local_checkin.raio_m }} m){% endif %} e com a localização do celular ligada.</p>
+            {% elif not local_checkin %}
+            <p class="text-xs text-amber-600">O endereço do local ainda não foi cadastrado. Avise o líder do ministério para cadastrar em “Local do check-in”.</p>
+            {% else %}
+            <div data-checkin-csrf class="hidden">{{ acao_form.hidden_tag() }}</div>
+            <button type="button" data-checkin-botao data-url="{{ url_for('escala.checkin', escala_id=selecionada.id) }}"
+                    class="w-full flex items-center justify-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-base font-bold py-3.5 rounded-full transition disabled:opacity-60">
+                <i class="fa-solid fa-location-crosshairs"></i><span data-checkin-texto>Fazer check-in</span>
+            </button>
+            <p data-checkin-msg class="text-xs {{ tema.text_secondary }}">
+                Toque quando chegar. O celular vai pedir sua localização; o check-in só é aceito a até {{ local_checkin.raio_m }} m do local.
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <!-- Sua funcao e status -->
         <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }}">
             <p class="px-4 pt-3.5 pb-2.5 text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">
@@ -243,5 +281,98 @@
             }
         });
     });
+
+    // Check-in por localizacao: pega a melhor posicao do GPS em ate ~12 s
+    // (a 1a leitura costuma vir imprecisa e melhora em segundos) e manda pro
+    // servidor, que confere a distancia ate o local (escala.routes.checkin).
+    (function () {
+        var botao = document.querySelector('[data-checkin-botao]');
+        if (!botao) return;
+        var texto = botao.querySelector('[data-checkin-texto]');
+        var msg = document.querySelector('[data-checkin-msg]');
+        var campoCsrf = document.querySelector('[data-checkin-csrf] input[name="csrf_token"]');
+        var BOA_PRECISAO = 30, ESPERA_MAXIMA = 12000;
+
+        function mostrar(textoMsg, tipo) {
+            msg.textContent = textoMsg;
+            msg.className = 'text-sm font-semibold ' +
+                (tipo === 'ok' ? 'text-emerald-600' : tipo === 'erro' ? 'text-red-500' : '{{ tema.text_secondary }}');
+        }
+        function liberar(rotulo) {
+            botao.disabled = false;
+            texto.textContent = rotulo || 'Tentar de novo';
+        }
+
+        function enviar(pos) {
+            texto.textContent = 'Conferindo…';
+            var corpo = new URLSearchParams();
+            corpo.append('csrf_token', campoCsrf ? campoCsrf.value : '');
+            corpo.append('latitude', pos.coords.latitude);
+            corpo.append('longitude', pos.coords.longitude);
+            corpo.append('precisao', pos.coords.accuracy);
+            fetch(botao.getAttribute('data-url'), { method: 'POST', credentials: 'same-origin', body: corpo })
+                .then(function (r) {
+                    if (r.status === 429) throw new Error('muitas');
+                    return r.json();
+                })
+                .then(function (dados) {
+                    if (dados.ok) {
+                        mostrar(dados.mensagem, 'ok');
+                        texto.textContent = 'Presença confirmada';
+                        setTimeout(function () { window.location.reload(); }, 1500);
+                    } else {
+                        mostrar(dados.mensagem, 'erro');
+                        liberar();
+                    }
+                })
+                .catch(function (e) {
+                    mostrar(e && e.message === 'muitas'
+                        ? 'Muitas tentativas seguidas. Espere um minuto e tente de novo.'
+                        : 'Sem conexão com o servidor. Confira a internet e tente de novo.', 'erro');
+                    liberar();
+                });
+        }
+
+        botao.addEventListener('click', function () {
+            if (!window.isSecureContext || !navigator.geolocation) {
+                mostrar('Este navegador não informa a localização. Abra o app pelo Safari ou Chrome atualizado.', 'erro');
+                return;
+            }
+            botao.disabled = true;
+            texto.textContent = 'Localizando…';
+            mostrar('Buscando o sinal do GPS. Se o celular perguntar, toque em “Permitir”.');
+
+            var melhor = null, terminou = false, vigia = null, limite = null;
+            function terminar() {
+                if (terminou) return;
+                terminou = true;
+                if (vigia !== null) navigator.geolocation.clearWatch(vigia);
+                clearTimeout(limite);
+                if (melhor) enviar(melhor);
+                else { mostrar('O GPS não respondeu a tempo. Vá para um lugar aberto ou perto de uma janela e tente de novo.', 'erro'); liberar(); }
+            }
+            vigia = navigator.geolocation.watchPosition(function (pos) {
+                if (!melhor || pos.coords.accuracy < melhor.coords.accuracy) melhor = pos;
+                if (pos.coords.accuracy <= BOA_PRECISAO) terminar();
+            }, function (erro) {
+                if (terminou) return;
+                if (erro.code === 1) {
+                    terminou = true;
+                    navigator.geolocation.clearWatch(vigia);
+                    clearTimeout(limite);
+                    mostrar('O check-in precisa da sua localização, e a permissão foi negada. Para liberar: no iPhone, Ajustes › Privacidade › Serviços de Localização › Safari (ou o app) › “Durante o uso”; no Android, toque no cadeado ao lado do endereço do site › Permissões › Localização.', 'erro');
+                    liberar();
+                } else if (!melhor && erro.code === 2) {
+                    terminou = true;
+                    navigator.geolocation.clearWatch(vigia);
+                    clearTimeout(limite);
+                    mostrar('A localização do celular está desligada ou indisponível. Ligue a localização (GPS) e tente de novo.', 'erro');
+                    liberar();
+                }
+                // Tempo esgotado (code 3) com alguma leitura: usa a melhor que veio.
+            }, { enableHighAccuracy: true, timeout: ESPERA_MAXIMA, maximumAge: 0 });
+            limite = setTimeout(terminar, ESPERA_MAXIMA);
+        });
+    })();
 </script>
 {% endblock %}

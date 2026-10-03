@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Local do check-in{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #local-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+{% block content %}
+<div id="local-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ voltar_url }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ titulo }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">Local do check-in</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-md mx-auto space-y-4">
+        <p class="text-sm {{ tema.text_secondary }}">
+            No dia da escala, quem está escalado só confirma presença fazendo o check-in <span class="font-semibold {{ tema.text_primary }}">dentro do raio</span> deste endereço.
+        </p>
+
+        {% if eh_ministerio %}
+            {% if tem_proprio %}
+            <form method="POST" class="flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3">
+                {{ form.csrf_token }}
+                <input type="hidden" name="acao" value="usar_comunidade">
+                <p class="text-xs {{ tema.text_secondary }}">Este ministério tem um local próprio.</p>
+                <button type="submit" class="shrink-0 text-xs font-semibold {{ tema.accent_text }} hover:underline">Usar o da comunidade</button>
+            </form>
+            {% elif herdado %}
+            <div class="flex gap-3 rounded-2xl px-4 py-3 bg-emerald-500/10 border border-emerald-500/30">
+                <i class="fa-solid fa-circle-check text-emerald-500 mt-0.5"></i>
+                <p class="text-xs {{ tema.text_primary }}">
+                    Hoje vale o local da comunidade{% if herdado.endereco %}: <span class="font-semibold">{{ herdado.endereco }}</span>{% endif %} (raio de {{ herdado.raio_m }} m).
+                    Só preencha abaixo se este ministério se reúne em outro lugar.
+                </p>
+            </div>
+            {% else %}
+            <div class="flex gap-3 rounded-2xl px-4 py-3 bg-amber-500/10 border border-amber-500/30">
+                <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+                <p class="text-xs {{ tema.text_primary }}">Nem o ministério nem a comunidade têm local cadastrado: ninguém consegue fazer check-in ainda.</p>
+            </div>
+            {% endif %}
+        {% endif %}
+
+        <form method="POST" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-4" data-local-form>
+            {{ form.hidden_tag() }}
+
+            <div class="space-y-2">
+                <label for="busca-endereco" class="block text-sm font-semibold {{ tema.text_primary }}">1. Encontre o endereço</label>
+                <div class="flex gap-2">
+                    <input id="busca-endereco" type="search" placeholder="Rua, número, bairro e cidade" autocomplete="off"
+                           class="{{ CAMPO }} min-w-0" data-busca-endereco>
+                    <button type="button" data-buscar class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 rounded-xl transition">Buscar</button>
+                </div>
+                <div data-resultados class="hidden {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl divide-y {{ tema.divide }} overflow-hidden"></div>
+                <button type="button" data-minha-localizacao
+                        class="w-full flex items-center justify-center gap-2 border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold py-2.5 rounded-xl {{ tema.card_bg_hover }} transition">
+                    <i class="fa-solid fa-location-crosshairs"></i>Estou no local: usar minha localização
+                </button>
+                <p data-aviso class="hidden text-xs"></p>
+            </div>
+
+            <div data-mapa class="{{ '' if form.latitude.data else 'hidden' }} space-y-2">
+                <p class="text-sm font-semibold {{ tema.text_primary }}">2. Confira no mapa</p>
+                <iframe data-mapa-frame title="Mapa do local" loading="lazy" class="w-full h-72 rounded-2xl border {{ tema.card_border }}"
+                        referrerpolicy="no-referrer"></iframe>
+                <p class="text-xs {{ tema.text_secondary }}">O ponto marcado é a referência. Se estiver errado, busque de novo ou use a sua localização estando no local.</p>
+            </div>
+
+            <div>
+                {{ form.endereco.label(class_="block text-sm font-semibold " ~ tema.text_primary ~ " mb-1") }}
+                {{ form.endereco(class_=CAMPO, placeholder="Como aparece para a equipe") }}
+            </div>
+
+            <div>
+                {{ form.raio_checkin_m.label(class_="block text-sm font-semibold " ~ tema.text_primary ~ " mb-1") }}
+                {{ form.raio_checkin_m(class_=CAMPO, type="number", min="30", max="2000", step="10", inputmode="numeric") }}
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Distância máxima aceita. 100 m cobre a maioria das igrejas; aumente se o terreno for grande ou o GPS errar muito lá dentro.</p>
+                {% for erro in form.raio_checkin_m.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+
+            {{ form.latitude(type="hidden", data_lat="") }}
+            {{ form.longitude(type="hidden", data_lng="") }}
+            {% for erro in form.latitude.errors + form.longitude.errors %}<p class="text-xs text-red-400">{{ erro }}</p>{% endfor %}
+
+            <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-3 rounded-full transition">
+                Salvar local
+            </button>
+        </form>
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+
+<script>
+(function () {
+    var form = document.querySelector('[data-local-form]');
+    var lat = form.querySelector('[data-lat]');
+    var lng = form.querySelector('[data-lng]');
+    var endereco = form.querySelector('[name="endereco"]');
+    var busca = form.querySelector('[data-busca-endereco]');
+    var resultados = form.querySelector('[data-resultados]');
+    var aviso = form.querySelector('[data-aviso]');
+    var mapa = form.querySelector('[data-mapa]');
+    var frame = form.querySelector('[data-mapa-frame]');
+    var urlBusca = {{ url_for('main.buscar_local') | tojson }};
+
+    function avisar(texto, erro) {
+        aviso.textContent = texto;
+        aviso.className = 'text-xs ' + (erro ? 'text-red-500' : 'text-emerald-600');
+        aviso.classList.toggle('hidden', !texto);
+    }
+
+    function mostrarMapa() {
+        var a = parseFloat(lat.value), o = parseFloat(lng.value);
+        if (isNaN(a) || isNaN(o)) return;
+        var d = 0.003;
+        frame.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' +
+            [o - d, a - d, o + d, a + d].join(',') + '&layer=mapnik&marker=' + a + ',' + o;
+        mapa.classList.remove('hidden');
+    }
+
+    function escolher(latitude, longitude, rotulo) {
+        lat.value = latitude.toFixed(6);
+        lng.value = longitude.toFixed(6);
+        if (rotulo) endereco.value = rotulo;
+        mostrarMapa();
+    }
+
+    function buscar() {
+        var q = busca.value.trim();
+        if (q.length < 4) { avisar('Digite pelo menos a rua e a cidade.', true); return; }
+        avisar('Buscando…');
+        fetch(urlBusca + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (dados) {
+                resultados.textContent = '';
+                if (!dados.ok) { avisar(dados.mensagem, true); return; }
+                if (!dados.resultados.length) {
+                    avisar('Nenhum endereço encontrado. Tente com menos detalhes (rua e cidade) ou use a sua localização.', true);
+                    resultados.classList.add('hidden');
+                    return;
+                }
+                avisar('');
+                dados.resultados.forEach(function (item) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'w-full text-left px-3 py-2.5 text-xs {{ tema.text_primary }} {{ tema.card_bg_hover }}';
+                    b.textContent = item.rotulo;
+                    b.addEventListener('click', function () {
+                        escolher(item.latitude, item.longitude, item.rotulo.split(',').slice(0, 4).join(',').trim());
+                        resultados.classList.add('hidden');
+                        avisar('Endereço escolhido. Confira o ponto no mapa e salve.');
+                    });
+                    resultados.appendChild(b);
+                });
+                resultados.classList.remove('hidden');
+            })
+            .catch(function () { avisar('Sem conexão com a busca. Tente de novo.', true); });
+    }
+
+    form.querySelector('[data-buscar]').addEventListener('click', buscar);
+    busca.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); buscar(); }
+    });
+
+    form.querySelector('[data-minha-localizacao]').addEventListener('click', function () {
+        if (!navigator.geolocation) { avisar('Este navegador não informa a localização.', true); return; }
+        avisar('Pegando sua localização…');
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            escolher(pos.coords.latitude, pos.coords.longitude, null);
+            avisar('Localização marcada (margem de ' + Math.round(pos.coords.accuracy) + ' m). Confira no mapa e salve.');
+        }, function (erro) {
+            avisar(erro.code === 1
+                ? 'Permissão de localização negada. Libere a localização para este site nas configurações do navegador.'
+                : 'Não foi possível pegar a localização agora. Tente de novo ou busque o endereço.', true);
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
+
+    mostrarMapa();
+})();
+</script>
+{% endblock %}

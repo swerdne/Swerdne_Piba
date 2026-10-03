@@ -36,6 +36,14 @@ class Ministerio(SequentialIdDocument):
     # quem abre entra como "membro". Regenerar invalida o anterior.
     token_convite_publico = mongoengine.StringField(unique=True, sparse=True, max_length=64)
 
+    # Local proprio do check-in por localizacao (ver app/escala/checkin.py) --
+    # vazio = vale o da Comunidade. Endereco so pra exibir; o que conta e
+    # latitude/longitude + o raio aceito.
+    endereco = mongoengine.StringField(max_length=300)
+    latitude = mongoengine.FloatField()
+    longitude = mongoengine.FloatField()
+    raio_checkin_m = mongoengine.IntField()
+
     def gerar_novo_link_convite(self):
         self.token_convite_publico = secrets.token_urlsafe(8)
         return self.token_convite_publico

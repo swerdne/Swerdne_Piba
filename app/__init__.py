@@ -86,7 +86,9 @@ def create_app(config_name="default"):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # geolocation=(self): o check-in por localizacao (app/escala/checkin.py)
+        # precisa do GPS; so nesta origem, nunca em iframe de terceiros.
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
         if app.config.get("SESSION_COOKIE_SECURE"):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
@@ -131,6 +133,9 @@ def create_app(config_name="default"):
     # imagem" ao carregar o documento -- icone padrao em vez de <img> quebrado.
     from .imagens import registrar_limpeza_de_legado
     registrar_limpeza_de_legado()
+
+    from .escala.checkin import hora_local
+    app.add_template_filter(hora_local, "hora_local")
 
     @app.context_processor
     def injetar_tema():

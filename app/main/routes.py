@@ -18,6 +18,7 @@ from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import Ministerio
 from app.escala.models import Membro, Escala, Funcao, Ensaio, Anexo, STATUS_LABELS, STATUS_CORES, eh_funcao_de_projecao
 from app.escala.forms import StatusForm
+from app.escala.checkin import local_do_checkin, situacao_do_dia, status_sem_presente
 
 
 # Icone por tipo de notificacao no sino do Dashboard -- fallback pra
@@ -207,6 +208,21 @@ def service_worker():
     em / (nao em /static/js/) pra conseguir controlar paginas como /dashboard
     e /comunidade/<id> (exigido pro Chrome considerar o PWA instalavel)."""
     return current_app.send_static_file("js/service-worker.js")
+
+
+@bp.route("/local/buscar")
+@login_required
+@limiter.limit("20 per minute")
+def buscar_local():
+    """Busca de endereco da tela "Local do check-in" (JSON). Feita aqui no
+    servidor (nao direto do navegador) pra identificar o app no
+    OpenStreetMap, como a politica de uso deles pede."""
+    from app.escala.local_checkin import buscar_endereco
+
+    resultados = buscar_endereco(request.args.get("q"))
+    if resultados is None:
+        return jsonify({"ok": False, "mensagem": "A busca de endereços não respondeu. Tente de novo ou use a sua localização."}), 502
+    return jsonify({"ok": True, "resultados": resultados})
 
 
 @bp.route("/imagem/<imagem_id>")
@@ -693,9 +709,10 @@ def minha_escala():
         ]
         formularios_status = {}
         for funcao in minhas_funcoes:
-            form = StatusForm(status=funcao.status or "nao_notificado")
+            form = status_sem_presente(StatusForm(status=funcao.status or "nao_notificado"), funcao.status)
             form.troca_sugestao_membro_id.choices = sugestoes
             formularios_status[funcao.id] = form
+        com_checkin = [f for f in minhas_funcoes if f.checkin_em]
         contexto = {
             "minhas_funcoes": minhas_funcoes,
             "formularios_status": formularios_status,
@@ -704,6 +721,11 @@ def minha_escala():
             "nomes_funcao": nomes_funcao,
             "repertorio": selecionada.repertorio,
             "ministerio": ministerio,
+            # Check-in por localizacao (app/escala/checkin.py)
+            "local_checkin": local_do_checkin(ministerio),
+            "motivo_sem_checkin": situacao_do_dia(selecionada, hoje),
+            "checkin_feito": com_checkin[0] if com_checkin else None,
+            "presente_sem_checkin": not com_checkin and any(f.status == "presente" for f in minhas_funcoes),
             # Cada funcao recebe a sua versao do repertorio: projecao/midia
             # fica com a letra; quem toca/canta, com as cifras.
             "folhas_repertorio": sorted({

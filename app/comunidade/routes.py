@@ -214,6 +214,19 @@ def detalhe(comunidade_id):
     )
 
 
+@bp.route("/<int:comunidade_id>/local-checkin", methods=["GET", "POST"])
+@login_required
+def local_checkin(comunidade_id):
+    """Endereco de referencia do check-in por localizacao (so admin) -- vale
+    pra todo ministerio que nao tiver o proprio (ver app/escala/checkin.py)."""
+    from app.escala.local_checkin import tela_local_checkin
+
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    return tela_local_checkin(
+        comunidade, comunidade.nome, url_for("comunidade.detalhe", comunidade_id=comunidade.id),
+    )
+
+
 @bp.route("/<int:comunidade_id>/editar", methods=["GET", "POST"])
 @login_required
 def editar(comunidade_id):

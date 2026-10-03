@@ -1,8 +1,8 @@
 """Formularios Flask-WTF do modulo escala."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
-from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField, HiddenField
-from wtforms.validators import DataRequired, Length, Optional, ValidationError
+from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField, HiddenField, FloatField, IntegerField
+from wtforms.validators import DataRequired, Length, NumberRange, Optional, ValidationError
 from wtforms.widgets import Select
 from markupsafe import Markup
 
@@ -190,3 +190,26 @@ class ItemDoBancoForm(FlaskForm):
 class ObservacoesRepertorioForm(FlaskForm):
     observacoes_repertorio = TextAreaField("Observacoes gerais", validators=[Optional(), Length(max=2000)])
     submit = SubmitField("Salvar observacoes")
+
+
+class _Coordenada(FloatField):
+    """Vazio = sem valor (mensagem do DataRequired), nao "Not a valid float"."""
+
+    def process_formdata(self, valuelist):
+        if valuelist and (valuelist[0] or "").strip():
+            super().process_formdata(valuelist)
+        else:
+            self.data = None
+
+
+class LocalCheckinForm(FlaskForm):
+    """Local do check-in por localizacao (Comunidade ou Ministerio, ver
+    app/escala/checkin.py). Latitude/longitude vem da busca do endereco ou
+    do botao "usar minha localizacao" (campos escondidos preenchidos pelo JS)."""
+    endereco = StringField("Endereço", validators=[Optional(), Length(max=300)])
+    latitude = _Coordenada("Latitude", validators=[DataRequired(message="Escolha o local no mapa (busque o endereço ou use a sua localização)."),
+                                                  NumberRange(min=-90, max=90)])
+    longitude = _Coordenada("Longitude", validators=[DataRequired(message="Escolha o local no mapa."),
+                                                    NumberRange(min=-180, max=180)])
+    raio_checkin_m = IntegerField("Raio aceito (metros)", default=100,
+                                  validators=[DataRequired(), NumberRange(min=30, max=2000, message="Use entre 30 e 2000 metros.")])

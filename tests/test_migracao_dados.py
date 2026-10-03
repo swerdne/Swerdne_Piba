@@ -14,7 +14,7 @@ from datetime import date, time
 
 import mongoengine
 import pytest
-from sqlalchemy import Boolean, Column, Date, DateTime, Integer, MetaData, String, Table, Time
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, MetaData, String, Table, Time, Float
 
 from app import create_app
 from app.extensions import db
@@ -39,6 +39,8 @@ def _tipo_sql_para_campo(campo):
         return Boolean
     if isinstance(campo, mongoengine.IntField):
         return Integer
+    if isinstance(campo, mongoengine.FloatField):
+        return Float
     if isinstance(campo, mongoengine.StringField):
         return String
     raise TypeError(f"tipo de campo sem mapeamento de teste: {campo!r}")

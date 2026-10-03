@@ -443,6 +443,20 @@ class Funcao(SequentialIdDocument):
     troca_motivo = mongoengine.StringField()
     troca_sugestao_membro_id = mongoengine.IntField()
 
+    # Check-in por localizacao (ver app/escala/checkin.py): quando a pessoa
+    # confirmou presenca estando no local -- hora (UTC), distancia ate o
+    # endereco e margem de erro do GPS. Vazio com status "presente" = marcado
+    # na mao pelo lider. Zerado quando a funcao troca de pessoa ou o status
+    # sai de "presente".
+    checkin_em = mongoengine.DateTimeField()
+    checkin_distancia_m = mongoengine.IntField()
+    checkin_precisao_m = mongoengine.IntField()
+
+    def limpar_checkin(self):
+        self.checkin_em = None
+        self.checkin_distancia_m = None
+        self.checkin_precisao_m = None
+
     @property
     def escala(self):
         return relacao_em_cache(
@@ -567,7 +581,7 @@ def marcar_notificado(funcao):
 
 
 def trocar_atribuicao(funcao_a, funcao_b):
-    """Troca (swap) membro/status/notificado_em entre duas Funcao.
+    """Troca (swap) membro/status/notificado_em/check-in entre duas Funcao.
 
     Usado tanto por escala.routes.mover_membro (troca manual dentro da mesma
     escala) quanto por plantao.sincronizacao.marcar_ausencia (troca entre a
@@ -577,6 +591,10 @@ def trocar_atribuicao(funcao_a, funcao_b):
     funcao_a.status, funcao_b.status = funcao_b.status, funcao_a.status
     funcao_a.notificado_em, funcao_b.notificado_em = funcao_b.notificado_em, funcao_a.notificado_em
     funcao_a.eh_convidado, funcao_b.eh_convidado = funcao_b.eh_convidado, funcao_a.eh_convidado
+    for campo in ("checkin_em", "checkin_distancia_m", "checkin_precisao_m"):
+        valor_a, valor_b = getattr(funcao_a, campo), getattr(funcao_b, campo)
+        setattr(funcao_a, campo, valor_b)
+        setattr(funcao_b, campo, valor_a)
 
 
 def mensagem_para(escala, funcao, membro):

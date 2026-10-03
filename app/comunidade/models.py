@@ -37,6 +37,13 @@ class Comunidade(SequentialIdDocument):
     # sobrescrito), protege contra o link vazado continuar funcionando.
     token_convite_publico = mongoengine.StringField(unique=True, sparse=True, max_length=64)
 
+    # Local do check-in por localizacao (ver app/escala/checkin.py): endereco
+    # so pra exibir; o que vale e latitude/longitude + o raio aceito.
+    endereco = mongoengine.StringField(max_length=300)
+    latitude = mongoengine.FloatField()
+    longitude = mongoengine.FloatField()
+    raio_checkin_m = mongoengine.IntField()
+
     def gerar_novo_link_convite(self):
         # 8 bytes (64 bits): ainda inviavel de adivinhar por forca bruta
         # (rota tambem tem rate limit, ver entrar_via_link), mas curto o

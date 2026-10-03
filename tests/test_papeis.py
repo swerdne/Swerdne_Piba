@@ -459,13 +459,14 @@ def test_membro_escalado_marca_o_proprio_status(logged_in_client, outro_logged_i
 
     with sessao_isolada(app):
         response = outro_logged_in_client.post(
-            f"/escala/funcao/{funcao_id}/status", data={"status": "presente"}, follow_redirects=True
+            f"/escala/funcao/{funcao_id}/status", data={"status": "confirmado"}, follow_redirects=True
         )
         assert response.status_code == 200
 
+    # ("presente" do proprio escalado so vale pelo check-in -- ver tests/test_checkin.py)
     with sessao_isolada(app):
         from app.escala.models import Funcao
-        assert Funcao.objects(id=funcao_id).first().status == "presente"
+        assert Funcao.objects(id=funcao_id).first().status == "confirmado"
 
 
 def test_nao_membro_nao_ve_ministerio_nem_escala(logged_in_client, outro_logged_in_client, app, db):

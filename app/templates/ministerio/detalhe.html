@@ -42,6 +42,7 @@
                     {{ item_menu(tema, url_for('ministerio.checkin', ministerio_id=ministerio.id), 'fa-child-reaching', 'Check-in de crianças') }}
                     {% endif %}
                     {{ item_menu(tema, url_for('ministerio.papeis', ministerio_id=ministerio.id), 'fa-user-group', 'Papéis e convites') }}
+                    {{ item_menu(tema, url_for('ministerio.local_checkin', ministerio_id=ministerio.id), 'fa-location-dot', 'Local do check-in') }}
                     {% if eh_admin %}
                     {{ item_menu(tema, url_for('ministerio.editar', ministerio_id=ministerio.id), 'fa-pen', 'Editar ministério') }}
                     {% endif %}

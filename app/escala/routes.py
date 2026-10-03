@@ -1,5 +1,6 @@
 """Controller (C do MVC): rotas do modulo escala."""
 import concurrent.futures
+import math
 import os
 import io
 from datetime import datetime, time, timedelta, timezone
@@ -10,6 +11,8 @@ from flask_login import login_required, current_user
 from mongoengine.queryset.visitor import Q as MongoQ
 
 from app.db_utils import delete_cascade, primeiro_ou_404
+from app.extensions import limiter
+from app.escala.checkin import status_sem_presente
 from app.escala import bp
 from app.escala.forms import (
     SelecionarMembroForm,
@@ -385,6 +388,8 @@ def detalhe(escala_id):
                 ]
                 formularios_mover[funcao.id] = mover_form
                 status_form = StatusForm(status=funcao.status or STATUS_PADRAO)
+                if funcao.membro and (funcao.membro.email or "").lower() == (current_user.email or "").lower():
+                    status_sem_presente(status_form, funcao.status)  # a propria funcao: so via check-in
                 status_form.troca_sugestao_membro_id.choices = _choices_sugestao
                 formularios_status[funcao.id] = status_form
 
@@ -404,9 +409,11 @@ def detalhe(escala_id):
                 not funcao.eh_subcabecalho and funcao.membro_id and funcao.membro.email
                 and funcao.membro.email.lower() == email_logado
             ):
-                status_form = StatusForm(status=funcao.status or STATUS_PADRAO)
+                status_form = status_sem_presente(StatusForm(status=funcao.status or STATUS_PADRAO), funcao.status)
                 status_form.troca_sugestao_membro_id.choices = _choices_sugestao
                 formularios_status[funcao.id] = status_form
+
+    from app.escala.checkin import local_do_checkin
 
     return render_template(
         "escala/detalhe.html",
@@ -436,6 +443,7 @@ def detalhe(escala_id):
         acao_form=AcaoForm(),
         status_labels=STATUS_LABELS,
         status_cores=STATUS_CORES,
+        local_checkin=local_do_checkin(escala.ministerio),
     )
 
 
@@ -603,6 +611,7 @@ def adicionar_membro(funcao_id):
     funcao.membro_id = membro.id
     funcao.status = STATUS_PADRAO
     funcao.notificado_em = None
+    funcao.limpar_checkin()
     funcao.eh_convidado = False
     _fixar_se_gerada_por_rodizio(funcao.escala)
     funcao.save()
@@ -675,6 +684,7 @@ def adicionar_convidado(funcao_id):
     funcao.membro_id = membro.id
     funcao.status = STATUS_PADRAO
     funcao.notificado_em = None
+    funcao.limpar_checkin()
     funcao.eh_convidado = True
     _fixar_se_gerada_por_rodizio(funcao.escala)
     funcao.save()
@@ -700,6 +710,7 @@ def remover_membro(funcao_id):
     funcao.membro_id = None
     funcao.status = None
     funcao.notificado_em = None
+    funcao.limpar_checkin()
     funcao.eh_convidado = False
     _fixar_se_gerada_por_rodizio(funcao.escala)
     funcao.save()
@@ -784,7 +795,15 @@ def atualizar_status(funcao_id):
 
     status_anterior = funcao.status
     status_novo = form.status.data
+    # "Presente" do proprio escalado so vale com check-in no local (ver
+    # app/escala/checkin.py e checkin abaixo). Lider/admin ainda marca
+    # alguem presente na mao -- fica sem check-in, visivel na escala.
+    if eh_proprio_escalado and status_novo == "presente" and status_anterior != "presente":
+        flash("Para marcar presença, faça o check-in no local, em Minha escala.", "warning")
+        return _destino_apos_status(escala_id)
     funcao.status = status_novo
+    if status_novo != "presente":
+        funcao.limpar_checkin()
 
     if status_novo == "troca_solicitada":
         funcao.troca_motivo = (form.troca_motivo.data or "").strip() or None
@@ -812,6 +831,70 @@ def atualizar_status(funcao_id):
         _notificar_lideres_do_ministerio(funcao.escala, titulo, mensagem, tipo=status_novo)
 
     return _destino_apos_status(escala_id)
+
+
+@bp.route("/<int:escala_id>/checkin", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute")
+def checkin(escala_id):
+    """Check-in por localizacao (JSON, chamado pelo botao de Minha escala).
+    So o proprio escalado (Membro com o e-mail da conta), so no dia da
+    escala, so dentro do raio do local -- ver app/escala/checkin.py. Dentro
+    do raio, TODAS as funcoes da pessoa nesta escala viram "Presente"."""
+    from app.escala.checkin import avaliar_checkin, local_do_checkin, situacao_do_dia
+
+    escala = primeiro_ou_404(Escala.objects(id=escala_id))
+    email = (current_user.email or "").lower()
+    ids_membro = [m.id for m in Membro.objects(email__iexact=email).only("id")] if email else []
+    minhas = list(Funcao.objects(escala_id=escala.id, membro_id__in=ids_membro)) if ids_membro else []
+    if not minhas:
+        abort(404)
+    if not AcaoForm().validate_on_submit():
+        return jsonify({"ok": False, "mensagem": "Sessão expirada. Recarregue a página e tente de novo."}), 400
+
+    def falha(mensagem, distancia=None):
+        corpo = {"ok": False, "mensagem": mensagem}
+        if distancia is not None:
+            corpo["distancia_m"] = round(distancia)
+        return jsonify(corpo)
+
+    motivo = situacao_do_dia(escala, _hoje_brasilia())
+    if motivo:
+        return falha(motivo)
+    if all(f.checkin_em for f in minhas):
+        return jsonify({"ok": True, "mensagem": "Seu check-in já estava feito.", "ja_feito": True})
+
+    def numero(campo):
+        try:
+            valor = float(request.form.get(campo, ""))
+        except ValueError:
+            return None
+        return valor if math.isfinite(valor) else None
+
+    local = local_do_checkin(escala.ministerio)
+    ok, distancia, mensagem = avaliar_checkin(local, numero("latitude"), numero("longitude"), numero("precisao"))
+    if not ok:
+        return falha(mensagem, distancia)
+
+    agora = datetime.now(timezone.utc)
+    precisao = numero("precisao")
+    for funcao in minhas:
+        funcao.status = "presente"
+        funcao.troca_motivo = None
+        funcao.troca_sugestao_membro_id = None
+        funcao.checkin_em = agora
+        funcao.checkin_distancia_m = round(distancia)
+        funcao.checkin_precisao_m = round(precisao) if precisao is not None else None
+        funcao.save()
+
+    nome = minhas[0].membro.nome
+    funcoes_txt = ", ".join(f.nome for f in minhas)
+    hora = (agora + timedelta(hours=-3)).strftime("%H:%M")
+    _notificar_lideres_do_ministerio(
+        escala, f"{nome} fez check-in ({funcoes_txt})",
+        f"{nome} fez check-in às {hora} em {escala.nome}, a {round(distancia)} m do local.", tipo="presente",
+    )
+    return jsonify({"ok": True, "mensagem": mensagem, "hora": hora, "distancia_m": round(distancia)})
 
 
 @bp.route("/funcao/<int:funcao_id>/troca/aprovar", methods=["POST"])
@@ -848,6 +931,7 @@ def aprovar_troca(funcao_id):
     funcao.membro_id = novo_membro.id
     funcao.status = STATUS_PADRAO
     funcao.notificado_em = None
+    funcao.limpar_checkin()
     funcao.eh_convidado = False
     funcao.troca_motivo = None
     funcao.troca_sugestao_membro_id = None
@@ -893,6 +977,7 @@ def recusar_troca(funcao_id):
     funcao.status = STATUS_PADRAO
     funcao.troca_motivo = None
     funcao.troca_sugestao_membro_id = None
+    funcao.limpar_checkin()
     funcao.save()
 
     if membro_email:
