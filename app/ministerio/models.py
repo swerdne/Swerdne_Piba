@@ -8,7 +8,7 @@ import secrets
 from datetime import datetime, timezone
 
 import mongoengine
-from app.db_utils import PureDateField, SequentialIdDocument
+from app.db_utils import PureDateField, SequentialIdDocument, relacao_em_cache
 
 PAPEIS_MINISTERIO = ("lider", "membro")
 
@@ -43,7 +43,10 @@ class Ministerio(SequentialIdDocument):
     @property
     def comunidade(self):
         from app.comunidade.models import Comunidade
-        return Comunidade.objects(id=self.comunidade_id).first()
+        return relacao_em_cache(
+            self, "comunidade", self.comunidade_id,
+            lambda: Comunidade.objects(id=self.comunidade_id).first(),
+        )
 
     @property
     def dias_culto_efetivos(self):

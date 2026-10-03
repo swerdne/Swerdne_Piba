@@ -10,7 +10,7 @@ from app.db_utils import SequentialIdDocument
 
 
 class Notificacao(SequentialIdDocument):
-    meta = {"collection": "notificacoes"}
+    meta = {"collection": "notificacoes", "indexes": ["usuario_id"]}
     _nome_sequencia = "notificacoes"
 
     usuario_id = mongoengine.IntField(required=True)

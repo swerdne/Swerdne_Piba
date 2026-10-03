@@ -130,6 +130,24 @@ def next_id(nome_sequencia):
     return doc["seq"]
 
 
+def relacao_em_cache(doc, nome, chave, carregar):
+    """Memoriza, na propria instancia, o resultado de uma property de relacao
+    (ex: `funcao.membro`, `escala.ministerio`) -- sem isso cada acesso e uma
+    ida nova ao banco, e uma pagina que le `funcao.membro` 5 vezes por linha
+    da grade faz dezenas de consultas a toa. O cache e indexado pela `chave`
+    (o id estrangeiro): se o id mudar (ex: `funcao.membro_id = outro`), a
+    proxima leitura busca de novo em vez de devolver o objeto antigo. Fica so
+    na memoria da instancia (nao vai pro Mongo) e morre com ela, no fim da
+    request."""
+    atributo = f"_cache_{nome}"
+    guardado = getattr(doc, atributo, None)
+    if guardado is not None and guardado[0] == chave:
+        return guardado[1]
+    valor = carregar()
+    setattr(doc, atributo, (chave, valor))
+    return valor
+
+
 class SequentialIdDocument(mongoengine.Document):
     """Base pra Documents que precisam manter o mesmo id inteiro sequencial
     que tinham como PK no Postgres (em vez do ObjectId nativo do Mongo).

@@ -48,7 +48,7 @@ from app.escala.models import (
     marcar_notificado,
     mensagem_para,
     trocar_atribuicao,
-    avisos_disponibilidade,
+    avisos_disponibilidade_em_lote,
 )
 from app.emailing import enviar_email, EmailNaoEnviadoError
 from app.sms import enviar_sms, SmsNaoEnviadoError
@@ -95,19 +95,43 @@ def _escala_visivel_ou_404(escala_id):
     from app.ministerio.routes import _eh_lider_do_ministerio, _eh_membro_do_ministerio
 
     escala = primeiro_ou_404(Escala.objects(id=escala_id))
-    pode_gerenciar = _eh_lider_do_ministerio(escala.ministerio, current_user)
+    ministerio = escala.ministerio
+    pode_gerenciar = _eh_lider_do_ministerio(ministerio, current_user)
     eh_membro = (
         pode_gerenciar
-        or _eh_membro_do_ministerio(escala.ministerio, current_user)
-        or _eh_membro_da_comunidade(escala.ministerio.comunidade, current_user)
+        or _eh_membro_do_ministerio(ministerio, current_user)
+        or _eh_membro_da_comunidade(ministerio.comunidade, current_user)
     )
-    eh_convidado_vinculado = any(
+    # So checa convidado se precisar -- percorrer as funcoes busca o Membro
+    # de cada uma (1 consulta por funcao), desperdicio pra quem ja e membro.
+    if not eh_membro and not any(
         f.eh_convidado and f.membro and f.membro.email == current_user.email
         for f in escala.funcoes
-    )
-    if not eh_membro and not eh_convidado_vinculado:
+    ):
         abort(404)
     return escala, pode_gerenciar
+
+
+def _pre_carregar_membros(funcoes, diretorio):
+    """Preenche o cache de `funcao.membro`/`funcao.troca_sugestao_membro`
+    (ver db_utils.relacao_em_cache) a partir do diretorio ja carregado --
+    sem isso a grade da Escala faz 1 consulta por pessoa escalada. Quem nao
+    estiver no diretorio (nao deveria acontecer, mas por seguranca) vem
+    numa unica consulta extra."""
+    por_id = {m.id: m for m in diretorio}
+    faltando = {
+        i for f in funcoes for i in (f.membro_id, f.troca_sugestao_membro_id)
+        if i and i not in por_id
+    }
+    if faltando:
+        por_id.update({m.id: m for m in Membro.objects(id__in=list(faltando))})
+    for f in funcoes:
+        if f.membro_id:
+            f._cache_membro = (f.membro_id, por_id.get(f.membro_id))
+        if f.troca_sugestao_membro_id:
+            f._cache_troca_sugestao_membro = (
+                f.troca_sugestao_membro_id, por_id.get(f.troca_sugestao_membro_id)
+            )
 
 
 def _avisos_conflito_horario(membro, escala_atual, funcao_atual_id=None):
@@ -301,9 +325,13 @@ def detalhe(escala_id):
     avisos_por_funcao = {}
     diretorio_vazio = False
 
-    diretorio_geral = list(Membro.objects(
-        comunidade_id=escala.ministerio.comunidade_id
-    ).order_by("nome"))
+    comunidade_id = escala.ministerio.comunidade_id
+    diretorio_geral = list(Membro.objects(comunidade_id=comunidade_id).order_by("nome"))
+    # Uma unica leitura das funcoes pra pagina inteira (rota + template) --
+    # `escala.funcoes` e uma consulta nova a cada acesso, e o template chegava
+    # a chamar isso dentro do loop da grade.
+    funcoes = escala.funcoes
+    _pre_carregar_membros(funcoes, diretorio_geral)
     # Placeholder em 0 -- "nao sugerir ninguem", nunca um Membro.id real (ver
     # StatusForm.troca_sugestao_membro_id).
     _choices_sugestao = [(0, "Ninguem em especial")] + [(m.id, m.nome) for m in diretorio_geral]
@@ -312,12 +340,7 @@ def detalhe(escala_id):
     # indisponivel na data da escala, segundo os ciclos que ela tiver
     # cadastrados (ver CicloDisponibilidade) -- sem data definida na escala
     # nao ha o que comparar, entao fica vazio de proposito.
-    avisos_por_membro = {}
-    if escala.data:
-        for m in diretorio_geral:
-            avisos = avisos_disponibilidade(m, escala.data)
-            if avisos:
-                avisos_por_membro[m.id] = avisos
+    avisos_por_membro = avisos_disponibilidade_em_lote(diretorio_geral, escala.data)
 
     def _rotulo_com_aviso(membro):
         avisos = avisos_por_membro.get(membro.id)
@@ -330,9 +353,9 @@ def detalhe(escala_id):
         # so pra quem pode escrever, poupa consultas desnecessarias pro convidado.
         diretorio = diretorio_geral
         diretorio_vazio = not diretorio
-        destinos_possiveis = [f for f in escala.funcoes if not f.eh_subcabecalho]
+        destinos_possiveis = [f for f in funcoes if not f.eh_subcabecalho]
 
-        for funcao in escala.funcoes:
+        for funcao in funcoes:
             formularios_editar_funcao[funcao.id] = FuncaoForm(nome=funcao.nome)
 
             if funcao.eh_subcabecalho:
@@ -372,7 +395,7 @@ def detalhe(escala_id):
         # escala.routes.atualizar_status) -- so monta o form pra funcao(oes)
         # cujo Membro bate por e-mail com a conta logada.
         email_logado = (current_user.email or "").lower()
-        for funcao in escala.funcoes:
+        for funcao in funcoes:
             if (
                 not funcao.eh_subcabecalho and funcao.membro_id and funcao.membro.email
                 and funcao.membro.email.lower() == email_logado
@@ -384,6 +407,8 @@ def detalhe(escala_id):
     return render_template(
         "escala/detalhe.html",
         escala=escala,
+        funcoes=funcoes,
+        comunidade_id=comunidade_id,
         eh_dono=eh_dono,
         diretorio_vazio=diretorio_vazio,
         formularios_membro=formularios_membro,
@@ -396,10 +421,10 @@ def detalhe(escala_id):
         formulario_novo_subcabecalho=FuncaoForm(),
         formulario_novo_item_repertorio=ItemRepertorioForm(),
         formulario_ensaio=EnsaioForm(prefix="ensaio"),
-        formulario_anexo=_form_anexo(escala),
+        formulario_anexo=_form_anexo(escala, funcoes),
         formulario_item_banco=_form_item_banco(escala),
         formulario_observacoes=ObservacoesRepertorioForm(observacoes_repertorio=escala.observacoes_repertorio),
-        anexos=_anexos_visiveis(escala, eh_dono),
+        anexos=_anexos_visiveis(escala, eh_dono, funcoes),
         ensaios=escala.ensaios,
         hoje=_hoje_brasilia(),
         acao_form=AcaoForm(),
@@ -1473,27 +1498,27 @@ def excluir_ensaio(ensaio_id):
 
 # --- Materiais (anexos) da escala, ver models.Anexo ------------------------
 
-def _funcoes_da_conta(escala):
+def _funcoes_da_conta(escala, funcoes=None):
     email = (current_user.email or "").lower()
     return [
-        f for f in escala.funcoes
+        f for f in (escala.funcoes if funcoes is None else funcoes)
         if f.membro_id and f.membro and (f.membro.email or "").lower() == email
     ]
 
 
-def _anexos_visiveis(escala, pode_gerenciar):
+def _anexos_visiveis(escala, pode_gerenciar, funcoes=None):
     """Lider ve todos; os demais veem os da equipe toda + os das proprias funcoes."""
     anexos = list(Anexo.objects(escala_id=escala.id).exclude("conteudo").order_by("criado_em"))
     if pode_gerenciar:
         return anexos
-    minhas = {f.id for f in _funcoes_da_conta(escala)}
+    minhas = {f.id for f in _funcoes_da_conta(escala, funcoes)}
     return [a for a in anexos if a.funcao_id is None or a.funcao_id in minhas]
 
 
-def _form_anexo(escala):
+def _form_anexo(escala, funcoes=None):
     form = AnexoForm(prefix="anexo")
     form.funcao_id.choices = [(0, "Toda a equipe")] + [
-        (f.id, f.nome) for f in escala.funcoes if f.tipo != TIPO_SUBCABECALHO
+        (f.id, f.nome) for f in (escala.funcoes if funcoes is None else funcoes) if f.tipo != TIPO_SUBCABECALHO
     ]
     return form
 

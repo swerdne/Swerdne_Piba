@@ -9,7 +9,7 @@ import unicodedata
 from datetime import datetime, timezone
 
 import mongoengine
-from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, delete_cascade
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, delete_cascade, relacao_em_cache
 
 STATUS_PADRAO = "nao_notificado"
 
@@ -118,7 +118,7 @@ class Membro(SequentialIdDocument):
     nova a cada escalacao).
     """
 
-    meta = {"collection": "escala_membros"}
+    meta = {"collection": "escala_membros", "indexes": ["comunidade_id", "email"]}
     _nome_sequencia = "escala_membros"
 
     comunidade_id = mongoengine.IntField(required=True)
@@ -165,7 +165,7 @@ class CicloDisponibilidade(SequentialIdDocument):
     vinculo) -- todos sao checados, nao ha exclusividade forcada.
     """
 
-    meta = {"collection": "escala_ciclos_disponibilidade"}
+    meta = {"collection": "escala_ciclos_disponibilidade", "indexes": ["membro_id"]}
     _nome_sequencia = "escala_ciclos_disponibilidade"
 
     membro_id = mongoengine.IntField(required=True)
@@ -183,10 +183,13 @@ class CicloDisponibilidade(SequentialIdDocument):
     def cascade_children(self):
         return [SegmentoCiclo.objects(ciclo_id=self.id)]
 
-    def segmento_na_data(self, data):
+    def segmento_na_data(self, data, segmentos=None):
         """Devolve o SegmentoCiclo (ja cadastrado, ver segmentos abaixo) em
-        que `data` cai, ou None se o ciclo ainda nao tem nenhum segmento."""
-        segmentos = self.segmentos
+        que `data` cai, ou None se o ciclo ainda nao tem nenhum segmento.
+        `segmentos` (ja ordenados) pode vir pre-carregado, ver
+        avisos_disponibilidade_em_lote."""
+        if segmentos is None:
+            segmentos = self.segmentos
         total = sum(s.duracao_dias for s in segmentos)
         if not segmentos or total <= 0:
             return None
@@ -244,10 +247,33 @@ def avisos_disponibilidade(membro, data):
     return avisos
 
 
+def avisos_disponibilidade_em_lote(membros, data):
+    """Mesmo resultado de avisos_disponibilidade, mas pra varios membros de
+    uma vez: {membro_id: [avisos]} so com quem tem algum aviso. Duas
+    consultas no total (ciclos + segmentos), em vez de 1+ por membro -- com
+    o diretorio inteiro de uma comunidade isso era a maior parte das
+    consultas da tela da Escala."""
+    if data is None or not membros:
+        return {}
+    ciclos = list(CicloDisponibilidade.objects(membro_id__in=[m.id for m in membros]))
+    if not ciclos:
+        return {}
+    segmentos_por_ciclo = {}
+    for segmento in SegmentoCiclo.objects(ciclo_id__in=[c.id for c in ciclos]).order_by("ordem"):
+        segmentos_por_ciclo.setdefault(segmento.ciclo_id, []).append(segmento)
+
+    avisos_por_membro = {}
+    for ciclo in ciclos:
+        segmento = ciclo.segmento_na_data(data, segmentos_por_ciclo.get(ciclo.id, []))
+        if segmento is not None and segmento.indisponivel:
+            avisos_por_membro.setdefault(ciclo.membro_id, []).append(segmento.nome)
+    return avisos_por_membro
+
+
 class Escala(SequentialIdDocument):
     """Um evento de escala (ensaio/culto): nome, departamento, data e horario."""
 
-    meta = {"collection": "escalas"}
+    meta = {"collection": "escalas", "indexes": ["ministerio_id", "data"]}
     _nome_sequencia = "escalas"
 
     ministerio_id = mongoengine.IntField(required=True)
@@ -313,7 +339,10 @@ class Escala(SequentialIdDocument):
     @property
     def ministerio(self):
         from app.ministerio.models import Ministerio
-        return Ministerio.objects(id=self.ministerio_id).first()
+        return relacao_em_cache(
+            self, "ministerio", self.ministerio_id,
+            lambda: Ministerio.objects(id=self.ministerio_id).first(),
+        )
 
     @property
     def funcoes(self):
@@ -384,7 +413,7 @@ class Funcao(SequentialIdDocument):
     A ordem das linhas (funcao ou subcabecalho) e definida por `ordem`.
     """
 
-    meta = {"collection": "escala_funcoes"}
+    meta = {"collection": "escala_funcoes", "indexes": ["escala_id", "membro_id"]}
     _nome_sequencia = "escala_funcoes"
 
     escala_id = mongoengine.IntField(required=True)
@@ -416,15 +445,26 @@ class Funcao(SequentialIdDocument):
 
     @property
     def escala(self):
-        return Escala.objects(id=self.escala_id).first()
+        return relacao_em_cache(
+            self, "escala", self.escala_id, lambda: Escala.objects(id=self.escala_id).first()
+        )
 
     @property
     def membro(self):
-        return Membro.objects(id=self.membro_id).first() if self.membro_id else None
+        if not self.membro_id:
+            return None
+        return relacao_em_cache(
+            self, "membro", self.membro_id, lambda: Membro.objects(id=self.membro_id).first()
+        )
 
     @property
     def troca_sugestao_membro(self):
-        return Membro.objects(id=self.troca_sugestao_membro_id).first() if self.troca_sugestao_membro_id else None
+        if not self.troca_sugestao_membro_id:
+            return None
+        return relacao_em_cache(
+            self, "troca_sugestao_membro", self.troca_sugestao_membro_id,
+            lambda: Membro.objects(id=self.troca_sugestao_membro_id).first(),
+        )
 
     @property
     def eh_subcabecalho(self):
@@ -440,7 +480,7 @@ class ItemRepertorio(SequentialIdDocument):
     escala.departamento == "Louvor"). `ordem` define a sequencia de
     apresentacao; `link` e opcional (cifra, video de referencia etc.)."""
 
-    meta = {"collection": "escala_repertorio"}
+    meta = {"collection": "escala_repertorio", "indexes": ["escala_id"]}
     _nome_sequencia = "escala_repertorio"
 
     escala_id = mongoengine.IntField(required=True)
@@ -476,7 +516,7 @@ class Ensaio(SequentialIdDocument):
     quem esta escalado e avisado (ver escala.routes.cancelar_ensaio) -- sem
     cancelar a escala inteira."""
 
-    meta = {"collection": "escala_ensaios"}
+    meta = {"collection": "escala_ensaios", "indexes": ["escala_id"]}
     _nome_sequencia = "escala_ensaios"
 
     escala_id = mongoengine.IntField(required=True)
