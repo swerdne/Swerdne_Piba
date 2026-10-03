@@ -41,9 +41,9 @@
             <form method="POST" action="{{ url_for('ministerio.nova_musica', ministerio_id=ministerio.id) }}" class="px-4 pb-4 space-y-2.5">
                 {{ form.hidden_tag() }}
                 {{ form.nome(class_="w-full " ~ CAMPO, placeholder="Nome da musica") }}
-                <div class="grid grid-cols-[1fr_6rem] gap-2">
+                <div class="grid grid-cols-[1fr_9rem] gap-2">
                     {{ form.artista(class_="w-full min-w-0 " ~ CAMPO, placeholder="Artista / ministerio") }}
-                    {{ form.tom(class_="w-full " ~ CAMPO, placeholder="Tom") }}
+                    {{ form.tom(class_="w-full " ~ CAMPO) }}
                 </div>
                 {{ form.tags(class_="w-full " ~ CAMPO, placeholder="Tags: adoracao, ceia, abertura...") }}
                 {{ form.link(class_="w-full " ~ CAMPO, placeholder="Link de referencia (opcional)") }}

@@ -95,9 +95,17 @@
             <div class="flex-1 min-w-0 space-y-2">
                 <p data-arquivo class="text-[11px] {{ tema.text_secondary }} truncate"></p>
                 <input type="text" data-campo="nome" maxlength="150" placeholder="Nome da musica" class="w-full font-semibold {{ CAMPO }}">
-                <div class="grid grid-cols-[1fr_5.5rem] gap-2">
+                <div class="grid grid-cols-[1fr_9rem] gap-2">
                     <input type="text" data-campo="artista" maxlength="120" placeholder="Artista / ministerio" class="w-full min-w-0 {{ CAMPO }}">
-                    <input type="text" data-campo="tom" maxlength="10" placeholder="Tom" class="w-full {{ CAMPO }}">
+                    <select data-campo="tom" aria-label="Tom" class="w-full {{ CAMPO }}">
+                        <option value="">Tom</option>
+                        <optgroup label="Maiores">
+                            {% for valor, rotulo in tons_maiores %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
+                        </optgroup>
+                        <optgroup label="Menores">
+                            {% for valor, rotulo in tons_menores %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
+                        </optgroup>
+                    </select>
                 </div>
                 <p data-ja-existe class="hidden text-xs font-semibold text-amber-500">
                     <i class="fa-solid fa-triangle-exclamation mr-1"></i>Ja existe uma musica com esse nome no repertorio -- desmarcada pra nao duplicar.
@@ -186,9 +194,19 @@
         var no = modeloMusica.content.cloneNode(true);
         var card = no.querySelector('[data-card]');
         card.querySelector('[data-arquivo]').textContent = nomeArquivo;
-        ['nome', 'artista', 'tom', 'cifra'].forEach(function (campo) {
+        ['nome', 'artista', 'cifra'].forEach(function (campo) {
             card.querySelector('[data-campo="' + campo + '"]').value = musica[campo] || '';
         });
+        // Tom fora da lista (outra grafia, ex: A#): entra como opcao propria
+        // no topo, senao o select ficaria em branco e o tom se perderia.
+        var seletorTom = card.querySelector('[data-campo="tom"]');
+        if (musica.tom && !Array.prototype.some.call(seletorTom.options, function (o) { return o.value === musica.tom; })) {
+            var extra = document.createElement('option');
+            extra.value = musica.tom;
+            extra.textContent = musica.tom;
+            seletorTom.insertBefore(extra, seletorTom.children[1] || null);  // logo apos "Tom", fora dos grupos
+        }
+        seletorTom.value = musica.tom || '';
         var avisos = card.querySelector('[data-avisos]');
         (musica.avisos || []).forEach(function (aviso) {
             var li = document.createElement('li');

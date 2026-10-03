@@ -22,7 +22,8 @@ from app.ministerio.models import (
 )
 from app.escala.models import (
     resumos_para_calendario_em_lote, Musica, ItemRepertorio, VersaoCifra,
-    blocos_da_letra, projecao_da_cifra, tem_acordes,
+    blocos_da_letra, projecao_da_cifra, tem_acordes, detectar_tom,
+    TONS_MAIORES, TONS_MENORES,
 )
 from app.escala.forms import MusicaForm, LetraProjecaoForm, CifraLouvorForm
 from app.convites.forms import ConvidarForm
@@ -798,7 +799,10 @@ def _ministerio_do_repertorio_ou_404(ministerio_id):
 @login_required
 def importar_musicas(ministerio_id):
     ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
-    return render_template("ministerio/importar_musicas.html", ministerio=ministerio, acao_form=AcaoForm())
+    return render_template(
+        "ministerio/importar_musicas.html", ministerio=ministerio, acao_form=AcaoForm(),
+        tons_maiores=TONS_MAIORES, tons_menores=TONS_MENORES,
+    )
 
 
 @bp.route("/<int:ministerio_id>/repertorio/importar/extrair", methods=["POST"])
@@ -954,6 +958,17 @@ def salvar_louvor_musica(musica_id):
     tom = (form.tom.data or "").strip()
     if musica.eh_tom_original(tom):
         musica.cifra_louvor = form.cifra_louvor.data or None
+        # Musica sem tom cadastrado: identifica pelos acordes (so preenche o
+        # vazio -- nunca troca um tom que alguem ja informou).
+        if not musica.tom and not tom:
+            identificado = detectar_tom(musica.cifra_louvor)
+            if identificado:
+                musica.tom = identificado
+                return _salvar_musica(
+                    musica, "louvor",
+                    f"Cifra original salva. Tom {identificado} identificado pelos acordes -- "
+                    "se nao for esse, corrija em Dados da musica.",
+                )
         return _salvar_musica(musica, "louvor", "Cifra original salva.")
     # Outro tom: vira (ou atualiza) uma versao separada -- a original fica intacta.
     versao = musica.versao_no_tom(tom)

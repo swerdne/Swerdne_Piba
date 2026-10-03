@@ -994,3 +994,123 @@ def projecao_da_cifra(texto):
 
 def tem_acordes(texto):
     return any(eh_linha_de_acordes(l) for l in (texto or "").split("\n"))
+
+
+# --- Deteccao do tom pelos acordes da cifra ----------------------------------
+#
+# Teoria musical simples, sem servico externo: cada tom tem um campo
+# harmonico (os acordes "da casa"). Pontua os 24 tons pelos acordes da cifra
+# e fica com o que mais encaixa. Tom relativo (G x Em) usa os mesmos acordes
+# -- o desempate e pelo acorde do proprio tom: quantas vezes aparece e,
+# principalmente, se a musica comeca/termina nele (quase sempre resolve ali).
+
+# (intervalo a partir do tom, qualidade): "M" maior, "m" menor, "d" diminuto.
+_CAMPO_MAIOR = {(0, "M"), (2, "m"), (4, "m"), (5, "M"), (7, "M"), (9, "m"), (11, "d")}
+# Menor natural + V maior e vii diminuto do menor harmonico (muito comuns).
+_CAMPO_MENOR = {(0, "m"), (2, "d"), (3, "M"), (5, "m"), (7, "m"), (7, "M"), (8, "M"), (10, "M"), (11, "d")}
+_ACORDE_INLINE = re.compile(r"\[([A-G][^\]\s]*)\]")
+
+
+def _qualidade(sufixo):
+    s = sufixo or ""
+    if s.startswith(("dim", "º", "°")) or "m7b5" in s or "m7(b5)" in s:
+        return "d"
+    if s.startswith("m") and not s.startswith("maj"):
+        return "m"
+    return "M"  # maior, 7, sus, add, aug... contam como maiores pro campo
+
+
+def acordes_da_cifra(texto):
+    """[(indice_da_nota 0..11, qualidade, raiz_como_escrita)] na ordem em que
+    aparecem -- das linhas de acordes e de acordes entre colchetes no meio da
+    letra ("[G]Tu es..."). Baixo invertido (/F#) e ignorado."""
+    acordes = []
+    for linha in (texto or "").replace("\r\n", "\n").split("\n"):
+        if eh_linha_de_acordes(linha):
+            tokens = _ROTULO_INICIAL.sub("", linha, count=1).split()
+        else:
+            tokens = _ACORDE_INLINE.findall(linha)
+        for token in tokens:
+            m = _TOKEN_ACORDE.match(token)
+            if m:
+                raiz = m.group(2)
+                acordes.append((_INDICE_NOTA[raiz], _qualidade(m.group(3)), raiz))
+    return acordes
+
+
+def detectar_tom(texto):
+    """Tom mais provavel da cifra ("G", "Em", "Bb"...) pelos acordes, ou None
+    se houver pouco acorde pra decidir. E uma estimativa -- quem usa deve
+    deixar claro que foi identificado automaticamente."""
+    acordes = acordes_da_cifra(texto)
+    if len(acordes) < 3:
+        return None
+
+    primeiro, ultimo = acordes[0], acordes[-1]
+    melhor = None
+    for tonica in range(12):
+        for menor in (False, True):
+            campo = _CAMPO_MENOR if menor else _CAMPO_MAIOR
+            qualidade_tonica = "m" if menor else "M"
+            pontos = 0.0
+            for indice, qualidade, _ in acordes:
+                intervalo = (indice - tonica) % 12
+                if (intervalo, qualidade) in campo:
+                    pontos += 1
+                    if intervalo == 0 and qualidade == qualidade_tonica:
+                        pontos += 0.5
+                else:
+                    pontos -= 1
+            if primeiro[0] == tonica and primeiro[1] == qualidade_tonica:
+                pontos += 2
+            if ultimo[0] == tonica and ultimo[1] == qualidade_tonica:
+                pontos += 3
+            if melhor is None or pontos > melhor[0]:
+                melhor = (pontos, tonica, menor)
+
+    pontos, tonica, menor = melhor
+    # Pouco encaixe (cifra cheia de acordes de fora): melhor nao chutar.
+    if pontos < len(acordes) * 0.5:
+        return None
+
+    # Grafia: a que a propria cifra usa pra essa nota (Bb x A#); sem ela,
+    # a convencao do tom (mesma regra da transposicao).
+    escritas = [raiz for indice, _, raiz in acordes if indice == tonica]
+    if escritas:
+        nota = max(set(escritas), key=escritas.count)
+    else:
+        bemol = tonica in (_MENORES_BEMOL if menor else _MAIORES_BEMOL)
+        nota = (_NOTAS_BEMOL if bemol else _NOTAS_SUSTENIDO)[tonica]
+    return nota + ("m" if menor else "")
+
+
+# --- Lista de tons (dropdown dos formularios, ver escala.forms.TomField) ------
+
+_NOME_NOTA_PT = {
+    "C": "Dó", "C#": "Dó#", "Db": "Réb", "D": "Ré", "D#": "Ré#", "Eb": "Mib", "E": "Mi",
+    "F": "Fá", "F#": "Fá#", "Gb": "Solb", "G": "Sol", "G#": "Sol#", "Ab": "Láb",
+    "A": "Lá", "A#": "Lá#", "Bb": "Sib", "B": "Si",
+}
+# Uma grafia por nota -- a mais usada em cifra de louvor (Bb, nao A#; F#, nao Gb).
+_TONS_MAIORES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+_TONS_MENORES = ["Cm", "C#m", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "G#m", "Am", "Bbm", "Bm"]
+_TOM_COMPLETO = re.compile(r"^[A-G][#b]?m?$")
+
+
+def rotulo_do_tom(tom):
+    """"G" -> "G — Sol", "F#m" -> "F#m — Fá# menor"."""
+    menor = tom.endswith("m")
+    nota = tom[:-1] if menor else tom
+    nome = _NOME_NOTA_PT.get(nota, nota)
+    return f"{tom} — {nome}{' menor' if menor else ''}"
+
+
+TONS_MAIORES = [(t, rotulo_do_tom(t)) for t in _TONS_MAIORES]
+TONS_MENORES = [(t, rotulo_do_tom(t)) for t in _TONS_MENORES]
+TONS = [t for t, _ in TONS_MAIORES + TONS_MENORES]
+
+
+def eh_tom_valido(tom):
+    """Tom escrito como cifra (G, F#m, Bb...) -- inclui grafias fora da lista
+    (A#, Db...) que musicas antigas ja tenham salvas."""
+    return bool(_TOM_COMPLETO.match(tom or ""))

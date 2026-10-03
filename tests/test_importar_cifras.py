@@ -6,6 +6,7 @@ cifra: cabecalho do navegador (data + "Nome - Artista - Site"), rodape (link
 + "1/1"), nome/artista/"tom: X" no topo e a cifra em fonte monoespacada.
 """
 import io
+import re
 import json
 from pathlib import Path
 
@@ -272,3 +273,84 @@ def test_lote_grande_salvo_em_partes_avisa_uma_vez_com_o_total(logged_in_client,
         with logged_in_client.session_transaction() as sessao:
             avisos = [mensagem for _categoria, mensagem in sessao.get("_flashes", [])]
         assert avisos == ["4 musica(s) importada(s) para o repertorio."]
+
+
+# --- Tom identificado pelos acordes (escala.models.detectar_tom) ---------------
+
+@pytest.mark.parametrize("cifra, esperado", [
+    ("G  D/F#  Em  C\nG D Em C\nC D G", "G"),
+    ("Em  C  G  D\nEm C G D\nC D Em", "Em"),       # relativo de G: decide pelo inicio/fim
+    ("Am  F  C  G\nAm Dm E7 Am", "Am"),            # V maior do menor harmonico
+    ("C  Am  F  G\nDm G C\nF G C", "C"),
+    ("Bb  Eb  F  Gm\nEb F Bb", "Bb"),              # grafia da propria cifra (nao A#)
+    ("F#m  D  A  E\nD E F#m", "F#m"),
+    ("E7M  B  C#m7  A9\nA9 B4 B E", "E"),          # extensoes contam pela qualidade
+    ("[G]Tu es [D]santo [Em]Senhor [C]Deus\n[G]fim", "G"),  # acordes no meio da letra
+    ("G D", None),                                 # pouco acorde: nao chuta
+    ("so letra, nenhum acorde aqui", None),
+])
+def test_detectar_tom_pelos_acordes(cifra, esperado):
+    from app.escala.models import detectar_tom
+    assert detectar_tom(cifra) == esperado
+
+
+def test_importacao_sem_tom_no_arquivo_identifica_pelos_acordes():
+    sem_tom = [linha for linha in _DOCX_CIFRA if not linha.startswith("Tom:")]
+    musica = extrair_musica(_docx(sem_tom), "ele_reina.docx")
+    assert musica["tom"] == "D"
+    assert any("identificado automaticamente" in aviso for aviso in musica["avisos"])
+
+
+def test_tom_informado_no_arquivo_prevalece_sobre_os_acordes():
+    """Com capotraste o desenho dos acordes nao e o tom real -- o arquivo manda."""
+    com_capo = ["Ele Reina", "Ministério Exemplo", "Tom: E", "", "D  A  Bm  G\nG A D"]
+    assert extrair_musica(_docx(com_capo), "x.docx")["tom"] == "E"
+
+
+def test_salvar_cifra_em_musica_sem_tom_preenche_o_tom(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        sem_tom = Musica(ministerio_id=ministerio.id, nome="Sem tom")
+        sem_tom.save()
+        com_tom = Musica(ministerio_id=ministerio.id, nome="Com tom", tom="A")
+        com_tom.save()
+        cifra = "G  D  Em  C\nC D G"
+        for musica in (sem_tom, com_tom):
+            logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": cifra, "tom": ""})
+
+        assert Musica.objects(id=sem_tom.id).first().tom == "G"
+        assert Musica.objects(id=com_tom.id).first().tom == "A"  # nunca troca tom ja informado
+
+
+# --- Dropdown de tom (escala.forms.TomField) ------------------------------------
+
+def test_campo_de_tom_e_um_dropdown_com_os_24_tons(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio").data.decode("utf-8")
+        assert re.search(r'<select [^>]*name="tom"', html)
+        assert '<option value="F#m">F#m — Fá# menor</option>' in html
+        assert '<option value="Bb">Bb — Sib</option>' in html
+        assert '<optgroup label="">' not in html  # opcao vazia solta no topo
+
+
+def test_tom_antigo_com_outra_grafia_continua_selecionado(logged_in_client, app, db):
+    """Musica salva como "A#" (antes do dropdown): sem isso o select viria em
+    branco e o proximo salvar apagaria o tom."""
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        musica = Musica(ministerio_id=ministerio.id, nome="Antiga", tom="A#")
+        musica.save()
+        html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
+        assert '<option selected value="A#">A#</option>' in html
+
+
+def test_tom_invalido_e_recusado(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        logged_in_client.post(f"/ministerio/{ministerio.id}/repertorio/nova",
+                              data={"nome": "Teste", "tom": "Sol maior"})
+        assert Musica.objects(ministerio_id=ministerio.id, nome="Teste").count() == 0
+        logged_in_client.post(f"/ministerio/{ministerio.id}/repertorio/nova",
+                              data={"nome": "Teste", "tom": "F#m"})
+        assert Musica.objects(ministerio_id=ministerio.id, nome="Teste").first().tom == "F#m"

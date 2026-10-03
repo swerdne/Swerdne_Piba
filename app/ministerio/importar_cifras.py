@@ -36,7 +36,7 @@ import xml.etree.ElementTree as ET
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.escala.models import eh_linha_de_acordes
+from app.escala.models import detectar_tom, eh_linha_de_acordes
 
 # PDF de navegador costuma ter tabela de fontes com linhas "quebradas" que o
 # pypdf contorna sozinho, mas avisa no log a cada uma -- ruido puro aqui.
@@ -286,7 +286,14 @@ def extrair_musica(dados, nome_arquivo=""):
     if not any(eh_linha_de_acordes(l) for l in cifra.split("\n")):
         avisos.append("Nao encontrei acordes -- confira se este PDF e mesmo uma cifra.")
     if not tom:
-        avisos.append("Tom nao encontrado no PDF.")
+        # Sem "tom: X" no arquivo: identifica pelos acordes. Quando o arquivo
+        # informa, ele manda -- com capotraste o tom real difere do desenho
+        # dos acordes, e o site sabe disso; os acordes sozinhos, nao.
+        tom = detectar_tom(cifra) or ""
+        if tom:
+            avisos.append(f"Tom {tom} identificado automaticamente pelos acordes -- confira.")
+        else:
+            avisos.append("Tom nao encontrado no arquivo nem identificado pelos acordes.")
 
     return {
         "nome": nome[:150],

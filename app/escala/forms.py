@@ -2,9 +2,54 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
 from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField, HiddenField
-from wtforms.validators import DataRequired, Length, Optional
+from wtforms.validators import DataRequired, Length, Optional, ValidationError
+from wtforms.widgets import Select
+from markupsafe import Markup
 
-from app.escala.models import DEPARTAMENTOS, CORES_DISPONIVEIS, TIPOS_ANEXO, TAMANHO_MAXIMO_ANEXO
+from app.escala.models import (
+    DEPARTAMENTOS, CORES_DISPONIVEIS, TIPOS_ANEXO, TAMANHO_MAXIMO_ANEXO,
+    TONS, TONS_MAIORES, TONS_MENORES, eh_tom_valido,
+)
+
+
+class _SelectDeTom(Select):
+    """O widget do WTForms poe TODA opcao dentro de um <optgroup> quando ha
+    grupos -- inclusive a vazia, que ficaria num grupo sem titulo. Tira esse
+    primeiro grupo (sempre o da opcao vazia, ver TomField.iter_groups) pra
+    ela aparecer solta no topo."""
+
+    def __call__(self, field, **kwargs):
+        html = str(super().__call__(field, **kwargs))
+        html = html.replace('<optgroup label="">', "", 1).replace("</optgroup>", "", 1)
+        return Markup(html)
+
+
+class TomField(SelectField):
+    """Dropdown com os 24 tons (maiores/menores em grupos), em vez de texto
+    livre. `vazio` e o rotulo da opcao "sem tom" (ex: "Tom original").
+
+    Tom ja salvo com outra grafia (A#, Db...) aparece num grupo proprio no
+    topo, ja selecionado -- senao o select mostraria "sem tom" e o proximo
+    salvar apagaria o tom da musica sem ninguem perceber."""
+
+    def __init__(self, label=None, validators=None, vazio="Tom", **kwargs):
+        self.vazio = vazio
+        super().__init__(label, validators, choices={
+            "": [("", vazio)],
+            "Maiores": TONS_MAIORES,
+            "Menores": TONS_MENORES,
+        }, validate_choice=False, widget=_SelectDeTom(), **kwargs)
+
+    def iter_groups(self):
+        grupos = list(super().iter_groups())
+        yield grupos[0]  # opcao vazia sempre primeiro (ver _SelectDeTom)
+        if self.data and self.data not in TONS:
+            yield ("Atual", self._choices_generator([(self.data, self.data)]))
+        yield from grupos[1:]
+
+    def pre_validate(self, form):
+        if self.data and not eh_tom_valido(self.data):
+            raise ValidationError("Escolha um tom da lista.")
 
 # "" (vazio) = usa a cor padrao do departamento (Escala.cor_selecionada fica
 # None) -- sempre a 1a opcao, pra nao forcar o usuario a escolher uma cor.
@@ -86,7 +131,7 @@ class FuncaoForm(FlaskForm):
 
 class ItemRepertorioForm(FlaskForm):
     nome_musica = StringField("Nome da musica", validators=[DataRequired(), Length(max=150)])
-    tom = StringField("Tom", validators=[Optional(), Length(max=10)])
+    tom = TomField("Tom", validators=[Optional(), Length(max=10)])
     link = StringField("Link (cifra, video...)", validators=[Optional(), Length(max=500)])
     submit = SubmitField("Adicionar")
 
@@ -116,7 +161,7 @@ class AnexoForm(FlaskForm):
 class MusicaForm(FlaskForm):
     nome = StringField("Nome da musica", validators=[DataRequired(message="Informe o nome da musica."), Length(max=150)])
     artista = StringField("Artista / ministerio", validators=[Optional(), Length(max=120)])
-    tom = StringField("Tom original", validators=[Optional(), Length(max=10)])
+    tom = TomField("Tom original", validators=[Optional(), Length(max=10)], vazio="Tom")
     tags = StringField("Tags (separadas por virgula)", validators=[Optional(), Length(max=300)])
     link = StringField("Link de referencia (video, cifra...)", validators=[Optional(), Length(max=500)])
     submit = SubmitField("Salvar")
@@ -137,7 +182,8 @@ class CifraLouvorForm(FlaskForm):
 class ItemDoBancoForm(FlaskForm):
     musica_id = SelectField("Musica", coerce=int, validators=[DataRequired(message="Escolha uma musica.")])
     momento = StringField("Momento", validators=[Optional(), Length(max=60)])
-    tom = StringField("Tom do dia", validators=[Optional(), Length(max=10)])
+    # Vazio = usa o tom original da musica (ver escala.routes.adicionar_musica_do_banco).
+    tom = TomField("Tom do dia", validators=[Optional(), Length(max=10)], vazio="Tom original")
     submit = SubmitField("Adicionar")
 
 
