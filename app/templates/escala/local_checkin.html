@@ -5,8 +5,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
     #local-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    #mapa-leaflet { height: 400px; border-radius: 1rem; }
+    .leaflet-control-attribution { display: none; }
 </style>
 {% endblock %}
 
@@ -82,10 +85,9 @@
             </div>
 
             <div data-mapa class="{{ '' if form.latitude.data else 'hidden' }} space-y-2">
-                <p class="text-sm font-semibold {{ tema.text_primary }}">2. Confira no mapa</p>
-                <iframe data-mapa-frame title="Mapa do local" loading="lazy" class="w-full h-72 rounded-2xl border {{ tema.card_border }}"
-                        referrerpolicy="no-referrer"></iframe>
-                <p class="text-xs {{ tema.text_secondary }}">O ponto marcado é a referência. Se estiver errado, busque de novo ou use a sua localização estando no local.</p>
+                <p class="text-sm font-semibold {{ tema.text_primary }}">2. Marque o local no mapa</p>
+                <div id="mapa-leaflet" class="rounded-2xl border {{ tema.card_border }} bg-gray-100"></div>
+                <p class="text-xs {{ tema.text_secondary }}">Clique no mapa para marcar a localização ou arraste o marcador. O raio em azul mostra a zona de check-in.</p>
             </div>
 
             <div>
@@ -113,18 +115,24 @@
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 (function () {
     var form = document.querySelector('[data-local-form]');
     var lat = form.querySelector('[data-lat]');
     var lng = form.querySelector('[data-lng]');
     var endereco = form.querySelector('[name="endereco"]');
+    var raio = form.querySelector('[name="raio_checkin_m"]');
     var busca = form.querySelector('[data-busca-endereco]');
     var resultados = form.querySelector('[data-resultados]');
     var aviso = form.querySelector('[data-aviso]');
     var mapa = form.querySelector('[data-mapa]');
-    var frame = form.querySelector('[data-mapa-frame]');
+    var mapaDiv = document.getElementById('mapa-leaflet');
     var urlBusca = {{ url_for('main.buscar_local') | tojson }};
+
+    var mapaLeaflet = null;
+    var marcador = null;
+    var circulo = null;
 
     function avisar(texto, erro) {
         aviso.textContent = texto;
@@ -132,19 +140,77 @@
         aviso.classList.toggle('hidden', !texto);
     }
 
+    function inicializarMapa() {
+        if (mapaLeaflet) return;
+        var latVal = parseFloat(lat.value);
+        var lngVal = parseFloat(lng.value);
+        var coordInicial = (isNaN(latVal) || isNaN(lngVal)) ? [-15.8267, -48.0516] : [latVal, lngVal];
+
+        mapaLeaflet = L.map(mapaDiv).setView(coordInicial, 18);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '',
+            maxZoom: 19
+        }).addTo(mapaLeaflet);
+
+        if (!isNaN(latVal) && !isNaN(lngVal)) {
+            adicionarMarcador(latVal, lngVal);
+        }
+
+        mapaLeaflet.on('click', function (e) {
+            adicionarMarcador(e.latlng.lat, e.latlng.lng);
+            avisar('Localização marcada. Confira e salve.');
+        });
+
+        setTimeout(function () { mapaLeaflet.invalidateSize(); }, 100);
+    }
+
+    function adicionarMarcador(latitude, longitude) {
+        if (marcador) mapaLeaflet.removeLayer(marcador);
+        if (circulo) mapaLeaflet.removeLayer(circulo);
+
+        lat.value = latitude.toFixed(6);
+        lng.value = longitude.toFixed(6);
+
+        marcador = L.marker([latitude, longitude], { draggable: true })
+            .addTo(mapaLeaflet)
+            .on('dragend', function () {
+                var pos = marcador.getLatLng();
+                lat.value = pos.lat.toFixed(6);
+                lng.value = pos.lng.toFixed(6);
+                atualizarCirculo();
+            });
+
+        var raioVal = parseInt(raio.value) || 100;
+        circulo = L.circle([latitude, longitude], {
+            radius: raioVal,
+            color: '#4f46e5',
+            fillColor: '#4f46e5',
+            fillOpacity: 0.1,
+            weight: 2
+        }).addTo(mapaLeaflet);
+
+        mapaLeaflet.setView([latitude, longitude], 18);
+    }
+
+    function atualizarCirculo() {
+        if (!circulo || !marcador) return;
+        var raioVal = parseInt(raio.value) || 100;
+        circulo.setRadius(raioVal);
+        var pos = marcador.getLatLng();
+        circulo.setLatLng([pos.lat, pos.lng]);
+    }
+
     function mostrarMapa() {
-        var a = parseFloat(lat.value), o = parseFloat(lng.value);
-        if (isNaN(a) || isNaN(o)) return;
-        var d = 0.003;
-        frame.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' +
-            [o - d, a - d, o + d, a + d].join(',') + '&layer=mapnik&marker=' + a + ',' + o;
-        mapa.classList.remove('hidden');
+        if (mapa.classList.contains('hidden') === false) {
+            setTimeout(inicializarMapa, 100);
+        }
     }
 
     function escolher(latitude, longitude, rotulo) {
         lat.value = latitude.toFixed(6);
         lng.value = longitude.toFixed(6);
         if (rotulo) endereco.value = rotulo;
+        mapa.classList.remove('hidden');
         mostrarMapa();
     }
 
@@ -197,6 +263,8 @@
                 : 'Não foi possível pegar a localização agora. Tente de novo ou busque o endereço.', true);
         }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
     });
+
+    raio.addEventListener('change', atualizarCirculo);
 
     mostrarMapa();
 })();
