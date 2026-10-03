@@ -684,6 +684,33 @@
             <p class="text-xs {{ tema.text_secondary }} px-4 py-3">Nenhuma musica adicionada ainda.</p>
             {% endif %}
             {% if eh_dono %}
+            {% if repertorios_prontos %}
+            <!-- Repertorio pronto do banco (ex: "Manha" do Louvor) cai inteiro aqui -- ver escala.routes.usar_repertorio_pronto -->
+            <form method="POST" action="{{ url_for('escala.usar_repertorio_pronto', escala_id=escala.id) }}"
+                  class="border-t {{ tema.card_border }} px-4 py-3 space-y-2">
+                {{ acao_form.hidden_tag() }}
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Usar um repertorio pronto</p>
+                <div class="flex gap-2">
+                    <select name="repertorio_id" required aria-label="Repertorio pronto"
+                            class="flex-1 min-w-0 {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                        {% for grupo, lista in repertorios_prontos %}
+                        <optgroup label="{{ grupo }}">
+                            {% for r in lista %}<option value="{{ r.id }}">{{ r.nome }} ({{ r.itens|length }} musica{{ 's' if r.itens|length != 1 }})</option>{% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
+                        Usar
+                    </button>
+                </div>
+                {% if escala.repertorio %}
+                <label class="flex items-center gap-2 text-xs {{ tema.text_secondary }} cursor-pointer">
+                    <input type="checkbox" name="substituir" value="1" class="w-4 h-4">
+                    Substituir as musicas que ja estao na escala (senao, soma no fim)
+                </label>
+                {% endif %}
+            </form>
+            {% endif %}
             {% if formulario_item_banco.musica_id.choices %}
             <form method="POST" action="{{ url_for('escala.adicionar_musica_do_banco', escala_id=escala.id) }}"
                   class="border-t {{ tema.card_border }} px-4 py-3 space-y-2">

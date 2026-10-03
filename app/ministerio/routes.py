@@ -1073,10 +1073,13 @@ def extrair_musica_pdf(comunidade_id=None, ministerio_id=None):
     # banco ou -- pra banco local -- no oficial, que o ministerio ja usa.
     # A tela deixa desmarcada, mas a pessoa pode importar mesmo assim.
     nome = musica["nome"]
+    no_proprio_banco = banco.musicas().filter(nome__iexact=nome).first()
     musica["ja_existe"] = (
-        banco.musicas().filter(nome__iexact=nome).first() is not None
+        no_proprio_banco is not None
         or (not banco.oficial and musicas_oficiais(banco.comunidade.id).filter(nome__iexact=nome).first() is not None)
     )
+    # So da pra ATUALIZAR musica do proprio banco (lider nao mexe no oficial).
+    musica["existente_id"] = no_proprio_banco.id if no_proprio_banco is not None else None
     return jsonify({"musica": musica})
 
 
@@ -1101,7 +1104,7 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
     if len(itens) > _MAX_MUSICAS_POR_LOTE:
         return jsonify({"erro": f"Importe no maximo {_MAX_MUSICAS_POR_LOTE} musicas por vez."}), 400
 
-    novas = []
+    novas, atualizadas = [], 0
     for item in itens:
         if not isinstance(item, dict):
             continue
@@ -1109,10 +1112,31 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
         if not nome:
             continue
         cifra = str(item.get("cifra") or "").replace("\r\n", "\n").strip("\n") or None
+        tom = str(item.get("tom") or "").strip()[:10] or None
+
+        # Reimportacao pra corrigir: troca a cifra da musica que ja existe no
+        # MESMO banco, sem duplicar. Letra de projecao, tags, link e escalas
+        # ficam; so o que estiver vazio e preenchido.
+        atualizar_id = str(item.get("atualizar_id") or "")
+        if atualizar_id.isdigit():
+            existente = banco.musicas().filter(id=int(atualizar_id)).first()
+            if existente is not None:
+                existente.cifra_louvor = cifra or existente.cifra_louvor
+                existente.tom = existente.tom or tom
+                existente.artista = existente.artista or str(item.get("artista") or "").strip()[:120] or None
+                if not existente.letra_projecao and existente.cifra_louvor:
+                    existente.letra_projecao = projecao_da_cifra(existente.cifra_louvor) or None
+                if not existente.tags:
+                    existente.tags = _tags_do_texto(str(item.get("tags") or ""))
+                existente.atualizada_em = datetime.now(timezone.utc)
+                existente.save()
+                atualizadas += 1
+                continue
+
         novas.append(banco.nova_musica(
             nome=nome,
             artista=str(item.get("artista") or "").strip()[:120] or None,
-            tom=str(item.get("tom") or "").strip()[:10] or None,
+            tom=tom,
             tags=_tags_do_texto(str(item.get("tags") or "")),
             palavras_chave_verificadas=True,  # revisadas no card da importacao
             cifra_louvor=cifra,
@@ -1124,9 +1148,9 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
     # Lote grande chega em partes (ver importar_musicas.html): so a ultima
     # avisa, com o total de todas -- senao viria 1 aviso por parte.
     if request.form.get("parcial") != "1":
-        total = request.form.get("total", type=int) or len(novas)
+        total = request.form.get("total", type=int) or (len(novas) + atualizadas)
         flash(f"{total} musica(s) importada(s) para o {banco.titulo.lower()}.", "success")
-    return jsonify({"criadas": len(novas), "destino": _url_do_banco(banco)})
+    return jsonify({"criadas": len(novas) + atualizadas, "destino": _url_do_banco(banco)})
 
 
 # --- Tela e edicao de 1 musica ---------------------------------------------------

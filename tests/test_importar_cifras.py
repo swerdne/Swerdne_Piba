@@ -565,3 +565,92 @@ def test_nova_musica_com_tema_no_titulo_ja_ganha_palavra_chave(logged_in_client,
         # Com tags escritas, nada muda.
         logged_in_client.post(f"/ministerio/musicas/{ministerio.comunidade_id}/nova", data={"nome": "A Cruz", "tags": "ceia"})
         assert Musica.objects(nome="A Cruz").first().tags == ["ceia"]
+
+
+# --- Realinhamento de acordes de Word em fonte proporcional ----------------------
+
+def _docx_arial(paragrafos):
+    """Igual ao .docx do Google Docs/Word: Arial (fonte do tema), sem fonte
+    declarada nos trechos -- o espaco e bem mais estreito que as letras."""
+    import zipfile
+    from xml.sax.saxutils import escape
+
+    corpo = "".join(
+        f'<w:p><w:r><w:t xml:space="preserve">{escape(texto)}</w:t></w:r></w:p>' for texto in paragrafos
+    )
+    documento = (
+        f'<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="{_NS_W}"><w:body>{corpo}</w:body></w:document>'
+    )
+    estilos = (
+        f'<?xml version="1.0"?><w:styles xmlns:w="{_NS_W}"><w:docDefaults><w:rPrDefault><w:rPr>'
+        '<w:rFonts w:asciiTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/><w:sz w:val="22"/>'
+        "</w:rPr></w:rPrDefault></w:docDefaults></w:styles>"
+    )
+    tema = (
+        '<?xml version="1.0"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        '<a:themeElements><a:fontScheme><a:minorFont><a:latin typeface="Arial"/></a:minorFont>'
+        "</a:fontScheme></a:themeElements></a:theme>"
+    )
+    arquivo = io.BytesIO()
+    with zipfile.ZipFile(arquivo, "w") as pacote:
+        pacote.writestr("word/document.xml", documento)
+        pacote.writestr("word/styles.xml", estilos)
+        pacote.writestr("word/theme/theme1.xml", tema)
+    return arquivo.getvalue()
+
+
+def test_acordes_alinhados_com_espacos_em_arial_ficam_sobre_a_mesma_silaba():
+    """Caso real (Aleluia, Verso 3): no Word em Arial, "B4" fica sobre "REI"
+    e o ultimo "B" sobre "VIVO". Copiado tal e qual, a fonte monoespacada da
+    tela empurra os acordes pra depois do fim da frase."""
+    cifra = _docx_arial([
+        "Aleluia", "Tom: B", "",
+        "B                           B4                      B",
+        "EU TENHO UM REI QUE ESTÁ VIVO",
+        "B/D#             E                      F#",
+        "A MORTE ELE DERROTOU",
+    ])
+    linhas = extrair_musica(cifra, "aleluia.docx")["cifra"].split("\n")
+    acordes, letra = linhas[0], linhas[1]
+    assert letra == "EU TENHO UM REI QUE ESTÁ VIVO"
+    # Mesmo ponto do Word: dentro da palavra "REI" (sobre o "E", como la).
+    assert letra.index("REI") <= acordes.index("B4") <= letra.index("REI") + 2
+    assert acordes.rstrip().endswith("B") and len(acordes.rstrip()) <= len(letra)  # nada passou do fim
+    acordes2, letra2 = linhas[2], linhas[3]
+    assert letra2.index("ELE") <= acordes2.index("E ") <= letra2.index("ELE") + 2
+    assert acordes2.index("F#") <= len(letra2)  # F# no fim de DERROTOU, como no Word
+
+
+def test_word_em_fonte_monoespacada_nao_e_mexido():
+    original = "G              D/F#"
+    musica = extrair_musica(_docx(["Teste", "Tom: G", original, "Tu és digno de toda honra"]), "x.docx")
+    assert original in musica["cifra"]  # _docx usa Courier New
+
+
+def test_reimportar_atualiza_a_cifra_da_musica_existente_sem_duplicar(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        cid = ministerio.comunidade_id
+        url = f"/ministerio/musicas/{cid}/importar"
+        logged_in_client.post(url + "/salvar", data={"musicas": json.dumps([
+            {"nome": "Aleluia", "tom": "B", "tags": "louvor", "cifra": "B          B4\nEU TENHO UM REI"}
+        ])})
+        musica = Musica.objects(nome="Aleluia").first()
+        musica.letra_projecao = "[VERSO]\nEU TENHO UM REI"
+        musica.save()
+
+        sugestao = _extrair(logged_in_client, ministerio.id, _docx_arial(["Aleluia", "Tom: B", "B   B4", "EU TENHO UM REI"]), "aleluia.docx")
+        # Rota do banco LOCAL: a existente e do oficial, entao nao oferece atualizar.
+        assert sugestao.get_json()["musica"]["existente_id"] is None
+        sugestao = logged_in_client.post(url + "/extrair", data={"arquivo": (io.BytesIO(_docx_arial(
+            ["Aleluia", "Tom: B", "B   B4", "EU TENHO UM REI"])), "aleluia.docx")}, content_type="multipart/form-data").get_json()["musica"]
+        assert sugestao["ja_existe"] and sugestao["existente_id"] == musica.id
+
+        logged_in_client.post(url + "/salvar", data={"musicas": json.dumps([
+            {"nome": "Aleluia", "tom": "", "tags": "", "cifra": sugestao["cifra"], "atualizar_id": str(musica.id)}
+        ])})
+        assert Musica.objects(nome="Aleluia").count() == 1
+        atual = Musica.objects(id=musica.id).first()
+        assert atual.cifra_louvor == sugestao["cifra"] != "B          B4\nEU TENHO UM REI"
+        assert atual.letra_projecao == "[VERSO]\nEU TENHO UM REI"  # projecao mantida
+        assert atual.tags == ["louvor"] and atual.tom == "B"

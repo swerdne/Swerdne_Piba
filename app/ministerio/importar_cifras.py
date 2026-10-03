@@ -21,8 +21,13 @@ PDF escaneado (imagem, sem texto) nao da pra extrair: volta com aviso.
 
 Word (.docx): so o corpo do documento (cabecalho/rodape do Word ficam em
 outra parte do arquivo e sao ignorados); cada paragrafo vira uma linha,
-quebra de linha manual tambem. O alinhamento dos acordes depende de quem
-digitou ter usado espacos (fonte monoespacada) -- tab vira 4 espacos. O
+quebra de linha manual tambem. Quase toda cifra feita no Word/Google Docs
+alinha os acordes com ESPACOS numa fonte PROPORCIONAL (Arial...), onde o
+espaco e bem mais estreito que uma letra -- copiado tal e qual pra tela
+(fonte monoespacada), os acordes escorregam pra direita. realinhar_acordes
+recalcula a posicao de cada acorde pela largura real das letras na fonte
+do documento (larguras_fontes.py) e o poe sobre a mesma letra. Documento em
+fonte monoespacada (Courier, Consolas...) fica como esta. O
 .doc antigo (binario, Word 97-2003) nao e lido: volta pedindo pra salvar
 como .docx. Depois de extraido o texto, PDF e Word seguem a MESMA
 heuristica (extrair_musica).
@@ -37,6 +42,7 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 from app.escala.models import detectar_tom, eh_linha_de_acordes
+from app.ministerio.larguras_fontes import CARACTERES, LARGURA_PADRAO, LARGURAS
 
 # PDF de navegador costuma ter tabela de fontes com linhas "quebradas" que o
 # pypdf contorna sozinho, mas avisa no log a cada uma -- ruido puro aqui.
@@ -48,6 +54,7 @@ MAX_PAGINAS = 30  # cifra de site tem 1-4 paginas; acima disso nao e uma cifra
 MAX_XML_DOCX = 20 * 1024 * 1024
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 _FALLBACK = "{http://schemas.openxmlformats.org/markup-compatibility/2006}Fallback"
 
 _DATA_HORA = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?\s*", re.I)
@@ -110,6 +117,77 @@ def _linhas_do_paragrafo(paragrafo):
     return "".join(partes)
 
 
+# --- Fonte de cada paragrafo do Word (pra realinhar os acordes) -----------------
+
+_FONTES_MONO = ("courier", "consolas", "lucida console", "mono", "menlo", "monaco", "lucida sans typewriter")
+_TAMANHO_PADRAO_PT = 11.0
+_TAB_PT = 36.0  # tab padrao do Word: a cada 1,27 cm
+
+
+def _chave_da_fonte(nome):
+    """Nome da fonte do Word -> chave de larguras_fontes (None = monoespacada,
+    nao precisa realinhar). Fonte proporcional desconhecida usa Arial, que e
+    bem proxima da maioria das sem serifa."""
+    nome = (nome or "").lower()
+    if any(m in nome for m in _FONTES_MONO):
+        return None
+    for chave in ("calibri", "times", "tahoma"):
+        if chave in nome:
+            return chave
+    return "arial"
+
+
+def _estilo_padrao(pacote):
+    """(fonte, tamanho em pt) padrao do documento: docDefaults do styles.xml,
+    resolvendo fonte de tema (minorHAnsi -> theme1.xml)."""
+    fonte, tamanho = None, _TAMANHO_PADRAO_PT
+    try:
+        estilos = ET.fromstring(pacote.read("word/styles.xml"))
+    except (KeyError, ET.ParseError):
+        return "Arial", tamanho
+    padrao = estilos.find(f"{_W}docDefaults/{_W}rPrDefault/{_W}rPr")
+    if padrao is not None:
+        rfonts = padrao.find(_W + "rFonts")
+        if rfonts is not None:
+            fonte = rfonts.get(_W + "ascii") or rfonts.get(_W + "hAnsi")
+            if not fonte and (rfonts.get(_W + "asciiTheme") or "").startswith("minor"):
+                fonte = _fonte_do_tema(pacote)
+        sz = padrao.find(_W + "sz")
+        if sz is not None and (sz.get(_W + "val") or "").isdigit():
+            tamanho = int(sz.get(_W + "val")) / 2
+    return fonte or "Arial", tamanho
+
+
+def _fonte_do_tema(pacote):
+    try:
+        tema = ET.fromstring(pacote.read("word/theme/theme1.xml"))
+    except (KeyError, ET.ParseError):
+        return None
+    latina = tema.find(f".//{_A}minorFont/{_A}latin")
+    return latina.get("typeface") if latina is not None else None
+
+
+def _estilo_do_paragrafo(paragrafo, padrao):
+    """(chave da fonte ou None, tamanho pt, negrito) do 1o trecho com texto."""
+    fonte, tamanho = padrao
+    negrito = False
+    for run in paragrafo.iter(_W + "r"):
+        if not "".join(t.text or "" for t in run.iter(_W + "t")).strip():
+            continue
+        propriedades = run.find(_W + "rPr")
+        if propriedades is not None:
+            rfonts = propriedades.find(_W + "rFonts")
+            if rfonts is not None and (rfonts.get(_W + "ascii") or rfonts.get(_W + "hAnsi")):
+                fonte = rfonts.get(_W + "ascii") or rfonts.get(_W + "hAnsi")
+            sz = propriedades.find(_W + "sz")
+            if sz is not None and (sz.get(_W + "val") or "").isdigit():
+                tamanho = int(sz.get(_W + "val")) / 2
+            b = propriedades.find(_W + "b")
+            negrito = b is not None and (b.get(_W + "val") or "true").lower() not in ("0", "false")
+        break
+    return _chave_da_fonte(fonte), tamanho, negrito
+
+
 def _texto_do_docx(dados):
     try:
         with zipfile.ZipFile(io.BytesIO(dados)) as pacote:
@@ -120,6 +198,7 @@ def _texto_do_docx(dados):
             if info.file_size > MAX_XML_DOCX:
                 raise ArquivoInvalidoError("Documento do Word grande demais -- nao parece uma cifra.")
             xml = pacote.read(info)
+            padrao = _estilo_padrao(pacote)
     except ArquivoInvalidoError:
         raise
     except (zipfile.BadZipFile, OSError, RuntimeError) as erro:
@@ -137,18 +216,103 @@ def _texto_do_docx(dados):
     corpo = raiz.find(_W + "body")
     if corpo is None:
         return ""
-    linhas = []
+    linhas = []  # [(texto, estilo)] -- quebra manual vira linhas com o mesmo estilo
 
     def percorrer(no):
         if no.tag == _FALLBACK:
             return
         if no.tag == _W + "p":
-            linhas.append(_linhas_do_paragrafo(no))
+            estilo = _estilo_do_paragrafo(no, padrao)
+            for texto in _linhas_do_paragrafo(no).split("\n"):
+                linhas.append((texto, estilo))
         for filho in no:
             percorrer(filho)
 
     percorrer(corpo)
-    return "\n".join(linhas)
+    return "\n".join(realinhar_acordes(linhas))
+
+
+# --- Realinhamento dos acordes (fonte proporcional -> colunas) --------------------
+
+_INDICE_CARACTERE = {c: i for i, c in enumerate(CARACTERES)}
+_MONO_MILESIMOS = 600  # Courier: todo caractere tem a mesma largura
+
+
+def _largura(caractere, estilo):
+    chave, tamanho, negrito = estilo
+    if chave is None:
+        return _MONO_MILESIMOS * tamanho / 1000
+    tabela = LARGURAS[chave + ("-negrito" if negrito else "")]
+    indice = _INDICE_CARACTERE.get(caractere)
+    return (tabela[indice] if indice is not None else LARGURA_PADRAO) * tamanho / 1000
+
+
+def _posicoes(texto, estilo):
+    """x (em pt) do inicio de cada caractere, + o fim da linha."""
+    posicoes, x = [], 0.0
+    for caractere in texto:
+        posicoes.append(x)
+        if caractere == "\t":
+            x = (int(x // _TAB_PT) + 1) * _TAB_PT
+        else:
+            x += _largura(caractere, estilo)
+    posicoes.append(x)
+    return posicoes
+
+
+def _eh_letra(texto):
+    return bool(texto.strip()) and not eh_linha_de_acordes(texto) and not texto.strip().startswith("[")
+
+
+def _montar_linha(colunas_e_acordes):
+    saida = ""
+    for coluna, acorde in colunas_e_acordes:
+        coluna = max(coluna, len(saida) + (1 if saida else 0))
+        saida = saida.ljust(coluna) + acorde
+    return saida
+
+
+def _realinhar_linha(acordes_txt, estilo_acordes, letra_txt, estilo_letra, largura_media):
+    xs = _posicoes(acordes_txt, estilo_acordes)
+    tokens = [(m.start(), m.group()) for m in re.finditer(r"\S+", acordes_txt)]
+    if letra_txt is None:
+        return _montar_linha((round(xs[i] / largura_media), t) for i, t in tokens)
+    xs_letra = _posicoes(letra_txt, estilo_letra)
+    fim_letra = xs_letra[-1]
+    media_letra = fim_letra / len(letra_txt) if letra_txt else largura_media
+    colocados = []
+    for i, token in tokens:
+        x = xs[i]
+        if x <= fim_letra:
+            # A letra mais perto do ponto onde o acorde estava.
+            coluna = min(range(len(xs_letra)), key=lambda k: abs(xs_letra[k] - x))
+        else:
+            coluna = len(letra_txt) + round((x - fim_letra) / media_letra)
+        colocados.append((coluna, token))
+    return _montar_linha(colocados)
+
+
+def realinhar_acordes(linhas):
+    """[(texto, estilo)] -> [texto] com cada linha de acordes escrita em fonte
+    proporcional reposicionada por coluna sobre a linha de letra seguinte.
+    estilo = (chave da fonte ou None se monoespacada, tamanho pt, negrito).
+    Linhas que nao sao de acordes saem como estao."""
+    letras = [(t, e) for t, e in linhas if e[0] is not None and _eh_letra(t)]
+    total = sum(_posicoes(t, e)[-1] for t, e in letras)
+    caracteres = sum(len(t) for t, _ in letras)
+    largura_media_padrao = (total / caracteres) if caracteres else 0.6 * _TAMANHO_PADRAO_PT
+
+    saida = []
+    for indice, (texto, estilo) in enumerate(linhas):
+        if estilo[0] is None or not eh_linha_de_acordes(texto):
+            saida.append(texto)
+            continue
+        seguinte = linhas[indice + 1] if indice + 1 < len(linhas) else None
+        if seguinte is not None and _eh_letra(seguinte[0]):
+            saida.append(_realinhar_linha(texto, estilo, seguinte[0], seguinte[1], largura_media_padrao))
+        else:
+            saida.append(_realinhar_linha(texto, estilo, None, None, largura_media_padrao))
+    return saida
 
 
 def _texto_do_arquivo(dados, nome_arquivo):

@@ -427,6 +427,7 @@ def detalhe(escala_id):
         formulario_ensaio=EnsaioForm(prefix="ensaio"),
         formulario_anexo=_form_anexo(escala, funcoes),
         formulario_item_banco=_form_item_banco(escala),
+        repertorios_prontos=_repertorios_pra_escala(escala) if eh_dono else [],
         formulario_observacoes=ObservacoesRepertorioForm(observacoes_repertorio=escala.observacoes_repertorio),
         anexos=_anexos_visiveis(escala, eh_dono, funcoes),
         ensaios=escala.ensaios,
@@ -1651,6 +1652,60 @@ def adicionar_musica_do_banco(escala_id):
     ).save()
     flash(f'"{musica.nome}" adicionada ao repertorio.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+
+
+def _repertorios_pra_escala(escala):
+    """[(nome do grupo, [repertorios])] que a escala pode usar: os do proprio
+    ministerio primeiro, depois os dos outros ministerios da comunidade."""
+    from app.ministerio.models import Ministerio
+
+    ministerio = escala.ministerio
+    nomes = {m.id: m.nome for m in Ministerio.objects(comunidade_id=ministerio.comunidade_id)}
+    grupos = {}
+    for pasta in PastaMusicas.objects(comunidade_id=ministerio.comunidade_id).order_by("nome"):
+        if pasta.itens:
+            grupos.setdefault(pasta.ministerio_id, []).append(pasta)
+    ordem = [ministerio.id] + sorted((i for i in grupos if i != ministerio.id), key=lambda i: (i is None, nomes.get(i, "")))
+    return [(nomes.get(i, "Sem ministerio") if i else "Sem ministerio", grupos[i]) for i in ordem if i in grupos]
+
+
+@bp.route("/<int:escala_id>/repertorio/usar-repertorio", methods=["POST"])
+@login_required
+def usar_repertorio_pronto(escala_id):
+    """Poe na escala as musicas de um repertorio do banco (ex: "Manha" do
+    Louvor), com o tom e o momento guardados nele -- somando as que ja
+    estao, ou substituindo tudo."""
+    escala = _escala_do_usuario_ou_404(escala_id)
+    voltar = redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+    pasta = PastaMusicas.objects(
+        id=request.form.get("repertorio_id", type=int), comunidade_id=escala.ministerio.comunidade_id
+    ).first()
+    if not AcaoForm().validate_on_submit() or pasta is None or not pasta.itens:
+        flash("Escolha um repertorio com musicas.", "danger")
+        return voltar
+
+    if request.form.get("substituir"):
+        ItemRepertorio.objects(escala_id=escala.id).delete()
+        ordem = 0
+    else:
+        ordem = max([item.ordem for item in escala.repertorio], default=-1) + 1
+
+    musicas = {m.id: m for m in Musica.objects(id__in=[i.musica_id for i in pasta.itens if i.musica_id])}
+    for item in pasta.itens:
+        musica = musicas.get(item.musica_id)
+        ItemRepertorio(
+            escala_id=escala.id,
+            musica_id=musica.id if musica else None,
+            nome_musica=item.nome,
+            tom=item.tom or (musica.tom if musica else None),
+            link=musica.link if musica else None,
+            momento=item.momento,
+            ordem=ordem,
+        ).save()
+        ordem += 1
+    _fixar_se_gerada_por_rodizio(escala)
+    flash(f'Repertorio "{pasta.nome}" aplicado: {len(pasta.itens)} musica(s) na escala.', "success")
+    return voltar
 
 
 @bp.route("/<int:escala_id>/repertorio/pasta", methods=["POST"])

@@ -309,3 +309,49 @@ def test_excluir_comunidade_apaga_as_pastas(logged_in_client, app, db):
         _criar_pasta(logged_in_client, comunidade.id, "P", [Musica.objects(nome="Oceanos").first()])
         logged_in_client.post(f"/comunidade/{comunidade.id}/excluir", data={}, follow_redirects=True)
         assert PastaMusicas.objects().count() == 0
+
+
+# --- Repertorio pronto do banco aplicado na escala ---------------------------------
+
+def test_escala_usa_repertorio_pronto_somando_ou_substituindo(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, kids = _igreja(logged_in_client)
+        for nome, tom in (("Oceanos", "D"), ("Grande", "G"), ("Avulsa antes", "C")):
+            logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": nome, "tom": tom})
+        oceanos, grande, antes = (Musica.objects(nome=n).first() for n in ("Oceanos", "Grande", "Avulsa antes"))
+        _criar_pasta(logged_in_client, comunidade.id, "Manha", [oceanos, grande], ministerio_id=louvor.id)
+        _criar_pasta(logged_in_client, comunidade.id, "Kids", [antes], ministerio_id=kids.id)
+        manha = PastaMusicas.objects(nome="Manha").first()
+        manha.itens[0].tom = "E"
+        manha.itens[0].momento = "Abertura"
+        manha.save()
+
+        escala = _criar_escala(logged_in_client, louvor.id, "Culto da manha")
+        html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
+        assert "Usar um repertorio pronto" in html
+        # Repertorios do proprio ministerio primeiro.
+        assert html.index('<optgroup label="Louvor">') < html.index('<optgroup label="Kids">')
+
+        logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
+                              data={"banco-musica_id": antes.id, "banco-momento": "", "banco-tom": ""})
+        logged_in_client.post(f"/escala/{escala.id}/repertorio/usar-repertorio", data={"repertorio_id": manha.id})
+        itens = list(ItemRepertorio.objects(escala_id=escala.id).order_by("ordem"))
+        assert [i.nome_musica for i in itens] == ["Avulsa antes", "Oceanos", "Grande"]  # somou no fim
+        assert (itens[1].tom, itens[1].momento, itens[1].musica_id) == ("E", "Abertura", oceanos.id)
+
+        logged_in_client.post(f"/escala/{escala.id}/repertorio/usar-repertorio",
+                              data={"repertorio_id": manha.id, "substituir": "1"})
+        assert [i.nome_musica for i in ItemRepertorio.objects(escala_id=escala.id).order_by("ordem")] == ["Oceanos", "Grande"]
+
+
+def test_so_quem_gerencia_a_escala_usa_repertorio_pronto(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos"})
+        _criar_pasta(logged_in_client, comunidade.id, "Manha", [Musica.objects(nome="Oceanos").first()], ministerio_id=louvor.id)
+        pasta_id = PastaMusicas.objects(nome="Manha").first().id
+        escala_id = _criar_escala(logged_in_client, louvor.id, "Culto").id
+    with sessao_isolada(app):
+        resposta = outro_logged_in_client.post(f"/escala/{escala_id}/repertorio/usar-repertorio", data={"repertorio_id": pasta_id})
+        assert resposta.status_code == 404
+        assert ItemRepertorio.objects(escala_id=escala_id).count() == 0
