@@ -1,23 +1,35 @@
-{# Campos de "pra quem enviar o repertorio": um ministerio inteiro ou uma
-   funcao dele (ver app/ministerio/compartilhamento.py). O 2o select e
-   preenchido pelo JS (static/js/main.js, [data-envio]) conforme o ministerio
-   escolhido, com quantas pessoas recebem; o botao de enviar do form fica
-   desligado quando ninguem receberia. #}
+{# Pra quem enviar o repertorio: marque um ou VARIOS ministerios (inteiros)
+   e/ou funcoes deles (ver app/ministerio/compartilhamento.py). Cada caixa
+   manda "ministerio_id|funcao" (funcao vazia = ministerio inteiro). O JS
+   (static/js/main.js, [data-envio]) desmarca as funcoes de um ministerio
+   marcado inteiro (ja estao incluidas), mostra o resumo e so libera o botao
+   de enviar com algo marcado. #}
 {% macro campos_envio(opcoes, ministerio_padrao, tema, CAMPO) %}
-<div data-envio data-opcoes='{{ opcoes|tojson }}' class="space-y-2">
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <label class="block">
-            <span class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Ministerio</span>
-            <select name="ministerio_id" data-envio-ministerio class="w-full {{ CAMPO }}">
-                {% for o in opcoes %}
-                <option value="{{ o.id }}" {{ 'selected' if ministerio_padrao and o.id == ministerio_padrao }}>{{ o.nome }}</option>
+<div data-envio class="space-y-2">
+    <p class="text-xs font-semibold {{ tema.text_secondary }}">Pra quem? Marque quantos ministerios e funcoes quiser.</p>
+    <div class="max-h-80 overflow-y-auto space-y-2 pr-1">
+        {% for o in opcoes %}
+        <details data-envio-ministerio class="border {{ tema.card_border }} rounded-xl overflow-hidden" {{ 'open' if o.id == ministerio_padrao }}>
+            <summary class="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer select-none text-sm font-semibold {{ tema.text_primary }}">
+                <span>{{ o.nome }}</span>
+                <span data-envio-marcados class="hidden text-[11px] font-semibold rounded-full px-2 py-0.5 {{ tema.accent_soft_bg }} {{ tema.accent_text }}"></span>
+            </summary>
+            <div class="border-t {{ tema.card_border }} px-3 py-2 space-y-1.5">
+                <label class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }} cursor-pointer">
+                    <input type="checkbox" name="alvo" value="{{ o.id }}|" data-envio-todo data-pessoas="{{ o.pessoas }}" class="w-4 h-4"
+                           {{ 'disabled' if not o.pessoas }}>
+                    Todo o ministerio <span class="text-xs font-normal {{ tema.text_secondary }}">({{ o.pessoas }} pessoa{{ 's' if o.pessoas != 1 }})</span>
+                </label>
+                {% for f in o.funcoes %}
+                <label class="flex items-center gap-2 text-sm {{ tema.text_primary }} cursor-pointer pl-6">
+                    <input type="checkbox" name="alvo" value="{{ o.id }}|{{ f.nome }}" data-envio-funcao data-pessoas="{{ f.pessoas }}" class="w-4 h-4"
+                           {{ 'disabled' if not f.pessoas }}>
+                    {{ f.nome }} <span class="text-xs {{ tema.text_secondary }}">({{ f.pessoas }} pessoa{{ 's' if f.pessoas != 1 }})</span>
+                </label>
                 {% endfor %}
-            </select>
-        </label>
-        <label class="block">
-            <span class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Pra quem</span>
-            <select name="funcao" data-envio-destino class="w-full {{ CAMPO }}"></select>
-        </label>
+            </div>
+        </details>
+        {% endfor %}
     </div>
     <p data-envio-resumo class="text-xs {{ tema.text_secondary }}"></p>
 </div>

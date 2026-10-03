@@ -636,63 +636,37 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
 })();
 
 /* Formulario "pra quem enviar o repertorio" (templates/ministerio/_envio.html):
-   ao trocar o ministerio, lista "Todo o ministerio" + as funcoes dele, cada
-   uma com quantas pessoas recebem; sem ninguem pra receber, o botao de
-   enviar do form fica desligado. */
+   varios ministerios e/ou funcoes marcados de uma vez. Marcar "Todo o
+   ministerio" desliga as funcoes dele (ja estao incluidas). O botao de
+   enviar do form so liga com algo marcado. */
 (function () {
     document.querySelectorAll('[data-envio]').forEach(function (caixa) {
-        var opcoes = [];
-        try { opcoes = JSON.parse(caixa.getAttribute('data-opcoes') || '[]'); } catch (e) { opcoes = []; }
-        var ministerio = caixa.querySelector('[data-envio-ministerio]');
-        var destino = caixa.querySelector('[data-envio-destino]');
         var resumo = caixa.querySelector('[data-envio-resumo]');
         var form = caixa.closest('form');
         var botoes = form ? form.querySelectorAll('[type="submit"]') : [];
 
-        function pessoas(n) { return n + (n === 1 ? ' pessoa' : ' pessoas'); }
-
-        function atual() {
-            var id = parseInt(ministerio.value, 10);
-            return opcoes.filter(function (o) { return o.id === id; })[0];
-        }
-
-        function atualizarResumo() {
-            var m = atual();
-            var n = 0;
-            if (m) {
-                if (!destino.value) n = m.pessoas;
-                else (m.funcoes || []).forEach(function (f) { if (f.nome === destino.value) n = f.pessoas; });
-            }
-            resumo.textContent = n
-                ? 'Vai pra ' + pessoas(n) + ' -- aparece na tela inicial de cada uma.'
-                : 'Ninguem com conta pra receber aqui ainda.';
-            Array.prototype.forEach.call(botoes, function (b) { b.disabled = !n; });
-        }
-
-        function montarDestinos() {
-            var m = atual();
-            destino.innerHTML = '';
-            if (!m) { atualizarResumo(); return; }
-            var todo = document.createElement('option');
-            todo.value = '';
-            todo.textContent = 'Todo o ministerio (' + pessoas(m.pessoas) + ')';
-            destino.appendChild(todo);
-            if ((m.funcoes || []).length) {
-                var grupo = document.createElement('optgroup');
-                grupo.label = 'So uma funcao';
-                m.funcoes.forEach(function (f) {
-                    var op = document.createElement('option');
-                    op.value = f.nome;
-                    op.textContent = f.nome + ' (' + pessoas(f.pessoas) + ')';
-                    grupo.appendChild(op);
+        function atualizar() {
+            var grupos = 0;
+            caixa.querySelectorAll('[data-envio-ministerio]').forEach(function (bloco) {
+                var todo = bloco.querySelector('[data-envio-todo]');
+                var funcoes = bloco.querySelectorAll('[data-envio-funcao]');
+                funcoes.forEach(function (f) {
+                    if (todo.checked) f.checked = false;
+                    f.disabled = todo.checked || f.getAttribute('data-pessoas') === '0';
                 });
-                destino.appendChild(grupo);
-            }
-            atualizarResumo();
+                var marcados = (todo.checked ? 1 : 0) + bloco.querySelectorAll('[data-envio-funcao]:checked').length;
+                grupos += marcados;
+                var etiqueta = bloco.querySelector('[data-envio-marcados]');
+                etiqueta.textContent = todo.checked ? 'todo' : marcados + ' funcao' + (marcados > 1 ? 'oes' : '');
+                etiqueta.classList.toggle('hidden', !marcados);
+            });
+            resumo.textContent = grupos
+                ? grupos + ' grupo(s) marcado(s) -- quem estiver em mais de um recebe uma vez so.'
+                : 'Marque pelo menos um ministerio ou funcao.';
+            Array.prototype.forEach.call(botoes, function (b) { b.disabled = !grupos; });
         }
 
-        ministerio.addEventListener('change', montarDestinos);
-        destino.addEventListener('change', atualizarResumo);
-        montarDestinos();
+        caixa.addEventListener('change', atualizar);
+        atualizar();
     });
 })();

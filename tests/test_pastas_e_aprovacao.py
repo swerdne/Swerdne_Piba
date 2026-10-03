@@ -181,7 +181,13 @@ def _carla():
 
 
 def _enviar(cliente, url, ministerio_id, funcao="", **extra):
-    return cliente.post(url, data={"ministerio_id": ministerio_id, "funcao": funcao, **extra})
+    """1 alvo (como 1 caixa marcada no formulario): ministerio inteiro ou 1 funcao."""
+    return _enviar_varios(cliente, url, [(ministerio_id, funcao)], **extra)
+
+
+def _enviar_varios(cliente, url, alvos, **extra):
+    """Varias caixas marcadas: [(ministerio_id, funcao ou "")]."""
+    return cliente.post(url, data={"alvo": [f"{m}|{f}" for m, f in alvos], **extra})
 
 
 def test_escala_compartilha_repertorio_com_um_ministerio_inteiro(logged_in_client, outro_logged_in_client, app, db):
@@ -225,7 +231,8 @@ def test_compartilhar_so_com_quem_serve_numa_funcao(logged_in_client, outro_logg
         pasta_id = PastaMusicas.objects(nome="Noite").first().id
 
         tela = logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
-        assert '"nome": "Teclado", "pessoas": 1' in tela  # opcoes de envio com a contagem
+        # Caixa de marcar da funcao, com quantas pessoas recebem.
+        assert f'value="{lid}|Teclado"' in tela and "Teclado <span" in tela and "(1 pessoa)" in tela
 
         _enviar(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", lid, "teclado")  # sem diferenciar maiuscula
         pasta = PastaMusicas.objects(id=pasta_id).first()
@@ -481,3 +488,45 @@ def test_banco_mostra_atalhos_de_tema_e_lixeira_no_topo(logged_in_client, app, d
         # Lixeira ao lado do contador (antes do conteudo), abrindo a janela de confirmacao.
         assert html.index("data-abrir-apagar") < html.index("data-lista-musicas")
         assert "<dialog data-dialog-apagar" in html
+
+
+def test_enviar_para_varios_ministerios_e_funcoes_de_uma_vez(logged_in_client, outro_logged_in_client, app, db):
+    """Todo o Kids + so o Teclado do Louvor, num envio so. Bruno esta nos
+    dois alvos e recebe uma vez so; Carla (bateria do Louvor) nao recebe."""
+    with sessao_isolada(app):
+        comunidade, louvor, kids = _igreja(logged_in_client)
+        cid = comunidade.id
+        escala = _criar_escala(logged_in_client, louvor.id, "Culto")
+        _escalar_conta(logged_in_client, cid, escala, "Teclado", "Bruno", "bruno@example.com")
+        _escalar_conta(logged_in_client, cid, escala, "Bateria", "Carla", _carla().email)
+        UsuarioMinisterio(usuario_id=_bruno().id, ministerio_id=kids.id, papel="membro").save()
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oceanos"})
+        _criar_pasta(logged_in_client, cid, "Noite", [Musica.objects(nome="Oceanos").first()], ministerio_id=louvor.id)
+        pasta_id = PastaMusicas.objects(nome="Noite").first().id
+
+        _enviar_varios(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar",
+                       [(kids.id, ""), (louvor.id, "Teclado")])
+        pasta = PastaMusicas.objects(id=pasta_id).first()
+        assert [c.usuario_id for c in pasta.compartilhada_com] == [_bruno().id]  # uma vez so
+        assert pasta.compartilhamento_de(_carla().id) is None
+        assert pasta.envios[-1].startswith("Kids (todo o ministerio), Louvor · Teclado: 1 pessoa(s)")
+        assert Notificacao.objects(usuario_id=_bruno().id, tipo="repertorio_compartilhado").count() == 1
+
+        # Funcao de um ministerio marcado inteiro e redundante: conta uma vez so.
+        _enviar_varios(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar",
+                       [(louvor.id, ""), (louvor.id, "Teclado")])
+        assert PastaMusicas.objects(id=pasta_id).first().envios[-1].startswith("Louvor (todo o ministerio): 2 pessoa(s)")
+
+
+def test_nada_marcado_nao_envia(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oceanos"})
+        _criar_pasta(logged_in_client, comunidade.id, "Noite", [Musica.objects(nome="Oceanos").first()], ministerio_id=louvor.id)
+        pasta = PastaMusicas.objects(nome="Noite").first()
+        logged_in_client.post(f"/ministerio/pastas/{pasta.id}/compartilhar", data={})
+        # Ministerio de outra comunidade tambem e ignorado.
+        outra = _criar_comunidade(logged_in_client, "Outra")
+        de_fora = _criar_ministerio(logged_in_client, outra.id, nome="De fora")
+        _enviar(logged_in_client, f"/ministerio/pastas/{pasta.id}/compartilhar", de_fora.id)
+        assert PastaMusicas.objects(id=pasta.id).first().envios == []

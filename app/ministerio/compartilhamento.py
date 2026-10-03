@@ -1,5 +1,7 @@
-"""Pra quem vai um repertorio compartilhado: um MINISTERIO inteiro ou so
-quem serve numa FUNCAO dele (ex: "Teclado", "Projecao").
+"""Pra quem vai um repertorio compartilhado: um ou VARIOS alvos de uma vez,
+cada alvo sendo um MINISTERIO inteiro ou so quem serve numa FUNCAO dele (ex:
+"Teclado", "Projecao") -- ex: todo o Kids + Teclado e Projecao do Louvor.
+Quem cai em mais de um alvo recebe uma vez so.
 
 So contas (User) recebem -- o repertorio aparece na tela inicial delas.
 - Ministerio inteiro: quem tem papel nele (UsuarioMinisterio, lider ou
@@ -77,3 +79,38 @@ def destinatarios(ministerio, funcao, quem_envia_id):
 def descricao_do_envio(ministerio, funcao):
     funcao = (funcao or "").strip()
     return f"{ministerio.nome} · {funcao}" if funcao else f"{ministerio.nome} (todo o ministerio)"
+
+
+def ler_alvos(valores, comunidade_id):
+    """Valores "ministerio_id|funcao" marcados no formulario (funcao vazia =
+    ministerio inteiro) -> [(ministerio, funcao)] so de ministerios da
+    comunidade, sem repetir. Funcao de um ministerio ja marcado inteiro e
+    redundante e sai."""
+    pedidos = []
+    for valor in valores:
+        id_txt, _, funcao = (valor or "").partition("|")
+        if id_txt.isdigit():
+            pedidos.append((int(id_txt), " ".join(funcao.split())[:80]))
+    ministerios = {m.id: m for m in Ministerio.objects(id__in=list({i for i, _ in pedidos}), comunidade_id=comunidade_id)}
+    inteiros = {i for i, f in pedidos if not f}
+    alvos, vistos = [], set()
+    for ministerio_id, funcao in pedidos:
+        chave = (ministerio_id, _chave(funcao))
+        if ministerio_id not in ministerios or chave in vistos or (funcao and ministerio_id in inteiros):
+            continue
+        vistos.add(chave)
+        alvos.append((ministerios[ministerio_id], funcao))
+    return alvos
+
+
+def destinatarios_de_varios(alvos, quem_envia_id):
+    """Uniao das contas de todos os alvos (cada pessoa uma vez so)."""
+    por_id = {}
+    for ministerio, funcao in alvos:
+        for pessoa in destinatarios(ministerio, funcao, quem_envia_id):
+            por_id.setdefault(pessoa.id, pessoa)
+    return list(por_id.values())
+
+
+def descricao_de_varios(alvos):
+    return ", ".join(descricao_do_envio(m, f) for m, f in alvos)

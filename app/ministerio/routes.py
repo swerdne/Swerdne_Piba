@@ -1567,16 +1567,18 @@ def excluir_pasta(pasta_id):
     return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade_id) + "#repertorios")
 
 
-def enviar_repertorio(pasta, ministerio, funcao):
-    """Manda o repertorio pra um ministerio inteiro ou pra quem serve numa
-    funcao dele (ver ministerio/compartilhamento.py): cada conta ganha leitura
-    + o repertorio na tela inicial + aviso no sino. Devolve quantas pessoas
+def enviar_repertorio(pasta, alvos):
+    """Manda o repertorio pros alvos [(ministerio, funcao)] -- cada um e um
+    ministerio inteiro (funcao vazia) ou quem serve numa funcao dele (ver
+    ministerio/compartilhamento.py). Cada conta, uma vez so, ganha leitura +
+    o repertorio na tela inicial + aviso no sino. Devolve quantas pessoas
     receberam. Reenviar pra quem ja tinha volta a marcar como novo."""
     from app.escala.models import CompartilhamentoPasta
-    from app.ministerio.compartilhamento import descricao_do_envio, destinatarios
+    from app.ministerio.compartilhamento import descricao_de_varios, destinatarios_de_varios
     from app.notificacoes import Notificacao
 
-    pessoas = destinatarios(ministerio, funcao, current_user.id)
+    pessoas = destinatarios_de_varios(alvos, current_user.id)
+    descricao = descricao_de_varios(alvos)
     agora = datetime.now(timezone.utc)
     for pessoa in pessoas:
         existente = pasta.compartilhamento_de(pessoa.id)
@@ -1585,9 +1587,7 @@ def enviar_repertorio(pasta, ministerio, funcao):
         else:
             pasta.compartilhada_com.append(CompartilhamentoPasta(usuario_id=pessoa.id, enviado_por_id=current_user.id))
     if pessoas:
-        pasta.envios.append(
-            f"{descricao_do_envio(ministerio, funcao)}: {len(pessoas)} pessoa(s), {agora.strftime('%d/%m/%Y')}"[:200]
-        )
+        pasta.envios.append(f"{descricao}: {len(pessoas)} pessoa(s), {agora.strftime('%d/%m/%Y')}"[:200])
     pasta.save()
 
     remetente = current_user.name or current_user.username or current_user.email
@@ -1595,25 +1595,24 @@ def enviar_repertorio(pasta, ministerio, funcao):
         Notificacao(
             usuario_id=pessoa.id, tipo="repertorio_compartilhado",
             titulo=f'{remetente} enviou o repertorio "{pasta.nome}"'[:120],
-            mensagem=f'Repertorio "{pasta.nome}" ({len(pasta.itens)} musica(s)) pra {descricao_do_envio(ministerio, funcao)}. '
+            mensagem=f'Repertorio "{pasta.nome}" ({len(pasta.itens)} musica(s)) pra {descricao}. '
                      "Abra pela tela inicial pra ver e baixar as cifras.",
         ).save()
     return len(pessoas)
 
 
-def _ministerio_e_funcao_do_form(comunidade_id):
-    """(ministerio, funcao) escolhidos no formulario de envio -- so ministerio
-    da mesma comunidade."""
-    ministerio = Ministerio.objects(id=request.form.get("ministerio_id", type=int), comunidade_id=comunidade_id).first()
-    return ministerio, (request.form.get("funcao") or "").strip()[:80]
+def _alvos_do_form(comunidade_id):
+    """Alvos marcados no formulario de envio (campos "alvo" = "ministerio_id|funcao")."""
+    from app.ministerio.compartilhamento import ler_alvos
+    return ler_alvos(request.form.getlist("alvo"), comunidade_id)
 
 
-def _mensagem_de_envio(pasta, ministerio, funcao, quantos):
-    from app.ministerio.compartilhamento import descricao_do_envio
+def _mensagem_de_envio(pasta, alvos, quantos):
+    from app.ministerio.compartilhamento import descricao_de_varios
 
     if not quantos:
-        return (f"Ninguem com conta em {descricao_do_envio(ministerio, funcao)} pra receber -- nada foi enviado.", "danger")
-    return (f'Repertorio "{pasta.nome}" enviado pra {quantos} pessoa(s) -- {descricao_do_envio(ministerio, funcao)}. '
+        return (f"Ninguem com conta em {descricao_de_varios(alvos)} pra receber -- nada foi enviado.", "danger")
+    return (f'Repertorio "{pasta.nome}" enviado pra {quantos} pessoa(s) -- {descricao_de_varios(alvos)}. '
             "Aparece na tela inicial de cada uma.", "success")
 
 
@@ -1623,13 +1622,13 @@ def compartilhar_pasta(pasta_id):
     pasta, _, pode_compartilhar = _pasta_ou_404(pasta_id)
     if not pode_compartilhar:
         abort(404)
-    ministerio, funcao = _ministerio_e_funcao_do_form(pasta.comunidade_id)
+    alvos = _alvos_do_form(pasta.comunidade_id)
     voltar = request.form.get("voltar") or ""
     destino = redirect(voltar) if voltar.startswith("/") and not voltar.startswith("//") else _voltar_pra_pasta(pasta, "#compartilhar")
-    if not AcaoForm().validate_on_submit() or ministerio is None:
-        flash("Escolha o ministerio (e, se quiser, a funcao) que vai receber.", "danger")
+    if not AcaoForm().validate_on_submit() or not alvos:
+        flash("Marque pelo menos um ministerio ou funcao pra receber.", "danger")
         return destino
-    flash(*_mensagem_de_envio(pasta, ministerio, funcao, enviar_repertorio(pasta, ministerio, funcao)))
+    flash(*_mensagem_de_envio(pasta, alvos, enviar_repertorio(pasta, alvos)))
     return destino
 
 

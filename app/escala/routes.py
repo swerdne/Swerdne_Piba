@@ -1722,15 +1722,15 @@ def compartilhar_repertorio(escala_id):
     (repertorio do ministerio da escala, com o tom do dia) -- sempre a
     mesma copia por escala, atualizada a cada envio, pra nao acumular
     repetidos."""
-    from app.ministerio.routes import _mensagem_de_envio, _ministerio_e_funcao_do_form, enviar_repertorio
+    from app.ministerio.routes import _alvos_do_form, _mensagem_de_envio, enviar_repertorio
 
     escala = _escala_do_usuario_ou_404(escala_id)
     voltar = redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
     itens = escala.repertorio
     comunidade_id = escala.ministerio.comunidade_id
-    ministerio_destino, funcao = _ministerio_e_funcao_do_form(comunidade_id)
-    if not AcaoForm().validate_on_submit() or ministerio_destino is None:
-        flash("Escolha o ministerio (e, se quiser, a funcao) que vai receber.", "danger")
+    alvos = _alvos_do_form(comunidade_id)
+    if not AcaoForm().validate_on_submit() or not alvos:
+        flash("Marque pelo menos um ministerio ou funcao pra receber.", "danger")
         return voltar
     if not itens:
         flash("O repertorio desta escala ainda esta vazio.", "danger")
@@ -1744,7 +1744,7 @@ def compartilhar_repertorio(escala_id):
     pasta.nome = f"{escala.nome} {data_curta}".strip()[:120]
     pasta.itens = [ItemPasta(musica_id=i.musica_id, nome=i.nome_musica, tom=i.tom, momento=i.momento) for i in itens]
     pasta.save()
-    flash(*_mensagem_de_envio(pasta, ministerio_destino, funcao, enviar_repertorio(pasta, ministerio_destino, funcao)))
+    flash(*_mensagem_de_envio(pasta, alvos, enviar_repertorio(pasta, alvos)))
     return voltar
 
 
