@@ -425,6 +425,12 @@
                 </div>
             </div>
 
+            <p class="text-center text-xs {{ tema.text_secondary }}">
+                <a href="{{ url_for('main.privacidade') }}" class="hover:underline">Política de Privacidade</a>
+                &middot; <a href="{{ url_for('main.termos') }}" class="hover:underline">Termos de Uso</a>
+                &middot; <a href="{{ url_for('main.exclusao_de_dados') }}" class="hover:underline">Exclusão de dados</a>
+            </p>
+
             <a href="{{ url_for('auth.logout') }}"
                class="block text-center border border-red-500/40 text-red-500 hover:bg-red-500/10 text-sm font-semibold py-3 rounded-full transition">
                 Sair da conta

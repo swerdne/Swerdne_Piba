@@ -225,6 +225,37 @@ def buscar_local():
     return jsonify({"ok": True, "resultados": resultados})
 
 
+# --- Paginas publicas: privacidade, termos e exclusao de dados -----------------
+# Sem login (a Meta exige esses links no app do WhatsApp, e robos de revisao
+# abrem sem conta). Texto em templates/main/legal/; contato = EMAIL_CONTATO.
+_PAGINAS_LEGAIS = {
+    "privacidade": "Política de Privacidade",
+    "termos": "Termos de Uso",
+    "exclusao_de_dados": "Exclusão de dados",
+}
+_LEGAL_ATUALIZADO_EM = "3 de outubro de 2026"
+
+
+def _pagina_legal(secao):
+    return render_template("main/legal.html", secao=secao, titulo=_PAGINAS_LEGAIS[secao],
+                           atualizado_em=_LEGAL_ATUALIZADO_EM)
+
+
+@bp.route("/privacidade")
+def privacidade():
+    return _pagina_legal("privacidade")
+
+
+@bp.route("/termos")
+def termos():
+    return _pagina_legal("termos")
+
+
+@bp.route("/exclusao-de-dados")
+def exclusao_de_dados():
+    return _pagina_legal("exclusao_de_dados")
+
+
 @bp.route("/imagem/<imagem_id>")
 def imagem(imagem_id):
     """Serve uma imagem enviada (ver app/imagens.py). O id e um uuid4

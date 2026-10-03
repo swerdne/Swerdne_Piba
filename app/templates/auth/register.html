@@ -127,6 +127,10 @@
             Ja tem conta?
             <a href="{{ url_for('auth.login') }}" class="text-indigo-400 font-medium hover:text-indigo-300 hover:underline">Entrar</a>
         </p>
+        <p class="text-center text-xs text-gray-500 mt-4">
+            Ao criar a conta, você concorda com os <a href="{{ url_for('main.termos') }}" class="text-gray-400 underline hover:text-gray-300">Termos de Uso</a>
+            e a <a href="{{ url_for('main.privacidade') }}" class="text-gray-400 underline hover:text-gray-300">Política de Privacidade</a>.
+        </p>
     </div>
 </div>
 {% endblock %}

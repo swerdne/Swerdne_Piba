@@ -1,0 +1,38 @@
+<p class="mt-5">
+    Você pode pedir a exclusão dos seus dados do TyBenson a qualquer momento, inclusive se entrou com a sua conta
+    do Google ou se recebeu avisos por WhatsApp.
+</p>
+
+<h2>Como pedir</h2>
+<ul>
+    <li>
+        {% if config.EMAIL_CONTATO %}
+        Envie um e-mail para <a href="mailto:{{ config.EMAIL_CONTATO }}?subject=Exclus%C3%A3o%20de%20dados">{{ config.EMAIL_CONTATO }}</a>
+        {% else %}
+        Envie um pedido pelo contato no fim desta página
+        {% endif %}
+        com o assunto “Exclusão de dados”, a partir do e-mail da sua conta (ou informando o telefone que recebe os avisos).
+    </li>
+    <li>Confirmamos o pedido e concluímos a exclusão em até 15 dias, avisando quando terminar.</li>
+</ul>
+
+<h2>O que é apagado</h2>
+<ul>
+    <li>Sua conta: nome, e-mail, senha, foto e preferências.</li>
+    <li>Seus vínculos com comunidades e ministérios, suas notificações e repertórios recebidos.</li>
+    <li>Seu cadastro no diretório das comunidades (nome, telefone, e-mail) e os registros de check-in.</li>
+</ul>
+
+<h2>O que pode continuar</h2>
+<ul>
+    <li>Escalas passadas podem manter o nome da função sem a pessoa, para o histórico da comunidade.</li>
+    <li>Conteúdo que você enviou para uma comunidade (cifras, arquivos) fica com ela, salvo se você pedir a remoção.</li>
+    <li>Dados que a lei obrigue a guardar, pelo prazo exigido.</li>
+</ul>
+
+<h2>Sem pedir exclusão total</h2>
+<ul>
+    <li>Para parar de receber avisos, peça ao líder para tirar seu telefone ou e-mail do diretório.</li>
+    <li>Para sair de uma comunidade, fale com o administrador dela.</li>
+    <li>Para negar o uso da localização, basta recusar a permissão no celular (o check-in deixa de funcionar, o resto do app continua).</li>
+</ul>

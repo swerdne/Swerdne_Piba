@@ -108,6 +108,10 @@
             Nao tem conta?
             <a href="{{ url_for('auth.register') }}" class="text-indigo-400 font-medium hover:text-indigo-300 hover:underline">Cadastre-se</a>
         </p>
+        <p class="text-center text-xs text-gray-500 mt-4">
+            <a href="{{ url_for('main.privacidade') }}" class="hover:text-gray-300 hover:underline">Privacidade</a>
+            &middot; <a href="{{ url_for('main.termos') }}" class="hover:text-gray-300 hover:underline">Termos</a>
+        </p>
     </div>
 </div>
 {% endblock %}

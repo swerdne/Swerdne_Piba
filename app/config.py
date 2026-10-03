@@ -42,6 +42,9 @@ class Config:
     # Endereco publico do site, pra links absolutos fora de uma requisicao
     # (ex: a logo no cabecalho dos e-mails enviados pelo agendador).
     URL_PUBLICA = os.environ.get("URL_PUBLICA", "https://pibaswerdne.me").rstrip("/")
+    # E-mail de contato das paginas publicas de privacidade/termos/exclusao
+    # de dados (main.privacidade etc., exigidas pela Meta pro app do WhatsApp).
+    EMAIL_CONTATO = os.environ.get("EMAIL_CONTATO")
 
     # Envio de SMS via Twilio (notificacoes da Escala Rapida, ver app/sms.py).
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
