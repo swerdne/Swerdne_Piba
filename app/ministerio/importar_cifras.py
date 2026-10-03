@@ -240,7 +240,7 @@ def extrair_musica(dados, nome_arquivo=""):
             else "Este PDF nao tem texto (parece escaneado ou imagem) -- nao da pra extrair a cifra."
         )
         return {
-            "nome": _nome_do_arquivo(nome_arquivo), "artista": "", "tom": "", "cifra": "",
+            "nome": _nome_do_arquivo(nome_arquivo), "artista": "", "tom": "", "cifra": "", "tags": [],
             "avisos": [vazio],
         }
 
@@ -295,11 +295,14 @@ def extrair_musica(dados, nome_arquivo=""):
         else:
             avisos.append("Tom nao encontrado no arquivo nem identificado pelos acordes.")
 
+    from app.escala.temas import sugerir_tags
+
     return {
         "nome": nome[:150],
         "artista": (artista or "")[:120],
         "tom": tom[:10],
         "cifra": cifra,
+        "tags": sugerir_tags(nome, cifra=cifra),
         "avisos": avisos,
     }
 

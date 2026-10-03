@@ -83,12 +83,20 @@ class Ministerio(SequentialIdDocument):
 
     def cascade_children(self):
         """Ver app/db_utils.py::delete_cascade. Escala e TurnoPlantao sao
-        apagados a parte, explicitamente, em ministerio.routes.excluir_ministerio."""
+        apagados a parte, explicitamente, em ministerio.routes.excluir_ministerio.
+
+        Musica: so as do banco LOCAL deste ministerio vao junto. As OFICIAIS
+        sao da comunidade e outros ministerios usam (`ministerio_id` nelas e
+        so historico) -- antes de apagar, junta o banco da comunidade, pra
+        musica antiga deste ministerio virar oficial em vez de sumir."""
+        from app.escala.banco_musicas import unificar_banco_da_comunidade
         from app.escala.models import Musica
+
+        unificar_banco_da_comunidade(self.comunidade_id)
         return [
             UsuarioMinisterio.objects(ministerio_id=self.id),
             Crianca.objects(ministerio_id=self.id),
-            Musica.objects(ministerio_id=self.id),
+            Musica.objects(ministerio_id=self.id, oficial=False),
         ]
 
     def __repr__(self):

@@ -79,6 +79,14 @@
                     <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Ver escalados</span>
                     <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
                 </a>
+                <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=comunidade.id) }}"
+                   class="flex items-center gap-3 py-3.5 group">
+                    <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
+                        <i class="fa-solid fa-music text-sm"></i>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Banco de musicas</span>
+                    <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+                </a>
                 <a href="{{ url_for('comunidade.calendario', comunidade_id=comunidade.id) }}"
                    class="flex items-center gap-3 py-3.5 group">
                     <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">

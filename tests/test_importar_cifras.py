@@ -83,13 +83,13 @@ def test_extrair_devolve_sugestao_sem_gravar_nada(logged_in_client, app, db):
         musica = resposta.get_json()["musica"]
         assert musica["nome"] == "Digno de Toda Honra"
         assert musica["ja_existe"] is False
-        assert Musica.objects(ministerio_id=ministerio.id).count() == 0
+        assert Musica.objects(comunidade_id=ministerio.comunidade_id).count() == 0
 
 
 def test_extrair_avisa_musica_repetida(logged_in_client, app, db):
     with app.app_context():
         ministerio = _ministerio(logged_in_client)
-        Musica(ministerio_id=ministerio.id, nome="digno de toda honra").save()
+        Musica(comunidade_id=ministerio.comunidade_id, nome="digno de toda honra").save()
         resposta = _extrair(logged_in_client, ministerio.id, _pdf("cifra_cifraclub.pdf"))
         assert resposta.get_json()["musica"]["ja_existe"] is True
 
@@ -116,12 +116,12 @@ def test_salvar_cria_musicas_com_cifra_e_projecao(logged_in_client, app, db):
         )
         assert resposta.get_json()["criadas"] == 2
 
-        digno = Musica.objects(ministerio_id=ministerio.id, nome="Digno").first()
+        digno = Musica.objects(comunidade_id=ministerio.comunidade_id, nome="Digno").first()
         assert digno.tom == "G" and digno.artista == "Exemplo"
         assert "Santo, santo" in digno.cifra_louvor
         # Projecao gerada da cifra: sem acordes, rotulo padronizado, maiusculas.
         assert digno.letra_projecao == "[REFRÃO]\nSANTO, SANTO"
-        assert Musica.objects(ministerio_id=ministerio.id, nome="Outra").first().cifra_louvor is None
+        assert Musica.objects(comunidade_id=ministerio.comunidade_id, nome="Outra").first().cifra_louvor is None
 
 
 def test_importacao_so_pra_quem_gerencia_o_ministerio(logged_in_client, outro_logged_in_client, app, db):
@@ -145,8 +145,8 @@ def test_tela_de_importacao_abre_e_repertorio_tem_o_link(logged_in_client, app, 
         tela = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio/importar")
         assert tela.status_code == 200
         assert "Importar cifras de PDF ou Word" in tela.data.decode("utf-8")
-        repertorio = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio")
-        assert f"/ministerio/{ministerio.id}/repertorio/importar" in repertorio.data.decode("utf-8")
+        banco = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio", follow_redirects=True)
+        assert f"/ministerio/{ministerio.id}/repertorio/importar" in banco.data.decode("utf-8")  # banco local do ministerio
 
 
 # --- Word (.docx) -------------------------------------------------------------
@@ -269,10 +269,10 @@ def test_lote_grande_salvo_em_partes_avisa_uma_vez_com_o_total(logged_in_client,
         logged_in_client.post(url, data={"musicas": json.dumps(parte1), "parcial": "1"})
         logged_in_client.post(url, data={"musicas": json.dumps(parte2), "total": "4"})
 
-        assert Musica.objects(ministerio_id=ministerio.id).count() == 4
+        assert Musica.objects(comunidade_id=ministerio.comunidade_id).count() == 4
         with logged_in_client.session_transaction() as sessao:
             avisos = [mensagem for _categoria, mensagem in sessao.get("_flashes", [])]
-        assert avisos == ["4 musica(s) importada(s) para o repertorio."]
+        assert avisos == ["4 musica(s) importada(s) para o banco do ministerio teste."]
 
 
 # --- Tom identificado pelos acordes (escala.models.detectar_tom) ---------------
@@ -310,9 +310,9 @@ def test_tom_informado_no_arquivo_prevalece_sobre_os_acordes():
 def test_salvar_cifra_em_musica_sem_tom_preenche_o_tom(logged_in_client, app, db):
     with app.app_context():
         ministerio = _ministerio(logged_in_client)
-        sem_tom = Musica(ministerio_id=ministerio.id, nome="Sem tom")
+        sem_tom = Musica(comunidade_id=ministerio.comunidade_id, nome="Sem tom")
         sem_tom.save()
-        com_tom = Musica(ministerio_id=ministerio.id, nome="Com tom", tom="A")
+        com_tom = Musica(comunidade_id=ministerio.comunidade_id, nome="Com tom", tom="A")
         com_tom.save()
         cifra = "G  D  Em  C\nC D G"
         for musica in (sem_tom, com_tom):
@@ -327,7 +327,7 @@ def test_salvar_cifra_em_musica_sem_tom_preenche_o_tom(logged_in_client, app, db
 def test_campo_de_tom_e_um_dropdown_com_os_24_tons(logged_in_client, app, db):
     with app.app_context():
         ministerio = _ministerio(logged_in_client)
-        html = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio").data.decode("utf-8")
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio", follow_redirects=True).data.decode("utf-8")
         assert re.search(r'<select [^>]*name="tom"', html)
         assert '<option value="F#m">F#m — Fá# menor</option>' in html
         assert '<option value="Bb">Bb — Sib</option>' in html
@@ -339,7 +339,7 @@ def test_tom_antigo_com_outra_grafia_continua_selecionado(logged_in_client, app,
     branco e o proximo salvar apagaria o tom."""
     with app.app_context():
         ministerio = _ministerio(logged_in_client)
-        musica = Musica(ministerio_id=ministerio.id, nome="Antiga", tom="A#")
+        musica = Musica(comunidade_id=ministerio.comunidade_id, nome="Antiga", tom="A#")
         musica.save()
         html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
         assert '<option selected value="A#">A#</option>' in html
@@ -350,10 +350,10 @@ def test_tom_invalido_e_recusado(logged_in_client, app, db):
         ministerio = _ministerio(logged_in_client)
         logged_in_client.post(f"/ministerio/{ministerio.id}/repertorio/nova",
                               data={"nome": "Teste", "tom": "Sol maior"})
-        assert Musica.objects(ministerio_id=ministerio.id, nome="Teste").count() == 0
+        assert Musica.objects(comunidade_id=ministerio.comunidade_id, nome="Teste").count() == 0
         logged_in_client.post(f"/ministerio/{ministerio.id}/repertorio/nova",
                               data={"nome": "Teste", "tom": "F#m"})
-        assert Musica.objects(ministerio_id=ministerio.id, nome="Teste").first().tom == "F#m"
+        assert Musica.objects(comunidade_id=ministerio.comunidade_id, nome="Teste").first().tom == "F#m"
 
 
 # --- Reconhecimento de linhas de acordes (escala.models.eh_linha_de_acordes) ---
@@ -477,3 +477,59 @@ def test_detecta_tom_com_notacoes_especiais():
     from app.escala.models import detectar_tom
     assert detectar_tom("|: Am  Dm7  Bø  E7(b9) :|\nN.C.\nF7M  Dm  E7  Am") == "Am"
     assert detectar_tom("C9(no3)  G/B  Am7  F6/9\nFΔ  G  C") == "C"
+
+
+# --- Palavras-chave de tema (escala/temas.py) -----------------------------------
+
+@pytest.mark.parametrize("nome, letra, esperado", [
+    ("Rude Cruz", "Rude cruz se erigiu\nDela o dia fugiu\nMas contemplo esta cruz\nPorque nela Jesus", ["cruz"]),
+    ("Ele é exaltado", "Ele é exaltado, o Rei é exaltado nos céus\nEu O louvarei\nE o Seu nome louvarei", ["adoração", "louvor"]),
+    ("Vou crer", "Colocar minha fé em Ti\nEu creio e confio em Ti\nNão vou vacilar, não vou temer\nVou crer!", ["fé"]),  # "temer" em 1 linha so: nao basta pra "esperança"
+    ("Sem tema", "Uma linha qualquer\nOutra linha qualquer", []),
+])
+def test_sugere_temas_pela_letra(nome, letra, esperado):
+    from app.escala.temas import sugerir_tags
+    assert sugerir_tags(nome, letra=letra) == esperado
+
+
+def test_tema_casa_so_no_comeco_da_palavra():
+    from app.escala.temas import sugerir_tags
+    # "engraçado"/"desgraça" nao sao "graça"; refrao repetido conta 1 vez.
+    assert "graça" not in sugerir_tags("", letra="Que engraçado\nQue engraçado\nDesgraça")
+    assert sugerir_tags("", letra="Tua graça me basta\nTua graça me basta") == []
+
+
+def test_importacao_sugere_e_salva_palavras_chave(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        cifra = ["Vou crer", "", "Tom: G", "G  C9\nColocar minha fé em Ti", "Em  D\nEu creio e confio em Ti"]
+        sugestao = _extrair(logged_in_client, ministerio.id, _docx(cifra), "vou_crer.docx").get_json()["musica"]
+        assert "fé" in sugestao["tags"]
+
+        logged_in_client.post(
+            f"/ministerio/{ministerio.id}/repertorio/importar/salvar",
+            data={"musicas": json.dumps([{"nome": "Vou crer", "tags": "fé, Fe, cruz"}])},
+        )
+        assert Musica.objects(comunidade_id=ministerio.comunidade_id, nome="Vou crer").first().tags == ["fé", "cruz"]
+
+
+def test_gerar_palavras_chave_so_preenche_musica_sem_tags(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        letra = "Rude cruz se erigiu\nMas contemplo esta cruz"
+        sem = Musica(comunidade_id=ministerio.comunidade_id, nome="Rude Cruz", letra_projecao=letra)
+        sem.save()
+        com = Musica(comunidade_id=ministerio.comunidade_id, nome="Outra", letra_projecao=letra, tags=["abertura"])
+        com.save()
+        logged_in_client.post(f"/ministerio/musicas/{ministerio.comunidade_id}/gerar-palavras-chave", data={})
+
+        assert Musica.objects(id=sem.id).first().tags == ["cruz"]
+        assert Musica.objects(id=com.id).first().tags == ["abertura"]  # nunca mexe no que ja tinha
+
+
+def test_gerar_palavras_chave_so_pra_quem_gerencia(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        ministerio_id = _ministerio(logged_in_client).id
+    with sessao_isolada(app):
+        resposta = outro_logged_in_client.post(f"/ministerio/{ministerio_id}/repertorio/gerar-palavras-chave", data={})
+        assert resposta.status_code == 404

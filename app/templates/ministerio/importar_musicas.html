@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Importar cifras - {{ ministerio.nome }}{% endblock %}
+{% block title %}Importar cifras - {{ comunidade.nome }}{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -16,11 +16,11 @@
 
     <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
         <div class="flex items-center gap-3 min-w-0">
-            <a href="{{ url_for('ministerio.repertorio', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+            <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=comunidade.id) if banco.oficial else url_for('ministerio.repertorio', ministerio_id=banco.ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
             </a>
             <div class="min-w-0">
-                <p class="text-xs {{ tema.text_secondary }} truncate">{{ ministerio.nome }}</p>
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ banco.titulo }} &middot; {{ comunidade.nome }}</p>
                 <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Importar cifras de PDF ou Word</h1>
             </div>
         </div>
@@ -107,6 +107,8 @@
                         </optgroup>
                     </select>
                 </div>
+                <input type="text" data-campo="tags" maxlength="300" placeholder="Palavras-chave (ex: amor, cruz, graça)"
+                       aria-label="Palavras-chave" class="w-full {{ CAMPO }}">
                 <p data-ja-existe class="hidden text-xs font-semibold text-amber-500">
                     <i class="fa-solid fa-triangle-exclamation mr-1"></i>Ja existe uma musica com esse nome no repertorio -- desmarcada pra nao duplicar.
                 </p>
@@ -143,8 +145,8 @@
 
 <script>
 (function () {
-    var URL_EXTRAIR = "{{ url_for('ministerio.extrair_musica_pdf', ministerio_id=ministerio.id) }}";
-    var URL_SALVAR = "{{ url_for('ministerio.salvar_musicas_importadas', ministerio_id=ministerio.id) }}";
+    var URL_EXTRAIR = "{{ url_for('ministerio.extrair_musica_pdf', **banco.args) }}";
+    var URL_SALVAR = "{{ url_for('ministerio.salvar_musicas_importadas', **banco.args) }}";
     var LIMITE_BYTES = 2 * 1024 * 1024;  // MAX_CONTENT_LENGTH do servidor
     var LEITURAS_AO_MESMO_TEMPO = 3;     // poucas em paralelo: rapido sem sobrecarregar o servidor
 
@@ -197,6 +199,7 @@
         ['nome', 'artista', 'cifra'].forEach(function (campo) {
             card.querySelector('[data-campo="' + campo + '"]').value = musica[campo] || '';
         });
+        card.querySelector('[data-campo="tags"]').value = (musica.tags || []).join(', ');
         // Tom fora da lista (outra grafia, ex: A#): entra como opcao propria
         // no topo, senao o select ficaria em branco e o tom se perderia.
         var seletorTom = card.querySelector('[data-campo="tom"]');
@@ -370,7 +373,7 @@
         lista.querySelectorAll('[data-card]').forEach(function (card) {
             if (!card.querySelector('[data-incluir]').checked) return;
             var item = {};
-            ['nome', 'artista', 'tom', 'cifra'].forEach(function (campo) {
+            ['nome', 'artista', 'tom', 'tags', 'cifra'].forEach(function (campo) {
                 item[campo] = card.querySelector('[data-campo="' + campo + '"]').value;
             });
             musicas.push(item);

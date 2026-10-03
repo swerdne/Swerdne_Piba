@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}{{ pasta.nome }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} blur-3xl -z-0"></div>
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=pasta.comunidade_id) ~ '#pastas' if da_comunidade else url_for('main.dashboard') }}"
+               class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate"><i class="fa-solid fa-folder mr-1 text-amber-500"></i>Pasta &middot; {{ pasta.comunidade.nome }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">{{ pasta.nome }}</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 pt-2 pb-16 max-w-xl lg:max-w-3xl mx-auto space-y-5">
+        {% set criador = pessoas.get(pasta.criada_por_id) %}
+        <p class="text-xs {{ tema.text_secondary }}">
+            {{ pasta.itens|length }} musica(s){% if criador %} &middot; criada por {{ criador.name or criador.email }}{% endif %}
+            &middot; {{ pasta.criada_em.strftime('%d/%m/%Y') }}
+        </p>
+
+        <!-- Baixar: mesma folha de imprimir/salvar em PDF do repertorio das escalas -->
+        <div class="grid grid-cols-2 gap-2">
+            <a href="{{ url_for('ministerio.folha_pasta', pasta_id=pasta.id, tipo='cifras') }}" target="_blank" rel="noopener"
+               class="flex items-center justify-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-3 rounded-2xl transition">
+                <i class="fa-solid fa-guitar"></i>Baixar cifras
+            </a>
+            <a href="{{ url_for('ministerio.folha_pasta', pasta_id=pasta.id, tipo='projecao') }}" target="_blank" rel="noopener"
+               class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-3 rounded-2xl hover:opacity-90 transition">
+                <i class="fa-solid fa-display"></i>Baixar projecao
+            </a>
+        </div>
+        <p class="text-xs {{ tema.text_secondary }} -mt-3">Abre a folha pronta; use "Imprimir / PDF" pra salvar o arquivo.</p>
+
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
+            {% for it in itens %}
+            <div class="flex items-center gap-3 px-4 py-3">
+                <span class="text-xs font-bold {{ tema.text_secondary }} w-5 text-right shrink-0">{{ loop.index }}</span>
+                <div class="flex-1 min-w-0">
+                    {% if it.musica and da_comunidade %}
+                    <a href="{{ url_for('ministerio.musica', musica_id=it.musica.id) }}" class="text-sm font-semibold {{ tema.text_primary }} hover:underline truncate block">{{ it.item.nome }}</a>
+                    {% else %}
+                    <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ it.item.nome }}</p>
+                    {% endif %}
+                    <p class="text-xs {{ tema.text_secondary }} truncate">
+                        {% if it.item.momento %}{{ it.item.momento }} &middot; {% endif %}
+                        {% if it.musica %}{{ it.musica.artista or 'Artista nao informado' }}{% else %}Musica avulsa (fora do banco){% endif %}
+                    </p>
+                </div>
+                {% if it.item.tom %}<span class="text-xs font-bold {{ tema.accent_text }} {{ tema.accent_soft_bg }} rounded-lg px-2 py-1 shrink-0">{{ it.item.tom }}</span>{% endif %}
+                {% if pode_editar %}
+                <form method="POST" action="{{ url_for('ministerio.remover_da_pasta', pasta_id=pasta.id, indice=it.indice) }}">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" aria-label="Tirar da pasta" title="Tirar da pasta" class="{{ tema.text_secondary }} hover:text-red-400 transition px-1">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="px-4 py-4 text-sm {{ tema.text_secondary }}">Pasta vazia.</p>
+            {% endfor %}
+        </div>
+
+        {% if pode_editar %}
+        <form method="POST" action="{{ url_for('ministerio.adicionar_na_pasta', pasta_id=pasta.id) }}"
+              class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2.5">
+            {{ acao_form.hidden_tag() }}
+            <p class="text-xs font-semibold {{ tema.text_secondary }}">Adicionar musica</p>
+            <select name="musica_id" required class="w-full {{ CAMPO }}">
+                <option value="">Escolha uma musica</option>
+                {% for grupo, lista in disponiveis.items() if lista %}
+                <optgroup label="{{ grupo }}">
+                    {% for m in lista %}<option value="{{ m.id }}">{{ m.nome }}</option>{% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+            <div class="flex gap-2">
+                <select name="tom" aria-label="Tom" class="flex-1 {{ CAMPO }}">
+                    <option value="">Tom original</option>
+                    <optgroup label="Maiores">{% for v, r in tons_maiores %}<option value="{{ v }}">{{ r }}</option>{% endfor %}</optgroup>
+                    <optgroup label="Menores">{% for v, r in tons_menores %}<option value="{{ v }}">{{ r }}</option>{% endfor %}</optgroup>
+                </select>
+                <button type="submit" class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 rounded-full transition">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        </form>
+        {% endif %}
+
+        {% if pode_compartilhar %}
+        <!-- Compartilhar com qualquer conta (de qualquer ministerio/comunidade) -->
+        <section id="compartilhar" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3 scroll-mt-4">
+            <div>
+                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-share-nodes mr-1 {{ tema.accent_text }}"></i>Compartilhar</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-0.5">
+                    Envie pra qualquer pessoa cadastrada, de qualquer ministerio. A pasta aparece na tela inicial dela, com as cifras pra baixar.
+                </p>
+            </div>
+            <form method="POST" action="{{ url_for('ministerio.compartilhar_pasta', pasta_id=pasta.id) }}" data-form-compartilhar class="relative">
+                {{ acao_form.hidden_tag() }}
+                <input type="hidden" name="usuario_id" data-usuario-escolhido>
+                <input type="search" data-busca-pessoa autocomplete="off" placeholder="Buscar por nome ou e-mail"
+                       data-url="{{ url_for('ministerio.buscar_usuario_pasta', pasta_id=pasta.id) }}"
+                       class="w-full {{ CAMPO }}">
+                <div data-resultados class="hidden mt-2 border {{ tema.card_border }} rounded-xl overflow-hidden divide-y {{ tema.divide }}"></div>
+            </form>
+
+            {% if pasta.compartilhada_com %}
+            <div>
+                <p class="text-xs font-semibold {{ tema.text_secondary }} mb-1.5">Ja enviada para</p>
+                <ul class="space-y-1">
+                    {% for c in pasta.compartilhada_com %}
+                    {% set pessoa = pessoas.get(c.usuario_id) %}
+                    <li class="flex items-center justify-between gap-2 text-sm">
+                        <span class="{{ tema.text_primary }} truncate">{{ pessoa.name or pessoa.email if pessoa else 'conta removida' }}</span>
+                        <span class="text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 {{ 'bg-emerald-500/15 text-emerald-600' if c.visto_em else 'bg-amber-500/15 text-amber-600' }}">
+                            {{ 'visto' if c.visto_em else 'ainda nao abriu' }}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if pode_editar %}
+        <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden">
+            <summary class="px-4 py-3 text-xs font-semibold {{ tema.text_secondary }} cursor-pointer select-none">Renomear ou excluir a pasta</summary>
+            <div class="px-4 pb-4 space-y-3">
+                <form method="POST" action="{{ url_for('ministerio.renomear_pasta', pasta_id=pasta.id) }}" class="flex gap-2">
+                    {{ acao_form.hidden_tag() }}
+                    <input type="text" name="nome" value="{{ pasta.nome }}" required maxlength="120" class="flex-1 min-w-0 {{ CAMPO }}">
+                    <button type="submit" class="shrink-0 border {{ tema.card_border }} {{ tema.text_primary }} text-xs font-semibold px-4 rounded-full hover:bg-black/5 transition">Salvar</button>
+                </form>
+                <form method="POST" action="{{ url_for('ministerio.excluir_pasta', pasta_id=pasta.id) }}"
+                      onsubmit="return confirm('Excluir a pasta? As musicas continuam no banco.');">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" class="text-xs font-semibold text-red-500 hover:underline"><i class="fa-solid fa-trash mr-1"></i>Excluir pasta</button>
+                </form>
+            </div>
+        </details>
+        {% endif %}
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+
+<script>
+    (function () {
+        var busca = document.querySelector('[data-busca-pessoa]');
+        if (!busca) return;
+        var form = document.querySelector('[data-form-compartilhar]');
+        var escolhido = document.querySelector('[data-usuario-escolhido]');
+        var resultados = document.querySelector('[data-resultados]');
+        var espera = null, consulta = 0;
+
+        function limpar() { resultados.innerHTML = ''; resultados.classList.add('hidden'); }
+
+        busca.addEventListener('input', function () {
+            clearTimeout(espera);
+            var termo = busca.value.trim();
+            if (termo.length < 2) { limpar(); return; }
+            espera = setTimeout(function () {
+                var minha = ++consulta;
+                fetch(busca.getAttribute('data-url') + '?q=' + encodeURIComponent(termo), { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (pessoas) {
+                        if (minha !== consulta) return;
+                        resultados.innerHTML = '';
+                        if (!pessoas.length) {
+                            var nada = document.createElement('p');
+                            nada.className = 'px-3 py-2 text-xs {{ tema.text_secondary }}';
+                            nada.textContent = 'Ninguem encontrado com esse nome ou e-mail.';
+                            resultados.appendChild(nada);
+                        }
+                        pessoas.forEach(function (p) {
+                            var botao = document.createElement('button');
+                            botao.type = 'button';
+                            botao.className = 'w-full text-left px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.card_bg_hover }} transition';
+                            botao.textContent = p.label;
+                            botao.addEventListener('click', function () {
+                                if (!confirm('Compartilhar esta pasta com ' + p.label + '?')) return;
+                                escolhido.value = p.id;
+                                form.submit();
+                            });
+                            resultados.appendChild(botao);
+                        });
+                        resultados.classList.remove('hidden');
+                    })
+                    .catch(limpar);
+            }, 300);
+        });
+    })();
+</script>
+{% endblock %}

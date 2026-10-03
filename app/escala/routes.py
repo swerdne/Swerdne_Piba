@@ -4,6 +4,7 @@ import os
 import io
 from datetime import datetime, time, timedelta, timezone
 
+from markupsafe import Markup
 from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from mongoengine.queryset.visitor import Q as MongoQ
@@ -49,6 +50,9 @@ from app.escala.models import (
     mensagem_para,
     trocar_atribuicao,
     avisos_disponibilidade_em_lote,
+    itens_para_folha,
+    PastaMusicas,
+    ItemPasta,
 )
 from app.emailing import enviar_email, EmailNaoEnviadoError
 from app.sms import enviar_sms, SmsNaoEnviadoError
@@ -1598,12 +1602,27 @@ def _escala_da_equipe_ou_404(escala_id):
 
 # --- Repertorio da escala puxando do banco de musicas ----------------------
 
+def _musicas_da_escala(escala):
+    """Musicas que a escala pode usar: banco OFICIAL da comunidade + banco
+    LOCAL do proprio ministerio (ver escala/banco_musicas.py). Junta os
+    bancos antigos se ainda nao foi."""
+    from app.escala.banco_musicas import musicas_disponiveis_pra_escala, unificar_banco_da_comunidade
+
+    ministerio = escala.ministerio
+    unificar_banco_da_comunidade(ministerio.comunidade_id)
+    return musicas_disponiveis_pra_escala(ministerio)
+
+
 def _form_item_banco(escala):
     form = ItemDoBancoForm(prefix="banco")
-    form.musica_id.choices = [
-        (m.id, f"{m.nome}" + (f" - {m.artista}" if m.artista else ""))
-        for m in Musica.objects(ministerio_id=escala.ministerio_id).only("id", "nome", "artista").order_by("nome")
-    ]
+    oficiais, locais = [], []
+    for m in _musicas_da_escala(escala).only("id", "nome", "artista", "oficial").order_by("nome"):
+        opcao = (m.id, f"{m.nome}" + (f" - {m.artista}" if m.artista else ""))
+        (locais if m.oficial is False else oficiais).append(opcao)
+    # So agrupa quando o ministerio tem banco local -- senao fica a lista simples de sempre.
+    form.musica_id.choices = (
+        {"Banco da comunidade": oficiais, f"Banco do {escala.ministerio.nome}": locais} if locais else oficiais
+    )
     return form
 
 
@@ -1616,9 +1635,9 @@ def adicionar_musica_do_banco(escala_id):
         erros = [erro for lista in form.errors.values() for erro in lista]
         flash(erros[0] if erros else "Escolha uma musica do repertorio.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
-    musica = Musica.objects(id=form.musica_id.data, ministerio_id=escala.ministerio_id).first()
+    musica = _musicas_da_escala(escala).filter(id=form.musica_id.data).first()
     if musica is None:
-        flash("Musica nao encontrada no repertorio deste ministerio.", "danger")
+        flash("Musica nao encontrada no banco da comunidade nem no do ministerio.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
     maior_ordem = max([item.ordem for item in escala.repertorio], default=-1)
     ItemRepertorio(
@@ -1632,6 +1651,33 @@ def adicionar_musica_do_banco(escala_id):
     ).save()
     flash(f'"{musica.nome}" adicionada ao repertorio.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+
+
+@bp.route("/<int:escala_id>/repertorio/pasta", methods=["POST"])
+@login_required
+def repertorio_para_pasta(escala_id):
+    """Copia o repertorio da escala (com o tom do dia e o momento de cada
+    musica) pra uma pasta do banco e abre ela no ponto de compartilhar -- e
+    assim que se envia o repertorio de um culto pra qualquer pessoa."""
+    escala = _escala_do_usuario_ou_404(escala_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+    itens = escala.repertorio
+    if not itens:
+        flash("O repertorio desta escala ainda esta vazio.", "danger")
+        return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
+    data_curta = escala.data.strftime("%d/%m") if escala.data else ""
+    pasta = PastaMusicas(
+        comunidade_id=escala.ministerio.comunidade_id,
+        nome=f"{escala.nome} {data_curta}".strip()[:120],
+        criada_por_id=current_user.id,
+        escala_id=escala.id,
+        itens=[ItemPasta(musica_id=i.musica_id, nome=i.nome_musica, tom=i.tom, momento=i.momento) for i in itens],
+    )
+    pasta.save()
+    flash("Repertorio salvo como pasta. Escolha abaixo com quem compartilhar.", "success")
+    return redirect(url_for("ministerio.pasta", pasta_id=pasta.id) + "#compartilhar")
 
 
 @bp.route("/<int:escala_id>/repertorio/observacoes", methods=["POST"])
@@ -1655,31 +1701,22 @@ def folha_repertorio(escala_id, tipo):
     "projecao" = letras em blocos, sem cifra (equipe de midia/projecao);
     "cifras" = versao do louvor, com acordes (quem toca/canta)."""
     escala = _escala_da_equipe_ou_404(escala_id)
-    itens = []
-    for item in escala.repertorio:
-        musica = item.musica
-        tom = item.tom or (musica.tom if musica else None)
-        tom_original = None
-        # 1o a cifra salva nesse tom (original ou versao); senao, a original
-        # transposta na hora pro tom do dia.
-        cifra = musica.cifra_no_tom(tom) if musica else None
-        if musica and cifra is None and musica.cifra_louvor:
-            cifra = musica.cifra_louvor
-            semitons = semitons_entre(musica.tom, tom)
-            if semitons:
-                cifra = transpor_cifra(cifra, semitons, prefere_bemol(tom))
-                tom_original = musica.tom
-        itens.append({
-            "item": item,
-            "musica": musica,
-            "tom": tom,
-            "tom_original": tom_original,
-            "blocos": blocos_da_letra(musica.letra_projecao) if musica else [],
-            "cifra": cifra,
-        })
+    itens = itens_para_folha(
+        (item.nome_musica, item.momento, item.musica, item.tom) for item in escala.repertorio
+    )
+    data_curta = escala.data.strftime("%d.%m.%y") if escala.data else "sem data"
     return render_template(
         "escala/folha_repertorio.html",
-        escala=escala,
         tipo=tipo,
         itens=itens,
+        nome_documento=escala.nome,
+        # Markup.format escapa os valores (nome vem do usuario) e mantem o &ndash;.
+        titulo=Markup("Escala {} &ndash; [{}]").format(escala.departamento or "", data_curta),
+        subtitulo=(
+            Markup("{} &ndash; {}h").format(escala.nome, escala.horario.strftime("%H:%M"))
+            if escala.horario else escala.nome
+        ),
+        voltar_url=url_for("escala.detalhe", escala_id=escala.id),
+        observacoes=escala.observacoes_repertorio,
+        vazio="Nenhuma musica no repertorio desta escala.",
     )

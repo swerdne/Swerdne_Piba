@@ -34,7 +34,7 @@ def _montar(cliente, dias=3):
 def _nova_musica(cliente, ministerio_id, nome="Grande e o Senhor", tom="G", tags="adoracao, abertura"):
     cliente.post(f"/ministerio/{ministerio_id}/repertorio/nova",
                  data={"nome": nome, "artista": "Adhemar", "tom": tom, "tags": tags, "link": ""})
-    return Musica.objects(ministerio_id=ministerio_id, nome=nome).first()
+    return Musica.objects(nome=nome).order_by("-id").first()  # banco e da comunidade (1 por teste)
 
 
 def _preencher(cliente, musica):
@@ -70,7 +70,8 @@ def test_lider_cadastra_musica_com_tags(logged_in_client, app, db):
         assert musica.tom == "G"
         assert musica.tags == ["adoracao", "abertura"]
 
-        html = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio").data.decode("utf-8")
+        # Endereco antigo (por ministerio) leva pro banco da comunidade.
+        html = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio", follow_redirects=True).data.decode("utf-8")
         assert "Grande e o Senhor" in html and "adoracao" in html
 
 
@@ -138,14 +139,26 @@ def test_adicionar_do_banco_copia_nome_e_tom(logged_in_client, app, db):
         assert "Folha de projecao" in html and "Abertura" in html
 
 
-def test_musica_de_outro_ministerio_nao_entra(logged_in_client, app, db):
+def test_escala_usa_banco_oficial_e_o_local_do_proprio_ministerio(logged_in_client, app, db):
+    """Entra na escala: musica do banco OFICIAL da comunidade e do banco LOCAL
+    do proprio ministerio. Nao entra: banco local de OUTRO ministerio nem
+    musica de OUTRA comunidade."""
     with app.app_context():
         comunidade, ministerio, escala = _montar(logged_in_client)
+        logged_in_client.post(f"/ministerio/musicas/{comunidade.id}/nova", data={"nome": "Oficial"})
+        oficial = Musica.objects(nome="Oficial").first()
+        local = _nova_musica(logged_in_client, ministerio.id, nome="Local")
         outro = _criar_ministerio(logged_in_client, comunidade.id, nome="Outro")
-        alheia = _nova_musica(logged_in_client, outro.id)
-        logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
-                              data={"banco-musica_id": alheia.id, "banco-momento": "", "banco-tom": ""})
-        assert ItemRepertorio.objects(escala_id=escala.id).count() == 0
+        local_de_outro = _nova_musica(logged_in_client, outro.id, nome="Local de outro")
+        outra_comunidade = _criar_comunidade(logged_in_client, "Outra Comunidade")
+        ministerio_de_fora = _criar_ministerio(logged_in_client, outra_comunidade.id, nome="De fora")
+        de_fora = _nova_musica(logged_in_client, ministerio_de_fora.id, nome="De fora")
+        assert oficial.oficial and local.oficial is False and local.ministerio_id == ministerio.id
+
+        for musica in (oficial, local, local_de_outro, de_fora):
+            logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
+                                  data={"banco-musica_id": musica.id, "banco-momento": "", "banco-tom": ""})
+        assert [i.musica_id for i in ItemRepertorio.objects(escala_id=escala.id)] == [oficial.id, local.id]
 
 
 def test_folhas_de_projecao_e_cifras(logged_in_client, app, db):

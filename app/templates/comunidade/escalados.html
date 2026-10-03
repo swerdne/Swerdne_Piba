@@ -42,6 +42,18 @@
 
     <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
 
+        <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=comunidade.id) }}"
+           class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm px-4 py-3.5 group">
+            <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
+                <i class="fa-solid fa-music text-sm"></i>
+            </div>
+            <span class="flex-1 min-w-0">
+                <span class="block text-sm font-semibold {{ tema.text_primary }}">Banco de musicas</span>
+                <span class="block text-xs {{ tema.text_secondary }}">Letras e cifras de todas as musicas da comunidade</span>
+            </span>
+            <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+        </a>
+
         {% if ministerios %}
         <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
             <h2 class="text-sm font-semibold {{ tema.text_primary }} mb-3">Ministerios</h2>

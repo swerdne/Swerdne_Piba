@@ -730,16 +730,33 @@ class VersaoCifra(mongoengine.EmbeddedDocument):
 
 
 class Musica(SequentialIdDocument):
-    """Musica do banco de repertorio de um Ministerio. Uma unica musica com
+    """Musica de um banco de musicas -- ver escala/banco_musicas.py. Dois
+    niveis: o banco OFICIAL da comunidade (oficial=True; so admin altera, usado
+    por todos os ministerios) e o banco LOCAL de cada ministerio (oficial=False,
+    ministerio_id = dono; o lider adiciona a vontade e o admin pode aprovar
+    pra virar oficial). Uma unica musica com
     duas versoes editadas separadamente: letra_projecao (pro telao: blocos
     sem cifra, rotulos tipo [VERSO 1]/[REFRAO]) e cifra_louvor (pra quem toca:
     acordes em cima da letra, alinhamento monoespacado). As escalas apontam
     pra ela via ItemRepertorio.musica_id."""
 
-    meta = {"collection": "musicas"}
+    meta = {"collection": "musicas", "indexes": ["comunidade_id", "ministerio_id"]}
     _nome_sequencia = "musicas"
 
-    ministerio_id = mongoengine.IntField(required=True)
+    # Comunidade dona (oficial e local). None so em musica antiga, de quando
+    # cada ministerio tinha o proprio banco -- banco_musicas.
+    # unificar_banco_da_comunidade preenche (e junta repetidas) na 1a vez que o
+    # banco da comunidade e usado; essas antigas viram OFICIAIS.
+    comunidade_id = mongoengine.IntField()
+    # Musica LOCAL: o ministerio dono. Musica oficial: so historico de onde foi
+    # cadastrada/aprovada (nao usar pra permissao de oficial).
+    ministerio_id = mongoengine.IntField()
+    # True (padrao, inclui as antigas sem o campo) = banco oficial da
+    # comunidade; False = banco local do ministerio_id.
+    oficial = mongoengine.BooleanField(default=True)
+    # Admin escondeu esta musica local da lista "Sugestoes dos ministerios"
+    # (nao quis aprovar) -- ela continua no banco local normalmente.
+    sugestao_dispensada = mongoengine.BooleanField(default=False)
     nome = mongoengine.StringField(required=True, max_length=150)
     artista = mongoengine.StringField(max_length=120)
     tom = mongoengine.StringField(max_length=10)
@@ -781,7 +798,65 @@ class Musica(SequentialIdDocument):
         return tons + [(v.tom, False) for v in self.versoes_cifra or []]
 
     def __repr__(self):
-        return f"<Musica {self.nome!r} do ministerio {self.ministerio_id}>"
+        banco = "oficial" if self.oficial else f"local do ministerio {self.ministerio_id}"
+        return f"<Musica {self.nome!r} ({banco}) da comunidade {self.comunidade_id}>"
+
+
+class ItemPasta(mongoengine.EmbeddedDocument):
+    """Uma musica dentro de uma PastaMusicas. `musica_id` None = musica avulsa
+    (veio de um repertorio de escala com musica fora do banco)."""
+
+    musica_id = mongoengine.IntField()
+    nome = mongoengine.StringField(required=True, max_length=150)
+    tom = mongoengine.StringField(max_length=10)
+    momento = mongoengine.StringField(max_length=60)
+
+    @property
+    def musica(self):
+        return Musica.objects(id=self.musica_id).first() if self.musica_id else None
+
+
+class CompartilhamentoPasta(mongoengine.EmbeddedDocument):
+    """Pasta enviada pra uma conta (de qualquer ministerio/comunidade) --
+    aparece na tela inicial dela ate abrir (visto_em)."""
+
+    usuario_id = mongoengine.IntField(required=True)
+    enviado_por_id = mongoengine.IntField(required=True)
+    enviado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    visto_em = mongoengine.DateTimeField()
+
+
+class PastaMusicas(SequentialIdDocument):
+    """Um grupo de musicas (repertorio de um culto, uma selecao...) -- modo
+    "Pastas" do banco de musicas. Montada a mao a partir do banco ou copiada
+    do repertorio de uma escala (com o tom do dia de cada musica). Pode ser
+    compartilhada com qualquer conta da plataforma, que ganha acesso de
+    LEITURA a ela e as folhas (cifras/projecao) pra baixar -- mesmo sem ser
+    da comunidade. Ver ministerio.routes (secao "Pastas")."""
+
+    meta = {"collection": "pastas_musicas", "indexes": ["comunidade_id", "compartilhada_com.usuario_id"]}
+    _nome_sequencia = "pastas_musicas"
+
+    comunidade_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=120)
+    criada_por_id = mongoengine.IntField(required=True)
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    # Escala de onde foi copiada (so informativo -- a pasta e uma copia, nao
+    # muda se o repertorio da escala mudar depois).
+    escala_id = mongoengine.IntField()
+    itens = mongoengine.EmbeddedDocumentListField(ItemPasta)
+    compartilhada_com = mongoengine.EmbeddedDocumentListField(CompartilhamentoPasta)
+
+    @property
+    def comunidade(self):
+        from app.comunidade.models import Comunidade
+        return Comunidade.objects(id=self.comunidade_id).first()
+
+    def compartilhamento_de(self, usuario_id):
+        return next((c for c in self.compartilhada_com if c.usuario_id == usuario_id), None)
+
+    def __repr__(self):
+        return f"<PastaMusicas {self.nome!r} da comunidade {self.comunidade_id}>"
 
 
 _ROTULO_SECAO = re.compile(r"^\s*\[(.+?)\]\s*$")
@@ -1121,3 +1196,33 @@ def eh_tom_valido(tom):
     """Tom escrito como cifra (G, F#m, Bb...) -- inclui grafias fora da lista
     (A#, Db...) que musicas antigas ja tenham salvas."""
     return bool(_TOM_COMPLETO.match(tom or ""))
+
+
+# --- Folha de repertorio (cifras/projecao) -- escala ou pasta ------------------
+
+def itens_para_folha(entradas):
+    """Monta os itens da folha de impressao (templates/escala/
+    folha_repertorio.html) a partir de [(nome, momento, musica_ou_None, tom)].
+    Cifra: 1o a salva nesse tom (original ou versao); senao a original
+    transposta na hora pro tom pedido."""
+    itens = []
+    for nome, momento, musica, tom in entradas:
+        tom = tom or (musica.tom if musica else None)
+        tom_original = None
+        cifra = musica.cifra_no_tom(tom) if musica else None
+        if musica and cifra is None and musica.cifra_louvor:
+            cifra = musica.cifra_louvor
+            semitons = semitons_entre(musica.tom, tom)
+            if semitons:
+                cifra = transpor_cifra(cifra, semitons, prefere_bemol(tom))
+                tom_original = musica.tom
+        itens.append({
+            "nome": nome,
+            "momento": momento,
+            "musica": musica,
+            "tom": tom,
+            "tom_original": tom_original,
+            "blocos": blocos_da_letra(musica.letra_projecao) if musica else [],
+            "cifra": cifra,
+        })
+    return itens

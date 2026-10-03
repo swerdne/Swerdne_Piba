@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Repertorio - {{ ministerio.nome }}{% endblock %}
+{% block title %}{{ banco.titulo }} - {{ comunidade.nome }}{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -7,6 +7,7 @@
 
 {% from "_macros.html" import logo_inicio, nav_inferior with context %}
 {% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+{% set CHIP = "shrink-0 text-xs font-semibold rounded-full px-3 py-1.5 border transition" %}
 
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
@@ -16,21 +17,40 @@
 
     <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
         <div class="flex items-center gap-3 min-w-0">
-            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+            <a href="{{ voltar_url }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
             </a>
             <div class="min-w-0">
-                <p class="text-xs {{ tema.text_secondary }} truncate">{{ ministerio.nome }}</p>
-                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Repertorio</h1>
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ comunidade.nome }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">{{ banco.titulo }}</h1>
             </div>
         </div>
         {{ logo_inicio(tema) }}
     </header>
 
-    <main class="px-4 sm:px-6 pt-2 pb-8 max-w-xl lg:max-w-3xl mx-auto space-y-5">
+    <main class="px-4 sm:px-6 pt-2 pb-28 max-w-xl lg:max-w-3xl mx-auto space-y-5">
+        <!-- Qual banco: o oficial da comunidade e o local de cada ministerio (ver escala/banco_musicas.py) -->
+        <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="Bancos de musicas">
+            <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=comunidade.id) }}"
+               class="{{ CHIP }} {{ tema.accent_bg ~ ' text-white border-transparent' if banco.oficial else tema.card_bg ~ ' ' ~ tema.card_border ~ ' ' ~ tema.text_secondary }}">
+                <i class="fa-solid fa-star mr-1"></i>Banco da comunidade
+            </a>
+            {% for m in ministerios %}
+            <a href="{{ url_for('ministerio.repertorio', ministerio_id=m.id) }}"
+               class="{{ CHIP }} {{ tema.accent_bg ~ ' text-white border-transparent' if banco.ministerio and banco.ministerio.id == m.id else tema.card_bg ~ ' ' ~ tema.card_border ~ ' ' ~ tema.text_secondary }}">
+                {{ m.nome }}
+            </a>
+            {% endfor %}
+        </nav>
+
         <p class="text-sm {{ tema.text_secondary }}">
-            Cada musica tem duas versoes: <span class="font-semibold {{ tema.text_primary }}">Projecao</span> (so a letra, pro telao)
-            e <span class="font-semibold {{ tema.text_primary }}">Louvor</span> (com cifras, pra quem toca).
+            {% if banco.oficial %}
+            Banco <span class="font-semibold {{ tema.text_primary }}">oficial</span> da comunidade: todos os ministerios usam estas musicas nas escalas.
+            {% if not pode_gerenciar %}So os admins alteram -- pra sugerir uma musica, cadastre no banco do seu ministerio e o admin pode aprovar.{% endif %}
+            {% else %}
+            Banco <span class="font-semibold {{ tema.text_primary }}">local</span> do {{ banco.ministerio.nome }}: as escalas dele usam estas musicas e as do banco da comunidade.
+            O admin da comunidade pode aprovar uma musica daqui pra virar oficial.
+            {% endif %}
         </p>
 
         {% if pode_gerenciar %}
@@ -38,7 +58,7 @@
             <summary class="flex items-center gap-2 px-4 py-3.5 text-sm font-semibold {{ tema.accent_text }} cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
                 <i class="fa-solid fa-plus"></i>Nova musica
             </summary>
-            <form method="POST" action="{{ url_for('ministerio.nova_musica', ministerio_id=ministerio.id) }}" class="px-4 pb-4 space-y-2.5">
+            <form method="POST" action="{{ url_for('ministerio.nova_musica', **banco.args) }}" class="px-4 pb-4 space-y-2.5">
                 {{ form.hidden_tag() }}
                 {{ form.nome(class_="w-full " ~ CAMPO, placeholder="Nome da musica") }}
                 <div class="grid grid-cols-[1fr_9rem] gap-2">
@@ -52,79 +72,285 @@
                 </button>
             </form>
         </details>
-        <a href="{{ url_for('ministerio.importar_musicas', ministerio_id=ministerio.id) }}"
+        <a href="{{ url_for('ministerio.importar_musicas', **banco.args) }}"
            class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm px-4 py-3.5 text-sm font-semibold {{ tema.accent_text }} {{ tema.card_bg_hover }} transition">
             <i class="fa-solid fa-file-import"></i>Importar varias cifras (PDF ou Word)
             <i class="fa-solid fa-chevron-right text-xs ml-auto"></i>
         </a>
+        {% if sem_tags %}
+        <form method="POST" action="{{ url_for('ministerio.gerar_palavras_chave', **banco.args) }}"
+              class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm px-4 py-3">
+            {{ acao_form.hidden_tag() }}
+            <p class="flex-1 text-xs {{ tema.text_secondary }}">
+                {{ sem_tags }} musica(s) sem palavras-chave. O app le a letra e sugere temas (amor, cruz, graça...) pra facilitar a busca.
+            </p>
+            <button type="submit" class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-4 py-2 rounded-full transition">
+                <i class="fa-solid fa-tags mr-1"></i>Gerar palavras-chave
+            </button>
+        </form>
+        {% endif %}
         {% endif %}
 
-        {% if musicas %}
-        <div class="relative">
-            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-sm {{ tema.text_secondary }}"></i>
-            <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tom ou tag"
-                   class="w-full pl-10 {{ CAMPO }}">
+        {% if sugestoes %}
+        <!-- So admin, no banco oficial: musicas dos bancos locais que podem virar oficiais -->
+        <section id="sugestoes" class="{{ tema.card_bg }} border border-amber-500/40 rounded-3xl shadow-sm overflow-hidden scroll-mt-4">
+            <div class="px-4 py-3 border-b {{ tema.card_border }}">
+                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-inbox mr-1 text-amber-500"></i>Sugestoes dos ministerios ({{ sugestoes|length }})</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-0.5">Musicas que os lideres cadastraram nos bancos locais. Aprove as que devem fazer parte do banco oficial.</p>
+            </div>
+            <div class="divide-y {{ tema.divide }}">
+                {% for s in sugestoes %}
+                <div class="flex items-center gap-3 px-4 py-3">
+                    <a href="{{ url_for('ministerio.musica', musica_id=s.musica.id) }}" class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ s.musica.nome }}</p>
+                        <p class="text-xs {{ tema.text_secondary }} truncate">{{ s.ministerio }}{% if s.musica.tom %} &middot; Tom {{ s.musica.tom }}{% endif %}{% if s.musica.artista %} &middot; {{ s.musica.artista }}{% endif %}</p>
+                    </a>
+                    <form method="POST" action="{{ url_for('ministerio.dispensar_sugestao', musica_id=s.musica.id) }}">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" title="Ocultar das sugestoes (continua no banco do ministerio)" aria-label="Ocultar sugestao"
+                                class="{{ tema.text_secondary }} hover:text-red-400 transition text-sm px-2"><i class="fa-solid fa-eye-slash"></i></button>
+                    </form>
+                    <form method="POST" action="{{ url_for('ministerio.aprovar_musica', musica_id=s.musica.id) }}">
+                        {{ acao_form.hidden_tag() }}
+                        <button type="submit" class="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition">
+                            <i class="fa-solid fa-check mr-1"></i>Aprovar
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- Modo de exibicao: lista de musicas ou agrupadas em pastas (lembrado no navegador) -->
+        <div class="flex items-center justify-between gap-3">
+            <div class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Modo de exibicao">
+                <button type="button" data-modo="lista" role="tab"
+                        class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list mr-1"></i>Lista</button>
+                <button type="button" data-modo="pastas" role="tab"
+                        class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-folder mr-1"></i>Pastas</button>
+            </div>
+            <span class="text-xs {{ tema.text_secondary }}">{{ musicas|length }} musica(s)</span>
         </div>
 
-        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
-            {% for m in musicas %}
-            <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" data-musica-item
-               data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
-               class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
-                <div class="w-11 h-11 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0 font-extrabold text-sm">
-                    {{ m.tom or '-' }}
+        <!-- ===== Modo Lista ===== -->
+        <section data-modo-conteudo="lista" class="space-y-3">
+            {% if musicas %}
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-sm {{ tema.text_secondary }}"></i>
+                <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tom ou tema (ex: cruz)"
+                       class="w-full pl-10 {{ CAMPO }}">
+            </div>
+            <p class="text-xs {{ tema.text_secondary }}">Marque musicas pra montar uma pasta (ex: o repertorio de um culto).</p>
+
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
+                {% for m in musicas %}
+                <div data-musica-item
+                     data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
+                     class="flex items-center gap-3 pl-4 {{ tema.card_bg_hover }} transition">
+                    <input type="checkbox" data-selecionar value="{{ m.id }}" aria-label="Selecionar {{ m.nome }}" class="w-4 h-4 shrink-0">
+                    <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="flex flex-1 min-w-0 items-center gap-3 pr-4 py-3">
+                        <div class="w-11 h-11 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0 font-extrabold text-sm">
+                            {{ m.tom or '-' }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ m.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">{{ m.artista or 'Artista nao informado' }}</p>
+                            {% if m.tags %}
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                {% for tag in m.tags %}
+                                <span class="text-[10px] font-semibold rounded-full px-2 py-0.5 border {{ tema.card_border }} {{ tema.text_secondary }}">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="flex flex-col gap-1 shrink-0 text-[10px] font-semibold">
+                            <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.letra_projecao else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao de projecao">
+                                <i class="fa-solid fa-display mr-0.5"></i>Projecao
+                            </span>
+                            <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.cifra_louvor else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao do louvor (cifra)">
+                                <i class="fa-solid fa-guitar mr-0.5"></i>Louvor
+                            </span>
+                        </div>
+                    </a>
                 </div>
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ m.nome }}</p>
-                    <p class="text-xs {{ tema.text_secondary }} truncate">{{ m.artista or 'Artista nao informado' }}</p>
-                    {% if m.tags %}
-                    <div class="flex flex-wrap gap-1 mt-1">
-                        {% for tag in m.tags %}
-                        <span class="text-[10px] font-semibold rounded-full px-2 py-0.5 border {{ tema.card_border }} {{ tema.text_secondary }}">{{ tag }}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                {% endfor %}
+            </div>
+            <p data-busca-vazia class="hidden text-center text-sm {{ tema.text_secondary }} py-6">Nenhuma musica encontrada.</p>
+            {% else %}
+            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
+                <i class="fa-solid fa-music text-3xl {{ tema.text_secondary }}"></i>
+                <p class="text-sm {{ tema.text_secondary }} mt-3">Nenhuma musica neste banco ainda.</p>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- ===== Modo Pastas ===== -->
+        <section data-modo-conteudo="pastas" id="pastas" class="hidden space-y-5 scroll-mt-4">
+            <div>
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Pastas da comunidade</h2>
+                {% if pastas %}
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
+                    {% for p in pastas %}
+                    <a href="{{ url_for('ministerio.pasta', pasta_id=p.id) }}" class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
+                        <div class="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-folder"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ p.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">
+                                {{ p.itens|length }} musica(s){% if p.compartilhada_com %} &middot; compartilhada com {{ p.compartilhada_com|length }}{% endif %}
+                            </p>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }}"></i>
+                    </a>
+                    {% endfor %}
                 </div>
-                <div class="flex flex-col gap-1 shrink-0 text-[10px] font-semibold">
-                    <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.letra_projecao else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao de projecao">
-                        <i class="fa-solid fa-display mr-0.5"></i>Projecao
-                    </span>
-                    <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.cifra_louvor else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao do louvor (cifra)">
-                        <i class="fa-solid fa-guitar mr-0.5"></i>Louvor
-                    </span>
+                {% else %}
+                <p class="text-sm {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-4">
+                    Nenhuma pasta ainda. No modo <span class="font-semibold">Lista</span>, marque as musicas e use "Criar pasta" --
+                    ou, numa escala, "Compartilhar este repertorio".
+                </p>
+                {% endif %}
+            </div>
+
+            <div>
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Repertorios dos cultos</h2>
+                {% if repertorios_escalas %}
+                <div class="space-y-2">
+                    {% for g in repertorios_escalas %}
+                    <details class="group {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden">
+                        <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                            <div class="w-11 shrink-0 text-center rounded-xl py-1 {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
+                                <p class="text-[10px] font-bold uppercase leading-none">{{ ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'][g.escala.data.weekday()] }}</p>
+                                <p class="text-base font-extrabold leading-tight">{{ g.escala.data.day }}</p>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ g.escala.nome }}</p>
+                                <p class="text-xs {{ tema.text_secondary }} truncate">{{ g.escala.data.strftime('%d/%m/%Y') }} &middot; {{ g.itens|length }} musica(s)</p>
+                            </div>
+                            <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition group-open:rotate-180"></i>
+                        </summary>
+                        <ol class="border-t {{ tema.card_border }} divide-y {{ tema.divide }}">
+                            {% for item in g.itens %}
+                            <li class="flex items-center gap-3 px-4 py-2">
+                                <span class="text-xs font-bold {{ tema.text_secondary }} w-4 text-right">{{ loop.index }}</span>
+                                <span class="flex-1 min-w-0 text-sm {{ tema.text_primary }} truncate">{{ item.nome_musica }}{% if item.momento %} <span class="text-xs {{ tema.text_secondary }}">&middot; {{ item.momento }}</span>{% endif %}</span>
+                                {% if item.tom %}<span class="text-xs font-semibold {{ tema.accent_text }}">{{ item.tom }}</span>{% endif %}
+                            </li>
+                            {% endfor %}
+                        </ol>
+                        <div class="border-t {{ tema.card_border }} px-4 py-2.5 flex flex-wrap gap-2 text-xs font-semibold">
+                            <a href="{{ url_for('escala.detalhe', escala_id=g.escala.id) }}#repertorio" class="{{ tema.accent_text }} hover:underline">Abrir escala</a>
+                            <span class="{{ tema.text_secondary }}">&middot;</span>
+                            <a href="{{ url_for('escala.folha_repertorio', escala_id=g.escala.id, tipo='cifras') }}" target="_blank" rel="noopener" class="{{ tema.accent_text }} hover:underline">Cifras</a>
+                            <span class="{{ tema.text_secondary }}">&middot;</span>
+                            <a href="{{ url_for('escala.folha_repertorio', escala_id=g.escala.id, tipo='projecao') }}" target="_blank" rel="noopener" class="{{ tema.accent_text }} hover:underline">Projecao</a>
+                        </div>
+                    </details>
+                    {% endfor %}
                 </div>
-            </a>
-            {% endfor %}
-        </div>
-        <p data-busca-vazia class="hidden text-center text-sm {{ tema.text_secondary }} py-6">Nenhuma musica encontrada.</p>
-        {% else %}
-        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
-            <i class="fa-solid fa-music text-3xl {{ tema.text_secondary }}"></i>
-            <p class="text-sm {{ tema.text_secondary }} mt-3">Nenhuma musica no repertorio ainda.</p>
-        </div>
-        {% endif %}
+                {% else %}
+                <p class="text-sm {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-4">
+                    Nenhum culto recente ou proximo com repertorio montado.
+                </p>
+                {% endif %}
+            </div>
+        </section>
     </main>
+
+    <!-- Barra de selecao (modo Lista): cria pasta com as musicas marcadas -->
+    <form method="POST" action="{{ url_for('ministerio.nova_pasta', comunidade_id=comunidade.id) }}"
+          data-barra-pasta class="hidden fixed bottom-0 inset-x-0 z-20 px-4 pb-4">
+        {{ acao_form.hidden_tag() }}
+        <input type="hidden" name="voltar" value="{{ request.path }}">
+        <div data-ids-selecionados></div>
+        <div class="max-w-xl lg:max-w-3xl mx-auto {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-lg px-3 py-2.5 flex items-center gap-2">
+            <span data-contagem class="text-xs font-semibold {{ tema.text_secondary }} shrink-0"></span>
+            <input type="text" name="nome" required maxlength="120" placeholder="Nome da pasta (ex: Culto 12/10)"
+                   class="flex-1 min-w-0 {{ CAMPO }}">
+            <button type="submit" class="shrink-0 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-4 py-2.5 rounded-full transition">
+                <i class="fa-solid fa-folder-plus mr-1"></i>Criar pasta
+            </button>
+        </div>
+    </form>
+
     {{ nav_inferior(tema, 'comunidades') }}
     </div>
 </div>
 
 <script>
     (function () {
+        // Busca (modo Lista)
         var busca = document.querySelector('[data-busca-musica]');
-        if (!busca) return;
-        var semAcento = function (t) { return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
-        var itens = document.querySelectorAll('[data-musica-item]');
-        var vazia = document.querySelector('[data-busca-vazia]');
-        busca.addEventListener('input', function () {
-            var termo = semAcento(busca.value.trim());
-            var visiveis = 0;
-            itens.forEach(function (item) {
-                var ok = !termo || semAcento(item.getAttribute('data-texto')).indexOf(termo) !== -1;
-                item.classList.toggle('hidden', !ok);
-                if (ok) visiveis++;
+        if (busca) {
+            var semAcento = function (t) { return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
+            var itens = document.querySelectorAll('[data-musica-item]');
+            var vazia = document.querySelector('[data-busca-vazia]');
+            busca.addEventListener('input', function () {
+                var termo = semAcento(busca.value.trim());
+                var visiveis = 0;
+                itens.forEach(function (item) {
+                    var ok = !termo || semAcento(item.getAttribute('data-texto')).indexOf(termo) !== -1;
+                    item.classList.toggle('hidden', !ok);
+                    if (ok) visiveis++;
+                });
+                vazia.classList.toggle('hidden', visiveis > 0);
             });
-            vazia.classList.toggle('hidden', visiveis > 0);
+        }
+
+        // Alternar Lista / Pastas -- lembrado no navegador; #pastas na URL abre direto as pastas.
+        var botoes = document.querySelectorAll('[data-modo]');
+        var conteudos = document.querySelectorAll('[data-modo-conteudo]');
+        var ATIVO = ['{{ tema.accent_bg }}', 'text-white'];
+        var INATIVO = ['{{ tema.text_secondary }}'];
+        function mostrar(modo) {
+            conteudos.forEach(function (c) { c.classList.toggle('hidden', c.getAttribute('data-modo-conteudo') !== modo); });
+            botoes.forEach(function (b) {
+                var ativo = b.getAttribute('data-modo') === modo;
+                ATIVO.forEach(function (c) { b.classList.toggle(c, ativo); });
+                INATIVO.forEach(function (c) { b.classList.toggle(c, !ativo); });
+                b.setAttribute('aria-selected', ativo ? 'true' : 'false');
+            });
+            atualizarSelecao();
+        }
+        botoes.forEach(function (b) {
+            b.addEventListener('click', function () {
+                var modo = b.getAttribute('data-modo');
+                try { localStorage.setItem('banco.modo', modo); } catch (e) {}
+                mostrar(modo);
+            });
         });
+
+        // Selecao de musicas -> barra "Criar pasta"
+        var barra = document.querySelector('[data-barra-pasta]');
+        var caixaIds = document.querySelector('[data-ids-selecionados]');
+        var contagem = document.querySelector('[data-contagem]');
+        var marcadas = [];  // ordem em que foram marcadas = ordem na pasta
+        function atualizarSelecao() {
+            var naLista = !document.querySelector('[data-modo-conteudo="lista"]').classList.contains('hidden');
+            barra.classList.toggle('hidden', !marcadas.length || !naLista);
+            contagem.textContent = marcadas.length + ' marcada(s)';
+            caixaIds.innerHTML = '';
+            marcadas.forEach(function (id) {
+                var campo = document.createElement('input');
+                campo.type = 'hidden';
+                campo.name = 'musica_id';
+                campo.value = id;
+                caixaIds.appendChild(campo);
+            });
+        }
+        document.querySelectorAll('[data-selecionar]').forEach(function (caixa) {
+            caixa.addEventListener('change', function () {
+                marcadas = marcadas.filter(function (id) { return id !== caixa.value; });
+                if (caixa.checked) marcadas.push(caixa.value);
+                atualizarSelecao();
+            });
+        });
+
+        var salvo = null;
+        try { salvo = localStorage.getItem('banco.modo'); } catch (e) {}
+        mostrar(window.location.hash === '#pastas' ? 'pastas' : (salvo === 'pastas' ? 'pastas' : 'lista'));
     })();
 </script>
 {% endblock %}

@@ -56,9 +56,13 @@ class Comunidade(SequentialIdDocument):
         moraram no Mongo (UsuarioComunidade/Evento) -- Ministerio e Membro
         (ainda em SQLAlchemy nesta fase da migracao) sao apagados a parte,
         explicitamente, em comunidade.routes.excluir_comunidade."""
+        from app.escala.models import Musica, PastaMusicas  # banco de musicas e pastas sao da comunidade
+
         return [
             UsuarioComunidade.objects(comunidade_id=self.id),
             Evento.objects(comunidade_id=self.id),
+            Musica.objects(comunidade_id=self.id),
+            PastaMusicas.objects(comunidade_id=self.id),
         ]
 
     def __repr__(self):

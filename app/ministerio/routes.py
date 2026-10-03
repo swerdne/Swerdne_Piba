@@ -711,61 +711,239 @@ def excluir_crianca(ministerio_id, crianca_id):
     return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
 
-# --- Repertorio: banco de musicas do ministerio (ver escala.models.Musica) ---
+# --- Bancos de musicas: OFICIAL da comunidade e LOCAL de cada ministerio ------
+#
+# Ver app/escala/banco_musicas.py pras regras. Resumo de quem pode:
+# - VER os dois bancos e as pastas: qualquer pessoa da comunidade (admin,
+#   membro, lider/membro de algum ministerio dela, ou do diretorio por e-mail).
+# - Banco OFICIAL (/musicas/<comunidade_id>/...): so admin da comunidade
+#   cadastra/importa/edita -- e aprova musica de banco local pra virar oficial.
+# - Banco LOCAL (/<ministerio_id>/repertorio/...): o lider do ministerio (e o
+#   admin, que lidera todos) cadastra/importa/edita a vontade.
+# As rotas que valem pros dois bancos tem as duas URLs; `Banco.args` monta a
+# certa no url_for.
 
 def _tags_do_texto(texto):
+    """"amor, Cruz, amor" -> ["amor", "Cruz"] (sem repetir, ignorando
+    maiuscula e acento -- "adoracao" e "adoração" contam como a mesma)."""
+    from app.escala.temas import _sem_acento
+
     tags = []
     for tag in (texto or "").split(","):
         tag = tag.strip()[:40]
-        if tag and tag.lower() not in [t.lower() for t in tags]:
+        if tag and _sem_acento(tag) not in [_sem_acento(t) for t in tags]:
             tags.append(tag)
     return tags[:12]
 
 
-def _musica_visivel_ou_404(musica_id):
-    musica = primeiro_ou_404(Musica.objects(id=musica_id))
-    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(musica.ministerio_id)
-    return musica, ministerio, pode_gerenciar
+def _ministerios_da_comunidade(comunidade_id):
+    return list(Ministerio.objects(comunidade_id=comunidade_id).order_by("nome"))
 
 
-def _musica_do_lider_ou_404(musica_id):
-    musica, ministerio, pode_gerenciar = _musica_visivel_ou_404(musica_id)
-    if not pode_gerenciar:
+def _pode_ver_banco(comunidade, usuario):
+    from app.comunidade.routes import _eh_admin_da_comunidade, _eh_membro_da_comunidade
+    from app.escala.models import Membro
+
+    if _eh_admin_da_comunidade(comunidade, usuario) or _eh_membro_da_comunidade(comunidade, usuario):
+        return True
+    # Lider/membro convidado direto num ministerio (sem papel na comunidade)
+    # tambem monta repertorio -- precisa enxergar o banco.
+    ids_ministerios = [m.id for m in Ministerio.objects(comunidade_id=comunidade.id).only("id")]
+    if UsuarioMinisterio.objects(usuario_id=usuario.id, ministerio_id__in=ids_ministerios).first():
+        return True
+    return Membro.objects(comunidade_id=comunidade.id, email=usuario.email).first() is not None
+
+
+def _banco_ou_404(comunidade_id=None, ministerio_id=None):
+    """Banco OFICIAL (comunidade_id) ou LOCAL (ministerio_id), ja com a
+    permissao de edicao da conta logada. Junta os bancos antigos na 1a vez."""
+    from app.comunidade.models import Comunidade
+    from app.comunidade.routes import _eh_admin_da_comunidade
+    from app.escala.banco_musicas import Banco, unificar_banco_da_comunidade
+
+    ministerio = None
+    if ministerio_id is not None:
+        ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
+        comunidade_id = ministerio.comunidade_id
+    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
+    if not _pode_ver_banco(comunidade, current_user):
         abort(404)
-    return musica, ministerio
+    unificar_banco_da_comunidade(comunidade.id)
+    if ministerio is not None:
+        pode_editar = _eh_lider_do_ministerio(ministerio, current_user)
+    else:
+        pode_editar = _eh_admin_da_comunidade(comunidade, current_user)
+    return Banco(comunidade, ministerio, pode_editar)
+
+
+def _banco_editavel_ou_404(comunidade_id=None, ministerio_id=None):
+    banco = _banco_ou_404(comunidade_id, ministerio_id)
+    if not banco.pode_editar:
+        abort(404)
+    return banco
+
+
+def _musica_visivel_ou_404(musica_id):
+    """(musica, banco onde ela mora)."""
+    from app.escala.banco_musicas import chave_do_nome, musicas_oficiais
+
+    musica = primeiro_ou_404(Musica.objects(id=musica_id))
+    if musica.comunidade_id is not None:
+        if musica.oficial is False:
+            return musica, _banco_ou_404(ministerio_id=musica.ministerio_id)
+        return musica, _banco_ou_404(comunidade_id=musica.comunidade_id)
+
+    # Musica antiga com o banco ainda nao unificado: unifica agora (ela vira
+    # oficial). Se era repetida e foi juntada noutra, abre a que ficou.
+    ministerio = primeiro_ou_404(Ministerio.objects(id=musica.ministerio_id))
+    banco = _banco_ou_404(comunidade_id=ministerio.comunidade_id)
+    atual = Musica.objects(id=musica_id).first()
+    if atual is None:
+        chave = chave_do_nome(musica.nome)
+        atual = next((m for m in musicas_oficiais(banco.comunidade.id) if chave_do_nome(m.nome) == chave), None)
+    if atual is None:
+        abort(404)
+    return atual, banco
+
+
+def _musica_editavel_ou_404(musica_id):
+    musica, banco = _musica_visivel_ou_404(musica_id)
+    if not banco.pode_editar:
+        abort(404)
+    return musica, banco
+
+
+def _url_do_banco(banco):
+    return url_for("ministerio.banco_musicas" if banco.oficial else "ministerio.repertorio", **banco.args)
+
+
+def _ids_ministerios_visiveis(comunidade):
+    """Ministerios cujas escalas a conta enxerga (pras pastas automaticas)."""
+    from app.comunidade.routes import _eh_admin_da_comunidade, _eh_membro_da_comunidade
+
+    todos = [m.id for m in Ministerio.objects(comunidade_id=comunidade.id).only("id")]
+    if _eh_admin_da_comunidade(comunidade, current_user) or _eh_membro_da_comunidade(comunidade, current_user):
+        return todos
+    return [u.ministerio_id for u in UsuarioMinisterio.objects(usuario_id=current_user.id, ministerio_id__in=todos)]
+
+
+def _repertorios_das_escalas(comunidade, limite=20):
+    """Pastas automaticas do modo "Pastas": o repertorio de cada escala
+    recente/proxima (60 dias pra tras em diante) que tenha musica."""
+    from app.escala.models import Escala
+
+    ids = _ids_ministerios_visiveis(comunidade)
+    if not ids:
+        return []
+    desde = date.today() - timedelta(days=60)
+    escalas = list(Escala.objects(ministerio_id__in=ids, data__gte=desde).order_by("data"))
+    if not escalas:
+        return []
+    itens_por_escala = {}
+    for item in ItemRepertorio.objects(escala_id__in=[e.id for e in escalas]).order_by("ordem"):
+        itens_por_escala.setdefault(item.escala_id, []).append(item)
+    grupos = [{"escala": e, "itens": itens_por_escala[e.id]} for e in escalas if e.id in itens_por_escala]
+    return grupos[:limite]
+
+
+def _render_banco(banco):
+    from app.escala.banco_musicas import sugestoes_dos_ministerios
+    from app.escala.models import PastaMusicas
+
+    musicas = list(banco.musicas().only(
+        "id", "nome", "artista", "tom", "tags", "letra_projecao", "cifra_louvor"
+    ).order_by("nome"))
+    ministerios = _ministerios_da_comunidade(banco.comunidade.id)
+    nome_ministerio = {m.id: m.nome for m in ministerios}
+    sugestoes = []
+    if banco.oficial and banco.pode_editar:
+        sugestoes = [
+            {"musica": m, "ministerio": nome_ministerio.get(m.ministerio_id, "ministerio removido")}
+            for m in sugestoes_dos_ministerios(banco.comunidade.id).order_by("nome")
+        ]
+
+    if banco.oficial:
+        from app.comunidade.routes import _eh_admin_da_comunidade
+        admin = _eh_admin_da_comunidade(banco.comunidade, current_user)
+        voltar = url_for("comunidade.detalhe" if admin else "comunidade.escalados", comunidade_id=banco.comunidade.id)
+    else:
+        voltar = url_for("ministerio.detalhe", ministerio_id=banco.ministerio.id)
+
+    return render_template(
+        "ministerio/repertorio.html",
+        banco=banco,
+        comunidade=banco.comunidade,
+        pode_gerenciar=banco.pode_editar,
+        musicas=musicas,
+        sugestoes=sugestoes,
+        ministerios=ministerios,
+        pastas=list(PastaMusicas.objects(comunidade_id=banco.comunidade.id).order_by("-criada_em")),
+        repertorios_escalas=_repertorios_das_escalas(banco.comunidade),
+        voltar_url=voltar,
+        form=MusicaForm(),
+        acao_form=AcaoForm(),
+        sem_tags=sum(1 for m in musicas if not m.tags),
+    )
+
+
+@bp.route("/musicas/<int:comunidade_id>")
+@login_required
+def banco_musicas(comunidade_id):
+    """Banco OFICIAL da comunidade."""
+    return _render_banco(_banco_ou_404(comunidade_id=comunidade_id))
 
 
 @bp.route("/<int:ministerio_id>/repertorio")
 @login_required
 def repertorio(ministerio_id):
-    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
-    musicas = list(
-        Musica.objects(ministerio_id=ministerio.id)
-        .only("id", "nome", "artista", "tom", "tags", "letra_projecao", "cifra_louvor")
-        .order_by("nome")
-    )
-    return render_template(
-        "ministerio/repertorio.html",
-        ministerio=ministerio,
-        pode_gerenciar=pode_gerenciar,
-        musicas=musicas,
-        form=MusicaForm(),
-    )
+    """Banco LOCAL do ministerio (mesmo endereco de quando cada ministerio
+    tinha o seu banco -- links antigos continuam caindo no lugar certo)."""
+    return _render_banco(_banco_ou_404(ministerio_id=ministerio_id))
 
 
+@bp.route("/musicas/<int:comunidade_id>/gerar-palavras-chave", methods=["POST"])
+@bp.route("/<int:ministerio_id>/repertorio/gerar-palavras-chave", methods=["POST"])
+@login_required
+def gerar_palavras_chave(comunidade_id=None, ministerio_id=None):
+    """Preenche as tags de tema (escala/temas.py) so das musicas do banco que
+    ainda nao tem nenhuma -- nunca mexe em tag que alguem ja escreveu."""
+    from app.escala.temas import sugerir_tags
+
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(_url_do_banco(banco))
+
+    preenchidas = sem_tema = 0
+    for musica in banco.musicas():
+        if musica.tags:
+            continue
+        tags = sugerir_tags(musica.nome, letra=musica.letra_projecao, cifra=musica.cifra_louvor)
+        if tags:
+            musica.tags = tags
+            musica.save()
+            preenchidas += 1
+        else:
+            sem_tema += 1
+
+    mensagem = f"{preenchidas} musica(s) ganharam palavras-chave."
+    if sem_tema:
+        mensagem += f" {sem_tema} ficaram sem: letra curta ou sem tema claro -- da pra pôr a mao em Dados da musica."
+    flash(mensagem, "success")
+    return redirect(_url_do_banco(banco))
+
+
+@bp.route("/musicas/<int:comunidade_id>/nova", methods=["POST"])
 @bp.route("/<int:ministerio_id>/repertorio/nova", methods=["POST"])
 @login_required
-def nova_musica(ministerio_id):
-    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
-    if not pode_gerenciar:
-        abort(404)
+def nova_musica(comunidade_id=None, ministerio_id=None):
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     form = MusicaForm()
     if not form.validate_on_submit():
         erros = [erro for lista in form.errors.values() for erro in lista]
         flash(erros[0] if erros else "Nao foi possivel cadastrar a musica.", "danger")
-        return redirect(url_for("ministerio.repertorio", ministerio_id=ministerio.id))
-    musica = Musica(
-        ministerio_id=ministerio.id,
+        return redirect(_url_do_banco(banco))
+    musica = banco.nova_musica(
         nome=form.nome.data.strip(),
         artista=(form.artista.data or "").strip() or None,
         tom=(form.tom.data or "").strip() or None,
@@ -778,42 +956,104 @@ def nova_musica(ministerio_id):
     return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
 
 
+# --- Aprovacao: musica do banco local -> banco oficial (so admin) ------------
+
+def _sugestao_do_admin_ou_404(musica_id):
+    from app.comunidade.routes import _eh_admin_da_comunidade
+    from app.comunidade.models import Comunidade
+
+    musica = primeiro_ou_404(Musica.objects(id=musica_id, oficial=False))
+    comunidade = primeiro_ou_404(Comunidade.objects(id=musica.comunidade_id))
+    if not _eh_admin_da_comunidade(comunidade, current_user):
+        abort(404)
+    return musica, comunidade
+
+
+@bp.route("/musicas/sugestao/<int:musica_id>/aprovar", methods=["POST"])
+@login_required
+def aprovar_musica(musica_id):
+    """Promove a musica do banco local pro OFICIAL da comunidade (ela sai do
+    local e passa a valer pra todos os ministerios; ministerio_id fica como
+    historico de onde veio). Avisa os lideres do ministerio de origem."""
+    from app.escala.banco_musicas import chave_do_nome, musicas_oficiais
+    from app.notificacoes import Notificacao
+
+    musica, comunidade = _sugestao_do_admin_ou_404(musica_id)
+    voltar = url_for("ministerio.banco_musicas", comunidade_id=comunidade.id) + "#sugestoes"
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(voltar)
+
+    chave = chave_do_nome(musica.nome)
+    ja_tinha = any(chave_do_nome(m.nome) == chave for m in musicas_oficiais(comunidade.id).only("nome"))
+    musica.oficial = True
+    musica.sugestao_dispensada = False
+    musica.atualizada_em = datetime.now(timezone.utc)
+    musica.save()
+
+    origem = Ministerio.objects(id=musica.ministerio_id).first()
+    if origem is not None:
+        for lider in _lideres_do_ministerio(origem):
+            if lider.id != current_user.id:
+                Notificacao(
+                    usuario_id=lider.id, tipo="musica_aprovada",
+                    titulo=f'"{musica.nome}" agora e do banco oficial'[:120],
+                    mensagem=f'A musica "{musica.nome}" do banco do {origem.nome} foi aprovada '
+                             f'para o banco de musicas oficial de {comunidade.nome}.',
+                ).save()
+
+    mensagem = f'"{musica.nome}" aprovada: agora faz parte do banco oficial da comunidade.'
+    if ja_tinha:
+        mensagem += " Ja existia uma musica oficial com esse nome -- se for a mesma, exclua uma das duas."
+    flash(mensagem, "success")
+    return redirect(voltar)
+
+
+@bp.route("/musicas/sugestao/<int:musica_id>/dispensar", methods=["POST"])
+@login_required
+def dispensar_sugestao(musica_id):
+    """Tira a musica da lista de sugestoes (ela continua no banco local)."""
+    musica, comunidade = _sugestao_do_admin_ou_404(musica_id)
+    if AcaoForm().validate_on_submit():
+        musica.sugestao_dispensada = True
+        musica.save()
+        flash(f'"{musica.nome}" saiu das sugestoes (continua no banco do ministerio).', "success")
+    return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade.id) + "#sugestoes")
+
+
 # --- Importacao de cifras em lote a partir de PDF/Word (ver importar_cifras.py) ---
 #
 # Tres passos, pra caber qualquer quantidade sem estourar o timeout do
 # servidor nem o limite de 2 MB por requisicao (MAX_CONTENT_LENGTH): a tela
 # manda UM arquivo por vez pra `extrair` (so le, nao grava nada), mostra tudo
 # pra pessoa revisar/corrigir, e so entao manda o lote revisado pra `salvar`.
+# Vale pros dois bancos (oficial: admin; local: lider do ministerio).
 
 _MAX_MUSICAS_POR_LOTE = 200
 
 
-def _ministerio_do_repertorio_ou_404(ministerio_id):
-    ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
-    if not pode_gerenciar:
-        abort(404)
-    return ministerio
-
-
+@bp.route("/musicas/<int:comunidade_id>/importar")
 @bp.route("/<int:ministerio_id>/repertorio/importar")
 @login_required
-def importar_musicas(ministerio_id):
-    ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
+def importar_musicas(comunidade_id=None, ministerio_id=None):
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     return render_template(
-        "ministerio/importar_musicas.html", ministerio=ministerio, acao_form=AcaoForm(),
+        "ministerio/importar_musicas.html", banco=banco, comunidade=banco.comunidade, acao_form=AcaoForm(),
         tons_maiores=TONS_MAIORES, tons_menores=TONS_MENORES,
     )
 
 
+@bp.route("/musicas/<int:comunidade_id>/importar/extrair", methods=["POST"])
 @bp.route("/<int:ministerio_id>/repertorio/importar/extrair", methods=["POST"])
 @login_required
 @limiter.limit("300 per minute")
-def extrair_musica_pdf(ministerio_id):
+def extrair_musica_pdf(comunidade_id=None, ministerio_id=None):
     """Le 1 arquivo (PDF ou .docx) e devolve a musica sugerida em JSON --
     nao grava nada."""
+    from app.escala.banco_musicas import musicas_oficiais
     from app.ministerio.importar_cifras import ArquivoInvalidoError, extrair_musica
 
-    ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     if not AcaoForm().validate_on_submit():
         return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
     arquivo = request.files.get("arquivo")
@@ -824,23 +1064,27 @@ def extrair_musica_pdf(ministerio_id):
     except ArquivoInvalidoError as erro:
         return jsonify({"erro": str(erro)}), 422
 
-    # Aviso de repetida (mesmo nome, sem diferenciar maiuscula) -- a tela ja
-    # deixa desmarcada, mas a pessoa pode importar mesmo assim.
-    musica["ja_existe"] = Musica.objects(
-        ministerio_id=ministerio.id, nome__iexact=musica["nome"]
-    ).first() is not None
+    # Aviso de repetida (mesmo nome, sem diferenciar maiuscula) no proprio
+    # banco ou -- pra banco local -- no oficial, que o ministerio ja usa.
+    # A tela deixa desmarcada, mas a pessoa pode importar mesmo assim.
+    nome = musica["nome"]
+    musica["ja_existe"] = (
+        banco.musicas().filter(nome__iexact=nome).first() is not None
+        or (not banco.oficial and musicas_oficiais(banco.comunidade.id).filter(nome__iexact=nome).first() is not None)
+    )
     return jsonify({"musica": musica})
 
 
+@bp.route("/musicas/<int:comunidade_id>/importar/salvar", methods=["POST"])
 @bp.route("/<int:ministerio_id>/repertorio/importar/salvar", methods=["POST"])
 @login_required
-def salvar_musicas_importadas(ministerio_id):
+def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
     """Grava o lote ja revisado na tela. A versao de Projecao ja sai gerada
     da cifra (mesmo rascunho do botao "Gerar da cifra"), pra musica ficar
     pronta pras duas folhas sem mais um passo por musica."""
     import json
 
-    ministerio = _ministerio_do_repertorio_ou_404(ministerio_id)
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     if not AcaoForm().validate_on_submit():
         return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
     try:
@@ -860,11 +1104,11 @@ def salvar_musicas_importadas(ministerio_id):
         if not nome:
             continue
         cifra = str(item.get("cifra") or "").replace("\r\n", "\n").strip("\n") or None
-        novas.append(Musica(
-            ministerio_id=ministerio.id,
+        novas.append(banco.nova_musica(
             nome=nome,
             artista=str(item.get("artista") or "").strip()[:120] or None,
             tom=str(item.get("tom") or "").strip()[:10] or None,
+            tags=_tags_do_texto(str(item.get("tags") or "")),
             cifra_louvor=cifra,
             letra_projecao=projecao_da_cifra(cifra) or None if cifra else None,
         ))
@@ -875,14 +1119,18 @@ def salvar_musicas_importadas(ministerio_id):
     # avisa, com o total de todas -- senao viria 1 aviso por parte.
     if request.form.get("parcial") != "1":
         total = request.form.get("total", type=int) or len(novas)
-        flash(f"{total} musica(s) importada(s) para o repertorio.", "success")
-    return jsonify({"criadas": len(novas), "destino": url_for("ministerio.repertorio", ministerio_id=ministerio.id)})
+        flash(f"{total} musica(s) importada(s) para o {banco.titulo.lower()}.", "success")
+    return jsonify({"criadas": len(novas), "destino": _url_do_banco(banco)})
 
+
+# --- Tela e edicao de 1 musica ---------------------------------------------------
 
 @bp.route("/repertorio/<int:musica_id>")
 @login_required
 def musica(musica_id):
-    musica, ministerio, pode_gerenciar = _musica_visivel_ou_404(musica_id)
+    musica, banco = _musica_visivel_ou_404(musica_id)
+    if musica.id != musica_id:  # era repetida e foi juntada noutra
+        return redirect(url_for("ministerio.musica", musica_id=musica.id))
     # ?tom=D abre a versao salva nesse tom (a original, se nao existir).
     pedido = (request.args.get("tom") or "").strip()
     versao = None if musica.eh_tom_original(pedido) else musica.versao_no_tom(pedido)
@@ -896,8 +1144,10 @@ def musica(musica_id):
     return render_template(
         "ministerio/musica.html",
         musica=musica,
-        ministerio=ministerio,
-        pode_gerenciar=pode_gerenciar,
+        banco=banco,
+        comunidade=banco.comunidade,
+        url_do_banco=_url_do_banco(banco),
+        pode_gerenciar=banco.pode_editar,
         form_info=form_info,
         form_projecao=LetraProjecaoForm(letra_projecao=musica.letra_projecao),
         form_louvor=CifraLouvorForm(cifra_louvor=cifra_aberta, tom=tom_aberto),
@@ -919,7 +1169,7 @@ def _salvar_musica(musica, aba, mensagem):
 @bp.route("/repertorio/<int:musica_id>/info", methods=["POST"])
 @login_required
 def salvar_info_musica(musica_id):
-    musica, _ = _musica_do_lider_ou_404(musica_id)
+    musica, _ = _musica_editavel_ou_404(musica_id)
     form = MusicaForm()
     if not form.validate_on_submit():
         erros = [erro for lista in form.errors.values() for erro in lista]
@@ -937,7 +1187,7 @@ def salvar_info_musica(musica_id):
 @login_required
 def salvar_projecao_musica(musica_id):
     """So a versao de projecao -- nao toca na cifra (edicao independente)."""
-    musica, _ = _musica_do_lider_ou_404(musica_id)
+    musica, _ = _musica_editavel_ou_404(musica_id)
     form = LetraProjecaoForm()
     if not form.validate_on_submit():
         flash("Nao foi possivel salvar a letra de projecao.", "danger")
@@ -950,7 +1200,7 @@ def salvar_projecao_musica(musica_id):
 @login_required
 def salvar_louvor_musica(musica_id):
     """So a versao com cifras -- nao toca na letra de projecao."""
-    musica, _ = _musica_do_lider_ou_404(musica_id)
+    musica, _ = _musica_editavel_ou_404(musica_id)
     form = CifraLouvorForm()
     if not form.validate_on_submit():
         flash("Nao foi possivel salvar a cifra.", "danger")
@@ -986,7 +1236,7 @@ def salvar_louvor_musica(musica_id):
 @bp.route("/repertorio/<int:musica_id>/louvor/excluir-versao", methods=["POST"])
 @login_required
 def excluir_versao_cifra(musica_id):
-    musica, _ = _musica_do_lider_ou_404(musica_id)
+    musica, _ = _musica_editavel_ou_404(musica_id)
     tom = (request.form.get("tom") or "").strip()
     if not AcaoForm().validate_on_submit() or musica.eh_tom_original(tom) or not musica.versao_no_tom(tom):
         flash("Versao nao encontrada.", "danger")
@@ -1001,7 +1251,7 @@ def rascunho_projecao(musica_id):
     """Devolve (sem gravar nada) a letra de projecao gerada a partir de um
     texto com cifra -- o enviado no campo "texto" ou, sem ele, a cifra
     original. A tela poe no editor da projecao e a pessoa ajusta/salva."""
-    musica, _ = _musica_do_lider_ou_404(musica_id)
+    musica, _ = _musica_editavel_ou_404(musica_id)
     if not AcaoForm().validate_on_submit():
         abort(400)
     texto = request.form.get("texto")
@@ -1013,7 +1263,7 @@ def rascunho_projecao(musica_id):
 @bp.route("/repertorio/<int:musica_id>/excluir", methods=["POST"])
 @login_required
 def excluir_musica(musica_id):
-    musica, ministerio = _musica_do_lider_ou_404(musica_id)
+    musica, banco = _musica_editavel_ou_404(musica_id)
     if not AcaoForm().validate_on_submit():
         flash("Acao invalida.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id))
@@ -1021,5 +1271,265 @@ def excluir_musica(musica_id):
     # As escalas que usavam a musica ficam com o item "avulso" (nome/tom).
     ItemRepertorio.objects(musica_id=musica.id).update(set__musica_id=None)
     musica.delete()
-    flash(f'"{nome}" removida do repertorio.', "success")
-    return redirect(url_for("ministerio.repertorio", ministerio_id=ministerio.id))
+    flash(f'"{nome}" removida do {banco.titulo.lower()}.', "success")
+    return redirect(_url_do_banco(banco))
+
+
+# --- Pastas de musicas (modo "Pastas" do banco) e compartilhamento ------------
+#
+# Uma PastaMusicas (escala/models.py) agrupa musicas -- montada a partir da
+# selecao no banco ou copiada do repertorio de uma escala. Quem pode:
+# - VER (e baixar as folhas): qualquer pessoa da comunidade, ou quem recebeu
+#   a pasta compartilhada (de qualquer comunidade/ministerio).
+# - EDITAR (renomear, por/tirar musica, excluir): quem criou ou admin.
+# - COMPARTILHAR: quem pode editar ou lider de algum ministerio da comunidade.
+# Quem recebe ve a pasta na tela inicial (main.dashboard) ate abrir.
+
+def _pasta_ou_404(pasta_id):
+    """(pasta, pode_editar, pode_compartilhar)."""
+    from app.comunidade.routes import _eh_admin_da_comunidade
+    from app.escala.models import PastaMusicas
+
+    pasta = primeiro_ou_404(PastaMusicas.objects(id=pasta_id))
+    comunidade = pasta.comunidade
+    if comunidade is None:
+        abort(404)
+    da_comunidade = _pode_ver_banco(comunidade, current_user)
+    if not da_comunidade and pasta.compartilhamento_de(current_user.id) is None:
+        abort(404)
+    pode_editar = da_comunidade and (
+        pasta.criada_por_id == current_user.id or _eh_admin_da_comunidade(comunidade, current_user)
+    )
+    pode_compartilhar = pode_editar or (da_comunidade and any(
+        _eh_lider_do_ministerio(m, current_user) for m in Ministerio.objects(comunidade_id=comunidade.id)
+    ))
+    return pasta, pode_editar, pode_compartilhar
+
+
+def _pasta_editavel_ou_404(pasta_id):
+    pasta, pode_editar, _ = _pasta_ou_404(pasta_id)
+    if not pode_editar:
+        abort(404)
+    return pasta
+
+
+def _voltar_pra_pasta(pasta, ancora=""):
+    return redirect(url_for("ministerio.pasta", pasta_id=pasta.id) + ancora)
+
+
+def _musicas_por_id(ids):
+    ids = [i for i in ids if i]
+    return {m.id: m for m in Musica.objects(id__in=ids)} if ids else {}
+
+
+@bp.route("/musicas/<int:comunidade_id>/pastas/nova", methods=["POST"])
+@login_required
+def nova_pasta(comunidade_id):
+    """Cria a pasta com as musicas marcadas no modo Lista do banco."""
+    from app.escala.models import ItemPasta, PastaMusicas
+
+    banco = _banco_ou_404(comunidade_id=comunidade_id)
+    voltar = request.form.get("voltar") or ""
+    if not voltar.startswith("/") or voltar.startswith("//"):
+        voltar = _url_do_banco(banco)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(voltar)
+    nome = (request.form.get("nome") or "").strip()[:120]
+    ids = [int(i) for i in request.form.getlist("musica_id") if i.isdigit()]
+    musicas = list(Musica.objects(id__in=ids, comunidade_id=banco.comunidade.id)) if ids else []
+    if not nome or not musicas:
+        flash("De um nome pra pasta e marque pelo menos uma musica.", "danger")
+        return redirect(voltar)
+    ordem = {musica_id: posicao for posicao, musica_id in enumerate(ids)}
+    musicas.sort(key=lambda m: ordem[m.id])
+    pasta = PastaMusicas(
+        comunidade_id=banco.comunidade.id, nome=nome, criada_por_id=current_user.id,
+        itens=[ItemPasta(musica_id=m.id, nome=m.nome, tom=m.tom) for m in musicas],
+    )
+    pasta.save()
+    flash(f'Pasta "{pasta.nome}" criada com {len(musicas)} musica(s).', "success")
+    return _voltar_pra_pasta(pasta)
+
+
+@bp.route("/pastas/<int:pasta_id>")
+@login_required
+def pasta(pasta_id):
+    from app.auth.models import User
+    from app.escala.banco_musicas import musicas_oficiais
+
+    pasta, pode_editar, pode_compartilhar = _pasta_ou_404(pasta_id)
+
+    # Quem recebeu: abrir a pasta tira ela de "novo" na tela inicial.
+    meu = pasta.compartilhamento_de(current_user.id)
+    if meu is not None and meu.visto_em is None:
+        meu.visto_em = datetime.now(timezone.utc)
+        pasta.save()
+
+    musicas = _musicas_por_id([i.musica_id for i in pasta.itens])
+    da_comunidade = _pode_ver_banco(pasta.comunidade, current_user)
+    itens = [{"indice": n, "item": i, "musica": musicas.get(i.musica_id)} for n, i in enumerate(pasta.itens)]
+
+    disponiveis = {}
+    if pode_editar:
+        nomes = {m.id: m.nome for m in Ministerio.objects(comunidade_id=pasta.comunidade_id)}
+        disponiveis["Banco da comunidade"] = list(
+            musicas_oficiais(pasta.comunidade_id).only("id", "nome").order_by("nome")
+        )
+        locais = Musica.objects(comunidade_id=pasta.comunidade_id, oficial=False).only("id", "nome", "ministerio_id")
+        for musica in locais.order_by("nome"):
+            grupo = "Banco do " + nomes.get(musica.ministerio_id, "ministerio")
+            disponiveis.setdefault(grupo, []).append(musica)
+
+    ids_pessoas = [c.usuario_id for c in pasta.compartilhada_com] + [pasta.criada_por_id]
+    pessoas = {u.id: u for u in User.objects(id__in=ids_pessoas)}
+    return render_template(
+        "ministerio/pasta.html",
+        pasta=pasta,
+        itens=itens,
+        da_comunidade=da_comunidade,
+        pode_editar=pode_editar,
+        pode_compartilhar=pode_compartilhar,
+        disponiveis=disponiveis,
+        pessoas=pessoas,
+        tons_maiores=TONS_MAIORES,
+        tons_menores=TONS_MENORES,
+        acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/pastas/<int:pasta_id>/adicionar", methods=["POST"])
+@login_required
+def adicionar_na_pasta(pasta_id):
+    from app.escala.models import ItemPasta
+
+    pasta = _pasta_editavel_ou_404(pasta_id)
+    musica = Musica.objects(id=request.form.get("musica_id", type=int), comunidade_id=pasta.comunidade_id).first()
+    if not AcaoForm().validate_on_submit() or musica is None:
+        flash("Escolha uma musica do banco.", "danger")
+        return _voltar_pra_pasta(pasta)
+    tom = (request.form.get("tom") or "").strip()[:10] or musica.tom
+    pasta.itens.append(ItemPasta(musica_id=musica.id, nome=musica.nome, tom=tom))
+    pasta.save()
+    flash(f'"{musica.nome}" adicionada a pasta.', "success")
+    return _voltar_pra_pasta(pasta)
+
+
+@bp.route("/pastas/<int:pasta_id>/remover/<int:indice>", methods=["POST"])
+@login_required
+def remover_da_pasta(pasta_id, indice):
+    pasta = _pasta_editavel_ou_404(pasta_id)
+    if AcaoForm().validate_on_submit() and 0 <= indice < len(pasta.itens):
+        nome = pasta.itens[indice].nome
+        del pasta.itens[indice]
+        pasta.save()
+        flash(f'"{nome}" saiu da pasta.', "success")
+    return _voltar_pra_pasta(pasta)
+
+
+@bp.route("/pastas/<int:pasta_id>/renomear", methods=["POST"])
+@login_required
+def renomear_pasta(pasta_id):
+    pasta = _pasta_editavel_ou_404(pasta_id)
+    nome = (request.form.get("nome") or "").strip()[:120]
+    if AcaoForm().validate_on_submit() and nome:
+        pasta.nome = nome
+        pasta.save()
+        flash("Pasta renomeada.", "success")
+    return _voltar_pra_pasta(pasta)
+
+
+@bp.route("/pastas/<int:pasta_id>/excluir", methods=["POST"])
+@login_required
+def excluir_pasta(pasta_id):
+    pasta = _pasta_editavel_ou_404(pasta_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return _voltar_pra_pasta(pasta)
+    comunidade_id, nome = pasta.comunidade_id, pasta.nome
+    pasta.delete()
+    flash(f'Pasta "{nome}" excluida. As musicas continuam no banco.', "success")
+    return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade_id))
+
+
+@bp.route("/pastas/<int:pasta_id>/buscar-usuario")
+@login_required
+def buscar_usuario_pasta(pasta_id):
+    """Busca contas (qualquer comunidade/ministerio) pra compartilhar --
+    mesmo formato de escala.buscar_usuario: so id + rotulo, nada sensivel."""
+    from mongoengine.queryset.visitor import Q
+    from app.auth.models import User
+
+    _, _, pode_compartilhar = _pasta_ou_404(pasta_id)
+    if not pode_compartilhar:
+        abort(404)
+    termo = request.args.get("q", "").strip()
+    if len(termo) < 2:
+        return jsonify([])
+    usuarios = User.objects(
+        Q(name__icontains=termo) | Q(username__icontains=termo) | Q(email__icontains=termo)
+    ).order_by("name").limit(8)
+    return jsonify([
+        {"id": u.id, "label": f"{u.name or u.username or u.email} ({u.email})"}
+        for u in usuarios if u.id != current_user.id
+    ])
+
+
+@bp.route("/pastas/<int:pasta_id>/compartilhar", methods=["POST"])
+@login_required
+def compartilhar_pasta(pasta_id):
+    from app.auth.models import User
+    from app.escala.models import CompartilhamentoPasta
+    from app.notificacoes import Notificacao
+
+    pasta, _, pode_compartilhar = _pasta_ou_404(pasta_id)
+    if not pode_compartilhar:
+        abort(404)
+    destino = User.objects(id=request.form.get("usuario_id", type=int)).first()
+    if not AcaoForm().validate_on_submit() or destino is None or destino.id == current_user.id:
+        flash("Escolha na busca a pessoa que vai receber a pasta.", "danger")
+        return _voltar_pra_pasta(pasta, "#compartilhar")
+
+    existente = pasta.compartilhamento_de(destino.id)
+    if existente is not None:
+        # Reenvio: volta a aparecer como novo na tela inicial dela.
+        existente.enviado_por_id = current_user.id
+        existente.enviado_em = datetime.now(timezone.utc)
+        existente.visto_em = None
+    else:
+        pasta.compartilhada_com.append(CompartilhamentoPasta(usuario_id=destino.id, enviado_por_id=current_user.id))
+    pasta.save()
+
+    remetente = current_user.name or current_user.username or current_user.email
+    Notificacao(
+        usuario_id=destino.id, tipo="repertorio_compartilhado",
+        titulo=f'{remetente} compartilhou "{pasta.nome}"'[:120],
+        mensagem=f'{remetente} enviou o repertorio "{pasta.nome}" ({len(pasta.itens)} musica(s)). '
+                 "Abra pela tela inicial pra ver e baixar as cifras.",
+    ).save()
+    flash(f"Pasta compartilhada com {destino.name or destino.email}. Ela aparece na tela inicial da pessoa.", "success")
+    return _voltar_pra_pasta(pasta, "#compartilhar")
+
+
+@bp.route("/pastas/<int:pasta_id>/<any(projecao, cifras):tipo>")
+@login_required
+def folha_pasta(pasta_id, tipo):
+    """Mesma folha de imprimir/salvar em PDF do repertorio da escala
+    (templates/escala/folha_repertorio.html), com o tom guardado na pasta."""
+    from app.escala.models import itens_para_folha
+
+    pasta, _, _ = _pasta_ou_404(pasta_id)
+    musicas = _musicas_por_id([i.musica_id for i in pasta.itens])
+    itens = itens_para_folha((i.nome, i.momento, musicas.get(i.musica_id), i.tom) for i in pasta.itens)
+    comunidade = pasta.comunidade
+    return render_template(
+        "escala/folha_repertorio.html",
+        tipo=tipo,
+        itens=itens,
+        nome_documento=pasta.nome,
+        titulo=pasta.nome,
+        subtitulo=comunidade.nome if comunidade else "",
+        voltar_url=url_for("ministerio.pasta", pasta_id=pasta.id),
+        observacoes=None,
+        vazio="Nenhuma musica nesta pasta.",
+    )

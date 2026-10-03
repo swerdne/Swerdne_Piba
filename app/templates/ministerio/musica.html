@@ -19,11 +19,11 @@
 
     <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
         <div class="flex items-center gap-3 min-w-0">
-            <a href="{{ url_for('ministerio.repertorio', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar ao repertorio">
+            <a href="{{ url_do_banco }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar ao repertorio">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
             </a>
             <div class="min-w-0">
-                <p class="text-xs {{ tema.text_secondary }} truncate">Repertorio &middot; {{ ministerio.nome }}</p>
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ banco.titulo }} &middot; {{ comunidade.nome }}</p>
                 <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">{{ musica.nome }}</h1>
             </div>
         </div>

@@ -94,6 +94,30 @@
                 {% endif %}
             </div>
 
+            {% if repertorios_compartilhados %}
+            <!-- Repertorios que alguem compartilhou com esta conta (ver ministerio.routes.compartilhar_pasta) -->
+            <div>
+                <h2 class="text-base font-bold {{ tema.text_primary }} mb-2.5">Repertorios para voce</h2>
+                <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} overflow-hidden">
+                    {% for r in repertorios_compartilhados %}
+                    <a href="{{ url_for('ministerio.pasta', pasta_id=r.pasta.id) }}" class="flex items-center gap-3 px-4 py-3.5 {{ tema.card_bg_hover }} transition">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-folder-open"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-bold {{ tema.text_primary }} truncate">{{ r.pasta.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">De {{ r.remetente }} &middot; {{ r.pasta.itens|length }} musica(s)</p>
+                        </div>
+                        {% if r.novo %}
+                        <span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-600 rounded-full px-2 py-0.5 shrink-0">Novo</span>
+                        {% endif %}
+                        {{ chevron("w-4 h-4 shrink-0 " ~ tema.text_secondary) }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Suas comunidades -->
             <div>
                 <div class="flex items-center justify-between mb-2.5">

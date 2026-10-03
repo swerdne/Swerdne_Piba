@@ -620,7 +620,7 @@
                     <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Repertorio
                 </span>
                 <span class="flex items-center gap-3">
-                    <a href="{{ url_for('ministerio.repertorio', ministerio_id=escala.ministerio_id) }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                    <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=comunidade_id) }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
                         Banco de musicas <i class="fa-solid fa-arrow-right text-[10px]"></i>
                     </a>
                     {% if repertorio %}<span class="text-xs {{ tema.text_secondary }}">{{ repertorio|length }}</span>{% endif %}
@@ -669,6 +669,16 @@
                    class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 transition">
                     <i class="fa-solid fa-guitar"></i>Cifras
                 </a>
+                {% if eh_dono %}
+                <!-- Vira uma pasta do banco e abre la no ponto de compartilhar (ver escala.routes.repertorio_para_pasta) -->
+                <form method="POST" action="{{ url_for('escala.repertorio_para_pasta', escala_id=escala.id) }}" class="col-span-2">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit"
+                            class="w-full flex items-center justify-center gap-2 border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold py-2.5 rounded-xl hover:bg-black/5 transition">
+                        <i class="fa-solid fa-share-nodes"></i>Compartilhar este repertorio
+                    </button>
+                </form>
+                {% endif %}
             </div>
             {% else %}
             <p class="text-xs {{ tema.text_secondary }} px-4 py-3">Nenhuma musica adicionada ainda.</p>

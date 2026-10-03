@@ -35,6 +35,8 @@ _ICONE_POR_TIPO = {
     "ensaio_cancelado": "fa-calendar-xmark",
     "novo_membro": "fa-user-plus",
     "adicionado_grupo": "fa-people-group",
+    "repertorio_compartilhado": "fa-folder-open",
+    "musica_aprovada": "fa-star",
 }
 _ICONE_PADRAO = "fa-bell"
 
@@ -273,6 +275,7 @@ def dashboard():
 
     return render_template(
         "main/dashboard.html",
+        repertorios_compartilhados=_repertorios_compartilhados(current_user),
         saudacao=_saudacao(agora.hour),
         proxima_escala=proxima_escala_info,
         agenda=_agenda_do_usuario(current_user, agora.date()),
@@ -298,6 +301,27 @@ def dashboard():
         icone_por_tipo=_ICONE_POR_TIPO,
         icone_padrao=_ICONE_PADRAO,
     )
+
+
+def _repertorios_compartilhados(usuario, limite=6):
+    """Pastas de musicas que alguem enviou pra esta conta (de qualquer
+    comunidade/ministerio -- ver ministerio.routes.compartilhar_pasta). As
+    ainda nao abertas primeiro, marcadas como novas; depois as mais recentes."""
+    from app.auth.models import User
+    from app.escala.models import PastaMusicas
+
+    lista = []
+    for pasta in PastaMusicas.objects(compartilhada_com__usuario_id=usuario.id):
+        meu = pasta.compartilhamento_de(usuario.id)
+        if meu is not None:
+            lista.append({"pasta": pasta, "envio": meu, "novo": meu.visto_em is None})
+    lista.sort(key=lambda r: (not r["novo"], -(r["envio"].enviado_em.timestamp() if r["envio"].enviado_em else 0)))
+    lista = lista[:limite]
+    remetentes = {u.id: u for u in User.objects(id__in=[r["envio"].enviado_por_id for r in lista])}
+    for r in lista:
+        quem = remetentes.get(r["envio"].enviado_por_id)
+        r["remetente"] = (quem.name or quem.username or quem.email) if quem else "alguem"
+    return lista
 
 
 @bp.route("/notificacoes/marcar-lidas", methods=["POST"])
