@@ -65,6 +65,30 @@
             {% endif %}
         {% endif %}
 
+        {% if eh_ministerio %}
+        <form id="quando-usar" method="POST" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-3 scroll-mt-4">
+            {{ form.csrf_token }}
+            <input type="hidden" name="acao" value="quando_usar">
+            <div>
+                <p class="text-sm font-semibold {{ tema.text_primary }}">Quando usar o check-in</p>
+                <p class="text-xs {{ tema.text_secondary }}">Vale para todas as escalas deste ministério. Em cada escala dá para mudar só ela.</p>
+            </div>
+            {% for nome, rotulo, ajuda, ligado in [
+                ('checkin_escala', 'No dia da escala', 'Para ficar “Presente”, a pessoa faz check-in no local. Desligado, ela marca a presença sozinha.', checkin_escala),
+                ('checkin_ensaio', 'Nos ensaios', 'Quem está escalado faz check-in no dia de cada ensaio.', checkin_ensaio),
+            ] %}
+            <label class="flex items-start justify-between gap-4 cursor-pointer">
+                <span class="min-w-0">
+                    <span class="block text-sm font-medium {{ tema.text_primary }}">{{ rotulo }}</span>
+                    <span class="block text-xs {{ tema.text_secondary }}">{{ ajuda }}</span>
+                </span>
+                <input type="checkbox" name="{{ nome }}" value="1" {{ 'checked' if ligado }} class="mt-1 w-5 h-5 shrink-0 accent-indigo-600" onchange="this.form.submit()">
+            </label>
+            {% endfor %}
+            <noscript><button type="submit" class="text-sm font-semibold {{ tema.accent_text }}">Salvar</button></noscript>
+        </form>
+        {% endif %}
+
         <form method="POST" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-4" data-local-form>
             {{ form.hidden_tag() }}
 

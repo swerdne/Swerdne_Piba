@@ -146,6 +146,7 @@ class Membro(SequentialIdDocument):
             CicloDisponibilidade.objects(membro_id=self.id),
             RegistroTroca.objects(membro_id=self.id),
             AlertaFaltas.objects(membro_id=self.id),
+            PresencaEnsaio.objects(membro_id=self.id),
         ]
 
     def __repr__(self):
@@ -332,6 +333,10 @@ class Escala(SequentialIdDocument):
     # Observacoes gerais do repertorio (saem no fim da folha de projecao e
     # das cifras, ver escala.routes.folha_repertorio).
     observacoes_repertorio = mongoengine.StringField(max_length=2000)
+    # Check-in desta escala: None = segue o ministerio; "ligado"/"desligado"
+    # sobrepoe (ver app/escala/checkin.py::checkin_ligado).
+    checkin_escala_modo = mongoengine.StringField(max_length=10)
+    checkin_ensaio_modo = mongoengine.StringField(max_length=10)
 
     # uq_escala_plantao_turno_periodo do Postgres (unique(plantao_turno_id,
     # plantao_periodo)) nao foi recriada aqui -- e uma invariante mantida
@@ -384,6 +389,7 @@ class Escala(SequentialIdDocument):
             Ensaio.objects(escala_id=self.id),
             Anexo.objects(escala_id=self.id),
             RegistroTroca.objects(escala_id=self.id),
+            PresencaEnsaio.objects(escala_id=self.id),
         ]
 
     @property
@@ -589,8 +595,26 @@ class Ensaio(SequentialIdDocument):
                 texto += f" as {self.horario_fim.strftime('%H:%M')}"
         return texto
 
+    def cascade_children(self):
+        return [PresencaEnsaio.objects(ensaio_id=self.id)]
+
     def __repr__(self):
         return f"<Ensaio {self.data} da escala {self.escala_id}>"
+
+
+class PresencaEnsaio(SequentialIdDocument):
+    """Check-in de uma pessoa num ensaio (o do dia da escala fica na
+    propria Funcao). Uma por pessoa por ensaio."""
+
+    meta = {"collection": "escala_presencas_ensaio", "indexes": ["ensaio_id", "escala_id", "membro_id"]}
+    _nome_sequencia = "escala_presencas_ensaio"
+
+    ensaio_id = mongoengine.IntField(required=True)
+    escala_id = mongoengine.IntField(required=True)
+    membro_id = mongoengine.IntField(required=True)
+    checkin_em = mongoengine.DateTimeField(required=True)
+    distancia_m = mongoengine.IntField()
+    precisao_m = mongoengine.IntField()
 
 def criar_escala_com_funcoes_padrao(
     ministerio_id, nome, departamento, data=None, horario=None, horario_fim=None, cor_selecionada=None

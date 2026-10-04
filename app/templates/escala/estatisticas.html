@@ -65,9 +65,17 @@
             </select>
             {% endif %}
             <input type="hidden" name="periodo" value="{{ periodo }}">
+            <input type="hidden" name="tipo" value="{{ tipo }}">
+            <nav class="flex p-1 rounded-full border {{ tema.card_border }} {{ tema.card_bg }} shrink-0 self-start" aria-label="Escalas ou ensaios">
+                {% for chave, rotulo in tipos.items() %}
+                <a href="{{ url_tela(periodo=periodo, tipo=chave, ministerio=selecionado.id if selecionado else None) }}"
+                   {% if chave == tipo %}aria-current="page"{% endif %}
+                   class="text-xs font-semibold px-3.5 py-1.5 rounded-full transition {{ (tema.accent_bg ~ ' text-white') if chave == tipo else tema.text_secondary }}">{{ rotulo }}</a>
+                {% endfor %}
+            </nav>
             <nav class="flex gap-1.5 overflow-x-auto" aria-label="Período">
                 {% for chave, (rotulo, _) in periodos.items() %}
-                <a href="{{ url_tela(periodo=chave, ministerio=selecionado.id if selecionado else None) }}"
+                <a href="{{ url_tela(periodo=chave, tipo=tipo, ministerio=selecionado.id if selecionado else None) }}"
                    {% if chave == periodo %}aria-current="page"{% endif %}
                    class="shrink-0 text-xs font-semibold px-3.5 py-2 rounded-full border transition
                           {{ (tema.accent_bg ~ ' text-white border-transparent') if chave == periodo else (tema.card_bg ~ ' ' ~ tema.card_border ~ ' ' ~ tema.text_secondary ~ ' ' ~ tema.card_bg_hover) }}">
@@ -89,8 +97,8 @@
         <div class="{{ CARD }} p-6 space-y-2">
             <p class="font-semibold">Ainda não há presenças registradas neste período.</p>
             <p class="text-sm {{ tema.text_secondary }}">
-                As estatísticas começam a aparecer quando a equipe faz check-in no local (ou o líder marca a presença) nas escalas.
-                {% if k.sem_registro %}{{ k.sem_registro }} escala{{ 's' if k.sem_registro > 1 }} do período não {{ 'tiveram' if k.sem_registro > 1 else 'teve' }} nenhuma presença registrada.{% endif %}
+                {% if tipo == 'ensaios' %}As estatísticas de ensaio aparecem quando o check-in nos ensaios está ligado e a equipe faz check-in neles.{% else %}As estatísticas começam a aparecer quando a equipe faz check-in no local (ou o líder marca a presença) nas escalas.{% endif %}
+                {% if k.sem_registro %}{{ k.sem_registro }} {{ 'ensaio' if tipo == 'ensaios' else 'escala' }}{{ 's' if k.sem_registro > 1 }} do período não {{ 'tiveram' if k.sem_registro > 1 else 'teve' }} nenhuma presença registrada.{% endif %}
             </p>
         </div>
         {% else %}
@@ -110,10 +118,10 @@
             <div class="{{ CARD }} p-4">
                 <p class="text-xs font-semibold {{ tema.text_secondary }}">Faltas</p>
                 <p class="text-3xl font-extrabold mt-1 {{ 'text-red-500' if k.faltas else '' }}">{{ k.faltas }}</p>
-                <p class="text-xs {{ tema.text_secondary }} mt-1">{{ k.trocas }} troca{{ 's' if k.trocas != 1 }} pedida{{ 's' if k.trocas != 1 }}</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{% if tipo == 'ensaios' %}sem check-in no ensaio{% else %}{{ k.trocas }} troca{{ 's' if k.trocas != 1 }} pedida{{ 's' if k.trocas != 1 }}{% endif %}</p>
             </div>
             <div class="{{ CARD }} p-4">
-                <p class="text-xs font-semibold {{ tema.text_secondary }}">Escalas</p>
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">{{ 'Ensaios' if tipo == 'ensaios' else 'Escalas' }}</p>
                 <p class="text-3xl font-extrabold mt-1">{{ k.escalas }}</p>
                 <p class="text-xs {{ tema.text_secondary }} mt-1">{% if k.sem_registro %}{{ k.sem_registro }} sem registro (fora da conta){% else %}com presença registrada{% endif %}</p>
             </div>
@@ -210,7 +218,7 @@
                         <option value="faltas:desc">Mais faltas</option>
                         <option value="chegada:desc">Chega mais tarde</option>
                         <option value="atrasos:desc">Mais atrasos</option>
-                        <option value="trocas:desc">Mais trocas</option>
+                        {% if tipo != 'ensaios' %}<option value="trocas:desc">Mais trocas</option>{% endif %}
                         <option value="nome:asc">Nome</option>
                     </select>
                 </label>
@@ -221,7 +229,7 @@
                 <span class="col-span-2 text-right">Comparecimento</span>
                 <span class="col-span-1 text-right">Faltas</span>
                 <span class="col-span-3 text-right">Chegada</span>
-                <span class="col-span-2 text-right">Trocas</span>
+                <span class="col-span-2 text-right">{{ '' if tipo == 'ensaios' else 'Trocas' }}</span>
             </div>
             <ul class="divide-y {{ tema.divide }}" data-lista-pessoas>
                 {% for pessoa in dados.pessoas %}
@@ -242,7 +250,7 @@
                     </div>
                     <p class="col-span-3 sm:col-span-1 text-xs sm:text-sm sm:text-right"><span class="sm:hidden {{ tema.text_secondary }}">Faltas: </span><span class="{{ 'text-red-500 font-bold' if pessoa.faltas else '' }}">{{ pessoa.faltas }}</span></p>
                     <p class="col-span-6 sm:col-span-3 text-xs sm:text-sm sm:text-right"><span class="sm:hidden {{ tema.text_secondary }}">Chegada: </span>{{ chegada(pessoa.chegada_media) }}{% if pessoa.atrasos %} <span class="text-red-500">({{ pessoa.atrasos }} atraso{{ 's' if pessoa.atrasos > 1 }})</span>{% endif %}</p>
-                    <p class="col-span-3 sm:col-span-2 text-xs sm:text-sm text-right"><span class="sm:hidden {{ tema.text_secondary }}">Trocas: </span>{{ pessoa.trocas }}</p>
+                    <p class="col-span-3 sm:col-span-2 text-xs sm:text-sm text-right">{% if tipo != 'ensaios' %}<span class="sm:hidden {{ tema.text_secondary }}">Trocas: </span>{{ pessoa.trocas }}{% endif %}</p>
                 </li>
                 {% endfor %}
             </ul>
@@ -281,6 +289,7 @@
                 <li>Comparecimento é o check-in no local ou a presença marcada pelo líder; quem não tem nenhum dos dois conta como falta.</li>
                 <li>O horário de chegada vem só do check-in, em escalas com horário definido. Check-ins a mais de 3 horas do horário ficam fora das médias.</li>
                 <li>As trocas contam os pedidos feitos pelo próprio escalado a partir de outubro de 2026.</li>
+                <li>Ensaios: quem está escalado na escala é esperado em cada ensaio dela; conta como presença só o check-in no ensaio. Ensaios sem nenhum check-in ficam fora da conta.</li>
             </ul>
         </details>
         {% endif %}

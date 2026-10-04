@@ -50,6 +50,12 @@ class Ministerio(SequentialIdDocument):
     tolerancia_atraso_min = mongoengine.IntField()
     alerta_faltas_seguidas = mongoengine.IntField()
 
+    # Check-in por localizacao: padrao do ministerio (cada Escala pode
+    # sobrepor, ver Escala.checkin_*_modo e checkin.checkin_ligado).
+    # Vazio = padrao: ligado no dia da escala, desligado nos ensaios.
+    checkin_escala = mongoengine.BooleanField()
+    checkin_ensaio = mongoengine.BooleanField()
+
     def gerar_novo_link_convite(self):
         self.token_convite_publico = secrets.token_urlsafe(8)
         return self.token_convite_publico

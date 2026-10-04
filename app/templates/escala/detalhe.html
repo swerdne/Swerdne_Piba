@@ -180,6 +180,14 @@
                         {% if ensaio.local %}
                         <p class="text-xs {{ tema.text_secondary }} truncate"><i class="fa-solid fa-location-dot mr-1"></i>{{ ensaio.local }}</p>
                         {% endif %}
+                        {% if eh_dono and checkin_ensaio_ligado and not ensaio.cancelado and ensaio.data <= hoje %}
+                        {% set ids_escalados = funcoes | rejectattr('eh_subcabecalho') | selectattr('membro_id') | map(attribute='membro_id') | unique | list %}
+                        {% set vieram = presencas_ensaio.get(ensaio.id, []) %}
+                        {% set nomes_vieram = funcoes | selectattr('membro_id', 'in', vieram) | map(attribute='membro.nome') | unique | list %}
+                        <p class="text-xs font-semibold {{ 'text-emerald-600' if vieram|length >= ids_escalados|length else 'text-amber-600' }}" title="{{ nomes_vieram | join(', ') }}">
+                            <i class="fa-solid fa-location-dot mr-1"></i>Check-in: {{ vieram|length }} de {{ ids_escalados|length }}{% if nomes_vieram %} &middot; <span class="font-normal {{ tema.text_secondary }}">{{ nomes_vieram | join(', ') }}</span>{% endif %}
+                        </p>
+                        {% endif %}
                     </div>
                     {% if eh_dono %}
                     <div class="flex items-center gap-3 shrink-0">
@@ -315,7 +323,27 @@
         <!-- Check-in por localizacao: resumo pro lider no dia (app/escala/checkin.py) -->
         {% if eh_dono and not escala.cancelada %}
         {% set pessoas_escaladas = funcoes | rejectattr('eh_subcabecalho') | selectattr('membro_id') | list %}
-        {% if not local_checkin %}
+        <form id="config-checkin" method="POST" action="{{ url_for('escala.configurar_checkin', escala_id=escala.id) }}"
+              class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 space-y-2.5 scroll-mt-4">
+            {{ acao_form.hidden_tag() }}
+            <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-location-dot mr-1.5 {{ tema.accent_text }}"></i>Check-in desta escala</p>
+            <div class="grid sm:grid-cols-2 gap-2.5">
+                {% for tipo, rotulo, padrao in [('escala', 'No dia da escala', checkin_padrao_escala), ('ensaio', 'Nos ensaios', checkin_padrao_ensaio)] %}
+                {% set modo = escala['checkin_' ~ tipo ~ '_modo'] %}
+                <label class="block">
+                    <span class="block text-xs {{ tema.text_secondary }} mb-1">{{ rotulo }}</span>
+                    <select name="checkin_{{ tipo }}_modo" onchange="this.form.submit()"
+                            class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                        <option value="" {{ 'selected' if modo not in ['ligado', 'desligado'] }}>Igual ao ministério ({{ 'ligado' if padrao else 'desligado' }})</option>
+                        <option value="ligado" {{ 'selected' if modo == 'ligado' }}>Ligado só nesta escala</option>
+                        <option value="desligado" {{ 'selected' if modo == 'desligado' }}>Desligado só nesta escala</option>
+                    </select>
+                </label>
+                {% endfor %}
+            </div>
+            <noscript><button type="submit" class="text-sm font-semibold {{ tema.accent_text }}">Salvar</button></noscript>
+        </form>
+        {% if (checkin_escala_ligado or checkin_ensaio_ligado) and not local_checkin %}
         <div class="flex items-start gap-3 rounded-2xl px-4 py-3 bg-amber-500/10 border border-amber-500/30">
             <i class="fa-solid fa-location-dot text-amber-500 mt-0.5"></i>
             <p class="text-xs {{ tema.text_primary }} flex-1">
@@ -323,7 +351,7 @@
                 <a href="{{ url_for('ministerio.local_checkin', ministerio_id=escala.ministerio_id) }}" class="font-semibold {{ tema.accent_text }} hover:underline">Cadastrar o local</a>
             </p>
         </div>
-        {% elif escala.data == hoje and pessoas_escaladas %}
+        {% elif checkin_escala_ligado and escala.data == hoje and pessoas_escaladas %}
         {% set com_checkin = pessoas_escaladas | selectattr('checkin_em') | list %}
         {% set faltam = pessoas_escaladas | rejectattr('checkin_em') | list %}
         <div data-resumo-checkin class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 space-y-2">

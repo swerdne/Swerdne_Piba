@@ -16,9 +16,9 @@ from app.imagens import ImagemArmazenada, salvar_imagem, remover_imagem
 from app.auth.routes import _notificar_senha_alterada
 from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import Ministerio
-from app.escala.models import Membro, Escala, Funcao, Ensaio, Anexo, STATUS_LABELS, STATUS_CORES, eh_funcao_de_projecao
+from app.escala.models import Membro, Escala, Funcao, Ensaio, Anexo, PresencaEnsaio, STATUS_LABELS, STATUS_CORES, eh_funcao_de_projecao
 from app.escala.forms import StatusForm
-from app.escala.checkin import local_do_checkin, situacao_do_dia, status_sem_presente
+from app.escala.checkin import checkin_ligado, local_do_checkin, situacao_do_dia, situacao_do_ensaio, status_sem_presente
 
 
 # Icone por tipo de notificacao no sino do Dashboard -- fallback pra
@@ -741,14 +741,24 @@ def minha_escala():
         ]
         formularios_status = {}
         for funcao in minhas_funcoes:
-            form = status_sem_presente(StatusForm(status=funcao.status or "nao_notificado"), funcao.status)
+            form = status_sem_presente(StatusForm(status=funcao.status or "nao_notificado"), funcao.status, selecionada)
             form.troca_sugestao_membro_id.choices = sugestoes
             formularios_status[funcao.id] = form
         com_checkin = [f for f in minhas_funcoes if f.checkin_em]
+        ensaios = selecionada.ensaios
+        checkin_ensaio_ligado = checkin_ligado(selecionada, "ensaio")
+        meus_membros = {f.membro_id for f in minhas_funcoes}
+        presencas_ensaio = {
+            p.ensaio_id: p for p in PresencaEnsaio.objects(escala_id=selecionada.id, membro_id__in=list(meus_membros))
+        } if checkin_ensaio_ligado else {}
         contexto = {
             "minhas_funcoes": minhas_funcoes,
             "formularios_status": formularios_status,
-            "ensaios": selecionada.ensaios,
+            "ensaios": ensaios,
+            "checkin_escala_ligado": checkin_ligado(selecionada, "escala"),
+            "checkin_ensaio_ligado": checkin_ensaio_ligado,
+            "presencas_ensaio": presencas_ensaio,
+            "motivo_ensaio": {e.id: situacao_do_ensaio(e, selecionada, hoje) for e in ensaios} if checkin_ensaio_ligado else {},
             "anexos": anexos,
             "nomes_funcao": nomes_funcao,
             "repertorio": selecionada.repertorio,

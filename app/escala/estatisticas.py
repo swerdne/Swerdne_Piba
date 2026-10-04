@@ -16,7 +16,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-from app.escala.models import TIPO_SUBCABECALHO, AlertaFaltas, Escala, Funcao, Membro, RegistroTroca
+from app.escala.models import TIPO_SUBCABECALHO, AlertaFaltas, Ensaio, Escala, Funcao, Membro, PresencaEnsaio, RegistroTroca
 
 PERIODOS = {
     "30d": ("Últimos 30 dias", 30),
@@ -25,6 +25,7 @@ PERIODOS = {
     "1a": ("1 ano", 365),
 }
 PERIODO_PADRAO = "3m"
+TIPOS = {"escalas": "Escalas", "ensaios": "Ensaios"}
 TOLERANCIA_PADRAO_MIN = 10
 ALERTA_FALTAS_PADRAO = 3
 LIMITE_PONTUALIDADE_MIN = 180
@@ -60,14 +61,15 @@ class Registro:
     tolerancia: int
 
 
-def _minutos_de_chegada(escala, funcao):
-    if not funcao.checkin_em or not escala.horario:
+def _minutos_de_chegada(evento, checkin_em):
+    """evento: Escala ou Ensaio (data + horario)."""
+    if not checkin_em or not evento.horario:
         return None
-    chegada = funcao.checkin_em
+    chegada = checkin_em
     if chegada.tzinfo is not None:
         chegada = chegada.astimezone(timezone.utc).replace(tzinfo=None)
     chegada -= timedelta(hours=3)
-    diferenca = round((chegada - datetime.combine(escala.data, escala.horario)).total_seconds() / 60)
+    diferenca = round((chegada - datetime.combine(evento.data, evento.horario)).total_seconds() / 60)
     return diferenca if abs(diferenca) <= LIMITE_PONTUALIDADE_MIN else None
 
 
@@ -96,10 +98,50 @@ def coletar(ministerios, inicio, fim):
                 escala_id=escala_id, data=escala.data, ministerio_id=escala.ministerio_id,
                 funcao_nome=f.nome, membro_id=f.membro_id,
                 compareceu=f.status == "presente" or bool(f.checkin_em),
-                checkin=bool(f.checkin_em), minutos=_minutos_de_chegada(escala, f),
+                checkin=bool(f.checkin_em), minutos=_minutos_de_chegada(escala, f.checkin_em),
                 tolerancia=tolerancias[escala.ministerio_id],
             ))
     return registros, sem_registro, list(por_id)
+
+
+def coletar_ensaios(ministerios, inicio, fim):
+    """Mesmo formato de coletar(), para os ensaios: quem esta escalado na
+    escala do ensaio e esperado nele; comparecimento = check-in no ensaio.
+    Ensaio sem nenhum check-in fica "sem registro" (check-in desligado ou
+    ninguem usou). `escala_id` do Registro guarda o id do ENSAIO."""
+    tolerancias = {m.id: tolerancia_de(m) for m in ministerios}
+    escalas = {e.id: e for e in Escala.objects(ministerio_id__in=list(tolerancias), cancelada__ne=True).only("id", "ministerio_id")}
+    ensaios = list(Ensaio.objects(
+        escala_id__in=list(escalas), data__gte=inicio, data__lte=fim, cancelado__ne=True,
+    ).only("id", "escala_id", "data", "horario")) if escalas else []
+    if not ensaios:
+        return [], 0, []
+    ids_escala = list({en.escala_id for en in ensaios})
+    funcoes_por_escala = defaultdict(list)
+    for f in Funcao.objects(escala_id__in=ids_escala, membro_id__ne=None, tipo__ne=TIPO_SUBCABECALHO).only("escala_id", "nome", "membro_id"):
+        funcoes_por_escala[f.escala_id].append(f)
+    presencas = {}
+    for p in PresencaEnsaio.objects(ensaio_id__in=[en.id for en in ensaios]).only("ensaio_id", "membro_id", "checkin_em"):
+        presencas[(p.ensaio_id, p.membro_id)] = p.checkin_em
+
+    registros, sem_registro = [], 0
+    for ensaio in ensaios:
+        funcoes = funcoes_por_escala.get(ensaio.escala_id, [])
+        if not funcoes:
+            continue
+        if not any((ensaio.id, f.membro_id) in presencas for f in funcoes):
+            sem_registro += 1
+            continue
+        ministerio_id = escalas[ensaio.escala_id].ministerio_id
+        for f in funcoes:
+            checkin_em = presencas.get((ensaio.id, f.membro_id))
+            registros.append(Registro(
+                escala_id=ensaio.id, data=ensaio.data, ministerio_id=ministerio_id,
+                funcao_nome=f.nome, membro_id=f.membro_id, compareceu=checkin_em is not None,
+                checkin=checkin_em is not None, minutos=_minutos_de_chegada(ensaio, checkin_em),
+                tolerancia=tolerancias[ministerio_id],
+            ))
+    return registros, sem_registro, []
 
 
 def _taxa(presencas, total):
@@ -155,12 +197,14 @@ def _sequencia_de_faltas(registros_da_pessoa):
     return seguidas, inicio
 
 
-def montar(ministerios, periodo):
-    """Tudo o que a tela mostra, ja calculado."""
+def montar(ministerios, periodo, tipo="escalas"):
+    """Tudo o que a tela mostra, ja calculado. tipo: "escalas" ou "ensaios"
+    (separados de proposito -- trocas e alerta de faltas so valem pra escalas)."""
     dias = PERIODOS[periodo][1]
     fim = hoje_brasilia() - timedelta(days=1)
     inicio = fim - timedelta(days=dias - 1)
-    registros, sem_registro, ids_escalas = coletar(ministerios, inicio, fim)
+    coletor = coletar_ensaios if tipo == "ensaios" else coletar
+    registros, sem_registro, ids_escalas = coletor(ministerios, inicio, fim)
 
     presencas = sum(r.compareceu for r in registros)
     com_horario = [r for r in registros if r.minutos is not None]
@@ -177,7 +221,7 @@ def montar(ministerios, periodo):
     for r in registros:
         por_pessoa[r.membro_id].append(r)
     nomes = {m.id: m.nome for m in Membro.objects(id__in=list(set(por_pessoa) | set(trocas))).only("nome")}
-    alerta = min((alerta_de(m) for m in ministerios if alerta_de(m)), default=0)
+    alerta = 0 if tipo == "ensaios" else min((alerta_de(m) for m in ministerios if alerta_de(m)), default=0)
     pessoas = []
     for membro_id in set(por_pessoa) | set(trocas):
         dele = por_pessoa.get(membro_id, [])
@@ -244,6 +288,7 @@ def montar(ministerios, periodo):
         "por_funcao": por_funcao,
         "por_dia": por_dia,
         "alerta": alerta,
+        "tipo": tipo,
     }
 
 
@@ -309,14 +354,19 @@ def tela_estatisticas(ministerios, titulo, voltar_url, url_tela, ministerio_conf
     if ministerio_config is None and len(ministerios) > 1:
         selecionado = next((m for m in ministerios if str(m.id) == request.args.get("ministerio")), None)
     alvo = [selecionado] if selecionado else ministerios
+    tipo = request.args.get("tipo")
+    if tipo not in TIPOS:
+        tipo = "escalas"
 
     return render_template(
         "escala/estatisticas.html",
         titulo=titulo,
         voltar_url=voltar_url,
         url_tela=url_tela,
-        dados=montar(alvo, periodo) if alvo else None,
+        dados=montar(alvo, periodo, tipo) if alvo else None,
         periodo=periodo,
+        tipo=tipo,
+        tipos=TIPOS,
         periodos=PERIODOS,
         ministerios=ministerios if ministerio_config is None and len(ministerios) > 1 else [],
         selecionado=selecionado,

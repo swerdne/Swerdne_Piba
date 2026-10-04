@@ -74,8 +74,9 @@
         </div>
 
         <!-- Check-in por localizacao (app/escala/checkin.py): Presente so no local -->
-        {% if not selecionada.cancelada %}
-        <div data-checkin-card class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+        <div data-checkin-csrf class="hidden">{{ acao_form.hidden_tag() }}</div>
+        {% if not selecionada.cancelada and checkin_escala_ligado %}
+        <div data-checkin-card data-checkin-bloco class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 {{ 'bg-emerald-500/15 text-emerald-500' if checkin_feito else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
                     <i class="fa-solid {{ 'fa-circle-check' if checkin_feito else 'fa-location-dot' }} text-lg"></i>
@@ -99,7 +100,6 @@
             {% elif not local_checkin %}
             <p class="text-xs text-amber-600">O endereço do local ainda não foi cadastrado. Avise o líder do ministério para cadastrar em “Local do check-in”.</p>
             {% else %}
-            <div data-checkin-csrf class="hidden">{{ acao_form.hidden_tag() }}</div>
             <button type="button" data-checkin-botao data-url="{{ url_for('escala.checkin', escala_id=selecionada.id) }}"
                     class="w-full flex items-center justify-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-base font-bold py-3.5 rounded-full transition disabled:opacity-60">
                 <i class="fa-solid fa-location-crosshairs"></i><span data-checkin-texto>Fazer check-in</span>
@@ -187,6 +187,7 @@
                     {% if ensaios %}
                     <div class="divide-y {{ tema.divide }}">
                         {% for ensaio in ensaios %}
+                        <div>
                         <div class="flex items-center gap-3 px-4 py-3 {{ 'opacity-60' if ensaio.data < hoje }}">
                             <div class="w-11 shrink-0 text-center rounded-xl py-1 {{ 'bg-red-500/10 text-red-500' if ensaio.cancelado else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
                                 <p class="text-[10px] font-bold uppercase leading-none">{{ DIAS[ensaio.data.weekday()] }}</p>
@@ -201,6 +202,25 @@
                             {% if ensaio.cancelado %}
                             <span class="text-[10px] font-semibold uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelado</span>
                             {% endif %}
+                        </div>
+                        {% if checkin_ensaio_ligado and not ensaio.cancelado and not selecionada.cancelada and ensaio.data >= hoje %}
+                        {% set presenca = presencas_ensaio.get(ensaio.id) %}
+                        <div class="px-4 pb-3 -mt-1" data-checkin-bloco>
+                            {% if presenca %}
+                            <p class="text-xs font-semibold text-emerald-600"><i class="fa-solid fa-circle-check mr-1"></i>Check-in feito às {{ presenca.checkin_em | hora_local }}{% if presenca.distancia_m is not none %}, a {{ presenca.distancia_m }} m do local{% endif %}.</p>
+                            {% elif motivo_ensaio.get(ensaio.id) %}
+                            <p class="text-xs {{ tema.text_secondary }}"><i class="fa-solid fa-location-dot mr-1"></i>Check-in no ensaio: {{ motivo_ensaio[ensaio.id] }}</p>
+                            {% elif not local_checkin %}
+                            <p class="text-xs text-amber-600">O endereço do local ainda não foi cadastrado. Avise o líder do ministério.</p>
+                            {% else %}
+                            <button type="button" data-checkin-botao data-url="{{ url_for('escala.checkin_ensaio', ensaio_id=ensaio.id) }}"
+                                    class="w-full flex items-center justify-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-bold py-2.5 rounded-full transition disabled:opacity-60">
+                                <i class="fa-solid fa-location-crosshairs"></i><span data-checkin-texto>Fazer check-in no ensaio</span>
+                            </button>
+                            <p data-checkin-msg class="text-xs {{ tema.text_secondary }} mt-1.5">Toque quando chegar ao ensaio (até {{ local_checkin.raio_m }} m do local).</p>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -285,11 +305,10 @@
     // Check-in por localizacao: pega a melhor posicao do GPS em ate ~12 s
     // (a 1a leitura costuma vir imprecisa e melhora em segundos) e manda pro
     // servidor, que confere a distancia ate o local (escala.routes.checkin).
-    (function () {
-        var botao = document.querySelector('[data-checkin-botao]');
-        if (!botao) return;
+    document.querySelectorAll('[data-checkin-botao]').forEach(function (botao) {
+        var bloco = botao.closest('[data-checkin-bloco]');
         var texto = botao.querySelector('[data-checkin-texto]');
-        var msg = document.querySelector('[data-checkin-msg]');
+        var msg = bloco.querySelector('[data-checkin-msg]');
         var campoCsrf = document.querySelector('[data-checkin-csrf] input[name="csrf_token"]');
         var BOA_PRECISAO = 30, ESPERA_MAXIMA = 12000;
 
@@ -373,6 +392,6 @@
             }, { enableHighAccuracy: true, timeout: ESPERA_MAXIMA, maximumAge: 0 });
             limite = setTimeout(terminar, ESPERA_MAXIMA);
         });
-    })();
+    });
 </script>
 {% endblock %}

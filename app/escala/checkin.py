@@ -117,9 +117,47 @@ def hora_local(momento):
     return (momento - timedelta(hours=3)).strftime("%H:%M")
 
 
-def status_sem_presente(form, status_atual):
+def status_sem_presente(form, status_atual, escala=None):
     """Tira "Presente" do <select> do proprio escalado: so o check-in marca
-    (ver escala.routes.atualizar_status). Se ja esta presente, fica."""
+    (ver escala.routes.atualizar_status). Se ja esta presente, fica. Com o
+    check-in desligado nesta escala, a pessoa marca sozinha."""
+    if escala is not None and not checkin_ligado(escala, "escala"):
+        return form
     if status_atual != "presente":
         form.status.choices = [c for c in form.status.choices if c[0] != "presente"]
     return form
+
+
+# --- Onde o check-in vale (configuravel) ----------------------------------------
+# Ministerio define o padrao (Ministerio.checkin_escala/checkin_ensaio) e cada
+# Escala pode sobrepor (Escala.checkin_escala_modo/checkin_ensaio_modo).
+PADRAO_POR_TIPO = {"escala": True, "ensaio": False}
+MODOS = ("ligado", "desligado")
+
+
+def checkin_padrao(ministerio, tipo):
+    valor = getattr(ministerio, f"checkin_{tipo}", None) if ministerio else None
+    return PADRAO_POR_TIPO[tipo] if valor is None else valor
+
+
+def checkin_ligado(escala, tipo):
+    """tipo: "escala" (o dia do evento) ou "ensaio"."""
+    modo = getattr(escala, f"checkin_{tipo}_modo", None)
+    if modo in MODOS:
+        return modo == "ligado"
+    return checkin_padrao(escala.ministerio, tipo)
+
+
+def situacao_do_ensaio(ensaio, escala, hoje):
+    """None se o check-in do ensaio esta liberado hoje; senao, o motivo."""
+    if not checkin_ligado(escala, "ensaio"):
+        return "O check-in não está ligado para os ensaios desta escala."
+    if escala.cancelada:
+        return "Esta escala foi cancelada."
+    if ensaio.cancelado:
+        return "Este ensaio foi cancelado."
+    if ensaio.data > hoje:
+        return f"O check-in abre no dia do ensaio ({ensaio.data.strftime('%d/%m')})."
+    if ensaio.data < hoje:
+        return "O dia deste ensaio já passou."
+    return None
