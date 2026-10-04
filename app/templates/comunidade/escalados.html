@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    [data-dia-escalados] > summary { list-style: none; }
+    [data-dia-escalados] > summary::-webkit-details-marker { display: none; }
+    [data-dia-escalados] .seta-retratil { transition: transform .2s; }
+    [data-dia-escalados][open] .seta-retratil { transform: rotate(180deg); }
 </style>
 {% endblock %}
 
@@ -47,17 +51,33 @@
         </a>
 
         {% if ministerios %}
-        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
-            <h2 class="text-sm font-semibold {{ tema.text_primary }} mb-3">Ministerios</h2>
-            <div class="flex flex-wrap gap-2">
+        <section>
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Ministérios</h2>
+            {% set cores_ministerio = [
+                ('bg-indigo-500', 'fa-music'), ('bg-emerald-500', 'fa-hands-praying'), ('bg-rose-500', 'fa-heart'),
+                ('bg-amber-500', 'fa-star'), ('bg-sky-500', 'fa-video'), ('bg-violet-500', 'fa-people-group'),
+            ] %}
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {% for ministerio in ministerios %}
+                {% set cor, icone = cores_ministerio[loop.index0 % cores_ministerio|length] %}
                 <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}"
-                   class="text-sm {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded-full px-3 py-1.5 hover:opacity-80 transition">
-                    {{ ministerio.nome }}
+                   class="group relative flex flex-col gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition">
+                    <span class="absolute -top-6 -right-6 w-20 h-20 rounded-full {{ cor }} opacity-10"></span>
+                    {% if ministerio.imagem %}
+                    <img src="{{ ministerio.imagem }}" alt="" class="w-11 h-11 rounded-2xl object-cover shadow-sm">
+                    {% else %}
+                    <span class="w-11 h-11 rounded-2xl {{ cor }} text-white flex items-center justify-center shadow-sm">
+                        <i class="fa-solid {{ 'fa-child-reaching' if ministerio.eh_kids else icone }}"></i>
+                    </span>
+                    {% endif %}
+                    <span class="flex items-end justify-between gap-2 min-w-0">
+                        <span class="text-sm font-bold {{ tema.text_primary }} leading-snug break-words min-w-0">{{ ministerio.nome | replace('_', ' ') }}</span>
+                        <i class="fa-solid fa-arrow-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition shrink-0 mb-0.5"></i>
+                    </span>
                 </a>
                 {% endfor %}
             </div>
-        </div>
+        </section>
         {% endif %}
 
         <form method="GET" class="grid grid-cols-2 sm:grid-cols-4 gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
@@ -97,16 +117,39 @@
         </div>
         {% endif %}
 
+        {% set dias_semana = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'] %}
+        {% set meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'] %}
         <div class="space-y-3">
-            {% set data_atual = namespace(valor=None) %}
-            {% for funcao in funcoes %}
+            {% for dia in dias %}
+            {% set qtd = dia.funcoes | length %}
+            <details data-dia-escalados class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm" {{ 'open' if dia.data == dia_aberto }}>
+                <summary class="flex items-center gap-3 px-4 py-3.5 cursor-pointer select-none">
+                    <span class="w-10 h-10 rounded-2xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex flex-col items-center justify-center shrink-0 leading-none">
+                        {% if dia.data %}
+                        <span class="text-sm font-extrabold">{{ dia.data.day }}</span>
+                        <span class="text-[10px] font-semibold uppercase mt-0.5">{{ meses[dia.data.month - 1] }}</span>
+                        {% else %}<i class="fa-solid fa-calendar text-sm"></i>{% endif %}
+                    </span>
+                    <span class="flex-1 min-w-0">
+                        <span class="flex items-center gap-2 flex-wrap">
+                            <span class="text-sm font-bold {{ tema.text_primary }}">
+                                {% if dia.data %}Escalados de {{ dias_semana[dia.data.weekday()] }}, {{ dia.data.strftime('%d/%m/%Y') }}{% else %}Escalados sem data definida{% endif %}
+                            </span>
+                            {% if dia.data == hoje %}
+                            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full {{ tema.accent_bg }} text-white">Hoje</span>
+                            {% elif dia.data and (dia.data - hoje).days == 1 %}
+                            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">Amanhã</span>
+                            {% elif dia.data and dia.data < hoje %}
+                            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full {{ tema.secondary_bg }} {{ tema.text_secondary }}">Já passou</span>
+                            {% endif %}
+                        </span>
+                        <span class="block text-xs {{ tema.text_secondary }}">{{ qtd }} pessoa{{ 's' if qtd != 1 }} escalada{{ 's' if qtd != 1 }}</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-retratil shrink-0"></i>
+                </summary>
+                <div class="px-3 pb-3 space-y-2">
+            {% for funcao in dia.funcoes %}
                 {% set escala = funcao.escala %}
-                {% if escala.data != data_atual.valor %}
-                    {% set data_atual.valor = escala.data %}
-                    <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide pt-2">
-                        {{ escala.data.strftime('%d/%m/%Y') if escala.data else 'Sem data definida' }}
-                    </h2>
-                {% endif %}
                 <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
                     <span class="w-2.5 h-2.5 rounded-full {{ escala.cor }} shrink-0"></span>
                     <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
@@ -124,6 +167,9 @@
                         {{ status_labels.get(funcao.status, 'Nao notificado') }}
                     </span>
                 </div>
+            {% endfor %}
+                </div>
+            </details>
             {% endfor %}
         </div>
 

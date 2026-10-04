@@ -768,12 +768,28 @@ def escalados(comunidade_id):
         escalas_relevantes[f.escala_id].horario or time.min,
     ))
 
+    # Um grupo recolhivel por dia; abre so o de hoje (ou o proximo dia com
+    # escala, ou o ultimo, se tudo ja passou).
+    from app.escala.estatisticas import hoje_brasilia
+
+    dias = []
+    for funcao in funcoes:
+        data = escalas_relevantes[funcao.escala_id].data
+        if not dias or dias[-1]["data"] != data:
+            dias.append({"data": data, "funcoes": []})
+        dias[-1]["funcoes"].append(funcao)
+    hoje = hoje_brasilia()
+    dia_aberto = next((d["data"] for d in dias if d["data"] and d["data"] >= hoje), dias[-1]["data"] if dias else None)
+
     return render_template(
         "comunidade/escalados.html",
         comunidade=comunidade,
         eh_dono=eh_dono,
         ministerios=ministerios,
         funcoes=funcoes,
+        dias=dias,
+        dia_aberto=dia_aberto,
+        hoje=hoje,
         departamentos=DEPARTAMENTOS.keys(),
         status_labels=STATUS_LABELS,
         status_cores=STATUS_CORES,
