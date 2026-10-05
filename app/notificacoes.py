@@ -43,7 +43,7 @@ class Notificacao(SequentialIdDocument):
         if not self.escala_id:
             return None
         from app.escala.models import Escala
-        return Escala.objects(id=self.escala_id).first()
+        return relacao_em_cache(self, "escala", self.escala_id, lambda: Escala.objects(id=self.escala_id).first())
 
     def __repr__(self):
         return f"<Notificacao {self.titulo!r} para usuario {self.usuario_id}>"

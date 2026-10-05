@@ -7,7 +7,7 @@ from flask_login import login_required, current_user
 
 from app.imagens import salvar_imagem, remover_imagem
 from app.extensions import limiter
-from app.db_utils import delete_cascade, primeiro_ou_404
+from app.db_utils import delete_cascade, precarregar, primeiro_ou_404
 from app.comunidade import bp
 from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm
 from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade
@@ -147,7 +147,7 @@ def index():
             if ids_admin else []
         )
 
-    comunidades_membro_ids = set(Membro.objects(email=current_user.email).distinct("comunidade_id"))
+    comunidades_membro_ids = set(Membro.da_conta(current_user.email).distinct("comunidade_id"))
     ids_papel_membro = {
         row.comunidade_id for row in
         UsuarioComunidade.objects(usuario_id=current_user.id, papel="membro")
@@ -761,6 +761,8 @@ def escalados(comunidade_id):
         filtro_funcao["nome__icontains"] = funcao_nome
 
     funcoes = list(Funcao.objects(**filtro_funcao))
+    precarregar(funcoes, "escala", "escala_id", objetos=escalas_relevantes)
+    precarregar(funcoes, "membro", "membro_id", Membro)
     funcoes.sort(key=lambda f: (
         escalas_relevantes[f.escala_id].data is None,
         escalas_relevantes[f.escala_id].data or date.min,

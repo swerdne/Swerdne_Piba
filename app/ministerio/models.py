@@ -124,6 +124,15 @@ class Ministerio(SequentialIdDocument):
         return f"<Ministerio {self.nome} da comunidade {self.comunidade_id}>"
 
 
+def ministerios_da_comunidade(comunidade_id):
+    """Ministerios da comunidade por nome, uma consulta por requisicao (a
+    tela da Escala pedia a mesma lista em 3 lugares)."""
+    from app.db_utils import por_requisicao
+
+    return por_requisicao(("ministerios_da_comunidade", comunidade_id),
+                          lambda: list(Ministerio.objects(comunidade_id=comunidade_id).order_by("nome")))
+
+
 class UsuarioMinisterio(SequentialIdDocument):
     """Papel de um usuario (conta com login) dentro de um Ministerio --
     'lider' gerencia escalas/turnos/membros daquele ministerio; 'membro'

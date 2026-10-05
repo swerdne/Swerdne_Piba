@@ -433,7 +433,7 @@ class EquipeMembro(SequentialIdDocument):
         return f"<EquipeMembro {self.membro_id} da equipe {self.equipe_turno_id}>"
 
 
-def equipe_do_periodo(turno, periodo):
+def equipe_do_periodo(turno, periodo, equipes=None):
     """A formula PURA do rodizio: equipes[(offset + periodo) % tamanho].
 
     Uso exclusivo de app/plantao/sincronizacao.py pra decidir a equipe (grupo
@@ -444,7 +444,8 @@ def equipe_do_periodo(turno, periodo):
     escala.routes.remover_membro). Nao chame esta funcao pra descobrir a
     atribuicao atual de um periodo especifico.
     """
-    equipes = turno.fila_ordenada
+    if equipes is None:
+        equipes = turno.fila_ordenada
     if not equipes:
         return None
     return equipes[(turno.offset + periodo) % len(equipes)]

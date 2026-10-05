@@ -8,10 +8,42 @@
    (Cache-Control: no-cache), ~300 ms cada no celular.
 2. Compressao gzip de HTML/CSS/JS/JSON (o Azure App Service nao comprime
    sozinho): o CSS cai de ~52 KB pra ~10 KB, uma pagina de ~40 KB pra ~8 KB.
+3. Medicao: toda resposta leva `Server-Timing` (tempo total, tempo no
+   MongoDB e quantas consultas -- aparece no DevTools > Network > Timing) e
+   requisicao lenta vai pro log (Azure > Log stream). Cada ida ao banco custa
+   uma volta de rede inteira: tela lenta quase sempre e consulta em loop --
+   use db_utils.precarregar.
 """
 import gzip
 import hashlib
+import logging
 import os
+import time
+
+from flask import g, has_request_context
+from pymongo import monitoring
+
+_LENTA_SEGUNDOS = 1.5
+logger = logging.getLogger(__name__)
+
+
+class ContadorMongo(monitoring.CommandListener):
+    """Soma o tempo/quantidade de comandos do MongoDB da requisicao atual
+    (o pymongo chama isto na mesma thread que executou a consulta)."""
+
+    def _somar(self, evento):
+        if has_request_context():
+            g.mongo_us = g.get("mongo_us", 0) + evento.duration_micros
+            g.mongo_n = g.get("mongo_n", 0) + 1
+
+    def started(self, evento):
+        pass
+
+    def succeeded(self, evento):
+        self._somar(evento)
+
+    def failed(self, evento):
+        self._somar(evento)
 
 _TIPOS_COMPRIMIVEIS = (
     "text/html", "text/css", "text/plain", "text/javascript", "application/javascript",
@@ -38,6 +70,28 @@ def registrar_desempenho(app):
             resumo = hashlib.sha1(arquivo.read()).hexdigest()[:10]
         versoes[caminho] = (mtime, resumo)
         return resumo
+
+    @app.before_request
+    def iniciar_cronometro():
+        g.inicio_requisicao = time.perf_counter()
+
+    @app.after_request
+    def informar_tempo(resposta):
+        from flask import request
+
+        inicio = g.get("inicio_requisicao")
+        if inicio is None or request.endpoint == "static":
+            return resposta
+        total_ms = (time.perf_counter() - inicio) * 1000
+        banco_ms = g.get("mongo_us", 0) / 1000
+        consultas = g.get("mongo_n", 0)
+        resposta.headers["Server-Timing"] = (
+            f'total;dur={total_ms:.0f}, db;dur={banco_ms:.0f};desc="{consultas} consultas"'
+        )
+        if total_ms >= _LENTA_SEGUNDOS * 1000:
+            logger.warning("Requisicao lenta: %s %s %.0f ms (banco %.0f ms, %d consultas)",
+                           request.method, request.path, total_ms, banco_ms, consultas)
+        return resposta
 
     @app.url_defaults
     def versionar_estaticos(endpoint, valores):

@@ -14,7 +14,7 @@ Quem envia nunca entra na propria lista.
 from app.auth.models import User
 from app.escala.models import Escala, Funcao, Membro, TIPO_SUBCABECALHO
 from app.escala.temas import _sem_acento
-from app.ministerio.models import Ministerio, UsuarioMinisterio
+from app.ministerio.models import Ministerio, UsuarioMinisterio, ministerios_da_comunidade
 
 
 def _chave(nome):
@@ -70,7 +70,7 @@ def _pessoas_do_ministerio(ministerio, escalados):
 def opcoes_de_envio(comunidade_id, quem_envia_id):
     """Dados pro formulario de envio: [{id, nome, pessoas, funcoes: [{nome,
     pessoas}]}] de cada ministerio da comunidade (contagens sem quem envia)."""
-    ministerios = list(Ministerio.objects(comunidade_id=comunidade_id).only("id", "nome").order_by("nome"))
+    ministerios = ministerios_da_comunidade(comunidade_id)
     ids = [m.id for m in ministerios]
     pessoas = _pessoas_por_funcao_de_varios(ids)
     papeis = _papeis_de_varios(ids)

@@ -5,13 +5,13 @@ from datetime import datetime, timedelta, timezone
 
 from flask import render_template, redirect, url_for, flash, request, jsonify, current_app, abort, make_response
 from flask_login import login_required, current_user
-from sqlalchemy import text
 
-from app.extensions import db, limiter
+from app.extensions import limiter
 from app.main import bp
 from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm, PrivacidadeForm
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
+from app.db_utils import por_requisicao, precarregar
 from app.imagens import ImagemArmazenada, salvar_imagem, remover_imagem
 from app.auth.routes import _notificar_senha_alterada
 from app.comunidade.models import Comunidade, UsuarioComunidade
@@ -50,6 +50,7 @@ def _agrupar_notificacoes(notificacoes):
     na lista). Notificacoes sem escala_id (antigas, de antes desse campo
     existir, ou algo geral no futuro) formam grupo de 1 item cada, nunca se
     misturam entre si nem com uma Escala."""
+    precarregar(notificacoes, "escala", "escala_id", Escala)
     grupos_por_chave = {}
     ordem = []
     for n in notificacoes:
@@ -87,10 +88,7 @@ def _proxima_escala_do_usuario(usuario, hoje):
     """Proxima Escala (nao cancelada, de hoje em diante) em que alguma Funcao
     esta atribuida a um Membro com o e-mail da conta -- mesmo vinculo
     conta<->diretorio usado em comunidade.routes.index."""
-    ids_membro = [m.id for m in Membro.objects(email=usuario.email).only("id")]
-    if not ids_membro:
-        return None, None
-    funcoes = list(Funcao.objects(membro_id__in=ids_membro).only("escala_id", "nome"))
+    funcoes = _funcoes_da_conta(usuario)
     if not funcoes:
         return None, None
     funcao_por_escala = {f.escala_id: f.nome for f in funcoes}
@@ -105,11 +103,18 @@ def _proxima_escala_do_usuario(usuario, hoje):
 
 
 
-def _ids_escalas_do_usuario(usuario):
-    ids_membro = [m.id for m in Membro.objects(email=usuario.email).only("id")]
+def _funcoes_da_conta(usuario):
+    """Funcoes (escala_id, nome) em que a conta esta escalada -- uma
+    consulta por requisicao, usada por varias secoes do Inicio."""
+    ids_membro = Membro.ids_da_conta(usuario.email)
     if not ids_membro:
         return []
-    return list(Funcao.objects(membro_id__in=ids_membro).distinct("escala_id"))
+    return por_requisicao(("funcoes_da_conta", usuario.id),
+                          lambda: list(Funcao.objects(membro_id__in=ids_membro).only("escala_id", "nome")))
+
+
+def _ids_escalas_do_usuario(usuario):
+    return list({f.escala_id for f in _funcoes_da_conta(usuario)})
 
 
 def _agenda_do_usuario(usuario, hoje, dias=30, limite=6):
@@ -167,7 +172,7 @@ def _comunidades_do_usuario(usuario):
         donas = list(Comunidade.objects(id__in=ids_admin).order_by("nome")) if ids_admin else []
 
     ids_dono = {c.id for c in donas}
-    ids_membro = set(Membro.objects(email=usuario.email).distinct("comunidade_id"))
+    ids_membro = set(Membro.da_conta(usuario.email).distinct("comunidade_id"))
     ids_membro |= {
         row.comunidade_id for row in
         UsuarioComunidade.objects(usuario_id=usuario.id, papel="membro")
@@ -275,9 +280,11 @@ def imagem(imagem_id):
 def healthz():
     """Endpoint publico e leve pra ping externo de keep-alive (cron-job.org,
     UptimeRobot etc.). Faz uma consulta real no banco de proposito -- so
-    manter o servidor Flask acordado nao evita o Postgres (Neon) hibernar
-    por inatividade, os dois hibernam de forma independente."""
-    db.session.execute(text("SELECT 1"))
+    manter o servidor acordado nao basta, o banco tambem precisa responder.
+    O banco do app e o MongoDB (o Postgres antigo nao e mais usado)."""
+    import mongoengine
+
+    mongoengine.get_db().command("ping")
     return "ok", 200
 
 
@@ -703,7 +710,7 @@ def minha_escala():
     da equipe + os da propria funcao -- sem a escala inteira de todo mundo.
     Navega entre os dias pela barra de datas (?escala=<id>)."""
     hoje = _agora_brasilia().date()
-    ids_membro = [m.id for m in Membro.objects(email=current_user.email).only("id")]
+    ids_membro = Membro.ids_da_conta(current_user.email)
     funcoes = list(Funcao.objects(membro_id__in=ids_membro)) if ids_membro else []
     funcoes_por_escala = {}
     for funcao in funcoes:

@@ -778,7 +778,7 @@ def _pode_ver_banco(comunidade, usuario):
     ids_ministerios = [m.id for m in Ministerio.objects(comunidade_id=comunidade.id).only("id")]
     if UsuarioMinisterio.objects(usuario_id=usuario.id, ministerio_id__in=ids_ministerios).first():
         return True
-    return Membro.objects(comunidade_id=comunidade.id, email=usuario.email).first() is not None
+    return Membro.da_conta(usuario.email, comunidade_id=comunidade.id).first() is not None
 
 
 def _banco_ou_404(comunidade_id=None, ministerio_id=None):

@@ -33,3 +33,18 @@ def test_imagem_nao_e_recomprimida(client):
     resposta = client.get("/static/img/logo-icone.png", headers={"Accept-Encoding": "gzip"})
     assert resposta.status_code == 200
     assert "Content-Encoding" not in resposta.headers
+
+
+def test_resposta_informa_tempo_e_consultas(client):
+    resposta = client.get("/auth/login")
+    assert resposta.headers["Server-Timing"].startswith("total;dur=")
+    assert "db;dur=" in resposta.headers["Server-Timing"]
+    assert "Server-Timing" not in client.get("/static/css/style.css").headers
+
+
+def test_gunicorn_um_processo_com_threads():
+    """2+ processos duplicariam os avisos do agendador."""
+    import runpy
+    import pathlib
+    config = runpy.run_path(str(pathlib.Path(__file__).resolve().parents[1] / "gunicorn.conf.py"))
+    assert config["workers"] == 1 and config["worker_class"] == "gthread" and config["threads"] > 1

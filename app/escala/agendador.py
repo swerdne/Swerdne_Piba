@@ -40,7 +40,11 @@ def _verificar_e_notificar(app):
             sincronizar_todos_os_turnos_ativos()
 
             agora = datetime.now()
-            escalas = Escala.objects(data__ne=None)
+            # So as que podem cair numa janela de aviso (16h-24h a frente):
+            # ler todas as escalas a cada 15 min pesava no servidor.
+            escalas = Escala.objects(
+                data__gte=agora.date(), data__lte=(agora + timedelta(hours=24) + _JANELA).date(),
+            )
 
             for escala in escalas:
                 data_hora = escala.data_hora

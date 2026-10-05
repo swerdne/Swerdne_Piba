@@ -121,9 +121,9 @@ def _juntar(fica, sai):
 def unificar_banco_da_comunidade(comunidade_id):
     """Idempotente. Devolve quantas musicas antigas foram migradas (0 = ja
     estava tudo migrado)."""
-    from app.ministerio.models import Ministerio
+    from app.ministerio.models import ministerios_da_comunidade
 
-    ids_ministerios = [m.id for m in Ministerio.objects(comunidade_id=comunidade_id).only("id")]
+    ids_ministerios = [m.id for m in ministerios_da_comunidade(comunidade_id)]
     if not ids_ministerios:
         return 0
     pendentes = [m.id for m in Musica.objects(comunidade_id=None, ministerio_id__in=ids_ministerios).only("id")]

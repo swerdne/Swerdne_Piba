@@ -20,7 +20,44 @@ from app.plantao.models import TurnoPlantao, data_do_periodo, periodo_da_data, e
 JANELA_GERACAO_DIAS = 180  # ~6 meses -- ver app/plantao/CLAUDE.md
 
 
-def _materializar_periodo(turno, periodo, data_periodo):
+class _MemoriaDoTurno:
+    """Fila, integrantes e funcoes lidos uma vez por sincronizacao (o
+    agendador sincroniza todo turno a cada 15 min; sem isso cada periodo
+    buscava a fila, cada equipe e cada pessoa de novo)."""
+
+    def __init__(self, turno):
+        self.turno = turno
+        self._equipes = None
+        self._membros = {}
+        self.funcoes_por_escala = None
+        self._ids_precarregados = set()
+
+    def membros_do_periodo(self, periodo):
+        if self._equipes is None:
+            self._equipes = self.turno.fila_ordenada
+        equipe = equipe_do_periodo(self.turno, periodo, self._equipes)
+        if equipe is None:
+            return []
+        if equipe.id not in self._membros:
+            self._membros[equipe.id] = equipe.membros_ordenados
+        return self._membros[equipe.id]
+
+    def precarregar_funcoes(self, ids_escalas):
+        self._ids_precarregados = set(ids_escalas)
+        self.funcoes_por_escala = {}
+        if ids_escalas:
+            for funcao in Funcao.objects(escala_id__in=list(ids_escalas)):
+                self.funcoes_por_escala.setdefault(funcao.escala_id, []).append(funcao)
+
+    def funcoes_da_escala(self, escala):
+        # Fora do pre-carregamento, busca no banco: "nenhuma funcao" aqui
+        # faria o sync achar que a equipe mudou e recriar as funcoes.
+        if self.funcoes_por_escala is None or escala.id not in self._ids_precarregados:
+            return list(escala.funcoes)
+        return sorted(self.funcoes_por_escala.get(escala.id, []), key=lambda f: f.ordem)
+
+
+def _materializar_periodo(turno, periodo, data_periodo, memoria=None):
     """Cria a Escala+Funcao(oes) de um periodo que ainda nao existe -- 1
     Funcao por integrante da equipe sorteada (ver equipe_do_periodo), todas
     na mesma Escala, pra equipe inteira aparecer agrupada na mesma data.
@@ -29,8 +66,7 @@ def _materializar_periodo(turno, periodo, data_periodo):
     data_do_periodo aqui) -- sincronizar_turno ja percorre os periodos via
     data_do_periodo pra decidir ate onde materializar; recalcular de novo
     aqui dentro do loop viraria O(n^2) pra recorrencias sem formula fechada."""
-    equipe = equipe_do_periodo(turno, periodo)
-    membros = equipe.membros_ordenados if equipe else []
+    membros = (memoria or _MemoriaDoTurno(turno)).membros_do_periodo(periodo)
 
     escala = Escala(
         ministerio_id=turno.ministerio_id,
@@ -55,7 +91,7 @@ def _materializar_periodo(turno, periodo, data_periodo):
     return escala
 
 
-def _atualizar_periodo_existente(turno, escala, data_periodo):
+def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None):
     """Recalcula uma Escala nao-fixada e ainda nao ocorrida a partir da config
     atual do turno -- so escreve/reseta notificacao se algo realmente mudou
     (idempotencia e obrigatoria aqui: essa funcao roda a cada 15 min pelo
@@ -71,12 +107,12 @@ def _atualizar_periodo_existente(turno, escala, data_periodo):
     a pena preservar num slot que ainda era so-formula."""
     from app.escala.routes import enviar_notificacao_de_alteracao
 
+    memoria = memoria or _MemoriaDoTurno(turno)
     periodo = escala.plantao_periodo
-    equipe = equipe_do_periodo(turno, periodo)
-    membros_novos = equipe.membros_ordenados if equipe else []
+    membros_novos = memoria.membros_do_periodo(periodo)
     ids_novos = [m.id for m in membros_novos]
 
-    funcoes_atuais = list(escala.funcoes)
+    funcoes_atuais = memoria.funcoes_da_escala(escala)
     ids_atuais = [f.membro_id for f in funcoes_atuais if f.membro_id is not None]
 
     mudou_data_horario = (
@@ -155,6 +191,11 @@ def sincronizar_turno(turno, ate_data=None):
         escala.plantao_periodo: escala
         for escala in Escala.objects(plantao_turno_id=turno.id, plantao_periodo__ne=None)
     }
+    memoria = _MemoriaDoTurno(turno)
+    memoria.precarregar_funcoes([
+        e.id for e in existentes.values()
+        if not e.plantao_fixado and (e.data is None or e.data >= hoje - timedelta(days=1))
+    ])
 
     periodo = periodo_da_data(turno, data_inicial)
     while True:
@@ -170,13 +211,13 @@ def sincronizar_turno(turno, ate_data=None):
             escala = existentes.get(periodo)
 
             if escala is None:
-                _materializar_periodo(turno, periodo, data_periodo)
+                _materializar_periodo(turno, periodo, data_periodo, memoria)
             elif escala.data_hora and escala.data_hora <= agora:
                 pass  # ja ocorreu -- historico intocavel
             elif escala.plantao_fixado:
                 pass  # excecao pontual preservada
             else:
-                _atualizar_periodo_existente(turno, escala, data_periodo)
+                _atualizar_periodo_existente(turno, escala, data_periodo, memoria)
 
         periodo += 1
 

@@ -151,3 +151,14 @@ def test_estatisticas_de_ensaio_separadas(logged_in_client, app, db):
 
         html = logged_in_client.get(f"/ministerio/{ministerio.id}/estatisticas?periodo=30d&tipo=ensaios").get_data(as_text=True)
         assert 'aria-current="page"' in html and "100%" in html and "Mais trocas" not in html
+
+
+def test_email_do_diretorio_com_maiusculas_acha_a_conta(logged_in_client, app, db):
+    """O diretorio guarda o e-mail como foi digitado; a conta e "ana@example.com"."""
+    with app.app_context():
+        _, ministerio, escala, funcao = _montar(logged_in_client, email="Ana@Example.COM")
+        _ligar_ensaios(logged_in_client, ministerio)
+        ensaio = _ensaio(escala)
+        html = logged_in_client.get("/minha-escala").get_data(as_text=True)
+        assert "nao esta escalado" not in html and f"/escala/ensaio/{ensaio.id}/checkin" in html
+        assert _checkin_ensaio(logged_in_client, ensaio, PERTO).get_json()["ok"] is True

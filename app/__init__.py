@@ -149,8 +149,10 @@ def create_app(config_name="default"):
             # realmente desenham a barra de navegacao inferior.
             if not current_user.is_authenticated:
                 return 0
+            from .db_utils import por_requisicao
             from .notificacoes import Notificacao
-            return Notificacao.objects(usuario_id=current_user.id, lida=False).count()
+            return por_requisicao(("avisos_nao_lidos", current_user.id),
+                                  lambda: Notificacao.objects(usuario_id=current_user.id, lida=False).count())
 
         def dados_tutorial(chave_tutorial):
             from .tutoriais import dados_do_tutorial

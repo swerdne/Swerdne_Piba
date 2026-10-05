@@ -114,7 +114,7 @@ def _escala_visivel_ou_404(escala_id):
     # So checa convidado se precisar -- percorrer as funcoes busca o Membro
     # de cada uma (1 consulta por funcao), desperdicio pra quem ja e membro.
     if not eh_membro and not any(
-        f.eh_convidado and f.membro and f.membro.email == current_user.email
+        f.eh_convidado and f.membro and (f.membro.email or "").strip().lower() == (current_user.email or "").strip().lower()
         for f in escala.funcoes
     ):
         abort(404)
@@ -683,7 +683,7 @@ def adicionar_convidado(funcao_id):
         flash("Selecione um usuario valido na busca.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
-    membro = Membro.objects(comunidade_id=comunidade_id, email=usuario.email).first()
+    membro = Membro.da_conta(usuario.email, comunidade_id=comunidade_id).first()
     if membro is None:
         membro = Membro(
             comunidade_id=comunidade_id,
@@ -865,7 +865,7 @@ def checkin(escala_id):
 
     escala = primeiro_ou_404(Escala.objects(id=escala_id))
     email = (current_user.email or "").lower()
-    ids_membro = [m.id for m in Membro.objects(email__iexact=email).only("id")] if email else []
+    ids_membro = [m.id for m in Membro.da_conta(email).only("id")]
     minhas = list(Funcao.objects(escala_id=escala.id, membro_id__in=ids_membro)) if ids_membro else []
     if not minhas:
         abort(404)
@@ -932,7 +932,7 @@ def checkin_ensaio(ensaio_id):
     ensaio = primeiro_ou_404(Ensaio.objects(id=ensaio_id))
     escala = ensaio.escala
     email = (current_user.email or "").lower()
-    ids_membro = [m.id for m in Membro.objects(email__iexact=email).only("id")] if email else []
+    ids_membro = [m.id for m in Membro.da_conta(email).only("id")]
     meus_ids = sorted({f.membro_id for f in Funcao.objects(escala_id=escala.id, membro_id__in=ids_membro).only("membro_id")}) if ids_membro else []
     if not meus_ids:
         abort(404)
@@ -1838,10 +1838,10 @@ def _opcoes_envio(escala):
 def _repertorios_pra_escala(escala):
     """[(nome do grupo, [repertorios])] que a escala pode usar: os do proprio
     ministerio primeiro, depois os dos outros ministerios da comunidade."""
-    from app.ministerio.models import Ministerio
+    from app.ministerio.models import ministerios_da_comunidade
 
     ministerio = escala.ministerio
-    nomes = {m.id: m.nome for m in Ministerio.objects(comunidade_id=ministerio.comunidade_id)}
+    nomes = {m.id: m.nome for m in ministerios_da_comunidade(ministerio.comunidade_id)}
     grupos = {}
     for pasta in PastaMusicas.objects(comunidade_id=ministerio.comunidade_id).order_by("nome"):
         if pasta.itens:

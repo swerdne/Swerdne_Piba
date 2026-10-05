@@ -112,7 +112,10 @@ def conectar_mongo(app):
     uri = app.config.get("MONGODB_URI")
     if not uri:
         return
-    mongoengine.connect(host=uri, alias="default", uuidRepresentation="standard")
+    from app.desempenho import ContadorMongo
+
+    mongoengine.connect(host=uri, alias="default", uuidRepresentation="standard",
+                        event_listeners=[ContadorMongo()])
 
 
 def next_id(nome_sequencia):
@@ -146,6 +149,35 @@ def relacao_em_cache(doc, nome, chave, carregar):
     valor = carregar()
     setattr(doc, atributo, (chave, valor))
     return valor
+
+
+def por_requisicao(chave, carregar):
+    """Resultado guardado so durante a requisicao atual: partes diferentes
+    da mesma tela (menu, cabecalho, secoes) pedem a mesma lista e cada pedido
+    era uma ida ao banco. Fora de requisicao (agendador), so carrega."""
+    from flask import g, has_request_context
+
+    if not has_request_context():
+        return carregar()
+    memoria = g.setdefault("_memoria_requisicao", {})
+    if chave not in memoria:
+        memoria[chave] = carregar()
+    return memoria[chave]
+
+
+def precarregar(docs, nome, campo_id, modelo=None, objetos=None):
+    """Preenche de uma vez o cache de `relacao_em_cache` (`doc.<nome>`) de
+    varios documentos: 1 consulta pra todos em vez de 1 por documento -- o que
+    deixava listas longas (ex: Escalados) com centenas de idas ao banco.
+    `objetos` ({id: doc}) evita ate essa consulta quando ja foram carregados.
+    Devolve o dicionario {id: doc}."""
+    if objetos is None:
+        ids = list({getattr(d, campo_id) for d in docs if getattr(d, campo_id, None) is not None})
+        objetos = {o.id: o for o in modelo.objects(id__in=ids)} if ids else {}
+    for d in docs:
+        chave = getattr(d, campo_id, None)
+        setattr(d, f"_cache_{nome}", (chave, objetos.get(chave)))
+    return objetos
 
 
 class SequentialIdDocument(mongoengine.Document):

@@ -141,6 +141,24 @@ class Membro(SequentialIdDocument):
         letras = "".join(p[0] for p in partes[:2])
         return letras.upper() or "?"
 
+    @classmethod
+    def ids_da_conta(cls, email):
+        """Ids de Membro.da_conta(email), uma consulta por requisicao."""
+        from app.db_utils import por_requisicao
+
+        chave = ("membros_da_conta", (email or "").strip().lower())
+        return por_requisicao(chave, lambda: [m.id for m in cls.da_conta(email).only("id")])
+
+    @classmethod
+    def da_conta(cls, email, **filtros):
+        """Pessoas do diretorio com o e-mail de uma conta -- sem diferenciar
+        maiusculas/minusculas (o diretorio guarda como foi digitado, ex.
+        "Fulano@Gmail.com"). E-mail vazio nao casa com ninguem."""
+        email = (email or "").strip()
+        if not email:
+            return cls.objects(id__in=[])
+        return cls.objects(email__iexact=email, **filtros)
+
     def cascade_children(self):
         return [
             CicloDisponibilidade.objects(membro_id=self.id),
