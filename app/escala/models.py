@@ -620,6 +620,22 @@ class Ensaio(SequentialIdDocument):
         return f"<Ensaio {self.data} da escala {self.escala_id}>"
 
 
+class PresencaCulto(SequentialIdDocument):
+    """Check-in de uma conta no culto de um ministerio (check-in de "Culto":
+    aberto a todo o ministerio, nao so a quem esta escalado). Um por conta
+    por ministerio por dia."""
+
+    meta = {"collection": "escala_presencas_culto", "indexes": [("ministerio_id", "data"), "usuario_id"]}
+    _nome_sequencia = "escala_presencas_culto"
+
+    ministerio_id = mongoengine.IntField(required=True)
+    data = PureDateField(required=True)
+    usuario_id = mongoengine.IntField(required=True)
+    checkin_em = mongoengine.DateTimeField(required=True)
+    distancia_m = mongoengine.IntField()
+    precisao_m = mongoengine.IntField()
+
+
 class PresencaEnsaio(SequentialIdDocument):
     """Check-in de uma pessoa num ensaio (o do dia da escala fica na
     propria Funcao). Uma por pessoa por ensaio."""

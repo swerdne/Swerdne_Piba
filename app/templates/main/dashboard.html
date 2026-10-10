@@ -86,6 +86,40 @@
                 {% endif %}
             </div>
 
+            {% if cultos_hoje %}
+            <!-- Check-in de culto (ver ministerio.routes.checkin_culto): aberto a todo o ministerio -->
+            <div class="space-y-2.5">
+                <div data-checkin-csrf class="hidden">{{ acao_form.hidden_tag() }}</div>
+                {% for item in cultos_hoje %}
+                <div data-checkin-bloco class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 {{ 'bg-emerald-500/15 text-emerald-500' if item.presenca else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
+                            <i class="fa-solid {{ 'fa-circle-check' if item.presenca else 'fa-church' }} text-lg"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold {{ tema.text_primary }}">Culto de hoje · {{ item.ministerio.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">
+                                {% if item.ministerio.culto_horario %}{{ item.ministerio.culto_horario.strftime('%H:%M') }}{% endif %}
+                                {% if item.local and item.local.endereco %}{{ ' · ' if item.ministerio.culto_horario }}{{ item.local.endereco }}{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    {% if item.presenca %}
+                    <p class="text-sm font-semibold text-emerald-600">Presença confirmada às {{ item.presenca.checkin_em | hora_local }}.</p>
+                    {% elif not item.local %}
+                    <p class="text-xs text-amber-600">O endereço do local ainda não foi cadastrado. Avise o líder do ministério.</p>
+                    {% else %}
+                    <button type="button" data-checkin-botao data-url="{{ url_for('ministerio.checkin_culto', ministerio_id=item.ministerio.id) }}"
+                            class="w-full flex items-center justify-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-base font-bold py-3 rounded-full transition disabled:opacity-60">
+                        <i class="fa-solid fa-location-crosshairs"></i><span data-checkin-texto>Fazer check-in no culto</span>
+                    </button>
+                    <p data-checkin-msg class="text-xs {{ tema.text_secondary }}">Toque quando chegar (até {{ item.local.raio_m }} m do local).</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
             {% if repertorios_compartilhados %}
             <!-- Repertorios que alguem compartilhou com esta conta (ver ministerio.routes.compartilhar_pasta) -->
             <div>
@@ -474,6 +508,7 @@
     </button>
 </div>
 
+<script src="{{ url_for('static', filename='js/checkin.js') }}" defer></script>
 <script>
     // --- Paineis (Inicio / Avisos / Perfil) pela barra inferior ---
     (function () {

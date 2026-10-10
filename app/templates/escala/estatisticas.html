@@ -29,6 +29,7 @@
     {%- endif -%}
 {%- endmacro %}
 
+{% set R = {'escalas': ('escala', 'escalas', 'escalados', 'Escalas'), 'ensaios': ('ensaio', 'ensaios', 'escalados', 'Ensaios'), 'cultos': ('culto', 'cultos', 'esperados', 'Cultos')}[tipo] %}
 {% set CARD = tema.card_bg ~ " border " ~ tema.card_border ~ " rounded-3xl shadow-sm" %}
 {% set CAMPO = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
 
@@ -66,13 +67,15 @@
             {% endif %}
             <input type="hidden" name="periodo" value="{{ periodo }}">
             <input type="hidden" name="tipo" value="{{ tipo }}">
-            <nav class="flex p-1 rounded-full border {{ tema.card_border }} {{ tema.card_bg }} shrink-0 self-start" aria-label="Escalas ou ensaios">
+            {% if tipos | length > 1 %}
+            <nav class="flex p-1 rounded-full border {{ tema.card_border }} {{ tema.card_bg }} shrink-0 self-start" aria-label="Tipo de check-in">
                 {% for chave, rotulo in tipos.items() %}
                 <a href="{{ url_tela(periodo=periodo, tipo=chave, ministerio=selecionado.id if selecionado else None) }}"
                    {% if chave == tipo %}aria-current="page"{% endif %}
                    class="text-xs font-semibold px-3.5 py-1.5 rounded-full transition {{ (tema.accent_bg ~ ' text-white') if chave == tipo else tema.text_secondary }}">{{ rotulo }}</a>
                 {% endfor %}
             </nav>
+            {% endif %}
             <nav class="flex gap-1.5 overflow-x-auto" aria-label="Período">
                 {% for chave, (rotulo, _) in periodos.items() %}
                 <a href="{{ url_tela(periodo=chave, tipo=tipo, ministerio=selecionado.id if selecionado else None) }}"
@@ -97,8 +100,8 @@
         <div class="{{ CARD }} p-6 space-y-2">
             <p class="font-semibold">Ainda não há presenças registradas neste período.</p>
             <p class="text-sm {{ tema.text_secondary }}">
-                {% if tipo == 'ensaios' %}As estatísticas de ensaio aparecem quando o check-in nos ensaios está ligado e a equipe faz check-in neles.{% else %}As estatísticas começam a aparecer quando a equipe faz check-in no local (ou o líder marca a presença) nas escalas.{% endif %}
-                {% if k.sem_registro %}{{ k.sem_registro }} {{ 'ensaio' if tipo == 'ensaios' else 'escala' }}{{ 's' if k.sem_registro > 1 }} do período não {{ 'tiveram' if k.sem_registro > 1 else 'teve' }} nenhuma presença registrada.{% endif %}
+                {% if tipo == 'ensaios' %}As estatísticas de ensaio aparecem quando a equipe faz check-in nos ensaios.{% elif tipo == 'cultos' %}As estatísticas de culto aparecem quando o ministério faz check-in nos dias de culto.{% else %}As estatísticas começam a aparecer quando a equipe faz check-in no local (ou o líder marca a presença) nas escalas.{% endif %}
+                {% if k.sem_registro %}{{ k.sem_registro }} {{ R[0] }}{{ 's' if k.sem_registro > 1 }} do período não {{ 'tiveram' if k.sem_registro > 1 else 'teve' }} nenhuma presença registrada.{% endif %}
             </p>
         </div>
         {% else %}
@@ -108,7 +111,7 @@
             <div class="{{ CARD }} p-4">
                 <p class="text-xs font-semibold {{ tema.text_secondary }}">Comparecimento</p>
                 <p class="text-3xl font-extrabold mt-1 {{ cor_taxa(k.taxa) }}">{{ k.taxa }}%</p>
-                <p class="text-xs {{ tema.text_secondary }} mt-1">{{ k.presencas }} de {{ k.escalados }} escalados</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{{ k.presencas }} de {{ k.escalados }} {{ R[2] }}</p>
             </div>
             <div class="{{ CARD }} p-4">
                 <p class="text-xs font-semibold {{ tema.text_secondary }}">Check-ins</p>
@@ -118,10 +121,10 @@
             <div class="{{ CARD }} p-4">
                 <p class="text-xs font-semibold {{ tema.text_secondary }}">Faltas</p>
                 <p class="text-3xl font-extrabold mt-1 {{ 'text-red-500' if k.faltas else '' }}">{{ k.faltas }}</p>
-                <p class="text-xs {{ tema.text_secondary }} mt-1">{% if tipo == 'ensaios' %}sem check-in no ensaio{% else %}{{ k.trocas }} troca{{ 's' if k.trocas != 1 }} pedida{{ 's' if k.trocas != 1 }}{% endif %}</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{% if tipo != 'escalas' %}sem check-in no {{ R[0] }}{% else %}{{ k.trocas }} troca{{ 's' if k.trocas != 1 }} pedida{{ 's' if k.trocas != 1 }}{% endif %}</p>
             </div>
             <div class="{{ CARD }} p-4">
-                <p class="text-xs font-semibold {{ tema.text_secondary }}">{{ 'Ensaios' if tipo == 'ensaios' else 'Escalas' }}</p>
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">{{ R[3] }}</p>
                 <p class="text-3xl font-extrabold mt-1">{{ k.escalas }}</p>
                 <p class="text-xs {{ tema.text_secondary }} mt-1">{% if k.sem_registro %}{{ k.sem_registro }} sem registro (fora da conta){% else %}com presença registrada{% endif %}</p>
             </div>
@@ -130,7 +133,7 @@
         {# ---- Evolucao ---- #}
         <section class="{{ CARD }} p-5">
             <h2 class="font-bold">Comparecimento ao longo do tempo</h2>
-            <p class="text-xs {{ tema.text_secondary }} mb-3">Escalados x presentes x check-ins, por {{ 'mês' if periodo in ['6m', '1a'] else 'semana' }}.</p>
+            <p class="text-xs {{ tema.text_secondary }} mb-3">{{ R[2] | capitalize }} x presentes x check-ins, por {{ 'mês' if periodo in ['6m', '1a'] else 'semana' }}.</p>
             <div class="estat-grafico"><canvas id="grafico-evolucao" aria-label="Gráfico de comparecimento ao longo do tempo" role="img"></canvas></div>
         </section>
 
@@ -142,6 +145,7 @@
                     <h2 class="font-bold">Horário de chegada</h2>
                     <p class="text-xs {{ tema.text_secondary }}">
                         Tolerância: até {{ tolerancias | join(' / ') }} min de atraso conta como no horário.
+                        {% if url_ajustes %}<a href="{{ url_ajustes }}" class="{{ tema.accent_text }} hover:underline">Ajustar</a>{% endif %}
                     </p>
                 </div>
                 {% if p.total %}
@@ -188,12 +192,15 @@
             </section>
         </div>
 
-        <div class="grid lg:grid-cols-2 gap-4">
+        {% set mostrar_funcao = tipo != 'cultos' or dados.por_funcao | length > 1 %}
+        <div class="grid {{ 'lg:grid-cols-2' if mostrar_funcao }} gap-4">
+            {% if mostrar_funcao %}
             <section class="{{ CARD }} p-5">
-                <h2 class="font-bold">Por função</h2>
+                <h2 class="font-bold">{{ 'Por ministério' if tipo == 'cultos' else 'Por função' }}</h2>
                 <p class="text-xs {{ tema.text_secondary }} mb-3">Taxa de comparecimento de cada função (menor primeiro).</p>
                 <div class="estat-grafico" style="height: {{ [160, 44 * dados.por_funcao | length + 40] | max }}px"><canvas id="grafico-funcao" role="img" aria-label="Comparecimento por função"></canvas></div>
             </section>
+            {% endif %}
             <section class="{{ CARD }} p-5">
                 <h2 class="font-bold">Por dia da semana</h2>
                 <p class="text-xs {{ tema.text_secondary }} mb-3">Comparecimento e faltas em cada dia com escala.</p>
@@ -218,7 +225,7 @@
                         <option value="faltas:desc">Mais faltas</option>
                         <option value="chegada:desc">Chega mais tarde</option>
                         <option value="atrasos:desc">Mais atrasos</option>
-                        {% if tipo != 'ensaios' %}<option value="trocas:desc">Mais trocas</option>{% endif %}
+                        {% if tipo == 'escalas' %}<option value="trocas:desc">Mais trocas</option>{% endif %}
                         <option value="nome:asc">Nome</option>
                     </select>
                 </label>
@@ -229,7 +236,7 @@
                 <span class="col-span-2 text-right">Comparecimento</span>
                 <span class="col-span-1 text-right">Faltas</span>
                 <span class="col-span-3 text-right">Chegada</span>
-                <span class="col-span-2 text-right">{{ '' if tipo == 'ensaios' else 'Trocas' }}</span>
+                <span class="col-span-2 text-right">{{ 'Trocas' if tipo == 'escalas' }}</span>
             </div>
             <ul class="divide-y {{ tema.divide }}" data-lista-pessoas>
                 {% for pessoa in dados.pessoas %}
@@ -250,36 +257,13 @@
                     </div>
                     <p class="col-span-3 sm:col-span-1 text-xs sm:text-sm sm:text-right"><span class="sm:hidden {{ tema.text_secondary }}">Faltas: </span><span class="{{ 'text-red-500 font-bold' if pessoa.faltas else '' }}">{{ pessoa.faltas }}</span></p>
                     <p class="col-span-6 sm:col-span-3 text-xs sm:text-sm sm:text-right"><span class="sm:hidden {{ tema.text_secondary }}">Chegada: </span>{{ chegada(pessoa.chegada_media) }}{% if pessoa.atrasos %} <span class="text-red-500">({{ pessoa.atrasos }} atraso{{ 's' if pessoa.atrasos > 1 }})</span>{% endif %}</p>
-                    <p class="col-span-3 sm:col-span-2 text-xs sm:text-sm text-right">{% if tipo != 'ensaios' %}<span class="sm:hidden {{ tema.text_secondary }}">Trocas: </span>{{ pessoa.trocas }}{% endif %}</p>
+                    <p class="col-span-3 sm:col-span-2 text-xs sm:text-sm text-right">{% if tipo == 'escalas' %}<span class="sm:hidden {{ tema.text_secondary }}">Trocas: </span>{{ pessoa.trocas }}{% endif %}</p>
                 </li>
                 {% endfor %}
             </ul>
         </section>
         {% endif %}
 
-        {% if form %}
-        <section id="ajustes" class="{{ CARD }} p-5">
-            <h2 class="font-bold">Ajustes</h2>
-            <form method="POST" class="grid sm:grid-cols-2 gap-4 mt-3">
-                {{ form.hidden_tag() }}
-                <div>
-                    {{ form.tolerancia_atraso_min.label(class_="block text-sm font-semibold mb-1") }}
-                    {{ form.tolerancia_atraso_min(class_=CAMPO, type="number", min="0", max="60", inputmode="numeric") }}
-                    <p class="text-xs {{ tema.text_secondary }} mt-1">Chegar até esse tempo depois do horário ainda conta como "no horário".</p>
-                    {% for erro in form.tolerancia_atraso_min.errors %}<p class="text-xs text-red-500 mt-1">{{ erro }}</p>{% endfor %}
-                </div>
-                <div>
-                    {{ form.alerta_faltas_seguidas.label(class_="block text-sm font-semibold mb-1") }}
-                    {{ form.alerta_faltas_seguidas(class_=CAMPO, type="number", min="0", max="10", inputmode="numeric") }}
-                    <p class="text-xs {{ tema.text_secondary }} mt-1">Os líderes recebem um aviso no sino. Use 0 para não avisar.</p>
-                    {% for erro in form.alerta_faltas_seguidas.errors %}<p class="text-xs text-red-500 mt-1">{{ erro }}</p>{% endfor %}
-                </div>
-                <div class="sm:col-span-2">
-                    <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">Salvar ajustes</button>
-                </div>
-            </form>
-        </section>
-        {% endif %}
 
         <details class="text-xs {{ tema.text_secondary }} px-1">
             <summary class="cursor-pointer font-semibold">Como os números são calculados</summary>
@@ -290,6 +274,7 @@
                 <li>O horário de chegada vem só do check-in, em escalas com horário definido. Check-ins a mais de 3 horas do horário ficam fora das médias.</li>
                 <li>As trocas contam os pedidos feitos pelo próprio escalado a partir de outubro de 2026.</li>
                 <li>Ensaios: quem está escalado na escala é esperado em cada ensaio dela; conta como presença só o check-in no ensaio. Ensaios sem nenhum check-in ficam fora da conta.</li>
+                <li>Cultos: cada dia de culto do ministério conta uma vez; são esperadas as contas com papel no ministério (e quem fez check-in). Dias sem nenhum check-in ficam fora da conta.</li>
             </ul>
         </details>
         {% endif %}
@@ -319,7 +304,7 @@
         data: {
             labels: dados.serie.rotulos,
             datasets: [
-                { label: 'Escalados', data: dados.serie.escalados, borderColor: cinza, backgroundColor: cinza, tension: 0.3, borderDash: [5, 4] },
+                { label: {{ R[2] | capitalize | tojson }}, data: dados.serie.escalados, borderColor: cinza, backgroundColor: cinza, tension: 0.3, borderDash: [5, 4] },
                 { label: 'Presentes', data: dados.serie.presentes, borderColor: anil, backgroundColor: anil, tension: 0.3 },
                 { label: 'Check-ins', data: dados.serie.checkins, borderColor: verde, backgroundColor: verde, tension: 0.3 }
             ]
@@ -334,7 +319,7 @@
         }
     });
 
-    new Chart(document.getElementById('grafico-funcao'), {
+    if (document.getElementById('grafico-funcao')) new Chart(document.getElementById('grafico-funcao'), {
         type: 'bar',
         data: {
             labels: dados.por_funcao.map(function (f) { return f.nome; }),

@@ -19,12 +19,8 @@ def _checkin_ensaio(cliente, ensaio, ponto, precisao=20):
 
 
 def _ligar_ensaios(cliente, ministerio, escala=True, ensaio=True):
-    dados = {"acao": "quando_usar"}
-    if escala:
-        dados["checkin_escala"] = "1"
-    if ensaio:
-        dados["checkin_ensaio"] = "1"
-    return cliente.post(f"/ministerio/{ministerio.id}/local-checkin", data=dados)
+    tipos = [t for t, ligado in (("escala", escala), ("ensaio", ensaio)) if ligado]
+    return cliente.post(f"/ministerio/{ministerio.id}/checkin/config", data={"acao": "tipo_uso", "tipo": tipos})
 
 
 def test_padrao_liga_escala_e_desliga_ensaio(logged_in_client, app, db):

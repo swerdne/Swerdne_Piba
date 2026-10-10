@@ -18,7 +18,7 @@ from app.comunidade.models import Comunidade, UsuarioComunidade
 from app.ministerio.models import Ministerio
 from app.escala.models import Membro, Escala, Funcao, Ensaio, Anexo, PresencaEnsaio, STATUS_LABELS, STATUS_CORES, eh_funcao_de_projecao
 from app.escala.forms import StatusForm
-from app.escala.checkin import checkin_ligado, local_do_checkin, situacao_do_dia, situacao_do_ensaio, status_sem_presente
+from app.escala.checkin import checkin_ligado, hora_local, local_do_checkin, situacao_do_dia, situacao_do_ensaio, status_sem_presente
 
 
 # Icone por tipo de notificacao no sino do Dashboard -- fallback pra
@@ -158,6 +158,12 @@ def _agenda_do_usuario(usuario, hoje, dias=30, limite=6):
         })
     itens.sort(key=lambda i: (i["data"], i["ordem"] or datetime.min.time()))
     return itens[:limite]
+
+def _cultos_de_hoje(usuario, hoje):
+    from app.ministerio.routes import cultos_de_hoje
+
+    return cultos_de_hoje(usuario, hoje)
+
 
 def _comunidades_do_usuario(usuario):
     """Mesma regra de comunidade.routes.index (admin x participa), achatada
@@ -334,6 +340,7 @@ def dashboard():
         saudacao=_saudacao(agora.hour),
         proxima_escala=proxima_escala_info,
         agenda=_agenda_do_usuario(current_user, agora.date()),
+        cultos_hoje=_cultos_de_hoje(current_user, agora.date()),
         comunidades=_comunidades_do_usuario(current_user),
         primeiro_nome=primeiro_nome,
         nome_completo=nome_completo,
@@ -700,6 +707,68 @@ def chat():
         resposta = "O chatbot com IA real ainda nao foi configurado neste ambiente."
 
     return jsonify({"resposta": resposta})
+
+
+@bp.route("/minhas-presencas")
+@login_required
+def minhas_presencas():
+    """Historico individual de presenca da propria conta (90 dias): escalas,
+    ensaios com check-in ligado e cultos. So os proprios dados -- os
+    graficos da equipe ficam com lideres/admins (Estatisticas)."""
+    from app.escala.checkin import checkin_ligado
+    from app.escala.models import PresencaCulto
+
+    hoje = _agora_brasilia().date()
+    inicio = hoje - timedelta(days=90)
+    itens = []
+
+    ids_membro = Membro.ids_da_conta(current_user.email)
+    funcoes = list(Funcao.objects(membro_id__in=ids_membro)) if ids_membro else []
+    por_escala = {}
+    for f in funcoes:
+        por_escala.setdefault(f.escala_id, []).append(f)
+    escalas = list(Escala.objects(id__in=list(por_escala), data__gte=inicio, data__lte=hoje, cancelada__ne=True)) if por_escala else []
+    for e in escalas:
+        minhas = por_escala[e.id]
+        com_checkin = next((f for f in minhas if f.checkin_em), None)
+        presente = com_checkin is not None or any(f.status == "presente" for f in minhas)
+        itens.append({
+            "data": e.data, "tipo": "Escala", "titulo": f"{e.nome} · {', '.join(f.nome for f in minhas)}",
+            "presente": presente, "pendente": e.data == hoje and not presente,
+            "detalhe": (f"Check-in {hora_local(com_checkin.checkin_em)}" if com_checkin
+                        else "Marcado pelo líder" if presente else None),
+        })
+
+    escalas_por_id = {e.id: e for e in Escala.objects(id__in=list(por_escala), cancelada__ne=True)} if por_escala else {}
+    com_ensaio = [eid for eid, e in escalas_por_id.items() if checkin_ligado(e, "ensaio")]
+    if com_ensaio:
+        presencas = {p.ensaio_id: p for p in PresencaEnsaio.objects(escala_id__in=com_ensaio, membro_id__in=ids_membro)}
+        for ensaio in Ensaio.objects(escala_id__in=com_ensaio, data__gte=inicio, data__lte=hoje, cancelado__ne=True):
+            p = presencas.get(ensaio.id)
+            itens.append({
+                "data": ensaio.data, "tipo": "Ensaio", "titulo": escalas_por_id[ensaio.escala_id].nome,
+                "presente": p is not None, "pendente": ensaio.data == hoje and p is None,
+                "detalhe": f"Check-in {hora_local(p.checkin_em)}" if p else None,
+            })
+
+    nomes_ministerio = {}
+    for p in PresencaCulto.objects(usuario_id=current_user.id, data__gte=inicio, data__lte=hoje):
+        if p.ministerio_id not in nomes_ministerio:
+            m = Ministerio.objects(id=p.ministerio_id).only("nome").first()
+            nomes_ministerio[p.ministerio_id] = m.nome if m else "Ministério"
+        itens.append({
+            "data": p.data, "tipo": "Culto", "titulo": nomes_ministerio[p.ministerio_id],
+            "presente": True, "pendente": False, "detalhe": f"Check-in {hora_local(p.checkin_em)}",
+        })
+
+    itens.sort(key=lambda i: (i["data"], i["tipo"]), reverse=True)
+    resumo = {}
+    for i in itens:
+        if i["pendente"]:
+            continue
+        total, presente = resumo.get(i["tipo"], (0, 0))
+        resumo[i["tipo"]] = (total + 1, presente + i["presente"])
+    return render_template("main/minhas_presencas.html", itens=itens, resumo=resumo, hoje=hoje)
 
 
 @bp.route("/minha-escala")

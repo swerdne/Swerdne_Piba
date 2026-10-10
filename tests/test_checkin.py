@@ -189,7 +189,7 @@ def test_raio_fora_dos_limites_e_recusado(logged_in_client, app, db):
         html = logged_in_client.post(f"/comunidade/{comunidade.id}/local-checkin", data={
             "latitude": IGREJA[0], "longitude": IGREJA[1], "raio_checkin_m": 5,
         }).data.decode("utf-8")
-        assert "Use entre 30 e 2000 metros" in html
+        assert "Use um número inteiro de metros, entre 30 e 2000." in html
         comunidade.reload()
         assert comunidade.latitude is None
 

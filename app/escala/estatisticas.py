@@ -11,12 +11,17 @@ Regras de contagem:
 - Horario de chegada so vem do check-in, e so quando a escala tem horario.
   Check-in a mais de LIMITE_PONTUALIDADE_MIN do horario fica fora das medias
   (a pessoa passou na igreja em outro momento do dia).
+- Tres visoes que nunca se misturam (TIPOS): escalas, ensaios e cultos; a
+  tela so mostra as dos tipos de check-in ligados no ministerio.
 """
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 
-from app.escala.models import TIPO_SUBCABECALHO, AlertaFaltas, Ensaio, Escala, Funcao, Membro, PresencaEnsaio, RegistroTroca
+from app.escala.models import (
+    TIPO_SUBCABECALHO, AlertaFaltas, Ensaio, Escala, Funcao, Membro, PresencaCulto, PresencaEnsaio, RegistroTroca,
+)
 
 PERIODOS = {
     "30d": ("Últimos 30 dias", 30),
@@ -25,7 +30,8 @@ PERIODOS = {
     "1a": ("1 ano", 365),
 }
 PERIODO_PADRAO = "3m"
-TIPOS = {"escalas": "Escalas", "ensaios": "Ensaios"}
+TIPOS = {"escalas": "Escalas", "ensaios": "Ensaios", "cultos": "Cultos"}
+_TIPO_DO_CHECKIN = {"escalas": "escala", "ensaios": "ensaio", "cultos": "culto"}
 TOLERANCIA_PADRAO_MIN = 10
 ALERTA_FALTAS_PADRAO = 3
 LIMITE_PONTUALIDADE_MIN = 180
@@ -50,7 +56,7 @@ def alerta_de(ministerio):
 
 @dataclass
 class Registro:
-    escala_id: int
+    escala_id: object  # id da escala/ensaio, ou (ministerio_id, data) no culto
     data: date
     ministerio_id: int
     funcao_nome: str
@@ -74,7 +80,8 @@ def _minutos_de_chegada(evento, checkin_em):
 
 
 def coletar(ministerios, inicio, fim):
-    """(registros, escalas_sem_registro, ids de todas as escalas do periodo)."""
+    """(registros, escalas_sem_registro, ids de todas as escalas do periodo,
+    nomes) -- nomes None = os ids sao de Membro (montar busca os nomes)."""
     tolerancias = {m.id: tolerancia_de(m) for m in ministerios}
     escalas = list(Escala.objects(
         ministerio_id__in=list(tolerancias), data__gte=inicio, data__lte=fim, cancelada__ne=True,
@@ -101,7 +108,7 @@ def coletar(ministerios, inicio, fim):
                 checkin=bool(f.checkin_em), minutos=_minutos_de_chegada(escala, f.checkin_em),
                 tolerancia=tolerancias[escala.ministerio_id],
             ))
-    return registros, sem_registro, list(por_id)
+    return registros, sem_registro, list(por_id), None
 
 
 def coletar_ensaios(ministerios, inicio, fim):
@@ -115,7 +122,7 @@ def coletar_ensaios(ministerios, inicio, fim):
         escala_id__in=list(escalas), data__gte=inicio, data__lte=fim, cancelado__ne=True,
     ).only("id", "escala_id", "data", "horario")) if escalas else []
     if not ensaios:
-        return [], 0, []
+        return [], 0, [], None
     ids_escala = list({en.escala_id for en in ensaios})
     funcoes_por_escala = defaultdict(list)
     for f in Funcao.objects(escala_id__in=ids_escala, membro_id__ne=None, tipo__ne=TIPO_SUBCABECALHO).only("escala_id", "nome", "membro_id"):
@@ -141,7 +148,61 @@ def coletar_ensaios(ministerios, inicio, fim):
                 checkin=checkin_em is not None, minutos=_minutos_de_chegada(ensaio, checkin_em),
                 tolerancia=tolerancias[ministerio_id],
             ))
-    return registros, sem_registro, []
+    return registros, sem_registro, [], None
+
+
+def coletar_cultos(ministerios, inicio, fim):
+    """Mesmo formato de coletar(), para o check-in de culto: cada dia de
+    culto (Ministerio.dias_culto) e uma ocorrencia; esperados = contas com
+    papel no ministerio + quem fez check-in nele. Dia sem nenhum check-in
+    fica "sem registro". `membro_id` do Registro guarda o id da CONTA (User)."""
+    from app.auth.models import User
+    from app.ministerio.models import UsuarioMinisterio
+
+    ativos = [m for m in ministerios if m.dias_culto_efetivos]
+    if not ativos:
+        return [], 0, [], {}
+    ids = [m.id for m in ativos]
+    presencas = {
+        (p.ministerio_id, p.data, p.usuario_id): p.checkin_em
+        for p in PresencaCulto.objects(ministerio_id__in=ids, data__gte=inicio, data__lte=fim)
+    }
+    esperados = defaultdict(set)
+    for um in UsuarioMinisterio.objects(ministerio_id__in=ids).only("ministerio_id", "usuario_id"):
+        esperados[um.ministerio_id].add(um.usuario_id)
+    for ministerio_id, _, usuario_id in presencas:
+        esperados[ministerio_id].add(usuario_id)
+
+    registros, sem_registro = [], 0
+    for m in ativos:
+        dias, tolerancia, dia = set(m.dias_culto_efetivos), tolerancia_de(m), inicio
+        while dia <= fim:
+            if dia.weekday() in dias and esperados[m.id]:
+                if not any((m.id, dia, u) in presencas for u in esperados[m.id]):
+                    sem_registro += 1
+                else:
+                    culto = SimpleNamespace(data=dia, horario=m.culto_horario)
+                    for usuario_id in esperados[m.id]:
+                        checkin_em = presencas.get((m.id, dia, usuario_id))
+                        registros.append(Registro(
+                            escala_id=(m.id, dia), data=dia, ministerio_id=m.id, funcao_nome=m.nome,
+                            membro_id=usuario_id, compareceu=checkin_em is not None, checkin=checkin_em is not None,
+                            minutos=_minutos_de_chegada(culto, checkin_em), tolerancia=tolerancia,
+                        ))
+            dia += timedelta(days=1)
+    contas = {u for grupo in esperados.values() for u in grupo}
+    nomes = {u.id: u.name or u.username or u.email for u in User.objects(id__in=list(contas))}
+    return registros, sem_registro, [], nomes
+
+
+def tipos_ligados(ministerios):
+    """Visoes que a tela mostra: as dos tipos de check-in ligados em algum
+    dos ministerios (nenhum ligado = so Escalas, presenca marcada a mao)."""
+    from app.escala.checkin import checkin_padrao
+
+    ligados = [t for t, tipo_checkin in _TIPO_DO_CHECKIN.items()
+               if any(checkin_padrao(m, tipo_checkin) for m in ministerios)]
+    return ligados or ["escalas"]
 
 
 def _taxa(presencas, total):
@@ -176,9 +237,12 @@ def _serie(registros, inicio, fim, mensal):
     rotulo = (lambda d: f"{_MESES[d.month - 1]}/{d:%y}") if mensal else (lambda d: d.strftime("%d/%m"))
     return {
         "rotulos": [rotulo(d) for d in baldes],
-        "escalados": [b[0] for b in baldes.values()],
-        "presentes": [b[1] for b in baldes.values()],
-        "checkins": [b[2] for b in baldes.values()],
+        # Periodo sem nenhum evento contado fica vazio no grafico (None), nao
+        # 0 -- senao a semana atual, ainda sem culto/escala encerrada, parecia
+        # uma queda de comparecimento.
+        "escalados": [b[0] or None for b in baldes.values()],
+        "presentes": [b[1] if b[0] else None for b in baldes.values()],
+        "checkins": [b[2] if b[0] else None for b in baldes.values()],
         "taxa": [_taxa(b[1], b[0]) for b in baldes.values()],
     }
 
@@ -203,8 +267,8 @@ def montar(ministerios, periodo, tipo="escalas"):
     dias = PERIODOS[periodo][1]
     fim = hoje_brasilia() - timedelta(days=1)
     inicio = fim - timedelta(days=dias - 1)
-    coletor = coletar_ensaios if tipo == "ensaios" else coletar
-    registros, sem_registro, ids_escalas = coletor(ministerios, inicio, fim)
+    coletor = {"ensaios": coletar_ensaios, "cultos": coletar_cultos}.get(tipo, coletar)
+    registros, sem_registro, ids_escalas, nomes = coletor(ministerios, inicio, fim)
 
     presencas = sum(r.compareceu for r in registros)
     com_horario = [r for r in registros if r.minutos is not None]
@@ -220,8 +284,9 @@ def montar(ministerios, periodo, tipo="escalas"):
     por_pessoa = defaultdict(list)
     for r in registros:
         por_pessoa[r.membro_id].append(r)
-    nomes = {m.id: m.nome for m in Membro.objects(id__in=list(set(por_pessoa) | set(trocas))).only("nome")}
-    alerta = 0 if tipo == "ensaios" else min((alerta_de(m) for m in ministerios if alerta_de(m)), default=0)
+    if nomes is None:
+        nomes = {m.id: m.nome for m in Membro.objects(id__in=list(set(por_pessoa) | set(trocas))).only("nome")}
+    alerta = min((alerta_de(m) for m in ministerios if alerta_de(m)), default=0) if tipo == "escalas" else 0
     pessoas = []
     for membro_id in set(por_pessoa) | set(trocas):
         dele = por_pessoa.get(membro_id, [])
@@ -306,7 +371,7 @@ def verificar_faltas_seguidas():
         limite = alerta_de(ministerio)
         if not limite:
             continue
-        registros, _, _ = coletar([ministerio], fim - timedelta(days=180), fim)
+        registros, _, _, _ = coletar([ministerio], fim - timedelta(days=180), fim)
         por_pessoa = defaultdict(list)
         for r in registros:
             por_pessoa[r.membro_id].append(r)
@@ -326,50 +391,36 @@ def verificar_faltas_seguidas():
                 Notificacao(usuario_id=lider.id, titulo=titulo, mensagem=mensagem, tipo="faltas_seguidas").save()
 
 
-def tela_estatisticas(ministerios, titulo, voltar_url, url_tela, ministerio_config=None):
-    """GET mostra a tela (filtros ?periodo= e, na Comunidade, ?ministerio=);
-    POST salva tolerancia/alerta de `ministerio_config` (so na tela do Ministerio)."""
-    from flask import flash, redirect, render_template, request
-
-    from app.escala.forms import ConfigEstatisticasForm
-
-    form = None
-    if ministerio_config is not None:
-        form = ConfigEstatisticasForm()
-        if request.method == "POST":
-            if form.validate_on_submit():
-                ministerio_config.tolerancia_atraso_min = form.tolerancia_atraso_min.data
-                ministerio_config.alerta_faltas_seguidas = form.alerta_faltas_seguidas.data
-                ministerio_config.save()
-                flash("Ajustes das estatísticas salvos.", "success")
-                return redirect(url_tela(periodo=request.args.get("periodo")) + "#ajustes")
-        else:
-            form.tolerancia_atraso_min.data = tolerancia_de(ministerio_config)
-            form.alerta_faltas_seguidas.data = alerta_de(ministerio_config)
+def tela_estatisticas(ministerios, titulo, voltar_url, url_tela, url_ajustes=None):
+    """Filtros ?periodo=, ?tipo= (so os tipos ligados) e, na Comunidade,
+    ?ministerio=. Os ajustes (tolerancia, alerta) ficam na secao "Check-in"
+    da tela do ministerio -- `url_ajustes` leva ate la."""
+    from flask import render_template, request
 
     periodo = request.args.get("periodo")
     if periodo not in PERIODOS:
         periodo = PERIODO_PADRAO
     selecionado = None
-    if ministerio_config is None and len(ministerios) > 1:
+    if len(ministerios) > 1:
         selecionado = next((m for m in ministerios if str(m.id) == request.args.get("ministerio")), None)
     alvo = [selecionado] if selecionado else ministerios
+    visiveis = tipos_ligados(alvo) if alvo else ["escalas"]
     tipo = request.args.get("tipo")
-    if tipo not in TIPOS:
-        tipo = "escalas"
+    if tipo not in visiveis:
+        tipo = visiveis[0]
 
     return render_template(
         "escala/estatisticas.html",
         titulo=titulo,
         voltar_url=voltar_url,
         url_tela=url_tela,
+        url_ajustes=url_ajustes,
         dados=montar(alvo, periodo, tipo) if alvo else None,
         periodo=periodo,
         tipo=tipo,
-        tipos=TIPOS,
+        tipos={chave: TIPOS[chave] for chave in visiveis},
         periodos=PERIODOS,
-        ministerios=ministerios if ministerio_config is None and len(ministerios) > 1 else [],
+        ministerios=ministerios if len(ministerios) > 1 else [],
         selecionado=selecionado,
         tolerancias=sorted({tolerancia_de(m) for m in alvo}),
-        form=form,
     )

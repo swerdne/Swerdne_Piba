@@ -345,6 +345,8 @@ def detalhe(ministerio_id):
         "ministerio/detalhe.html",
         ministerio=ministerio,
         pode_gerenciar=pode_gerenciar,
+        config_checkin=_config_checkin(ministerio) if pode_gerenciar else None,
+        abrir_checkin=request.args.get("checkin") == "1",
         eh_admin=eh_admin,
         escalas=escalas,
         qtd_ocorrencias_por_turno=qtd_ocorrencias_por_turno,
@@ -354,6 +356,149 @@ def detalhe(ministerio_id):
         acao_form=AcaoForm(),
         **dados_calendario,
     )
+
+
+def _config_checkin(ministerio):
+    """O que a secao "Check-in" da tela do ministerio mostra (so lider/admin)."""
+    from app.escala.checkin import DIAS_SEMANA_LONGOS, checkin_padrao, local_do_checkin
+    from app.escala.estatisticas import alerta_de, tolerancia_de
+    from app.escala.forms import ConfigEstatisticasForm
+
+    tipos = {tipo: checkin_padrao(ministerio, tipo) for tipo in ("escala", "ensaio", "culto")}
+    form_tolerancia = ConfigEstatisticasForm(formdata=None)
+    form_tolerancia.tolerancia_atraso_min.data = tolerancia_de(ministerio)
+    form_tolerancia.alerta_faltas_seguidas.data = alerta_de(ministerio)
+    return {
+        "tipos": tipos,
+        "desativado": not any(tipos.values()),
+        "dias_culto": ministerio.dias_culto_efetivos,
+        "culto_horario": ministerio.culto_horario,
+        "dias_semana": DIAS_SEMANA_LONGOS,
+        "local": local_do_checkin(ministerio),
+        "form_tolerancia": form_tolerancia,
+    }
+
+
+@bp.route("/<int:ministerio_id>/checkin/config", methods=["POST"])
+@login_required
+def config_checkin(ministerio_id):
+    """Salva a secao "Check-in" do ministerio (lider/admin): tipo de uso
+    (escala, ensaio, culto -- nenhum = desativado) ou tolerancia/alerta."""
+    from datetime import datetime as _dt
+
+    from app.escala.forms import ConfigEstatisticasForm
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    destino = url_for("ministerio.detalhe", ministerio_id=ministerio.id, checkin="1") + "#checkin"
+    acao = request.form.get("acao")
+
+    if acao == "tolerancia":
+        form = ConfigEstatisticasForm()
+        if form.validate_on_submit():
+            ministerio.tolerancia_atraso_min = form.tolerancia_atraso_min.data
+            ministerio.alerta_faltas_seguidas = form.alerta_faltas_seguidas.data
+            ministerio.save()
+            flash("Tolerância de horário salva.", "success")
+        else:
+            erros = [e for campo in (form.tolerancia_atraso_min, form.alerta_faltas_seguidas) for e in campo.errors]
+            flash(erros[0] if erros else "Sessão expirada. Tente de novo.", "danger")
+        return redirect(destino)
+
+    if acao != "tipo_uso" or not AcaoForm().validate_on_submit():
+        flash("Sessão expirada. Tente de novo.", "danger")
+        return redirect(destino)
+
+    tipos = set(request.form.getlist("tipo"))
+    dias = sorted({int(d) for d in request.form.getlist("dia_culto") if d.isdigit() and 0 <= int(d) <= 6})
+    horario_texto = (request.form.get("culto_horario") or "").strip()
+    horario = None
+    if horario_texto:
+        try:
+            horario = _dt.strptime(horario_texto, "%H:%M").time()
+        except ValueError:
+            flash("Horário do culto inválido. Use o formato 19:00.", "danger")
+            return redirect(destino)
+    if "culto" in tipos and not dias:
+        flash("Para usar o check-in de culto, marque os dias em que há culto.", "danger")
+        return redirect(destino)
+
+    ministerio.checkin_escala = "escala" in tipos
+    ministerio.checkin_ensaio = "ensaio" in tipos
+    ministerio.checkin_culto = "culto" in tipos
+    if "culto" in tipos or dias:
+        ministerio.dias_culto = ",".join(str(d) for d in dias) or None
+    ministerio.culto_horario = horario
+    ministerio.save()
+    flash("Check-in desativado neste ministério." if not tipos else "Tipo de uso do check-in salvo.", "success")
+    return redirect(destino)
+
+
+@bp.route("/<int:ministerio_id>/culto/checkin", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute")
+def checkin_culto(ministerio_id):
+    """Check-in de culto (JSON, botao do Inicio): aberto a quem participa do
+    ministerio, escalado ou nao, nos dias de culto -- mesma conferencia de
+    local do check-in de escala (ver app/escala/checkin.py)."""
+    import math
+
+    from app.escala.checkin import avaliar_checkin, local_do_checkin, pode_fazer_checkin_culto, situacao_do_culto
+    from app.escala.estatisticas import hoje_brasilia
+    from app.escala.models import PresencaCulto
+
+    ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
+    if not pode_fazer_checkin_culto(ministerio, current_user):
+        abort(404)
+    if not AcaoForm().validate_on_submit():
+        return jsonify({"ok": False, "mensagem": "Sessão expirada. Recarregue a página e tente de novo."}), 400
+
+    hoje = hoje_brasilia()
+    motivo = situacao_do_culto(ministerio, hoje)
+    if motivo:
+        return jsonify({"ok": False, "mensagem": motivo})
+    if PresencaCulto.objects(ministerio_id=ministerio.id, data=hoje, usuario_id=current_user.id).first():
+        return jsonify({"ok": True, "mensagem": "Seu check-in no culto já estava feito.", "ja_feito": True})
+
+    def numero(campo):
+        try:
+            valor = float(request.form.get(campo, ""))
+        except ValueError:
+            return None
+        return valor if math.isfinite(valor) else None
+
+    precisao = numero("precisao")
+    ok, distancia, mensagem = avaliar_checkin(local_do_checkin(ministerio), numero("latitude"), numero("longitude"), precisao)
+    if not ok:
+        corpo = {"ok": False, "mensagem": mensagem}
+        if distancia is not None:
+            corpo["distancia_m"] = round(distancia)
+        return jsonify(corpo)
+
+    PresencaCulto(
+        ministerio_id=ministerio.id, data=hoje, usuario_id=current_user.id, checkin_em=datetime.now(timezone.utc),
+        distancia_m=round(distancia), precisao_m=round(precisao) if precisao is not None else None,
+    ).save()
+    return jsonify({"ok": True, "mensagem": "Check-in feito! Presença no culto confirmada.", "distancia_m": round(distancia)})
+
+
+def cultos_de_hoje(usuario, hoje):
+    """Cartoes de check-in de culto do Inicio: ministerios em que a conta tem
+    papel, com check-in de culto ligado e culto hoje."""
+    from app.escala.checkin import checkin_padrao, local_do_checkin
+    from app.escala.models import PresencaCulto
+
+    ids = [u.ministerio_id for u in UsuarioMinisterio.objects(usuario_id=usuario.id).only("ministerio_id")]
+    if not ids:
+        return []
+    cultos = [
+        m for m in Ministerio.objects(id__in=ids, checkin_culto=True).order_by("nome")
+        if checkin_padrao(m, "culto") and hoje.weekday() in m.dias_culto_efetivos
+    ]
+    if not cultos:
+        return []
+    feitos = {p.ministerio_id: p for p in PresencaCulto.objects(
+        ministerio_id__in=[m.id for m in cultos], data=hoje, usuario_id=usuario.id)}
+    return [{"ministerio": m, "presenca": feitos.get(m.id), "local": local_do_checkin(m)} for m in cultos]
 
 
 @bp.route("/<int:ministerio_id>/calendario")
@@ -380,10 +525,11 @@ def local_checkin(ministerio_id):
 
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
     return tela_local_checkin(
-        ministerio, ministerio.nome, url_for("ministerio.detalhe", ministerio_id=ministerio.id), ministerio=ministerio,
+        ministerio, ministerio.nome, url_for("ministerio.detalhe", ministerio_id=ministerio.id, checkin="1") + "#checkin",
+        ministerio=ministerio,
     )
 
-@bp.route("/<int:ministerio_id>/estatisticas", methods=["GET", "POST"])
+@bp.route("/<int:ministerio_id>/estatisticas")
 @login_required
 def estatisticas(ministerio_id):
     """Estatisticas de comparecimento do ministerio (lider/admin), ver
@@ -394,7 +540,7 @@ def estatisticas(ministerio_id):
     return tela_estatisticas(
         [ministerio], ministerio.nome, url_for("ministerio.detalhe", ministerio_id=ministerio.id),
         lambda **args: url_for("ministerio.estatisticas", ministerio_id=ministerio.id, **args),
-        ministerio_config=ministerio,
+        url_ajustes=url_for("ministerio.detalhe", ministerio_id=ministerio.id, checkin="1") + "#checkin",
     )
 
 

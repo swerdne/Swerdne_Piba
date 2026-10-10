@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    [data-secao-checkin] > summary { list-style: none; }
+    [data-secao-checkin] > summary::-webkit-details-marker { display: none; }
+    [data-secao-checkin] .seta-retratil { transition: transform .2s; }
+    [data-secao-checkin][open] .seta-retratil { transform: rotate(180deg); }
 </style>
 {% endblock %}
 
@@ -42,7 +46,7 @@
                     {{ item_menu(tema, url_for('ministerio.checkin', ministerio_id=ministerio.id), 'fa-child-reaching', 'Check-in de crianças') }}
                     {% endif %}
                     {{ item_menu(tema, url_for('ministerio.papeis', ministerio_id=ministerio.id), 'fa-user-group', 'Papéis e convites') }}
-                    {{ item_menu(tema, url_for('ministerio.local_checkin', ministerio_id=ministerio.id), 'fa-location-dot', 'Local do check-in') }}
+                    {{ item_menu(tema, url_for('ministerio.detalhe', ministerio_id=ministerio.id, checkin='1') ~ '#checkin', 'fa-location-dot', 'Check-in') }}
                     {{ item_menu(tema, url_for('ministerio.estatisticas', ministerio_id=ministerio.id), 'fa-chart-line', 'Estatísticas de comparecimento') }}
                     {% if eh_admin %}
                     {{ item_menu(tema, url_for('ministerio.editar', ministerio_id=ministerio.id), 'fa-pen', 'Editar ministério') }}
@@ -298,6 +302,10 @@
             </div>
 
         </div>
+
+        {% if config_checkin %}
+        <div class="mt-6">{% include "ministerio/_secao_checkin.html" %}</div>
+        {% endif %}
     </main>
     {{ nav_inferior(tema, 'comunidades') }}
     </div>

@@ -1,0 +1,118 @@
+{# Secao "Check-in" do ministerio (so lider/admin) -- recolhida por padrao.
+   Rota de salvar: ministerio.config_checkin. Dados: ministerio.routes._config_checkin. #}
+{% set c = config_checkin %}
+{% set CAMPO = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+{% set BLOCO = "rounded-2xl border " ~ tema.card_border ~ " p-4 space-y-3" %}
+<details id="checkin" data-secao-checkin class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm scroll-mt-4" {{ 'open' if abrir_checkin }}>
+    <summary class="flex items-center gap-3 px-4 py-3.5 cursor-pointer select-none">
+        <span class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-location-dot text-sm"></i>
+        </span>
+        <span class="flex-1 min-w-0">
+            <span class="block text-sm font-semibold {{ tema.text_primary }}">Check-in</span>
+            <span class="block text-xs {{ tema.text_secondary }} truncate">
+                {% if c.desativado %}Desativado{% else %}
+                {{ [('Escala', c.tipos.escala), ('Ensaios', c.tipos.ensaio), ('Culto', c.tipos.culto)] | selectattr(1) | map(attribute=0) | join(' · ') }}
+                {% if c.local %} · raio {{ c.local.raio_m }} m{% else %} · <span class="text-amber-600">sem local</span>{% endif %}
+                {% endif %}
+            </span>
+        </span>
+        <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-retratil shrink-0"></i>
+    </summary>
+
+    <div class="px-4 pb-4 space-y-3">
+        {# 1. Tipo de uso #}
+        <form method="POST" action="{{ url_for('ministerio.config_checkin', ministerio_id=ministerio.id) }}" class="{{ BLOCO }}" data-tipo-uso>
+            {{ acao_form.hidden_tag() }}
+            <input type="hidden" name="acao" value="tipo_uso">
+            <div>
+                <p class="text-sm font-bold {{ tema.text_primary }}">Tipo de uso</p>
+                <p class="text-xs {{ tema.text_secondary }}">Marque um ou mais. Sem nenhum marcado, o ministério não usa check-in e o botão some para todos.</p>
+            </div>
+            {% for chave, rotulo, ajuda in [
+                ('escala', 'Escala', 'Quem está escalado faz check-in no dia da escala para ficar “Presente”. Desligado, a pessoa marca a presença sozinha.'),
+                ('ensaio', 'Ensaios', 'Quem está escalado faz check-in no dia de cada ensaio da escala.'),
+                ('culto', 'Culto', 'Todo o ministério, escalado ou não, registra presença nos dias de culto.'),
+            ] %}
+            <label class="flex items-start justify-between gap-4 cursor-pointer">
+                <span class="min-w-0">
+                    <span class="block text-sm font-medium {{ tema.text_primary }}">{{ rotulo }}</span>
+                    <span class="block text-xs {{ tema.text_secondary }}">{{ ajuda }}</span>
+                </span>
+                <input type="checkbox" name="tipo" value="{{ chave }}" {{ 'checked' if c.tipos[chave] }} class="mt-1 w-5 h-5 shrink-0 accent-indigo-600" {% if chave == 'culto' %}data-tipo-culto{% endif %}>
+            </label>
+            {% endfor %}
+            <div class="space-y-2 {{ '' if c.tipos.culto else 'hidden' }}" data-campos-culto>
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Dias de culto</p>
+                <div class="flex flex-wrap gap-1.5">
+                    {% for nome in c.dias_semana %}
+                    <label class="cursor-pointer">
+                        <input type="checkbox" name="dia_culto" value="{{ loop.index0 }}" class="peer sr-only" {{ 'checked' if loop.index0 in c.dias_culto }}>
+                        <span class="block text-xs font-semibold px-3 py-1.5 rounded-full border {{ tema.card_border }} {{ tema.text_secondary }} peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-transparent peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500 transition">{{ nome[:3] }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <label class="block">
+                    <span class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Horário do culto</span>
+                    <input type="time" name="culto_horario" value="{{ c.culto_horario.strftime('%H:%M') if c.culto_horario else '' }}" class="{{ CAMPO }} sm:w-40">
+                    <span class="block text-xs {{ tema.text_secondary }} mt-1">Referência para saber quem chegou adiantado ou atrasado. Os dias também aparecem em “Editar ministério”.</span>
+                </label>
+            </div>
+            <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">Salvar tipo de uso</button>
+        </form>
+
+        {# 2. Localizacao e raio #}
+        <div class="{{ BLOCO }}">
+            <p class="text-sm font-bold {{ tema.text_primary }}">Localização e raio</p>
+            {% if c.local %}
+            <p class="text-xs {{ tema.text_secondary }}">
+                {{ c.local.endereco or 'Ponto marcado no mapa' }} · aceita até <span class="font-semibold {{ tema.text_primary }}">{{ c.local.raio_m }} m</span>
+                {% if c.local.origem == 'comunidade' %}<br>Usando o local da comunidade.{% endif %}
+            </p>
+            {% else %}
+            <p class="text-xs text-amber-600">Nenhum local cadastrado: ninguém consegue fazer check-in ainda.</p>
+            {% endif %}
+            <a href="{{ url_for('ministerio.local_checkin', ministerio_id=ministerio.id) }}"
+               class="inline-flex items-center gap-2 text-sm font-semibold {{ tema.accent_text }} hover:underline">
+                <i class="fa-solid fa-map-location-dot"></i>{{ 'Ajustar no mapa' if c.local else 'Cadastrar no mapa' }}
+            </a>
+        </div>
+
+        {# 3. Tolerancia de horario #}
+        {% set ft = c.form_tolerancia %}
+        <form method="POST" action="{{ url_for('ministerio.config_checkin', ministerio_id=ministerio.id) }}" class="{{ BLOCO }}">
+            {{ ft.hidden_tag() }}
+            <input type="hidden" name="acao" value="tolerancia">
+            <p class="text-sm font-bold {{ tema.text_primary }}">Tolerância de horário</p>
+            <div class="grid sm:grid-cols-2 gap-3">
+                <label class="block">
+                    <span class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">{{ ft.tolerancia_atraso_min.label.text }}</span>
+                    {{ ft.tolerancia_atraso_min(class_=CAMPO, type="number", min="0", max="60", inputmode="numeric") }}
+                    <span class="block text-xs {{ tema.text_secondary }} mt-1">Chegar até esse tempo depois do horário ainda conta como “no horário”.</span>
+                </label>
+                <label class="block">
+                    <span class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">{{ ft.alerta_faltas_seguidas.label.text }}</span>
+                    {{ ft.alerta_faltas_seguidas(class_=CAMPO, type="number", min="0", max="10", inputmode="numeric") }}
+                    <span class="block text-xs {{ tema.text_secondary }} mt-1">Faltas seguidas em escalas que avisam os líderes no sino. 0 desliga.</span>
+                </label>
+            </div>
+            <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">Salvar tolerância</button>
+        </form>
+
+        {# 4. Estatisticas #}
+        <a href="{{ url_for('ministerio.estatisticas', ministerio_id=ministerio.id) }}" class="flex items-center gap-3 {{ BLOCO }} {{ tema.card_bg_hover }} transition">
+            <span class="flex-1 min-w-0">
+                <span class="block text-sm font-bold {{ tema.text_primary }}">Estatísticas</span>
+                <span class="block text-xs {{ tema.text_secondary }}">Gráficos de comparecimento, horários e cada pessoa. Só líderes e admins veem.</span>
+            </span>
+            <i class="fa-solid fa-chart-line {{ tema.accent_text }}"></i>
+        </a>
+    </div>
+</details>
+<script>
+(function () {
+    var culto = document.querySelector('[data-tipo-culto]');
+    var campos = document.querySelector('[data-campos-culto]');
+    if (culto && campos) culto.addEventListener('change', function () { campos.classList.toggle('hidden', !culto.checked); });
+})();
+</script>

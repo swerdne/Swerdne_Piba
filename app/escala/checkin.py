@@ -131,7 +131,7 @@ def status_sem_presente(form, status_atual, escala=None):
 # --- Onde o check-in vale (configuravel) ----------------------------------------
 # Ministerio define o padrao (Ministerio.checkin_escala/checkin_ensaio) e cada
 # Escala pode sobrepor (Escala.checkin_escala_modo/checkin_ensaio_modo).
-PADRAO_POR_TIPO = {"escala": True, "ensaio": False}
+PADRAO_POR_TIPO = {"escala": True, "ensaio": False, "culto": False}
 MODOS = ("ligado", "desligado")
 
 
@@ -161,3 +161,31 @@ def situacao_do_ensaio(ensaio, escala, hoje):
     if ensaio.data < hoje:
         return "O dia deste ensaio já passou."
     return None
+
+
+DIAS_SEMANA_LONGOS = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
+
+
+def situacao_do_culto(ministerio, hoje):
+    """None se o check-in de culto do ministerio esta aberto hoje; senao, o
+    motivo. Culto = dias de `ministerio.dias_culto` (o dia inteiro, como o
+    check-in de escala)."""
+    if not checkin_padrao(ministerio, "culto"):
+        return "O check-in de culto não está ligado neste ministério."
+    dias = ministerio.dias_culto_efetivos
+    if not dias:
+        return "Os dias de culto ainda não foram definidos."
+    if hoje.weekday() not in dias:
+        return "Hoje não é dia de culto (" + ", ".join(DIAS_SEMANA_LONGOS[d] for d in dias) + ")."
+    return None
+
+
+def pode_fazer_checkin_culto(ministerio, usuario):
+    """Quem participa do ministerio (papel de membro ou lider nele) ou tem
+    autoridade de lider sobre ele (admin da comunidade)."""
+    from app.ministerio.models import UsuarioMinisterio
+    from app.ministerio.routes import _eh_lider_do_ministerio
+
+    if UsuarioMinisterio.objects(ministerio_id=ministerio.id, usuario_id=usuario.id).first():
+        return True
+    return _eh_lider_do_ministerio(ministerio, usuario)

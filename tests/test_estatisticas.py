@@ -150,11 +150,12 @@ def test_tela_do_ministerio_e_ajustes(logged_in_client, outro_logged_in_client, 
         with sessao_isolada(app):
             assert outro_logged_in_client.get(url).status_code == 404
 
-        logged_in_client.post(url, data={"tolerancia_atraso_min": 0, "alerta_faltas_seguidas": 5})
+        config = f"/ministerio/{ministerio.id}/checkin/config"
+        logged_in_client.post(config, data={"acao": "tolerancia", "tolerancia_atraso_min": 0, "alerta_faltas_seguidas": 5})
         ministerio = Ministerio.objects(id=ministerio.id).first()
         assert (ministerio.tolerancia_atraso_min, ministerio.alerta_faltas_seguidas) == (0, 5)
 
-        logged_in_client.post(url, data={"tolerancia_atraso_min": 99, "alerta_faltas_seguidas": 5})
+        logged_in_client.post(config, data={"acao": "tolerancia", "tolerancia_atraso_min": 99, "alerta_faltas_seguidas": 5})
         assert Ministerio.objects(id=ministerio.id).first().tolerancia_atraso_min == 0
 
         assert f"/ministerio/{ministerio.id}/estatisticas" in logged_in_client.get(f"/ministerio/{ministerio.id}").get_data(as_text=True)

@@ -2,7 +2,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
 from wtforms import StringField, SelectField, SubmitField, DateField, TimeField, TextAreaField, HiddenField, FloatField, IntegerField
-from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, ValidationError
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, StopValidation, ValidationError
 from wtforms.widgets import Select
 from markupsafe import Markup
 
@@ -193,7 +193,7 @@ class ObservacoesRepertorioForm(FlaskForm):
 
 
 class _Coordenada(FloatField):
-    """Vazio = sem valor (mensagem do DataRequired), nao "Not a valid float"."""
+    """Vazio = sem valor, nao "Not a valid float"."""
 
     def process_formdata(self, valuelist):
         if valuelist and (valuelist[0] or "").strip():
@@ -202,17 +202,47 @@ class _Coordenada(FloatField):
             self.data = None
 
 
+class _Metros(IntegerField):
+    """Inteiro com erro em portugues ("Not a valid integer value" aparecia
+    pra quem digitava 100,5 ou 1.000)."""
+
+    def process_formdata(self, valuelist):
+        texto = (valuelist[0] if valuelist else "") or ""
+        texto = str(texto).strip()
+        if not texto:
+            self.data = None
+            return
+        try:
+            self.data = int(texto)
+        except ValueError:
+            self.data = None
+            raise ValueError("Use um número inteiro de metros, entre 30 e 2000.")
+
+
+class _Preenchida:
+    """Como DataRequired, mas 0 vale: DataRequired recusava latitude 0 (a
+    linha do Equador passa pelo Amapa e pelo Para)."""
+
+    def __init__(self, message):
+        self.message = message
+
+    def __call__(self, form, field):
+        if field.data is None:
+            raise StopValidation(self.message)
+
+
 class LocalCheckinForm(FlaskForm):
     """Local do check-in por localizacao (Comunidade ou Ministerio, ver
     app/escala/checkin.py). Latitude/longitude vem da busca do endereco ou
     do botao "usar minha localizacao" (campos escondidos preenchidos pelo JS)."""
     endereco = StringField("Endereço", validators=[Optional(), Length(max=300)])
-    latitude = _Coordenada("Latitude", validators=[DataRequired(message="Escolha o local no mapa (busque o endereço ou use a sua localização)."),
+    latitude = _Coordenada("Latitude", validators=[_Preenchida("Escolha o local no mapa (busque o endereço ou use a sua localização)."),
                                                   NumberRange(min=-90, max=90)])
-    longitude = _Coordenada("Longitude", validators=[DataRequired(message="Escolha o local no mapa."),
+    longitude = _Coordenada("Longitude", validators=[_Preenchida("Escolha o local no mapa."),
                                                     NumberRange(min=-180, max=180)])
-    raio_checkin_m = IntegerField("Raio aceito (metros)", default=100,
-                                  validators=[DataRequired(), NumberRange(min=30, max=2000, message="Use entre 30 e 2000 metros.")])
+    raio_checkin_m = _Metros("Raio aceito (metros)", default=100,
+                             validators=[InputRequired(message="Informe o raio em metros."),
+                                         NumberRange(min=30, max=2000, message="Use um número inteiro de metros, entre 30 e 2000.")])
 
 
 class ConfigEstatisticasForm(FlaskForm):

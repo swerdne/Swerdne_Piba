@@ -8,7 +8,7 @@ import secrets
 from datetime import datetime, timezone
 
 import mongoengine
-from app.db_utils import PureDateField, SequentialIdDocument, relacao_em_cache
+from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, relacao_em_cache
 
 PAPEIS_MINISTERIO = ("lider", "membro")
 
@@ -55,6 +55,10 @@ class Ministerio(SequentialIdDocument):
     # Vazio = padrao: ligado no dia da escala, desligado nos ensaios.
     checkin_escala = mongoengine.BooleanField()
     checkin_ensaio = mongoengine.BooleanField()
+    # Check-in de culto: aberto a todo o ministerio (escalado ou nao) nos
+    # dias de `dias_culto`; o horario e a referencia de atraso.
+    checkin_culto = mongoengine.BooleanField()
+    culto_horario = PureTimeField()
 
     def gerar_novo_link_convite(self):
         self.token_convite_publico = secrets.token_urlsafe(8)
@@ -110,12 +114,13 @@ class Ministerio(SequentialIdDocument):
         so historico) -- antes de apagar, junta o banco da comunidade, pra
         musica antiga deste ministerio virar oficial em vez de sumir."""
         from app.escala.banco_musicas import unificar_banco_da_comunidade
-        from app.escala.models import AlertaFaltas, Musica
+        from app.escala.models import AlertaFaltas, Musica, PresencaCulto
 
         unificar_banco_da_comunidade(self.comunidade_id)
         return [
             UsuarioMinisterio.objects(ministerio_id=self.id),
             AlertaFaltas.objects(ministerio_id=self.id),
+            PresencaCulto.objects(ministerio_id=self.id),
             Crianca.objects(ministerio_id=self.id),
             Musica.objects(ministerio_id=self.id, oficial=False),
         ]

@@ -5,7 +5,7 @@ formulario. Busca de endereco: buscar_endereco (OpenStreetMap/Nominatim)."""
 import requests
 from flask import current_app, flash, redirect, render_template, request
 
-from app.escala.checkin import RAIO_PADRAO_M, checkin_padrao, local_do_checkin
+from app.escala.checkin import RAIO_PADRAO_M, local_do_checkin
 from app.escala.forms import LocalCheckinForm
 
 _NOMINATIM = "https://nominatim.openstreetmap.org/search"
@@ -22,16 +22,6 @@ def tela_local_checkin(alvo, titulo, voltar_url, ministerio=None):
             alvo.save()
             flash("Este ministério agora usa o local da comunidade.", "success")
         return redirect(request.path)
-
-    if request.method == "POST" and request.form.get("acao") == "quando_usar" and ministerio is not None:
-        from app.escala.forms import AcaoForm
-
-        if AcaoForm().validate_on_submit():
-            ministerio.checkin_escala = request.form.get("checkin_escala") == "1"
-            ministerio.checkin_ensaio = request.form.get("checkin_ensaio") == "1"
-            ministerio.save()
-            flash("Quando usar o check-in: salvo.", "success")
-        return redirect(request.path + "#quando-usar")
 
     form = LocalCheckinForm(obj=alvo) if request.method == "GET" else LocalCheckinForm()
     if request.method == "GET" and not alvo.raio_checkin_m:
@@ -56,8 +46,6 @@ def tela_local_checkin(alvo, titulo, voltar_url, ministerio=None):
         eh_ministerio=ministerio is not None,
         tem_proprio=alvo.latitude is not None,
         herdado=herdado,
-        checkin_escala=checkin_padrao(ministerio, "escala") if ministerio is not None else None,
-        checkin_ensaio=checkin_padrao(ministerio, "ensaio") if ministerio is not None else None,
     )
 
 
