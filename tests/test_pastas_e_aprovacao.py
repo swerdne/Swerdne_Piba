@@ -477,6 +477,63 @@ def test_so_quem_edita_o_banco_apaga_todas(logged_in_client, outro_logged_in_cli
         assert Musica.objects(nome="Oficial").count() == 1
 
 
+# --- Excluir so as musicas marcadas -------------------------------------------------
+
+def test_excluir_marcadas_apaga_so_as_escolhidas(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        cid = comunidade.id
+        for nome in ("Oceanos", "Grande", "Ressuscitou"):
+            logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": nome})
+        logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/nova", data={"nome": "Local do Louvor"})
+        oceanos, grande = Musica.objects(nome="Oceanos").first(), Musica.objects(nome="Grande").first()
+        local = Musica.objects(nome="Local do Louvor").first()
+
+        html = logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
+        assert "Excluir marcadas" in html and "excluir-marcadas" in html
+
+        escala = _criar_escala(logged_in_client, louvor.id, "Culto")
+        logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
+                              data={"banco-musica_id": oceanos.id, "banco-momento": "", "banco-tom": "E"})
+
+        # Musica de outro banco (a local) e id inventado no meio: ignorados.
+        logged_in_client.post(f"/ministerio/musicas/{cid}/excluir-marcadas",
+                              data={"musica_id": [oceanos.id, grande.id, local.id, 99999]})
+        assert sorted(m.nome for m in Musica.objects(comunidade_id=cid)) == ["Local do Louvor", "Ressuscitou"]
+        item = ItemRepertorio.objects(escala_id=escala.id).first()
+        assert (item.nome_musica, item.musica_id) == ("Oceanos", None)  # virou avulsa
+
+        # Sem nada marcado: nada acontece.
+        logged_in_client.post(f"/ministerio/musicas/{cid}/excluir-marcadas", data={})
+        assert Musica.objects(comunidade_id=cid).count() == 2
+
+
+def test_excluir_marcadas_no_banco_local(logged_in_client, app, db):
+    with app.app_context():
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        for nome in ("A", "B"):
+            logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/nova", data={"nome": nome})
+        a = Musica.objects(nome="A").first()
+        logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/excluir-marcadas", data={"musica_id": [a.id]})
+        assert [m.nome for m in Musica.objects()] == ["B"]
+
+
+def test_so_quem_edita_o_banco_exclui_marcadas(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade, louvor, _ = _igreja(logged_in_client)
+        cid, lid = comunidade.id, louvor.id
+        logged_in_client.post(f"/ministerio/musicas/{cid}/nova", data={"nome": "Oficial"})
+        mid = Musica.objects(nome="Oficial").first().id
+        _bruno_lider(lid)
+    with sessao_isolada(app):
+        # Lider marca musicas do oficial (pra repertorio), mas nao ve o excluir nem consegue.
+        html = outro_logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
+        assert "data-selecionar" in html and 'id="form-excluir-marcadas"' not in html
+        resposta = outro_logged_in_client.post(f"/ministerio/musicas/{cid}/excluir-marcadas", data={"musica_id": [mid]})
+        assert resposta.status_code == 404
+        assert Musica.objects(nome="Oficial").count() == 1
+
+
 def test_banco_mostra_atalhos_de_tema_e_lixeira_no_topo(logged_in_client, app, db):
     with app.app_context():
         comunidade, _, _ = _igreja(logged_in_client)

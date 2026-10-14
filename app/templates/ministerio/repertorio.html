@@ -119,6 +119,10 @@
         </section>
         {% endif %}
 
+        {# Marcar musicas serve pra criar repertorio (quem lidera algum ministerio)
+           e pra excluir varias de uma vez (quem edita este banco). #}
+        {% set pode_marcar = ministerios_que_lidera or (pode_gerenciar and musicas) %}
+
         <!-- Modo de exibicao: lista de musicas ou repertorios por ministerio (lembrado no navegador) -->
         <div class="flex items-center justify-between gap-3">
             <div data-tutorial="modos" class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Modo de exibicao">
@@ -161,7 +165,7 @@
                         class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_secondary }} transition">
                     <i class="fa-solid fa-list mr-1"></i>Ver todas ({{ musicas|length }})
                 </button>
-                {% if ministerios_que_lidera %}
+                {% if pode_marcar %}
                 <button type="button" data-ver-marcadas
                         class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_secondary }} transition">
                     <i class="fa-solid fa-check-square mr-1"></i>Ver marcadas (<span data-qtd-marcadas>0</span>)
@@ -175,24 +179,25 @@
                 {% endfor %}
             </div>
             <p data-lista-dica class="text-xs {{ tema.text_secondary }} hidden">
-                Pesquise ou toque num tema pra ver as musicas{% if ministerios_que_lidera %} -- e marque as que vao num repertorio (ex: manha, noite){% endif %}.
+                Pesquise ou toque num tema pra ver as musicas{% if ministerios_que_lidera %} -- e marque as que vao num repertorio (ex: manha, noite){% elif pode_marcar %} -- e marque as que quer excluir{% endif %}.
             </p>
 
-            {% if ministerios_que_lidera %}
-            <!-- Criar repertorio com as marcadas: aparece quando ha musica marcada, na
-                 largura da lista e preso no topo enquanto rola (nao flutua no rodape). -->
+            {% if pode_marcar %}
+            <!-- Acoes com as marcadas (criar repertorio / excluir): aparece quando ha
+                 musica marcada, na largura da lista e preso no topo enquanto rola. -->
             <form method="POST" action="{{ url_for('ministerio.nova_pasta', comunidade_id=comunidade.id) }}"
                   data-barra-pasta class="hidden sticky top-2 z-20 {{ tema.card_bg }} border-2 {{ tema.accent_border }} rounded-2xl shadow-lg p-3 space-y-2.5">
                 {{ acao_form.hidden_tag() }}
                 <input type="hidden" name="voltar" value="{{ request.path }}">
                 <div data-ids-selecionados></div>
                 <div class="flex items-center justify-between gap-3">
-                    <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-list-ol mr-1 {{ tema.accent_text }}"></i><span data-contagem></span></p>
+                    <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-check-square mr-1 {{ tema.accent_text }}"></i><span data-contagem></span></p>
                     <div class="flex items-center gap-3 text-xs font-semibold">
                         <button type="button" data-ver-marcadas-barra class="{{ tema.accent_text }} hover:underline">Ver marcadas</button>
                         <button type="button" data-limpar-selecao class="{{ tema.text_secondary }} hover:underline">Limpar</button>
                     </div>
                 </div>
+                {% if ministerios_que_lidera %}
                 <div class="grid grid-cols-1 sm:grid-cols-[11rem_1fr] gap-2">
                     <select name="ministerio_id" aria-label="Ministerio do repertorio" class="w-full {{ CAMPO }}">
                         {% for m in ministerios_que_lidera %}
@@ -205,7 +210,23 @@
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
                     <i class="fa-solid fa-plus mr-1"></i>Criar repertorio com as marcadas
                 </button>
+                {% endif %}
+                {% if pode_gerenciar %}
+                <!-- Fica dentro da barra, mas envia o form proprio la de baixo (form=). -->
+                <button type="submit" form="form-excluir-marcadas"
+                        class="w-full border border-red-500/30 text-red-500 hover:bg-red-500/10 text-sm font-semibold py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-trash mr-1"></i><span data-excluir-texto>Excluir marcadas</span>
+                </button>
+                {% endif %}
             </form>
+            {% if pode_gerenciar %}
+            <form method="POST" id="form-excluir-marcadas" class="hidden"
+                  action="{{ url_for('ministerio.excluir_musicas_marcadas', **banco.args) }}"
+                  data-form-excluir-marcadas data-confirm-excluir="Excluir as musicas marcadas?">
+                {{ acao_form.hidden_tag() }}
+                <div data-ids-excluir></div>
+            </form>
+            {% endif %}
             {% endif %}
 
             <div data-lista-musicas class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
@@ -213,13 +234,13 @@
                 <div data-musica-item
                      data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
                      class="flex items-center {{ tema.card_bg_hover }} transition">
-                    {% if ministerios_que_lidera %}
+                    {% if pode_marcar %}
                     <!-- Area de clique grande em volta do quadradinho: errar por pouco nao abre a musica -->
                     <label class="self-stretch flex items-center pl-4 pr-3 cursor-pointer shrink-0">
                         <input type="checkbox" data-selecionar value="{{ m.id }}" aria-label="Selecionar {{ m.nome }}" class="w-5 h-5 cursor-pointer">
                     </label>
                     {% endif %}
-                    <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="flex flex-1 min-w-0 items-center gap-3 pr-4 py-3 {{ '' if ministerios_que_lidera else 'pl-4' }}">
+                    <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="flex flex-1 min-w-0 items-center gap-3 pr-4 py-3 {{ '' if pode_marcar else 'pl-4' }}">
                         <div class="w-11 h-11 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0 font-extrabold text-sm">
                             {{ m.tom or '-' }}
                         </div>
@@ -456,8 +477,31 @@
             botaoBaixar.querySelector('[data-baixar-texto]').textContent =
                 marcadas.length ? 'Baixar ' + marcadas.length + (marcadas.length === 1 ? ' marcada' : ' marcadas') : 'Baixar';
         }
+        // Excluir as marcadas: manda os ids marcados; a pergunta do confirm() (handler
+        // global de data-confirm-excluir em main.js) diz quantas vao. Depois de
+        // excluir, a selecao guardada se limpa sozinha (ids que sumiram da pagina
+        // sao descartados ao carregar).
+        var formExcluir = document.querySelector('[data-form-excluir-marcadas]');
+        var textoExcluir = document.querySelector('[data-excluir-texto]');
+        function atualizarExcluir() {
+            if (!formExcluir) return;
+            var caixaExcluir = formExcluir.querySelector('[data-ids-excluir]');
+            caixaExcluir.innerHTML = '';
+            marcadas.forEach(function (id) {
+                var campo = document.createElement('input');
+                campo.type = 'hidden';
+                campo.name = 'musica_id';
+                campo.value = id;
+                caixaExcluir.appendChild(campo);
+            });
+            var qtd = marcadas.length + (marcadas.length === 1 ? ' musica marcada' : ' musicas marcadas');
+            textoExcluir.textContent = 'Excluir ' + (marcadas.length === 1 ? 'a marcada' : 'as ' + marcadas.length + ' marcadas');
+            formExcluir.setAttribute('data-confirm-excluir',
+                'Excluir ' + qtd + '? Nao da pra desfazer. Escalas e repertorios que usavam alguma ficam com ela como musica avulsa.');
+        }
         function atualizarSelecao() {
             atualizarBaixar();
+            atualizarExcluir();
             if (qtdMarcadas) qtdMarcadas.textContent = marcadas.length;
             if (!barra) return;
             var naLista = !document.querySelector('[data-modo-conteudo="lista"]').classList.contains('hidden');

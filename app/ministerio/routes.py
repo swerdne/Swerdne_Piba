@@ -1582,6 +1582,27 @@ def apagar_todas_musicas(comunidade_id=None, ministerio_id=None):
     return redirect(_url_do_banco(banco))
 
 
+@bp.route("/musicas/<int:comunidade_id>/excluir-marcadas", methods=["POST"])
+@bp.route("/<int:ministerio_id>/repertorio/excluir-marcadas", methods=["POST"])
+@login_required
+def excluir_musicas_marcadas(comunidade_id=None, ministerio_id=None):
+    """Apaga so as musicas marcadas na lista (campos musica_id). Ids de outro
+    banco (ou inventados) sao ignorados: so apaga o que mora NESTE banco."""
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
+    pedidos = {int(i) for i in request.form.getlist("musica_id") if str(i).strip().isdigit()}
+    if not AcaoForm().validate_on_submit() or not pedidos:
+        flash("Nenhuma musica marcada para excluir.", "warning")
+        return redirect(_url_do_banco(banco))
+
+    ids = [m.id for m in banco.musicas().filter(id__in=list(pedidos)).only("id")]
+    if ids:
+        _soltar_musicas_apagadas(ids, banco.comunidade.id)
+        Musica.objects(id__in=ids).delete()
+    flash(f"{len(ids)} musica(s) excluida(s) do {banco.titulo.lower()}. "
+          "Escalas e repertorios que usavam alguma ficaram com ela como musica avulsa.", "success")
+    return redirect(_url_do_banco(banco))
+
+
 # --- Baixar musicas (Word) -----------------------------------------------------
 # Quem ve o banco (ou o repertorio) baixa: 1 musica = .docx; varias = .zip
 # com um .docx por musica (ver ministerio/exportar_cifras.py). So leitura, por
