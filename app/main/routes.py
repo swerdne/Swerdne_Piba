@@ -294,6 +294,47 @@ def healthz():
     return "ok", 200
 
 
+@bp.route("/whatsapp/webhook", methods=["GET", "POST"])
+@limiter.limit("300 per minute")
+def whatsapp_webhook():
+    """Webhook da Meta (WhatsApp Cloud API), publico de proposito.
+
+    GET: verificacao do cadastro -- a Meta manda hub.verify_token (tem que ser
+    META_WHATSAPP_VERIFY_TOKEN) e espera o hub.challenge de volta.
+    POST: mensagens recebidas (app/whatsapp_recebidas.py). So aceita com a
+    assinatura X-Hub-Signature-256 (HMAC do corpo com META_APP_SECRET) --
+    sem ela qualquer um poderia "confirmar escala" no nome de outra pessoa.
+    Responde 200 mesmo se o processamento falhar, senao a Meta reenvia o
+    mesmo webhook por horas."""
+    import hashlib
+    import hmac
+
+    if request.method == "GET":
+        esperado = current_app.config.get("META_WHATSAPP_VERIFY_TOKEN")
+        recebido = request.args.get("hub.verify_token") or ""
+        if (request.args.get("hub.mode") == "subscribe" and esperado
+                and hmac.compare_digest(recebido, esperado)):
+            return request.args.get("hub.challenge", ""), 200
+        abort(403)
+
+    segredo = current_app.config.get("META_APP_SECRET")
+    if not segredo:
+        current_app.logger.warning("Webhook do WhatsApp recusado: META_APP_SECRET nao configurado.")
+        abort(403)
+    corpo = request.get_data()
+    assinatura = "sha256=" + hmac.new(segredo.encode(), corpo, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(assinatura, request.headers.get("X-Hub-Signature-256", "")):
+        abort(403)
+
+    from app.whatsapp_recebidas import processar_webhook
+
+    try:
+        processar_webhook(request.get_json(silent=True))
+    except Exception:
+        current_app.logger.exception("Falha ao processar webhook do WhatsApp")
+    return "ok", 200
+
+
 @bp.route("/dashboard")
 @login_required
 def dashboard():

@@ -60,6 +60,12 @@ class Config:
     # em uso hoje (camada gratuita, sem precisar de conta paga).
     META_WHATSAPP_TOKEN = os.environ.get("META_WHATSAPP_TOKEN")
     META_WHATSAPP_PHONE_ID = os.environ.get("META_WHATSAPP_PHONE_ID")
+    # Recebimento (webhook, ver main.whatsapp_webhook e app/whatsapp_recebidas.py):
+    # VERIFY_TOKEN e a senha inventada que vai no campo "Verificar token" da
+    # Meta; APP_SECRET ("Chave secreta do aplicativo", Configuracoes do app >
+    # Basico) confere a assinatura de cada POST -- sem ela o webhook recusa tudo.
+    META_WHATSAPP_VERIFY_TOKEN = os.environ.get("META_WHATSAPP_VERIFY_TOKEN")
+    META_APP_SECRET = os.environ.get("META_APP_SECRET")
 
     # Cadastro tradicional: confere se o dominio do e-mail tem registro MX (ou
     # A) antes de aceitar o cadastro (ver app/auth/dominio_email.py). Flag pra
@@ -108,6 +114,8 @@ class TestingConfig(Config):
     TWILIO_WHATSAPP_FROM = None
     META_WHATSAPP_TOKEN = None
     META_WHATSAPP_PHONE_ID = None
+    META_WHATSAPP_VERIFY_TOKEN = None
+    META_APP_SECRET = None
 
     # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
     VALIDAR_DOMINIO_EMAIL = False

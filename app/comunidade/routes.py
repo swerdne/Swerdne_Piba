@@ -28,6 +28,7 @@ from app.escala.models import (
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite
 from app.convites.adicao import adicionar_ou_convidar
+from app.whatsapp_recebidas import nao_lidas_da_comunidade
 
 
 def _eh_admin_da_comunidade(comunidade, usuario):
@@ -210,6 +211,7 @@ def detalhe(comunidade_id):
         ministerios=ministerios,
         total_membros=total_membros,
         pedidos_diretorio=len(_pedidos_diretorio(comunidade, contas_vinculadas, emails_diretorio)),
+        whatsapp_nao_lidas=nao_lidas_da_comunidade(comunidade.id),
         acao_form=AcaoForm(),
     )
 
@@ -225,6 +227,64 @@ def local_checkin(comunidade_id):
     return tela_local_checkin(
         comunidade, comunidade.nome, url_for("comunidade.detalhe", comunidade_id=comunidade.id),
     )
+
+@bp.route("/<int:comunidade_id>/whatsapp")
+@bp.route("/<int:comunidade_id>/whatsapp/<telefone>", methods=["GET", "POST"])
+@login_required
+def whatsapp(comunidade_id, telefone=None):
+    """Caixa de entrada do WhatsApp (so admin): mensagens recebidas de quem
+    tem o telefone no diretorio desta comunidade (ver
+    app/whatsapp_recebidas.py). Com `telefone`, abre a conversa (marca como
+    lida) e deixa responder em texto livre -- so dentro das 24h desde a
+    ultima mensagem da pessoa (regra da Meta)."""
+    from app.whatsapp import WhatsappNaoEnviadoError, enviar_whatsapp
+    from app.whatsapp_recebidas import (
+        RECEBIDA, MensagemWhatsapp, conversas_da_comunidade, pode_responder_livre, registrar_enviada,
+    )
+
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    conversas = conversas_da_comunidade(comunidade.id)
+    conversa = None
+    if telefone is not None:
+        conversa = next((c for c in conversas if c["telefone"] == telefone), None)
+        if conversa is None:
+            abort(404)
+        url_conversa = url_for("comunidade.whatsapp", comunidade_id=comunidade.id, telefone=telefone)
+        if request.method == "POST":
+            texto = (request.form.get("texto") or "").strip()[:4000]
+            mensagens = list(MensagemWhatsapp.objects(comunidade_ids=comunidade.id, telefone=telefone))
+            if not AcaoForm().validate_on_submit() or not texto:
+                flash("Escreva a mensagem.", "danger")
+            elif not pode_responder_livre(mensagens):
+                flash("Passaram 24h desde a última mensagem dessa pessoa: o WhatsApp não deixa mais responder em texto livre.", "danger")
+            else:
+                try:
+                    enviar_whatsapp("+" + telefone, texto)
+                except WhatsappNaoEnviadoError as erro:
+                    flash(f"Não foi possível enviar: {erro}", "danger")
+                else:
+                    registrar_enviada(telefone, texto, [comunidade.id], conversa["membro_ids"], current_user.id)
+                    flash("Mensagem enviada.", "success")
+            return redirect(url_conversa)
+        MensagemWhatsapp.objects(
+            comunidade_ids=comunidade.id, telefone=telefone, direcao=RECEBIDA, lida=False,
+        ).update(set__lida=True)
+        conversa["nao_lidas"] = 0
+        conversa["mensagens"] = list(
+            MensagemWhatsapp.objects(comunidade_ids=comunidade.id, telefone=telefone).order_by("criada_em")
+        )
+        conversa["pode_responder"] = pode_responder_livre(conversa["mensagens"])
+
+    return render_template(
+        "comunidade/whatsapp.html",
+        comunidade=comunidade,
+        conversas=conversas,
+        conversa=conversa,
+        rotulos_acao={"confirmado": "Confirmou a escala", "troca_solicitada": "Pediu troca"},
+        timedelta_brasilia=timedelta(hours=3),  # Mongo devolve UTC sem fuso
+        acao_form=AcaoForm(),
+    )
+
 
 @bp.route("/<int:comunidade_id>/estatisticas")
 @login_required
