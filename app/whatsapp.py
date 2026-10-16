@@ -24,6 +24,7 @@ def _config_ou_erro():
     token = current_app.config.get("META_WHATSAPP_TOKEN")
     phone_id = current_app.config.get("META_WHATSAPP_PHONE_ID")
     if not token or not phone_id:
+        current_app.logger.warning("WhatsApp nao enviado: META_WHATSAPP_TOKEN/META_WHATSAPP_PHONE_ID nao configurados.")
         raise WhatsappNaoEnviadoError(
             "Envio de WhatsApp nao configurado (defina META_WHATSAPP_TOKEN e "
             "META_WHATSAPP_PHONE_ID no .env)."
@@ -31,7 +32,20 @@ def _config_ou_erro():
     return token, phone_id
 
 
+def _descrever_envio(payload):
+    """'template pibachurch_escalado para 5528*****2102' -- pro log, sem o numero inteiro."""
+    destino = payload.get("to") or ""
+    destino = destino[:4] + "*****" + destino[-4:] if len(destino) > 8 else destino
+    if payload.get("type") == "template":
+        return f"template {payload['template']['name']} para {destino}"
+    return f"texto livre para {destino}"
+
+
 def _chamar_api(token, phone_id, payload):
+    """Toda falha vai pro log (WARNING, aparece no log do Azure) com o motivo
+    que a Meta devolveu -- quem chama (ex: o botao Notificar) so conta
+    "falharam", entao sem isso o porque (template inexistente/nao aprovado,
+    numero fora da lista de teste, token vencido...) se perdia."""
     url = f"https://graph.facebook.com/{_API_VERSAO}/{phone_id}/messages"
     try:
         resposta = requests.post(
@@ -41,10 +55,14 @@ def _chamar_api(token, phone_id, payload):
             timeout=_TIMEOUT_SEGUNDOS,
         )
     except requests.RequestException as erro:
+        current_app.logger.warning("WhatsApp nao enviado (%s): erro de rede: %s", _descrever_envio(payload), erro)
         raise WhatsappNaoEnviadoError(f"Falha ao enviar WhatsApp: {erro}") from erro
 
     if resposta.status_code >= 300:
+        current_app.logger.warning("WhatsApp nao enviado (%s): Meta respondeu %s %s",
+                                   _descrever_envio(payload), resposta.status_code, resposta.text[:1000])
         raise WhatsappNaoEnviadoError(f"Meta recusou o envio: {resposta.status_code} {resposta.text}")
+    current_app.logger.info("WhatsApp enviado (%s).", _descrever_envio(payload))
 
 
 def enviar_whatsapp(destinatario, corpo):
@@ -82,7 +100,7 @@ def trocar_foto_do_perfil(caminho_imagem, app_id=None):
     Levanta WhatsappNaoEnviadoError em qualquer falha.
     """
     token, phone_id = _config_ou_erro()
-    base = f"https://graph.facebook.com/{_API_VERSAO}"
+    base =f"https://graph.facebook.com/{_API_VERSAO}"
     tipo = "image/png" if caminho_imagem.lower().endswith(".png") else "image/jpeg"
     with open(caminho_imagem, "rb") as arquivo:
         conteudo = arquivo.read()
