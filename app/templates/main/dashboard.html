@@ -353,7 +353,7 @@
                       class="hidden mt-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
                     {{ telefone_form.hidden_tag() }}
                     {{ telefone_form.telefone.label(class_="block text-sm font-medium " ~ tema.text_primary) }}
-                    {{ telefone_form.telefone(class_="block w-full rounded-xl border " ~ tema.card_border ~ " " ~ tema.page_bg ~ " px-3 py-2 text-sm " ~ tema.text_primary, placeholder="(DD) 9XXXX-XXXX", maxlength=15, inputmode="tel", autocomplete="tel", **{"data-mascara-telefone": ""}) }}
+                    {{ telefone_form.telefone(class_="block w-full rounded-xl border " ~ tema.card_border ~ " " ~ tema.page_bg ~ " px-3 py-2 text-sm " ~ tema.text_primary, placeholder="(DD) 9XXXX-XXXX", maxlength=20, inputmode="tel", autocomplete="tel", **{"data-mascara-telefone": ""}) }}
                     <p class="text-xs {{ tema.text_secondary }}">
                         Opcional. Com DDD, de preferência o do WhatsApp: é por ele que chegam os avisos de escala.
                         Só você, o admin da comunidade e{% if not current_user.telefone_visivel_lider is false %} os líderes dos seus ministérios{% else %} (escondido dos líderes){% endif %} veem o número.

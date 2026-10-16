@@ -14,18 +14,30 @@ document.querySelectorAll("form[data-confirm-excluir]").forEach(function (form) 
 
 // Mascara de telefone brasileiro: <input data-mascara-telefone>. Vai
 // formatando enquanto digita -- "(DD) 9XXXX-XXXX" (celular, 11 digitos) ou
-// "(DD) XXXX-XXXX" (fixo, 10). Tira o +55 colado. A validacao de verdade e
-// no servidor (app/telefones.py); aqui e so pra ajudar a digitar.
+// "(DD) XXXX-XXXX" (fixo, 10). Quem comeca com "+" esta digitando o codigo
+// do pais: "+55 28 99987-2102" vira "+55 (28) 99987-2102" (o 55 nao e
+// confundido com DDD). Numero colado com 55 na frente e sem "+"
+// (5528999872102) tambem perde o 55. A validacao de verdade e no servidor
+// (app/telefones.py, que guarda sempre sem o +55); aqui e so pra ajudar.
 (function () {
-    function mascarar(valor) {
-        var d = (valor || "").replace(/\D/g, "");
-        if (d.length > 11 && d.indexOf("55") === 0) d = d.slice(2);
+    function local(d) {
         d = d.slice(0, 11);
         if (!d) return "";
         if (d.length <= 2) return "(" + d;
         var ddd = "(" + d.slice(0, 2) + ") ", resto = d.slice(2);
         var corte = d.length === 11 ? 5 : 4;
         return resto.length > corte ? ddd + resto.slice(0, corte) + "-" + resto.slice(corte) : ddd + resto;
+    }
+    function mascarar(valor) {
+        var texto = (valor || "").trim();
+        var d = texto.replace(/\D/g, "");
+        if (texto.charAt(0) === "+") {
+            if (d.length <= 2) return "+" + d;  // ainda digitando o codigo do pais
+            if (d.indexOf("55") !== 0) return "+" + d;  // outro pais: o servidor recusa com mensagem
+            return "+55 " + local(d.slice(2));
+        }
+        if (d.length > 11 && d.indexOf("55") === 0) d = d.slice(2);
+        return local(d);
     }
     document.querySelectorAll("input[data-mascara-telefone]").forEach(function (campo) {
         if (campo.value) campo.value = mascarar(campo.value);

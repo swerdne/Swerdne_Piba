@@ -186,7 +186,7 @@
                     {{ form.nome(class=CAMPO ~ " mt-1", required=True, maxlength=120) }}
                 </label>
                 <label class="block text-xs font-semibold {{ tema.text_secondary }}">Telefone (com DDD, de preferência WhatsApp; opcional)
-                    {{ form.telefone(class=CAMPO ~ " mt-1", maxlength=15, placeholder="(11) 98765-4321", inputmode="tel", autocomplete="tel", **{"data-mascara-telefone": ""}) }}
+                    {{ form.telefone(class=CAMPO ~ " mt-1", maxlength=20, placeholder="(11) 98765-4321", inputmode="tel", autocomplete="tel", **{"data-mascara-telefone": ""}) }}
                 </label>
                 <label class="block text-xs font-semibold {{ tema.text_secondary }}">E-mail (liga a pessoa à conta dela no site)
                     {{ form.email(class=CAMPO ~ " mt-1", maxlength=120, type="email") }}
@@ -206,7 +206,7 @@
                 {{ telefone_form.csrf_token }}
                 <input type="hidden" name="so_telefone" value="1">
                 <label class="block text-xs font-semibold {{ tema.text_secondary }}">Telefone (com DDD, de preferência WhatsApp; opcional)
-                    {{ telefone_form.telefone(class=CAMPO ~ " mt-1", maxlength=15, placeholder="(11) 98765-4321", inputmode="tel", autocomplete="tel", **{"data-mascara-telefone": ""}) }}
+                    {{ telefone_form.telefone(class=CAMPO ~ " mt-1", maxlength=20, placeholder="(11) 98765-4321", inputmode="tel", autocomplete="tel", **{"data-mascara-telefone": ""}) }}
                 </label>
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
                     <i class="fa-solid fa-floppy-disk mr-1"></i>Salvar telefone

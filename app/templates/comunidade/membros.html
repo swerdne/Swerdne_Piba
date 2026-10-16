@@ -98,7 +98,7 @@
                         {% endfor %}
                     </div>
                     <div>
-                        {{ form.telefone(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="(DD) 9XXXX-XXXX (opcional)", maxlength=15, inputmode="tel", autocomplete="tel", **{"aria-label": "Telefone com DDD", "data-mascara-telefone": ""}) }}
+                        {{ form.telefone(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="(DD) 9XXXX-XXXX (opcional)", maxlength=20, inputmode="tel", autocomplete="tel", **{"aria-label": "Telefone com DDD", "data-mascara-telefone": ""}) }}
                         {% for erro in form.telefone.errors %}
                             <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
                         {% endfor %}

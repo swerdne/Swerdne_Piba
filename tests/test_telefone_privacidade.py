@@ -20,6 +20,7 @@ NUMERO = "(28) 99935-9709"
 @pytest.mark.parametrize("entrada,esperado", [
     ("28999359709", NUMERO), ("+55 28 99935-9709", NUMERO), ("(28) 99935 9709", NUMERO),
     ("028 99935-9709", NUMERO), ("11 3333-4444", "(11) 3333-4444"), ("", None), ("   ", None),
+    ("+55 (28) 99935-9709", NUMERO),  # como a mascara mostra quem digita com +55
 ])
 def test_formatar_telefone(entrada, esperado):
     assert formatar_telefone(entrada) == esperado
