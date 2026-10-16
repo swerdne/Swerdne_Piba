@@ -63,7 +63,7 @@
                             </p>
                         </div>
                         <form method="POST" action="{{ url_for('comunidade.excluir_disponibilidade', comunidade_id=comunidade.id, ciclo_id=ciclo.id) }}"
-                              onsubmit="return confirm('Remover o ciclo &quot;{{ ciclo.nome }}&quot;?');">
+                              data-confirm-excluir="Remover o ciclo &quot;{{ ciclo.nome }}&quot;?">
                             {{ acao_form.hidden_tag() }}
                             <button type="submit" aria-label="Remover ciclo" class="text-red-500 hover:text-red-400 transition shrink-0">
                                 <i class="fa-solid fa-trash"></i>
