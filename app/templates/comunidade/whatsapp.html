@@ -61,8 +61,10 @@
                 <div class="balao {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-3.5 py-2 text-sm shadow-sm">
                     {{ m.texto }}
                     {% if m.acao %}
-                    <p class="mt-1.5 text-xs font-semibold {{ 'text-emerald-500' if m.acao == 'confirmado' else 'text-red-500' }}">
-                        <i class="fa-solid {{ 'fa-circle-check' if m.acao == 'confirmado' else 'fa-rotate' }} mr-1"></i>{{ rotulos_acao[m.acao] }}
+                    {% set cor_acao = {'confirmado': 'text-emerald-500', 'troca_solicitada': 'text-red-500'} %}
+                    {% set icone_acao = {'confirmado': 'fa-circle-check', 'troca_solicitada': 'fa-rotate'} %}
+                    <p class="mt-1.5 text-xs font-semibold {{ cor_acao.get(m.acao, tema.text_secondary) }}">
+                        <i class="fa-solid {{ icone_acao.get(m.acao, 'fa-robot') }} mr-1"></i>{{ rotulos_acao.get(m.acao, m.acao) }}
                     </p>
                     {% endif %}
                     <p class="text-[10px] {{ tema.text_secondary }} mt-1">{{ hora(m.criada_em) }}</p>

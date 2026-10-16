@@ -8,13 +8,18 @@ O envio fica em app/whatsapp.py; aqui fica o caminho de volta:
   do diretorio bate com o remetente (`membros_do_telefone`) e as comunidades
   deles -- e o que a caixa de entrada da comunidade mostra
   (comunidade.whatsapp).
-- Resposta a aviso de escala: "confirmo"/"sim" confirma, "nao posso"/"nao"
-  pede troca (`interpretar_resposta`) em TODAS as funcoes da pessoa na
-  PROXIMA escala dela (nao cancelada, de hoje em diante) -- mesmo efeito do
-  botao de status do site (lideres avisados no sino, RegistroTroca), e a
-  pessoa recebe uma resposta dizendo o que foi feito. Texto que nao e
-  confirmacao/recusa nao gera resposta automatica: fica na caixa de entrada
-  pra lideranca responder.
+- Roteador de intencao por palavras-chave (`interpretar_mensagem`):
+  confirmar ("confirmo", "pode contar comigo", "beleza"), recusar ("nao vou
+  conseguir", "nao da") e troca ("preciso trocar", "quem pode me
+  substituir?") mudam TODAS as funcoes da pessoa na PROXIMA escala dela (nao
+  cancelada, de hoje em diante) -- mesmo efeito do botao de status do site
+  (lideres avisados no sino, RegistroTroca; recusa e troca viram
+  troca_solicitada). Perguntas so leem e respondem: proximas escalas,
+  endereco (Comunidade.endereco/lat/lng) e horarios (dias/horario de culto
+  dos ministerios + eventos dos proximos 30 dias). Na duvida (pergunta,
+  negacao, incerteza, dupla negacao) nao muda nada: sem resposta
+  automatica, fica na caixa de entrada pra lideranca -- igual a pergunta
+  de endereco/horario sem dado cadastrado.
 """
 import re
 import unicodedata
@@ -94,31 +99,106 @@ def _normalizar(texto):
     return " ".join(re.sub(r"[^a-z0-9 ]", " ", sem_acento).split())
 
 
-_RECUSA = re.compile(
-    r"\b(nao|n)\s+(posso|vou|consigo|irei|poderei|vai dar|da)\b|\brecuso\b|\bpreciso de troca\b|\bpedir troca\b"
+# Roteador de intencao por palavras-chave (sem IA). Regra de ouro: na duvida,
+# None -- a mensagem vai pra caixa de entrada da lideranca, como sempre.
+# Mudar status de escala por engano e pior do que nao responder.
+CONFIRMAR, RECUSAR, TROCA = "confirmar", "recusar", "troca"
+CONSULTA_ESCALA, ENDERECO, HORARIOS = "consulta_escala", "endereco", "horarios"
+MUDAM_ESCALA = (CONFIRMAR, RECUSAR, TROCA)
+
+_TROCA = re.compile(
+    r"\b(troca|trocar|trocaria|substitu\w*|me cobrir|cobrir pra mim|cobrir para mim|no meu lugar|ir no meu)\b"
 )
-_CONFIRMA = re.compile(r"\b(confirm\w*|estarei|irei|pode contar|tamo junto|estou dentro)\b")
-_SO_RECUSA = {"nao", "n", "2", "nao posso", "troca"}
-_SO_CONFIRMA = {"sim", "s", "ok", "okay", "1", "vou", "presente", "certo", "beleza", "blz", "combinado", "fechado"}
+_RECUSA = re.compile(
+    r"\b(nao|n)\s+(posso|vou|consigo|conseguirei|irei|poderei|vai dar|da|dou conta|tenho como|estarei"
+    r"|comparecerei|rola|vai rolar|vai ser possivel)\b"
+    r"|\binfelizmente nao\b|\bimpossivel\b|\bvou faltar\b|\brecuso\b|\bfora da cidade\b"
+    r"|\b(estou|to|estarei|vou estar)\s+(doente|viajando|fora|internad\w*|trabalhando|de plantao)\b"
+)
+_CONFIRMA = re.compile(
+    r"\b(confirm\w*|estarei|irei|pode contar|conta comigo|tamo junto|estamos juntos|estou dentro|to dentro"
+    r"|vou sim|com certeza|pode deixar|vou estar la)\b"
+)
+# Palavras curtas que so confirmam/recusam quando a mensagem inteira e feita
+# delas (mais cumprimentos/agradecimentos): "ok, valeu" confirma; "ok, mas
+# que horas" nao ("mas" e "horas" nao estao em nenhuma das listas).
+_SO_CONFIRMA = {"sim", "s", "ok", "okay", "okk", "1", "vou", "presente", "certo", "beleza", "blz", "combinado",
+                "fechado", "claro", "positivo", "ciente", "perfeito", "show", "confirmado", "confirmada", "joia"}
+_SO_RECUSA = {"nao", "n", "2", "troca", "infelizmente"}
+_CORTESIA = {"obrigado", "obrigada", "valeu", "vlw", "deus", "abencoe", "amem", "irmao", "irma", "pastor",
+             "pastora", "lider", "ja", "entao", "opa", "oi", "ola", "bom", "boa", "dia", "tarde", "noite",
+             "a", "o", "e", "paz", "gracas", "sim", "pra", "voce", "vc", "td", "tudo"}
+# Incerteza ("talvez", "acho que", "vou ver"): nunca muda escala.
+_INCERTEZA = re.compile(
+    r"\b(talvez|acho que|acredito que|depende|se der|se eu|vou ver|vou tentar|nao sei|provavelmente"
+    r"|possivelmente|quem sabe|te aviso|depois confirmo|confirmo depois|confirmo mais tarde|ainda vou ver)\b"
+)
+_NEGACAO = re.compile(r"\b(nao|n|nem|nunca)\b")
+# "Nao vou faltar"/"nao posso perder" querem dizer que VAI -- mas parecem
+# recusa pras regras acima. Dupla negacao nunca muda escala.
+_DUPLA_NEGACAO = re.compile(
+    r"\b(nao|n)\s+(vou|posso|irei|vou deixar de)\s+(faltar|esquecer|perder|deixar|ir embora)\b"
+)
+_CONSULTA_ESCALA = re.compile(
+    r"\b(proxim\w* escala\w*|minha escala|minhas escalas|meu culto|minha proxima|estou escalad\w*|to escalad\w*"
+    r"|sou escalad\w*|fui escalad\w*|escalad\w* (pra|para) quando|quando (eu )?(sirvo|vou servir|toco|canto|estou|to)"
+    r"|qual (e )?(a )?minha (funcao|escala)|que dia (eu )?(sirvo|toco|canto|estou|to))\b"
+)
+_ENDERECO = re.compile(
+    r"\b(endereco|onde fica|onde e a igreja|localizacao|como (eu )?chego|qual o local|onde (vai ser|sera|e) o culto)\b"
+)
+_HORARIOS = re.compile(r"\b(horario\w*|que horas|qual (a )?hora)\b")
+_ASSUNTO_CULTO = re.compile(r"\b(culto\w*|igreja|reuniao|reunioes|celebrac\w*|programac\w*)\b")
+_JOINHA = {"👍", "👍🏻", "👍🏼", "👍🏽", "👍🏾", "👍🏿", "✅"}
 
 
-def interpretar_resposta(texto):
-    """"confirmar", "recusar" ou None. Recusa tem prioridade ("sim, mas nao
-    posso" e recusa). Palavras curtas soltas ("ok", "sim", "nao") so valem
-    como a mensagem inteira -- no meio de uma frase podem ser outra coisa."""
+def _so_palavras(normal, essenciais):
+    """A mensagem inteira e feita de `essenciais` + cortesia, com pelo menos 1 essencial?"""
+    palavras = normal.replace("ta bom", "certo").replace("ta certo", "certo").replace("ta otimo", "certo").split()
+    return any(p in essenciais for p in palavras) and all(p in essenciais or p in _CORTESIA for p in palavras)
+
+
+def interpretar_mensagem(texto):
+    """Uma das intencoes acima ou None (nao reconhecida -> caixa de entrada).
+
+    Ordem: troca > recusa > pergunta da propria escala > endereco >
+    horarios > confirmacao. Confirmacao e a mais cautelosa: nunca com "?",
+    com uma negacao em qualquer lugar ("nao confirmo ainda") ou com
+    incerteza ("acho que vou") -- nesses casos fica None."""
     bruto = (texto or "").strip()
-    if bruto in {"👍", "👍🏻", "👍🏼", "👍🏽", "👍🏾", "👍🏿", "✅"}:
-        return "confirmar"
+    if bruto in _JOINHA:
+        return CONFIRMAR
     if bruto in {"👎", "❌"}:
-        return "recusar"
+        return RECUSAR
     normal = _normalizar(bruto)
     if not normal:
         return None
-    if normal in _SO_RECUSA or _RECUSA.search(normal):
-        return "recusar"
-    if normal in _SO_CONFIRMA or _CONFIRMA.search(normal):
-        return "confirmar"
+    pergunta = "?" in bruto
+    incerto = bool(_INCERTEZA.search(normal)) or bool(_DUPLA_NEGACAO.search(normal))
+
+    if _TROCA.search(normal):
+        return None if incerto else TROCA
+    if normal in _SO_RECUSA or _so_palavras(normal, _SO_RECUSA) or _RECUSA.search(normal):
+        return None if incerto else RECUSAR
+    if _CONSULTA_ESCALA.search(normal) and (pergunta or not _CONFIRMA.search(normal)):
+        return CONSULTA_ESCALA
+    if _ENDERECO.search(normal):
+        return ENDERECO
+    if _HORARIOS.search(normal) and _ASSUNTO_CULTO.search(normal):
+        return HORARIOS
+    if pergunta or incerto or _NEGACAO.search(normal):
+        return None
+    if _so_palavras(normal, _SO_CONFIRMA) or _CONFIRMA.search(normal):
+        return CONFIRMAR
     return None
+
+
+def interpretar_resposta(texto):
+    """Compatibilidade: so "confirmar"/"recusar"/None (troca conta como recusa)."""
+    intencao = interpretar_mensagem(texto)
+    if intencao == TROCA:
+        return RECUSAR
+    return intencao if intencao in (CONFIRMAR, RECUSAR) else None
 
 
 # --- Aplicar na escala -----------------------------------------------------------
@@ -200,12 +280,101 @@ def _texto_de_resposta(acao, escala, funcoes):
     nomes = ", ".join(f.nome for f in funcoes)
     quando = _quando(escala)
     onde = f"{escala.nome}" + (f" ({quando})" if quando else "")
-    if acao == "confirmar":
+    if acao == CONFIRMAR:
         if all(f.status == "presente" for f in funcoes):
             return f"Sua presença em {onde} já está registrada. Obrigado!"
         return f"✅ Confirmado: {nomes} em {onde}. Obrigado!"
+    if acao == TROCA:
+        return (f"🔄 Pedido de troca registrado: {nomes} em {onde}. A liderança foi avisada e vai combinar "
+                "quem te substitui. Você continua na escala até eles confirmarem a troca.")
     return (f"Certo, avisamos a liderança que você não pode estar em {onde} ({nomes}). "
             "Eles vão providenciar a troca.")
+
+
+# --- Perguntas (so leitura, nada muda) ------------------------------------------------
+
+_DIAS_SEMANA = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
+_DIAS_SEMANA_CURTO = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+_STATUS_NO_WHATSAPP = {"confirmado": "confirmado", "presente": "presente", "troca_solicitada": "troca pedida"}
+
+
+def proximas_escalas_dos_membros(membros, limite=3):
+    """[(escala, funcoes da pessoa nela)] das proximas escalas nao canceladas."""
+    from app.escala.models import TIPO_FUNCAO, Escala, Funcao
+
+    funcoes = list(Funcao.objects(membro_id__in=[m.id for m in membros], tipo=TIPO_FUNCAO)) if membros else []
+    if not funcoes:
+        return []
+    escalas = (Escala.objects(id__in=list({f.escala_id for f in funcoes}), data__gte=_hoje_brasilia(),
+                              cancelada__ne=True).order_by("data", "horario").limit(limite))
+    return [(e, [f for f in funcoes if f.escala_id == e.id]) for e in escalas]
+
+
+def _texto_proximas_escalas(membros):
+    proximas = proximas_escalas_dos_membros(membros)
+    if not proximas:
+        return "Você não tem nenhuma escala marcada de hoje em diante."
+    linhas = ["📅 Suas próximas escalas:"]
+    for escala, funcoes in proximas:
+        quando = ""
+        if escala.data:
+            quando = f"{_DIAS_SEMANA_CURTO[escala.data.weekday()]}, {_quando(escala)}"
+        ministerio = escala.ministerio.nome if escala.ministerio else ""
+        funcoes_txt = ", ".join(
+            f.nome + (f" ({_STATUS_NO_WHATSAPP[f.status]})" if f.status in _STATUS_NO_WHATSAPP else "")
+            for f in funcoes
+        )
+        linhas.append(f"• {escala.nome}{f' ({ministerio})' if ministerio else ''} — {quando} — {funcoes_txt}")
+    linhas.append("Para a próxima, responda \"confirmo\" ou \"não posso\".")
+    return "\n".join(linhas)
+
+
+def _comunidades(comunidade_ids):
+    from app.comunidade.models import Comunidade
+
+    return list(Comunidade.objects(id__in=list(comunidade_ids))) if comunidade_ids else []
+
+
+def _texto_endereco(comunidade_ids):
+    """Endereco cadastrado da comunidade (o mesmo do check-in) -- None se nao
+    tem nenhum (a pergunta vai pra caixa de entrada)."""
+    linhas = []
+    for comunidade in _comunidades(comunidade_ids):
+        if not comunidade.endereco and comunidade.latitude is None:
+            continue
+        linha = f"📍 {comunidade.nome}: {comunidade.endereco or 'veja no mapa'}"
+        if comunidade.latitude is not None and comunidade.longitude is not None:
+            linha += f"\nhttps://maps.google.com/?q={comunidade.latitude:.6f},{comunidade.longitude:.6f}"
+        linhas.append(linha)
+    return "\n\n".join(linhas) or None
+
+
+def _texto_horarios(comunidade_ids):
+    """Dias/horario de culto dos ministerios (check-in de culto) e eventos da
+    comunidade nos proximos 30 dias -- None se nao ha nada cadastrado."""
+    from app.comunidade.models import Evento
+    from app.ministerio.models import Ministerio
+
+    linhas = []
+    for comunidade in _comunidades(comunidade_ids):
+        cultos = {}
+        for m in Ministerio.objects(comunidade_id=comunidade.id):
+            if m.dias_culto_efetivos and m.culto_horario:
+                dias = ", ".join(_DIAS_SEMANA[d] for d in m.dias_culto_efetivos)
+                cultos.setdefault(f"{dias} às {m.culto_horario.strftime('%H:%M')}", []).append(m.nome)
+        hoje = _hoje_brasilia()
+        eventos = list(Evento.objects(comunidade_id=comunidade.id, data__gte=hoje,
+                                      data__lte=hoje + timedelta(days=30)).order_by("data").limit(3))
+        if not cultos and not eventos:
+            continue
+        linhas.append(f"⛪ {comunidade.nome}")
+        for quando, nomes in cultos.items():
+            linhas.append(f"• Culto: {quando} ({', '.join(nomes)})")
+        for e in eventos:
+            hora = f" às {e.horario.strftime('%H:%M')}" if e.horario else ""
+            local = f" — {e.local}" if e.local else ""
+            linhas.append(f"• {e.nome}: {_DIAS_SEMANA_CURTO[e.data.weekday()]}, {e.data.strftime('%d/%m')}{hora}{local}")
+    return "\n".join(linhas) or None
 
 
 # --- Webhook -----------------------------------------------------------------------
@@ -300,22 +469,43 @@ def processar_mensagem(msg, nomes_perfil):
         _responder_numero_desconhecido(telefone)
         return registro
 
-    acao = interpretar_resposta(texto)
-    if acao is None:
-        current_app.logger.info("WhatsApp de %s nao e confirmacao/recusa: foi pra caixa de entrada.",
-                                _mascarar(telefone))
+    intencao = interpretar_mensagem(texto)
+
+    # Perguntas: so leitura. Sem dado cadastrado (endereco/horarios), cai na
+    # caixa de entrada como mensagem nao reconhecida.
+    if intencao in (CONSULTA_ESCALA, ENDERECO, HORARIOS):
+        if intencao == CONSULTA_ESCALA:
+            resposta = _texto_proximas_escalas(membros)
+        elif intencao == ENDERECO:
+            resposta = _texto_endereco(comunidade_ids)
+        else:
+            resposta = _texto_horarios(comunidade_ids)
+        current_app.logger.info("WhatsApp de %s: pergunta %s, %s.", _mascarar(telefone), intencao,
+                                "respondida" if resposta else "sem dado cadastrado, foi pra caixa de entrada")
+        if resposta is None:
+            return registro
+        registro.acao = "consulta" if intencao == CONSULTA_ESCALA else "informacao"
+        registro.lida = True  # respondida sozinha
+        registro.save()
+        _responder(telefone, resposta, comunidade_ids, registro.membro_ids)
+        return registro
+
+    if intencao not in MUDAM_ESCALA:
+        current_app.logger.info("WhatsApp de %s nao reconhecido: foi pra caixa de entrada.", _mascarar(telefone))
         return registro  # fica na caixa de entrada pra lideranca
 
     escala, funcoes = proxima_escala_dos_membros(membros)
-    current_app.logger.info("WhatsApp de %s: acao %s, proxima escala %s.", _mascarar(telefone), acao,
+    current_app.logger.info("WhatsApp de %s: acao %s, proxima escala %s.", _mascarar(telefone), intencao,
                             escala.id if escala else "nenhuma")
     if escala is not None:
-        aplicar_resposta(acao, funcoes, texto)
-        registro.acao = "confirmado" if acao == "confirmar" else "troca_solicitada"
+        # Troca e recusa usam o mesmo fluxo do site (troca_solicitada: lideres
+        # avisados no sino, aprovam escolhendo o substituto).
+        aplicar_resposta(CONFIRMAR if intencao == CONFIRMAR else RECUSAR, funcoes, texto)
+        registro.acao = "confirmado" if intencao == CONFIRMAR else "troca_solicitada"
         registro.escala_id = escala.id
         registro.lida = True  # ja resolvida sozinha; nao precisa de atencao
         registro.save()
-    _responder(telefone, _texto_de_resposta(acao, escala, funcoes), comunidade_ids, registro.membro_ids)
+    _responder(telefone, _texto_de_resposta(intencao, escala, funcoes), comunidade_ids, registro.membro_ids)
     return registro
 
 

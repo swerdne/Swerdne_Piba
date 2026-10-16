@@ -69,6 +69,36 @@ def test_interpretar_resposta(texto, esperado):
     assert interpretar_resposta(texto) == esperado
 
 
+@pytest.mark.parametrize("texto,esperado", [
+    # Confirmacao, inclusive texto livre
+    ("Confirmo", "confirmar"), ("pode contar comigo!", "confirmar"), ("Beleza", "confirmar"),
+    ("ok, valeu", "confirmar"), ("Sim, obrigada pastor", "confirmar"), ("tô dentro", "confirmar"),
+    ("vou sim", "confirmar"), ("Com certeza, estarei lá", "confirmar"), ("tá bom", "confirmar"), ("✅", "confirmar"),
+    # Recusa
+    ("não vou conseguir ir", "recusar"), ("Não dá", "recusar"), ("infelizmente não", "recusar"),
+    ("Estou doente", "recusar"), ("vou estar viajando", "recusar"), ("não, obrigado", "recusar"),
+    ("nao vai rolar", "recusar"),
+    # Troca
+    ("preciso trocar", "troca"), ("Quem pode me substituir?", "troca"),
+    ("alguém pode ir no meu lugar?", "troca"), ("não posso, pode trocar com alguém?", "troca"),
+    # Perguntas
+    ("qual minha próxima escala?", "consulta_escala"), ("Quando é meu culto?", "consulta_escala"),
+    ("estou escalado pra quando?", "consulta_escala"), ("que dia eu toco?", "consulta_escala"),
+    ("Qual o endereço da igreja?", "endereco"), ("onde fica?", "endereco"),
+    ("que horas é o culto?", "horarios"), ("qual o horário da igreja", "horarios"),
+    # Ambiguas: na duvida, caixa de entrada (None) -- nunca confirma/recusa por engano
+    ("não confirmo ainda", None), ("acho que vou", None), ("talvez eu não consiga", None),
+    ("confirmo depois", None), ("vou ver e te aviso", None), ("não vou faltar!", None),
+    ("não posso perder esse culto", None), ("ok, mas que horas?", None), ("posso confirmar amanhã?", None),
+    ("bom dia", None), ("oi, tudo bem?", None), ("Amém 🙏", None), ("que horas?", None),
+    ("vou levar meu violão", None), ("sim mas preciso falar com o pastor", None),
+])
+def test_interpretar_mensagem(texto, esperado):
+    from app.whatsapp_recebidas import interpretar_mensagem
+
+    assert interpretar_mensagem(texto) == esperado
+
+
 def test_chave_do_telefone_ignora_formato_e_o_nove():
     chave = chave_do_telefone("(11) 98765-4321")
     for outro in ("+55 11 98765-4321", "11987654321", "+551187654321", "5511987654321", "011 98765-4321"):
@@ -141,6 +171,60 @@ def test_escala_cancelada_e_presente_nao_mudam(logged_in_client, enviados, app, 
         _postar(logged_in_client, _payload("confirmo"))
         assert Funcao.objects(escala_id=escala.id).first().status == "presente"
         assert "já está registrada" in enviados[0][1]
+
+
+def test_preciso_trocar_pede_troca_com_resposta_propria(logged_in_client, enviados, app, db):
+    with app.app_context():
+        _, ministerio, membro = _igreja(logged_in_client)
+        escala = _escala(ministerio, membro)
+        _postar(logged_in_client, _payload("Preciso trocar, alguém pode me substituir?"))
+        funcao = Funcao.objects(escala_id=escala.id).first()
+        assert funcao.status == "troca_solicitada" and "substituir" in funcao.troca_motivo
+        assert Notificacao.objects(escala_id=escala.id, tipo="troca_solicitada").count() == 1
+        assert "Pedido de troca registrado" in enviados[0][1]
+        assert MensagemWhatsapp.objects(direcao="recebida").first().acao == "troca_solicitada"
+
+
+def test_pergunta_da_proxima_escala_responde_sem_mudar_nada(logged_in_client, enviados, app, db):
+    with app.app_context():
+        comunidade, ministerio, membro = _igreja(logged_in_client)
+        _escala(ministerio, membro, dias=3, nome="Culto de Domingo", funcoes=("Vocal",))
+        _escala(ministerio, membro, dias=10, nome="Culto Jovem", funcoes=("Violao",))
+        _escala(ministerio, membro, dias=5, nome="Cancelada", cancelada=True)
+
+        _postar(logged_in_client, _payload("qual minha próxima escala?"))
+
+        texto = enviados[0][1]
+        assert "Culto de Domingo (Louvor)" in texto and "Culto Jovem" in texto and "Cancelada" not in texto
+        assert texto.index("Culto de Domingo") < texto.index("Culto Jovem")
+        assert {f.status for f in Funcao.objects(membro_id=membro.id)} == {"nao_notificado"}
+        msg = MensagemWhatsapp.objects(direcao="recebida").first()
+        assert (msg.acao, msg.lida) == ("consulta", True)
+        conversa = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
+        assert "Perguntou da escala (respondido)" in conversa
+
+
+def test_pergunta_de_endereco_e_horario_usa_o_cadastro_ou_vai_pra_caixa(logged_in_client, enviados, app, db):
+    from datetime import time
+
+    with app.app_context():
+        comunidade, ministerio, _ = _igreja(logged_in_client)
+
+        # Sem nada cadastrado: nao responde, fica na caixa de entrada.
+        _postar(logged_in_client, _payload("qual o endereço da igreja?", wamid="w1"))
+        _postar(logged_in_client, _payload("que horas é o culto?", wamid="w2"))
+        assert enviados == []
+        assert MensagemWhatsapp.objects(direcao="recebida", lida=False).count() == 2
+
+        comunidade.endereco, comunidade.latitude, comunidade.longitude = "Rua A, 10", -20.5, -40.3
+        comunidade.save()
+        ministerio.dias_culto, ministerio.culto_horario = "6", time(19, 0)
+        ministerio.save()
+
+        _postar(logged_in_client, _payload("qual o endereço da igreja?", wamid="w3"))
+        _postar(logged_in_client, _payload("que horas é o culto?", wamid="w4"))
+        assert "Rua A, 10" in enviados[0][1] and "maps.google.com/?q=-20.500000,-40.300000" in enviados[0][1]
+        assert "domingo às 19:00 (Louvor)" in enviados[1][1]
 
 
 def test_texto_qualquer_vai_pra_caixa_de_entrada_sem_resposta_automatica(logged_in_client, enviados, app, db):
