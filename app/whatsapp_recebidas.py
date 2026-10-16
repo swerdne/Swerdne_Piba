@@ -241,17 +241,47 @@ def _responder(telefone, texto, comunidade_ids, membro_ids):
     except WhatsappNaoEnviadoError as erro:
         current_app.logger.warning("Resposta automatica de WhatsApp nao enviada: %s", erro)
         return
+    current_app.logger.info("Resposta automatica de WhatsApp enviada para %s.", _mascarar(telefone))
     registrar_enviada(telefone, texto, comunidade_ids, membro_ids)
+
+
+TEXTO_NUMERO_DESCONHECIDO = (
+    "Olá! Recebemos sua mensagem, mas este número de WhatsApp não está cadastrado no diretório "
+    "de nenhuma comunidade. Peça à liderança para conferir seu telefone (com DDD) no cadastro de membros."
+)
+
+
+def _mascarar(telefone):
+    """Telefone pro log sem expor o numero inteiro: 5511*****4321."""
+    return telefone[:4] + "*****" + telefone[-4:] if len(telefone) > 8 else telefone
+
+
+def _responder_numero_desconhecido(telefone):
+    """Avisa quem nao esta em diretorio nenhum -- sem isso a pessoa manda
+    "confirmo" e fica sem resposta nenhuma, achando que o sistema quebrou.
+    No maximo 1 aviso a cada 24h por numero, pra nao responder toda mensagem."""
+    desde = datetime.now(timezone.utc) - JANELA_RESPOSTA
+    if MensagemWhatsapp.objects(telefone=telefone, direcao=ENVIADA, criada_em__gte=desde).first():
+        return
+    _responder(telefone, TEXTO_NUMERO_DESCONHECIDO, [], [])
 
 
 def processar_mensagem(msg, nomes_perfil):
     telefone = (msg.get("from") or "").lstrip("+")
     wamid = msg.get("id")
-    if not telefone or (wamid and MensagemWhatsapp.objects(wamid=wamid).first()):
+    if not telefone:
+        current_app.logger.warning("WhatsApp recebido sem remetente ('from'), ignorado: %s", msg)
+        return None
+    if wamid and MensagemWhatsapp.objects(wamid=wamid).first():
+        current_app.logger.info("WhatsApp %s repetido (a Meta reenviou), ignorado.", wamid)
         return None
     texto = _texto_da_mensagem(msg)
     membros = membros_do_telefone(telefone)
     comunidade_ids = sorted({m.comunidade_id for m in membros})
+    current_app.logger.info(
+        "WhatsApp recebido de %s (tipo %s): %d membro(s) com esse telefone, comunidade(s) %s.",
+        _mascarar(telefone), msg.get("type"), len(membros), comunidade_ids or "nenhuma",
+    )
     registro = MensagemWhatsapp(
         wamid=wamid, direcao=RECEBIDA, telefone=telefone, nome_perfil=nomes_perfil.get(telefone),
         texto=texto, membro_ids=[m.id for m in membros], comunidade_ids=comunidade_ids,
@@ -261,11 +291,24 @@ def processar_mensagem(msg, nomes_perfil):
     except mongoengine.NotUniqueError:
         return None  # a mesma mensagem chegou em dois webhooks ao mesmo tempo
 
-    acao = interpretar_resposta(texto) if membros else None
+    if not membros:
+        current_app.logger.warning(
+            "WhatsApp de %s: telefone nao bate com nenhum Membro de diretorio (confira se esta "
+            "cadastrado com DDD). Mensagem guardada, mas nao aparece em comunidade nenhuma.",
+            _mascarar(telefone),
+        )
+        _responder_numero_desconhecido(telefone)
+        return registro
+
+    acao = interpretar_resposta(texto)
     if acao is None:
+        current_app.logger.info("WhatsApp de %s nao e confirmacao/recusa: foi pra caixa de entrada.",
+                                _mascarar(telefone))
         return registro  # fica na caixa de entrada pra lideranca
 
     escala, funcoes = proxima_escala_dos_membros(membros)
+    current_app.logger.info("WhatsApp de %s: acao %s, proxima escala %s.", _mascarar(telefone), acao,
+                            escala.id if escala else "nenhuma")
     if escala is not None:
         aplicar_resposta(acao, funcoes, texto)
         registro.acao = "confirmado" if acao == "confirmar" else "troca_solicitada"
@@ -280,14 +323,28 @@ def processar_webhook(payload):
     """Percorre o JSON do webhook. Status de entrega ("sent", "read"...) sao
     ignorados -- so mensagens recebidas interessam aqui."""
     processadas = []
-    for entrada in (payload or {}).get("entry") or []:
+    if not payload:
+        current_app.logger.warning("Webhook do WhatsApp sem JSON no corpo, ignorado.")
+        return processadas
+    for entrada in payload.get("entry") or []:
         for mudanca in entrada.get("changes") or []:
             valor = mudanca.get("value") or {}
+            mensagens = valor.get("messages") or []
+            status = valor.get("statuses") or []
+            current_app.logger.info("Webhook do WhatsApp (campo %s): %d mensagem(ns), %d status de entrega.",
+                                    mudanca.get("field"), len(mensagens), len(status))
+            # Status "failed" e o unico lugar onde a Meta conta por que uma
+            # resposta NOSSA nao chegou (ex: numero fora da lista de teste,
+            # janela de 24h, pagamento) -- o envio em si devolveu 200.
+            for s in status:
+                if s.get("status") == "failed":
+                    current_app.logger.warning("Meta nao entregou WhatsApp para %s: %s",
+                                               _mascarar(s.get("recipient_id") or ""), s.get("errors"))
             nomes = {
                 (c.get("wa_id") or "").lstrip("+"): (c.get("profile") or {}).get("name")
                 for c in valor.get("contacts") or []
             }
-            for msg in valor.get("messages") or []:
+            for msg in mensagens:
                 registro = processar_mensagem(msg, nomes)
                 if registro is not None:
                     processadas.append(registro)

@@ -155,12 +155,28 @@ def test_texto_qualquer_vai_pra_caixa_de_entrada_sem_resposta_automatica(logged_
         assert "1 nova(s)" in logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode()
 
 
-def test_telefone_desconhecido_nao_recebe_resposta_nem_aparece_em_comunidade(logged_in_client, enviados, app, db):
+def test_telefone_desconhecido_recebe_aviso_uma_vez_e_nao_aparece_em_comunidade(logged_in_client, enviados, app, db):
     with app.app_context():
-        _igreja(logged_in_client)
+        comunidade, _, _ = _igreja(logged_in_client)
         _postar(logged_in_client, _payload("confirmo", de="5521999990000"))
-        assert enviados == []
-        assert MensagemWhatsapp.objects.first().comunidade_ids == []
+        assert len(enviados) == 1 and enviados[0][0] == "+5521999990000"
+        assert "não está cadastrado" in enviados[0][1]
+        assert MensagemWhatsapp.objects(direcao="recebida").first().comunidade_ids == []
+        assert "nova(s)" not in logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode()
+
+        # Segunda mensagem no mesmo dia: sem aviso repetido.
+        _postar(logged_in_client, _payload("teste", de="5521999990000", wamid="wamid.2"))
+        assert len(enviados) == 1
+
+
+def test_webhook_so_com_status_de_entrega_nao_grava_nada(logged_in_client, enviados, app, db):
+    with app.app_context():
+        payload = {"entry": [{"changes": [{"field": "messages", "value": {"statuses": [
+            {"id": "wamid.x", "status": "failed", "recipient_id": "5511987654321",
+             "errors": [{"code": 131030, "title": "Recipient phone number not in allowed list"}]},
+        ]}}]}]}
+        assert _postar(logged_in_client, payload).status_code == 200
+        assert MensagemWhatsapp.objects.count() == 0 and enviados == []
 
 
 # --- Caixa de entrada -------------------------------------------------------------------------------

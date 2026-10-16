@@ -1,4 +1,5 @@
 """Application Factory."""
+import logging
 import os
 import click
 from flask import Flask
@@ -10,6 +11,12 @@ from .extensions import db, migrate, login_manager, oauth, limiter
 def create_app(config_name="default"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+
+    # Sem isso o logger do Flask so mostra WARNING pra cima, e os registros
+    # informativos (ex: o que o webhook do WhatsApp fez com cada mensagem,
+    # app/whatsapp_recebidas.py) nunca aparecem no log do Azure.
+    if config_name != "testing":
+        app.logger.setLevel(logging.INFO)
 
     # Atras de um proxy reverso (Azure App Service, e qualquer PaaS que nao
     # normalize isso sozinho) a requisicao chega no processo Flask como HTTP
