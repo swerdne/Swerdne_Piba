@@ -72,6 +72,54 @@ def enviar_whatsapp(destinatario, corpo):
     })
 
 
+def trocar_foto_do_perfil(caminho_imagem, app_id=None):
+    """Troca a foto de perfil do numero de WhatsApp Business (comando
+    `flask whatsapp-foto-perfil`). A Meta nao aceita a imagem direto no
+    perfil: primeiro sobe o arquivo pelo Resumable Upload do APP (precisa do
+    id do app -- META_APP_ID ou descoberto pelo proprio token), que devolve um
+    "handle", e o handle e o que vai no whatsapp_business_profile.
+
+    Levanta WhatsappNaoEnviadoError em qualquer falha.
+    """
+    token, phone_id = _config_ou_erro()
+    base = f"https://graph.facebook.com/{_API_VERSAO}"
+    tipo = "image/png" if caminho_imagem.lower().endswith(".png") else "image/jpeg"
+    with open(caminho_imagem, "rb") as arquivo:
+        conteudo = arquivo.read()
+
+    def _post_ou_erro(etapa, url, **kwargs):
+        try:
+            resposta = requests.post(url, timeout=_TIMEOUT_SEGUNDOS * 3, **kwargs)
+        except requests.RequestException as erro:
+            raise WhatsappNaoEnviadoError(f"{etapa}: {erro}") from erro
+        if resposta.status_code >= 300:
+            raise WhatsappNaoEnviadoError(f"{etapa}: {resposta.status_code} {resposta.text}")
+        return resposta.json()
+
+    app_id = app_id or current_app.config.get("META_APP_ID")
+    if not app_id:
+        try:
+            resposta = requests.get(f"{base}/app", params={"access_token": token}, timeout=_TIMEOUT_SEGUNDOS)
+            app_id = resposta.json().get("id") if resposta.status_code < 300 else None
+        except (requests.RequestException, ValueError):
+            app_id = None
+        if not app_id:
+            raise WhatsappNaoEnviadoError(
+                "Nao deu pra descobrir o id do app pelo token -- passe --app-id (Configuracoes do app > "
+                "Basico > ID do aplicativo) ou defina META_APP_ID."
+            )
+
+    sessao = _post_ou_erro("Abrir envio da imagem", f"{base}/{app_id}/uploads", params={
+        "file_length": len(conteudo), "file_type": tipo, "access_token": token,
+    })
+    enviado = _post_ou_erro("Enviar a imagem", f"{base}/{sessao['id']}", data=conteudo, headers={
+        "Authorization": f"OAuth {token}", "file_offset": "0",
+    })
+    _post_ou_erro("Trocar a foto do perfil", f"{base}/{phone_id}/whatsapp_business_profile",
+                  headers={"Authorization": f"Bearer {token}"},
+                  json={"messaging_product": "whatsapp", "profile_picture_handle": enviado["h"]})
+
+
 def enviar_whatsapp_template(destinatario, nome_template, parametros):
     """Envia uma mensagem via Template aprovado pela Meta -- unico jeito de
     mandar WhatsApp PROATIVO (fora da janela de 24h), ver

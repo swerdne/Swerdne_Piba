@@ -179,6 +179,50 @@ def test_webhook_so_com_status_de_entrega_nao_grava_nada(logged_in_client, envia
         assert MensagemWhatsapp.objects.count() == 0 and enviados == []
 
 
+# --- Foto do perfil (flask whatsapp-foto-perfil) ------------------------------------------------
+
+def test_comando_foto_perfil_sobe_imagem_e_troca_perfil(app, monkeypatch, tmp_path):
+    imagem = tmp_path / "logo.png"
+    imagem.write_bytes(b"\x89PNG-falso")
+    app.config.update(META_WHATSAPP_TOKEN="tok", META_WHATSAPP_PHONE_ID="999")
+    chamadas = []
+
+    class Resposta:
+        def __init__(self, dados):
+            self.status_code, self._dados, self.text = 200, dados, ""
+
+        def json(self):
+            return self._dados
+
+    def falso_get(url, **kw):
+        chamadas.append(("GET", url))
+        return Resposta({"id": "app123"})
+
+    def falso_post(url, **kw):
+        chamadas.append(("POST", url, kw))
+        if url.endswith("/app123/uploads"):
+            return Resposta({"id": "upload:abc"})
+        if url.endswith("/upload:abc"):
+            return Resposta({"h": "handle-xyz"})
+        return Resposta({"success": True})
+
+    monkeypatch.setattr("app.whatsapp.requests.get", falso_get)
+    monkeypatch.setattr("app.whatsapp.requests.post", falso_post)
+    resultado = app.test_cli_runner().invoke(args=["whatsapp-foto-perfil", "--arquivo", str(imagem)])
+
+    assert resultado.exit_code == 0, resultado.output
+    abrir, enviar, perfil = [c for c in chamadas if c[0] == "POST"]
+    assert abrir[2]["params"]["file_type"] == "image/png" and abrir[2]["params"]["file_length"] == 10
+    assert enviar[2]["data"] == b"\x89PNG-falso" and enviar[2]["headers"]["file_offset"] == "0"
+    assert perfil[1].endswith("/999/whatsapp_business_profile")
+    assert perfil[2]["json"]["profile_picture_handle"] == "handle-xyz"
+
+
+def test_comando_foto_perfil_sem_config_falha_com_mensagem(app):
+    resultado = app.test_cli_runner().invoke(args=["whatsapp-foto-perfil"])
+    assert resultado.exit_code == 1 and "nao configurado" in resultado.output
+
+
 # --- Caixa de entrada -------------------------------------------------------------------------------
 
 def test_caixa_de_entrada_lista_abre_e_responde(logged_in_client, enviados, app, db):

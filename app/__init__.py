@@ -116,6 +116,23 @@ def create_app(config_name="default"):
         usuario.save()
         click.echo(f"{email} agora e Super Admin.")
 
+    # Foto de perfil do numero de WhatsApp Business (ver
+    # app/whatsapp.py::trocar_foto_do_perfil). Padrao: o icone "maskable"
+    # (quadrado, fundo escuro e margem -- nao corta no circulo do WhatsApp).
+    @app.cli.command("whatsapp-foto-perfil")
+    @click.option("--arquivo", default=os.path.join(app.static_folder, "img", "icon-maskable-512.png"),
+                  show_default=True, help="Imagem JPG/PNG quadrada, minimo 192x192, ate 5 MB.")
+    @click.option("--app-id", default=None, help="ID do app na Meta (so se nao der pra descobrir pelo token).")
+    def whatsapp_foto_perfil(arquivo, app_id):
+        from .whatsapp import WhatsappNaoEnviadoError, trocar_foto_do_perfil
+
+        try:
+            trocar_foto_do_perfil(arquivo, app_id=app_id)
+        except (WhatsappNaoEnviadoError, OSError) as erro:
+            click.echo(f"ERRO: {erro}", err=True)
+            raise SystemExit(1)
+        click.echo("Foto do perfil do WhatsApp trocada (pode levar alguns minutos pra aparecer).")
+
     # Corte de producao da migracao pra Mongo (Fase 8, ver plano da
     # migracao) -- so faz sentido rodar contra um app com DATABASE_URL
     # (Postgres de origem) E MONGODB_URI (Mongo de destino) configurados ao

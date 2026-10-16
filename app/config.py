@@ -66,6 +66,9 @@ class Config:
     # Basico) confere a assinatura de cada POST -- sem ela o webhook recusa tudo.
     META_WHATSAPP_VERIFY_TOKEN = os.environ.get("META_WHATSAPP_VERIFY_TOKEN")
     META_APP_SECRET = os.environ.get("META_APP_SECRET")
+    # Opcional: so o comando `flask whatsapp-foto-perfil` usa (e tenta
+    # descobrir pelo token quando falta).
+    META_APP_ID = os.environ.get("META_APP_ID")
 
     # Cadastro tradicional: confere se o dominio do e-mail tem registro MX (ou
     # A) antes de aceitar o cadastro (ver app/auth/dominio_email.py). Flag pra
