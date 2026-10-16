@@ -6,9 +6,11 @@ Templates de mensagem proativa em conta paga. Precisa de META_WHATSAPP_TOKEN
 (token de acesso do app) e META_WHATSAPP_PHONE_ID (id do numero configurado
 no WhatsApp Business) no .env.
 """
+import mongoengine
 import requests
 from flask import current_app
 
+from app.fuso import hoje_brasilia
 from app.sms import normalizar_telefone
 
 # Mesmo raciocinio do timeout em app/emailing.py e app/sms.py.
@@ -18,6 +20,34 @@ _API_VERSAO = "v21.0"
 
 class WhatsappNaoEnviadoError(Exception):
     """Levantada quando a mensagem de WhatsApp nao pode ser enviada (config ausente, Meta recusou, etc.)."""
+
+
+class TemplatesDoDia(mongoengine.Document):
+    """Quantos templates (mensagens cobradas) foram tentados em cada dia de
+    Brasilia -- base do teto diario (WHATSAPP_LIMITE_TEMPLATES_DIA). No banco,
+    nao em memoria, pra valer mesmo depois de reiniciar o servidor."""
+    meta = {"collection": "whatsapp_templates_por_dia"}
+
+    dia = mongoengine.StringField(primary_key=True)  # "2026-10-16"
+    enviados = mongoengine.IntField(default=0)
+
+
+def _reservar_template_do_dia():
+    """Conta +1 template no dia (atomico -- os envios do Notificar rodam em
+    threads) e recusa acima do teto: trava de seguranca contra um bug ou um
+    disparo em massa gerar custo inesperado. Conta a TENTATIVA (antes de
+    chamar a Meta), entao erra pro lado de mandar menos, nunca mais."""
+    limite = current_app.config.get("WHATSAPP_LIMITE_TEMPLATES_DIA") or 0
+    if limite <= 0:
+        return  # 0 = sem teto
+    dia = hoje_brasilia().isoformat()
+    contador = TemplatesDoDia.objects(dia=dia).modify(upsert=True, new=True, inc__enviados=1)
+    if contador.enviados > limite:
+        if contador.enviados == limite + 1:
+            current_app.logger.error(
+                "Teto diario de templates de WhatsApp atingido (%s em %s): os proximos envios de template "
+                "de hoje foram bloqueados. Ajuste WHATSAPP_LIMITE_TEMPLATES_DIA se for esperado.", limite, dia)
+        raise WhatsappNaoEnviadoError(f"Teto diario de {limite} templates de WhatsApp atingido.")
 
 
 def _config_ou_erro():
@@ -151,6 +181,12 @@ def enviar_whatsapp_template(destinatario, nome_template, parametros):
     numero_destino = normalizar_telefone(destinatario)
     if numero_destino is None:
         raise WhatsappNaoEnviadoError(f"Telefone invalido: {destinatario!r}")
+
+    try:
+        _reservar_template_do_dia()
+    except WhatsappNaoEnviadoError:
+        current_app.logger.warning("WhatsApp nao enviado (template %s): teto diario atingido.", nome_template)
+        raise
 
     _chamar_api(token, phone_id, {
         "messaging_product": "whatsapp",

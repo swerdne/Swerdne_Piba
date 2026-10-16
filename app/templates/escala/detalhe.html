@@ -120,12 +120,17 @@
         </div>
         {% else %}
         <!-- Acoes -->
+        {# Notificar avisa so quem ainda nao foi avisado; reenviar pra todos e a
+           parte, com confirmacao e no maximo 1x a cada 6h (escala.notificar_escala). #}
+        {% set escalados_notif = funcoes | selectattr('membro_id') | list %}
+        {% set pendentes_notif = escalados_notif | rejectattr('notificado_em') | list | length %}
         <div class="flex flex-col sm:flex-row gap-3">
-            <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1" data-tutorial="notificar">
+            <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1" data-tutorial="notificar"
+                  {% if pendentes_notif %}data-confirm-excluir="Avisar {{ pendentes_notif }} pessoa(s) que ainda não foram avisadas?"{% endif %}>
                 {{ acao_form.hidden_tag() }}
                 <button type="submit"
                         class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-3 rounded-full transition">
-                    <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe
+                    <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe{% if escalados_notif %} ({{ pendentes_notif }} sem aviso){% endif %}
                 </button>
             </form>
             {% if not escala.plantao_turno_id and not escala.turno_plantao_origem_id and (funcoes | selectattr('membro_id') | list) %}
@@ -135,10 +140,21 @@
             </a>
             {% endif %}
         </div>
+        {% if escalados_notif | length > pendentes_notif %}
+        <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="-mt-1 text-center"
+              data-confirm-excluir="Mandar o aviso de novo para todos os {{ escalados_notif | length }} escalados? Cada WhatsApp enviado é cobrado.">
+            {{ acao_form.hidden_tag() }}
+            <input type="hidden" name="reenviar" value="1">
+            <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                <i class="fa-solid fa-rotate-right mr-1"></i>Reenviar para todos
+            </button>
+        </form>
+        {% endif %}
         {% if escala.data %}
         <p class="text-xs {{ tema.text_secondary }} -mt-2">
             <i class="fa-solid fa-clock mr-1"></i>
-            Alem do botao acima, a equipe escalada e notificada automaticamente 24h e 16h antes do evento.
+            Alem do botao acima, a equipe escalada recebe um lembrete automatico 24h antes do evento
+            (e de novo 16h antes, so por e-mail e no app).
         </p>
         {% endif %}
         {% endif %}

@@ -11,9 +11,11 @@ seguem pelo MESMO fluxo de notificacao abaixo. Nao existe mais um scheduler
 separado para o plantao.
 """
 import logging
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
+
+from app.fuso import agora_brasilia, hoje_brasilia
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ def _verificar_e_notificar(app):
         try:
             sincronizar_todos_os_turnos_ativos()
 
-            agora = datetime.now()
+            agora = agora_brasilia()  # nunca datetime.now(): o servidor roda em UTC
             # So as que podem cair numa janela de aviso (16h-24h a frente):
             # ler todas as escalas a cada 15 min pesava no servidor.
             escalas = Escala.objects(
@@ -53,25 +55,31 @@ def _verificar_e_notificar(app):
 
                 faltam = data_hora - agora
 
+                # Marca como avisada ANTES de enviar: se o envio quebrar no
+                # meio, a escala perde o lembrete (no maximo 1 vez) em vez de
+                # mandar tudo de novo no proximo tick -- templates sao cobrados.
                 if escala.notificado_24h_em is None and abs(faltam - timedelta(hours=24)) <= _JANELA:
                     logger.info("Notificacao automatica (24h antes): escala %s", escala.id)
-                    enviar_notificacoes_da_escala(escala)
                     escala.notificado_24h_em = agora
                     escala.save()
-
-                if escala.notificado_16h_em is None and abs(faltam - timedelta(hours=16)) <= _JANELA:
-                    logger.info("Notificacao automatica (16h antes): escala %s", escala.id)
                     enviar_notificacoes_da_escala(escala)
+
+                # 2o lembrete so pelos canais gratuitos (e-mail + sino): o
+                # WhatsApp (template cobrado) e o SMS vao uma vez so, no de
+                # 24h -- ver app/escala/CLAUDE.md, "Lembretes automaticos".
+                if escala.notificado_16h_em is None and abs(faltam - timedelta(hours=16)) <= _JANELA:
+                    logger.info("Notificacao automatica (16h antes, so canais gratuitos): escala %s", escala.id)
                     escala.notificado_16h_em = agora
                     escala.save()
+                    enviar_notificacoes_da_escala(escala, canais_pagos=False)
         except Exception:
             logger.exception("Tick do agendador falhou -- sync/notificacoes deste ciclo foram pulados.")
 
         global _dia_alertas_faltas
-        if _dia_alertas_faltas != date.today():
+        if _dia_alertas_faltas != hoje_brasilia():
             try:
                 verificar_faltas_seguidas()
-                _dia_alertas_faltas = date.today()
+                _dia_alertas_faltas = hoje_brasilia()
             except Exception:
                 logger.exception("Alerta de faltas seguidas falhou -- tenta de novo no proximo tick.")
 

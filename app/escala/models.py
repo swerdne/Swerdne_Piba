@@ -346,6 +346,9 @@ class Escala(SequentialIdDocument):
 
     notificado_24h_em = mongoengine.DateTimeField()
     notificado_16h_em = mongoengine.DateTimeField()
+    # Ultimo "Reenviar para todos" do botao Notificar (UTC) -- trava um novo
+    # reenvio por REENVIO_MANUAL_INTERVALO (templates de WhatsApp sao cobrados).
+    reenvio_manual_em = mongoengine.DateTimeField()
 
     # Cancelamento (ver escala.routes::cancelar_escala/reabrir_escala) --
     # diferente de excluir: o evento continua existindo (historico, calendario),

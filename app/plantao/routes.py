@@ -5,7 +5,9 @@ por rodizio sao Escala de verdade (ver app/plantao/sincronizacao.py) e
 aparecem no calendario/lista do proprio Ministerio e em escala/detalhe.html.
 Este modulo cuida so da CONFIGURACAO da regra (fila, offset, recorrencia).
 """
-from datetime import date, datetime
+from datetime import date
+
+from app.fuso import agora_brasilia
 
 from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
@@ -247,7 +249,7 @@ def excluir_turno(turno_id):
     # Escalas ja ocorridas ou fixadas (excecao pontual/edicao manual) viram
     # historico solto -- nao podem ser apagadas junto com a regra. As futuras
     # nao-fixadas eram so previsao calculada, sao removidas.
-    agora = datetime.now()
+    agora = agora_brasilia()
     for escala in list(turno.escalas_geradas):
         ja_ocorreu = escala.data_hora and escala.data_hora <= agora
         if escala.plantao_fixado or ja_ocorreu:

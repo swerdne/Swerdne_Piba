@@ -11,13 +11,19 @@ Chamado em 3 situacoes: ao criar/editar o turno ou a fila (app/plantao/routes.py
 e a cada tick do agendador unico (rola a janela de geracao pra frente com o
 tempo -- ver sincronizar_todos_os_turnos_ativos).
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.db_utils import delete_cascade
+from app.fuso import agora_brasilia
 from app.escala.models import Escala, Funcao, STATUS_PADRAO
 from app.plantao.models import TurnoPlantao, data_do_periodo, periodo_da_data, equipe_do_periodo
 
 JANELA_GERACAO_DIAS = 180  # ~6 meses -- ver app/plantao/CLAUDE.md
+# Mudar o horario de um turno mexe em ate ~6 meses de ocorrencias de uma vez;
+# avisar todas mandava dezenas de templates de WhatsApp (cobrados) no mesmo
+# segundo. So as proximas N recebem o aviso de alteracao; as demais tem o
+# lembrete de 24h resetado e recebem a hora nova por ele.
+AVISAR_ALTERACAO_PROXIMAS = 2
 
 
 class _MemoriaDoTurno:
@@ -91,7 +97,7 @@ def _materializar_periodo(turno, periodo, data_periodo, memoria=None):
     return escala
 
 
-def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None):
+def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None, avisar_alteracao=True):
     """Recalcula uma Escala nao-fixada e ainda nao ocorrida a partir da config
     atual do turno -- so escreve/reseta notificacao se algo realmente mudou
     (idempotencia e obrigatoria aqui: essa funcao roda a cada 15 min pelo
@@ -158,7 +164,7 @@ def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None):
 
     escala.save()
 
-    if mudou_data_horario:
+    if mudou_data_horario and avisar_alteracao:
         enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo)
 
 
@@ -179,9 +185,10 @@ def sincronizar_turno(turno, ate_data=None):
     overestima) do ponto de partida -- comecar um pouco antes do real custa
     so algumas iteracoes descartadas, nunca incorretude.
     """
-    agora = datetime.now()
+    agora = agora_brasilia()
     hoje = agora.date()
     ate_data = ate_data or hoje + timedelta(days=JANELA_GERACAO_DIAS)
+    ocorrencias_futuras = 0  # pra limitar o aviso de alteracao as proximas
 
     data_inicial = max(turno.data_inicio, hoje)
     if data_inicial > ate_data:
@@ -210,14 +217,21 @@ def sincronizar_turno(turno, ate_data=None):
         if data_periodo >= data_inicial:
             escala = existentes.get(periodo)
 
+            ja_ocorreu = escala is not None and escala.data_hora and escala.data_hora <= agora
+            if not ja_ocorreu:
+                ocorrencias_futuras += 1
+
             if escala is None:
                 _materializar_periodo(turno, periodo, data_periodo, memoria)
-            elif escala.data_hora and escala.data_hora <= agora:
-                pass  # ja ocorreu -- historico intocavel
+            elif ja_ocorreu:
+                pass  # historico intocavel
             elif escala.plantao_fixado:
                 pass  # excecao pontual preservada
             else:
-                _atualizar_periodo_existente(turno, escala, data_periodo, memoria)
+                _atualizar_periodo_existente(
+                    turno, escala, data_periodo, memoria,
+                    avisar_alteracao=ocorrencias_futuras <= AVISAR_ALTERACAO_PROXIMAS,
+                )
 
         periodo += 1
 
@@ -240,7 +254,7 @@ def preparar_para_renumeracao(turno):
     Futuras nao-fixadas -- eram so previsao, sao apagadas e recriadas do
     zero pelo sync com a nova numeracao.
     """
-    agora = datetime.now()
+    agora = agora_brasilia()
     for escala in list(turno.escalas_geradas):
         if escala.plantao_periodo is None:
             continue

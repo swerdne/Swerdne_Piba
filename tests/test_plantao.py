@@ -613,6 +613,34 @@ def test_editar_horario_dispara_notificacao_de_alteracao_e_reseta_timestamps(log
         assert escala_atualizada.notificado_24h_em is None  # resetado pra reconsiderar notificacao
 
 
+def test_mudar_horario_do_turno_so_avisa_as_proximas_ocorrencias(logged_in_client, app, db, monkeypatch):
+    """Protecao de custo: mudar o horario mexe em ~6 meses de ocorrencias,
+    mas so as AVISAR_ALTERACAO_PROXIMAS primeiras recebem o aviso de
+    alteracao (template cobrado); todas ficam com o lembrete de 24h resetado."""
+    from app.plantao.sincronizacao import AVISAR_ALTERACAO_PROXIMAS
+
+    avisadas = []
+    monkeypatch.setattr("app.escala.routes.enviar_notificacao_de_alteracao",
+                        lambda escala, data_antiga, horario_antiga: avisadas.append(escala.data))
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        turno = _criar_turno_teste(ministerio.id, data_inicio=date.today() + timedelta(days=1),
+                                   unidade_recorrencia="dia", horario=time(19, 0))
+        _adicionar_a_fila(turno, [_criar_membro_teste(comunidade.id, "Ana")])
+        ate = date.today() + timedelta(days=10)
+        sincronizar_turno(turno, ate_data=ate)
+
+        turno.horario = time(20, 0)
+        turno.save()
+        sincronizar_turno(turno, ate_data=ate)
+
+        geradas = Escala.objects(plantao_turno_id=turno.id).order_by("data")
+        assert geradas.count() == 10 and all(e.horario == time(20, 0) for e in geradas)
+        assert all(e.notificado_24h_em is None for e in geradas)
+        assert avisadas == [e.data for e in geradas][:AVISAR_ALTERACAO_PROXIMAS] and AVISAR_ALTERACAO_PROXIMAS == 2
+
+
 def test_editar_data_inicio_recria_periodos_futuros_preserva_passado_fixado(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)

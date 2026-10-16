@@ -69,6 +69,10 @@ class Config:
     # Opcional: so o comando `flask whatsapp-foto-perfil` usa (e tenta
     # descobrir pelo token quando falta).
     META_APP_ID = os.environ.get("META_APP_ID")
+    # Teto de templates de WhatsApp (mensagens cobradas pela Meta) por dia de
+    # Brasilia -- acima disso o envio de template e bloqueado e vai pro log
+    # (app/whatsapp.py::_reservar_template_do_dia). 0 desliga o teto.
+    WHATSAPP_LIMITE_TEMPLATES_DIA = int(os.environ.get("WHATSAPP_LIMITE_TEMPLATES_DIA", "100"))
 
     # Cadastro tradicional: confere se o dominio do e-mail tem registro MX (ou
     # A) antes de aceitar o cadastro (ver app/auth/dominio_email.py). Flag pra

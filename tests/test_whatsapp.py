@@ -35,6 +35,29 @@ def test_recusa_da_meta_vai_pro_log_com_o_motivo(app, monkeypatch, caplog):
     assert "5528*****2102" in log and "28999872102" not in log  # numero mascarado
 
 
+def test_teto_diario_de_templates_bloqueia_e_registra_no_log(app, db, monkeypatch, caplog):
+    """Trava de custo: acima de WHATSAPP_LIMITE_TEMPLATES_DIA a Meta nem e
+    chamada. Texto livre (resposta dentro das 24h, gratis) nao conta."""
+    app.config.update(META_WHATSAPP_TOKEN="TOKENFAKE", META_WHATSAPP_PHONE_ID="1234567890",
+                      WHATSAPP_LIMITE_TEMPLATES_DIA=2)
+    chamadas = []
+
+    class Ok:
+        status_code = 200
+        text = "{}"
+
+    monkeypatch.setattr("app.whatsapp.requests.post", lambda *a, **kw: chamadas.append(kw["json"]["type"]) or Ok())
+    with app.app_context(), caplog.at_level("WARNING"):
+        for _ in range(2):
+            enviar_whatsapp_template("(11) 98765-4321", "pibachurch_escalado", ["Ana", "Vocal", "Culto", "20/10"])
+        enviar_whatsapp("(11) 98765-4321", "Resposta livre")  # nao conta pro teto
+        with pytest.raises(WhatsappNaoEnviadoError):
+            enviar_whatsapp_template("(11) 98765-4321", "pibachurch_escalado", ["Ana", "Vocal", "Culto", "20/10"])
+
+    assert chamadas == ["template", "template", "text"]
+    assert "Teto diario de templates de WhatsApp atingido" in caplog.text
+
+
 def test_enviar_whatsapp_com_config_mas_telefone_invalido_levanta_erro(app):
     app.config["META_WHATSAPP_TOKEN"] = "TOKENFAKE"
     app.config["META_WHATSAPP_PHONE_ID"] = "1234567890"

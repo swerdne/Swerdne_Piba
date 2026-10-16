@@ -457,8 +457,10 @@ def test_notificar_membro_com_conta_gera_notificacao_no_app(logged_in_client, ou
         membro = _criar_membro(logged_in_client, comunidade.id, "Bruno", email="bruno@example.com")
         _escalar(logged_in_client, baixo.id, membro.id)
 
+        # Escalar ja avisou Bruno -- o Notificar normal nao manda de novo; o
+        # "Reenviar para todos" manda.
         response = logged_in_client.post(
-            f"/escala/{escala.id}/notificar", data={}, follow_redirects=True
+            f"/escala/{escala.id}/notificar", data={"reenviar": "1"}, follow_redirects=True
         )
         html = response.data.decode("utf-8")
         assert response.status_code == 200
@@ -495,6 +497,39 @@ def test_marcar_notificacoes_como_lidas(logged_in_client, outro_logged_in_client
         bruno = User.objects(email="bruno@example.com").first()
         notificacao = Notificacao.objects(usuario_id=bruno.id).first()
         assert notificacao.lida
+
+
+def test_notificar_so_quem_nao_foi_avisado_e_reenvio_travado_por_6h(logged_in_client, app, db, monkeypatch):
+    """Protecao de custo: Notificar normal manda so pra quem esta sem aviso;
+    "Reenviar para todos" manda pra todos, mas no maximo 1x a cada 6h."""
+    enviados = []
+    monkeypatch.setattr("app.escala.routes.enviar_whatsapp_template",
+                        lambda destinatario, nome_template, parametros: enviados.append(destinatario))
+    with app.app_context():
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id)
+        escala = _criar_escala(logged_in_client, ministerio.id, "Culto de Domingo")
+        ana = _criar_membro(logged_in_client, comunidade.id, "Ana", telefone="(11) 98765-4321")
+        bia = _criar_membro(logged_in_client, comunidade.id, "Bia", telefone="(11) 91234-5678")
+        _escalar(logged_in_client, _funcao_por_nome(escala, "Baixo").id, ana.id)
+        _escalar(logged_in_client, _funcao_por_nome(escala, "Bateria").id, bia.id)
+        assert len(enviados) == 2  # aviso ao escalar, 1 pra cada
+
+        # Bia perde o aviso (ex: trocada na mao) -- Notificar so manda pra ela.
+        Funcao.objects(escala_id=escala.id, membro_id=bia.id).update(set__notificado_em=None)
+        logged_in_client.post(f"/escala/{escala.id}/notificar", data={})
+        assert len(enviados) == 3 and enviados[-1].endswith("91234-5678")
+
+        # Todo mundo avisado: clicar de novo nao manda nada.
+        html = logged_in_client.post(f"/escala/{escala.id}/notificar", data={}, follow_redirects=True).data.decode()
+        assert len(enviados) == 3 and "ja foram avisados" in html
+
+        # Reenviar para todos: manda pros 2; um 2o reenvio logo depois e recusado.
+        logged_in_client.post(f"/escala/{escala.id}/notificar", data={"reenviar": "1"})
+        assert len(enviados) == 5
+        html = logged_in_client.post(f"/escala/{escala.id}/notificar", data={"reenviar": "1"},
+                                     follow_redirects=True).data.decode()
+        assert len(enviados) == 5 and "Outro reenvio para todos so a partir das" in html
 
 
 def test_notificar_escala_vazia_mostra_aviso(logged_in_client, app, db):

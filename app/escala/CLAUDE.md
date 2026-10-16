@@ -75,9 +75,11 @@ Toda `Notificacao` criada por este módulo (escalação, alteração de data, e 
 
 ## Scheduler (`agendador.py`) — único do projeto
 
+**Lembretes automáticos (decisão de custo):** são dois, mas só o de 24h manda WhatsApp (template cobrado) e SMS; o de 16h vai só por e-mail + sino (`canais_pagos=False`). Mantido o 2º lembrete porque é grátis nesses canais; tirar o WhatsApp dele corta pela metade o custo automático por escala. O agendador grava `notificado_24h_em`/`16h_em` **antes** de chamar `enviar_notificacoes_da_escala` (at-most-once). O botão "Notificar" (`notificar_escala`) só manda pra quem tem `Funcao.notificado_em` vazio; "Reenviar para todos" (`reenviar=1`) no máximo 1x a cada `REENVIO_MANUAL_INTERVALO` (6h, `Escala.reenvio_manual_em`).
+
 `BackgroundScheduler` (timezone `America/Sao_Paulo`), job `interval` a cada 15 min (`INTERVALO_VERIFICACAO_MINUTOS`). **Único agendador do projeto**: a cada tick, primeiro chama `plantao.sincronizacao.sincronizar_todos_os_turnos_ativos()` (materializa as próximas ocorrências de todo `TurnoPlantao`, rolando a janela de 180 dias pra frente), depois checa notificação. Para cada `Escala` com `data` preenchida (manual ou gerada por rodízio — indistintas aqui), calcula `faltam = data_hora - agora`; se `notificado_24h_em is None and abs(faltam - timedelta(hours=24)) <= _JANELA` (±15 min, idem para 16h), chama `enviar_notificacoes_da_escala` e stampa o timestamp correspondente. Não existe mais scheduler nem tabela de notificação próprios do `plantao` — foram eliminados quando o rodízio passou a materializar em `Escala` real.
 
-**Atenção:** usa `datetime.now()` (hora local, naive), enquanto os defaults de modelo (ex. `Notificacao.criada_em`) usam `datetime.now(timezone.utc)`. É uma inconsistência existente — não assuma que os dois são diretamente comparáveis se for mexer nessa lógica. `app/plantao/sincronizacao.py` segue a mesma convenção naive de propósito, pelo mesmo motivo.
+**Atenção:** usa `app/fuso.py::agora_brasilia()` (naive, hora de Brasília — a mesma em que `Escala.data`/`horario` são gravados), enquanto os defaults de modelo (ex. `Notificacao.criada_em`) usam `datetime.now(timezone.utc)`. Não são diretamente comparáveis. Nunca use `datetime.now()` aqui: no Azure o servidor roda em UTC e os lembretes saíam 3h adiantados. `app/plantao/sincronizacao.py` usa o mesmo `agora_brasilia()`.
 
 ## Testes
 

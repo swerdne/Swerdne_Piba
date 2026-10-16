@@ -12,7 +12,7 @@ from mongoengine.queryset.visitor import Q as MongoQ
 
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.extensions import limiter
-from app.escala.checkin import checkin_ligado, status_sem_presente
+from app.escala.checkin import checkin_ligado, hora_local, status_sem_presente
 from app.escala import bp
 from app.escala.forms import (
     SelecionarMembroForm,
@@ -1095,6 +1095,8 @@ def recusar_troca(funcao_id):
 # producao (gunicorn) e derrubou o processo (SIGKILL) mesmo depois do
 # timeout individual existir. Ver _disparar_notificacoes_em_paralelo abaixo.
 _TIMEOUT_TOTAL_NOTIFICACAO_SEGUNDOS = 20
+# Intervalo minimo entre dois "Reenviar para todos" da mesma escala (notificar_escala).
+REENVIO_MANUAL_INTERVALO = timedelta(hours=6)
 
 
 def _disparar_notificacoes_em_paralelo(tarefas):
@@ -1157,13 +1159,14 @@ def _disparar_notificacoes_em_paralelo(tarefas):
     return resultados
 
 
-def enviar_notificacoes_da_escala(escala, funcoes=None):
+def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
     """Notifica todo mundo escalado numa escala (por e-mail/SMS/app).
 
     Reutilizada tanto pelo botao manual quanto pelo agendador automatico
     (24h/16h antes do evento) -- ver app/escala/agendador.py. `funcoes`
     restringe o envio a essas (ex: so quem acabou de ser escalado, ver
-    _avisar_recem_escalado).
+    _avisar_recem_escalado). `canais_pagos=False` manda so e-mail + sino
+    (sem SMS nem template de WhatsApp) -- usado no lembrete de 16h.
     """
     escalados = [f for f in (escala.funcoes if funcoes is None else funcoes) if f.membro_id is not None]
     data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
@@ -1172,7 +1175,7 @@ def enviar_notificacoes_da_escala(escala, funcoes=None):
         {
             "funcao_id": funcao.id,
             "email": funcao.membro.email,
-            "telefone": funcao.membro.telefone,
+            "telefone": funcao.membro.telefone if canais_pagos else None,
             "mensagem": mensagem_para(escala, funcao, funcao.membro),
             "assunto": f"Voce foi escalado(a): {funcao.nome} - {escala.nome}",
             "wa_template": "pibachurch_escalado",
@@ -1214,7 +1217,7 @@ def enviar_notificacoes_da_escala(escala, funcoes=None):
             else:
                 email_falhas += 1
 
-        if membro.telefone:
+        if membro.telefone and canais_pagos:
             if resultado["sms_ok"]:
                 sms_enviados += 1
                 notificou_algum_canal = True
@@ -1468,14 +1471,40 @@ def notificar_escala(escala_id):
         flash("Acao invalida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
-    if not any(f.membro_id is not None for f in escala.funcoes):
+    destino = url_for("escala.detalhe", escala_id=escala.id)
+    escalados = [f for f in escala.funcoes if f.membro_id is not None]
+    if not escalados:
         flash(f"Ninguem escalado em {escala.nome} para notificar.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=escala.id))
+        return redirect(destino)
 
-    resultado = enviar_notificacoes_da_escala(escala)
-    texto, houve_sucesso = _resumo_do_envio(resultado)
+    # Protecao de custo (template de WhatsApp e cobrado): o normal avisa so
+    # quem ainda nao foi avisado (Funcao.notificado_em -- tambem marcado pelo
+    # aviso ao escalar e pelo lembrete de 24h). "Reenviar para todos" e um
+    # botao a parte, com confirmacao, no maximo 1 vez a cada
+    # REENVIO_MANUAL_INTERVALO por escala.
+    if request.form.get("reenviar") == "1":
+        agora = datetime.now(timezone.utc)
+        ultimo = escala.reenvio_manual_em
+        if ultimo is not None and ultimo.tzinfo is None:
+            ultimo = ultimo.replace(tzinfo=timezone.utc)
+        if ultimo is not None and agora - ultimo < REENVIO_MANUAL_INTERVALO:
+            liberado = hora_local(ultimo + REENVIO_MANUAL_INTERVALO)
+            flash(f"A equipe ja recebeu o aviso de novo as {hora_local(ultimo)}. "
+                  f"Outro reenvio para todos so a partir das {liberado}.", "danger")
+            return redirect(destino)
+        escala.reenvio_manual_em = agora
+        escala.save()
+        alvo = escalados
+    else:
+        alvo = [f for f in escalados if f.notificado_em is None]
+        if not alvo:
+            flash("Todos os escalados ja foram avisados. Para mandar de novo, use \"Reenviar para todos\".",
+                  "warning")
+            return redirect(destino)
+
+    texto, houve_sucesso = _resumo_do_envio(enviar_notificacoes_da_escala(escala, funcoes=alvo))
     flash(texto, "success" if houve_sucesso else "danger")
-    return redirect(url_for("escala.detalhe", escala_id=escala.id))
+    return redirect(destino)
 
 
 def _resumo_do_envio(resultado):

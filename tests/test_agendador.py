@@ -8,7 +8,9 @@ MongoEngine (ver app/db_utils.py) -- sem identity map, `Model.objects(...)`
 sempre busca fresco do banco, entao nao precisa de `db.session.expire_all()`
 antes de reconsultar apos o tick do agendador.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+from app.fuso import agora_brasilia
 
 from app.comunidade.models import criar_comunidade
 from app.ministerio.models import criar_ministerio
@@ -36,7 +38,7 @@ def test_notifica_automaticamente_dentro_da_janela_de_24h(logged_in_client, app,
 
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    daqui_24h = datetime.now() + timedelta(hours=24, minutes=2)
+    daqui_24h = agora_brasilia() + timedelta(hours=24, minutes=2)
 
     escala = criar_escala_com_funcoes_padrao(
         ministerio_id=ministerio.id, nome="Culto Teste", departamento="Louvor",
@@ -57,7 +59,7 @@ def test_nao_notifica_fora_da_janela(logged_in_client, app, db):
 
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    daqui_3_dias = datetime.now() + timedelta(days=3)
+    daqui_3_dias = agora_brasilia() + timedelta(days=3)
 
     escala = criar_escala_com_funcoes_padrao(
         ministerio_id=ministerio.id, nome="Culto Distante", departamento="Louvor",
@@ -77,7 +79,7 @@ def test_nao_notifica_duas_vezes_para_a_mesma_janela(logged_in_client, app, db):
 
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    daqui_16h = datetime.now() + timedelta(hours=16)
+    daqui_16h = agora_brasilia() + timedelta(hours=16)
 
     escala = criar_escala_com_funcoes_padrao(
         ministerio_id=ministerio.id, nome="Culto Teste 16h", departamento="Louvor",
@@ -106,9 +108,9 @@ def test_agendador_materializa_e_notifica_turno_de_rodizio_dentro_da_janela_24h(
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     # microsegundos zerados -- um formulario real nunca envia microssegundos,
-    # isso so evita ruido artificial deste fixture de teste (datetime.now()
+    # isso so evita ruido artificial deste fixture de teste (agora_brasilia()
     # carrega microssegundos, Mongo so guarda precisao de milissegundos).
-    daqui_24h = (datetime.now() + timedelta(hours=24, minutes=2)).replace(microsecond=0)
+    daqui_24h = (agora_brasilia() + timedelta(hours=24, minutes=2)).replace(microsecond=0)
 
     turno = TurnoPlantao(
         ministerio_id=ministerio.id, nome="Plantao Recepcao", departamento="Louvor",
@@ -137,7 +139,7 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     # ver comentario equivalente acima (microsegundos zerados de proposito)
-    daqui_16h = (datetime.now() + timedelta(hours=16)).replace(microsecond=0)
+    daqui_16h = (agora_brasilia() + timedelta(hours=16)).replace(microsecond=0)
 
     turno = TurnoPlantao(
         ministerio_id=ministerio.id, nome="Plantao Recepcao", departamento="Louvor",
@@ -158,6 +160,51 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     _verificar_e_notificar(app)
     segunda = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em
     assert segunda == primeira
+
+
+def test_lembrete_de_24h_manda_whatsapp_e_o_de_16h_so_canais_gratuitos(logged_in_client, app, db, monkeypatch):
+    """O template de WhatsApp (cobrado) vai uma vez so, no lembrete de 24h;
+    o de 16h manda so e-mail + sino."""
+    from app.auth.models import User
+
+    templates = []
+    monkeypatch.setattr("app.escala.routes.enviar_whatsapp_template",
+                        lambda destinatario, nome_template, parametros: templates.append(nome_template))
+    usuario = User.objects(username="ana").first()
+    ministerio = _criar_ministerio_teste(usuario.id)
+    for horas, nome in ((24, "Culto 24h"), (16, "Culto 16h")):
+        quando = agora_brasilia() + timedelta(hours=horas, minutes=2)
+        escala = criar_escala_com_funcoes_padrao(
+            ministerio_id=ministerio.id, nome=nome, departamento="Louvor",
+            data=quando.date(), horario=quando.time(),
+        )
+        funcao = _escalar_membro(escala, "Baixo", nome_membro=nome)
+        Membro.objects(id=funcao.membro_id).update(set__telefone="(11) 98765-4321")
+
+    _verificar_e_notificar(app)
+
+    assert templates == ["pibachurch_escalado"]  # so a de 24h
+    assert Escala.objects(nome="Culto 16h").first().notificado_16h_em is not None
+
+
+def test_agendador_usa_hora_de_brasilia_e_nao_a_do_servidor(logged_in_client, app, db):
+    """Escala gravada em hora de Brasilia: um horario "daqui a 24h" contado a
+    partir da hora UTC (o que o servidor do Azure enxerga com datetime.now())
+    fica, em Brasilia, a 27h -- fora da janela; nao pode ser avisado ainda."""
+    from app.auth.models import User
+
+    usuario = User.objects(username="ana").first()
+    ministerio = _criar_ministerio_teste(usuario.id)
+    em_utc = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24)
+    escala = criar_escala_com_funcoes_padrao(
+        ministerio_id=ministerio.id, nome="Culto UTC", departamento="Louvor",
+        data=em_utc.date(), horario=em_utc.time(),
+    )
+    _escalar_membro(escala, "Baixo")
+
+    _verificar_e_notificar(app)
+
+    assert Escala.objects(id=escala.id).first().notificado_24h_em is None
 
 
 def test_escala_sem_data_e_ignorada_pelo_agendador(logged_in_client, app, db):
