@@ -1257,9 +1257,9 @@ def enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo):
     escalados = [f for f in escala.funcoes if f.membro_id is not None]
 
     data_antiga_texto = data_antiga.strftime("%d/%m/%Y") if data_antiga else "sem data definida"
-    horario_antigo_texto = f" as {horario_antigo.strftime('%H:%M')}" if horario_antigo else ""
+    horario_antigo_texto = f" às {horario_antigo.strftime('%H:%M')}" if horario_antigo else ""
     data_nova_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "sem data definida"
-    horario_novo_texto = f" as {escala.horario.strftime('%H:%M')}" if escala.horario else ""
+    horario_novo_texto = f" às {escala.horario.strftime('%H:%M')}" if escala.horario else ""
 
     mensagem = (
         f"A data/horario de {escala.nome} mudou de {data_antiga_texto}{horario_antigo_texto} "
