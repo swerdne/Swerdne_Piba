@@ -14,7 +14,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, avatar_membro with context %}
 {% block content %}
 <div id="comunidade-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -98,7 +98,7 @@
                         {% endfor %}
                     </div>
                     <div>
-                        {{ form.telefone(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="Telefone") }}
+                        {{ form.telefone(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="(DD) 9XXXX-XXXX (opcional)", maxlength=15, inputmode="tel", autocomplete="tel", **{"aria-label": "Telefone com DDD", "data-mascara-telefone": ""}) }}
                         {% for erro in form.telefone.errors %}
                             <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
                         {% endfor %}
@@ -130,15 +130,16 @@
             <div class="space-y-2">
                 {% for membro in diretorio %}
                 <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
-                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
-                        {{ membro.iniciais }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ membro.nome }}</p>
-                        <p class="text-xs {{ tema.text_secondary }} truncate">
-                            {{ membro.email or '' }}{% if membro.email and membro.telefone %} &middot; {% endif %}{{ membro.telefone or '' }}
-                        </p>
-                    </div>
+                    <a href="{{ url_for('comunidade.perfil_membro', comunidade_id=comunidade.id, membro_id=membro.id) }}"
+                       class="flex flex-1 min-w-0 items-center gap-3" title="Abrir perfil">
+                        {{ avatar_membro(tema, membro, "w-10 h-10 text-xs") }}
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate hover:underline">{{ membro.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">
+                                {{ membro.email or '' }}{% if membro.email and membro.telefone %} &middot; {% endif %}{{ membro.telefone or '' }}
+                            </p>
+                        </div>
+                    </a>
                     <a href="{{ url_for('comunidade.disponibilidade', comunidade_id=comunidade.id, membro_id=membro.id) }}"
                        title="Ciclos de disponibilidade" aria-label="Ciclos de disponibilidade"
                        class="{{ tema.text_secondary }} {{ tema.text_hover }} transition shrink-0">

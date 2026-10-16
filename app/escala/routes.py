@@ -632,6 +632,7 @@ def adicionar_membro(funcao_id):
     flash(f"{membro.nome} adicionado(a) em {funcao.nome}.", "success")
     for aviso in avisos_conflito:
         flash(aviso, "warning")
+    _avisar_recem_escalado(funcao)
     return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
 
@@ -705,6 +706,7 @@ def adicionar_convidado(funcao_id):
     flash(f"{membro.nome} adicionado(a) como convidado(a) em {funcao.nome}.", "success")
     for aviso in avisos_conflito:
         flash(aviso, "warning")
+    _avisar_recem_escalado(funcao)
     return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
 
@@ -1042,6 +1044,7 @@ def aprovar_troca(funcao_id):
             ).save()
 
     flash(f"Troca aprovada: {novo_membro.nome} assume {nome_funcao}.", "success")
+    _avisar_recem_escalado(funcao)
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
 
@@ -1154,13 +1157,15 @@ def _disparar_notificacoes_em_paralelo(tarefas):
     return resultados
 
 
-def enviar_notificacoes_da_escala(escala):
+def enviar_notificacoes_da_escala(escala, funcoes=None):
     """Notifica todo mundo escalado numa escala (por e-mail/SMS/app).
 
     Reutilizada tanto pelo botao manual quanto pelo agendador automatico
-    (24h/16h antes do evento) -- ver app/escala/agendador.py.
+    (24h/16h antes do evento) -- ver app/escala/agendador.py. `funcoes`
+    restringe o envio a essas (ex: so quem acabou de ser escalado, ver
+    _avisar_recem_escalado).
     """
-    escalados = [f for f in escala.funcoes if f.membro_id is not None]
+    escalados = [f for f in (escala.funcoes if funcoes is None else funcoes) if f.membro_id is not None]
     data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
 
     tarefas = [
@@ -1468,7 +1473,14 @@ def notificar_escala(escala_id):
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     resultado = enviar_notificacoes_da_escala(escala)
+    texto, houve_sucesso = _resumo_do_envio(resultado)
+    flash(texto, "success" if houve_sucesso else "danger")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
+
+def _resumo_do_envio(resultado):
+    """(texto pro flash, se algum canal funcionou) de um
+    enviar_notificacoes_da_escala."""
     partes = []
     if resultado["notificacoes_app"]:
         partes.append(f"{resultado['notificacoes_app']} notificacao(oes) no app")
@@ -1491,8 +1503,23 @@ def notificar_escala(escala_id):
         resultado["notificacoes_app"] or resultado["email_enviados"]
         or resultado["sms_enviados"] or resultado["whatsapp_enviados"]
     )
-    flash(", ".join(partes) + "." if partes else "Nada foi enviado.", "success" if houve_sucesso else "danger")
-    return redirect(url_for("escala.detalhe", escala_id=escala.id))
+    return (", ".join(partes) + "." if partes else "Nada foi enviado."), houve_sucesso
+
+
+def _avisar_recem_escalado(funcao):
+    """Avisa (e-mail/SMS/WhatsApp/sino, igual ao "Notificar") SO a pessoa que
+    acabou de ser escalada nesta funcao -- chamado por adicionar_membro,
+    adicionar_convidado e aprovar_troca. Escala cancelada ou ja passada nao
+    avisa. Escalas geradas pelo rodizio (plantao) nao passam por aqui de
+    proposito: o sync materializa 6 meses de uma vez e mandaria dezenas de
+    avisos; essas recebem o lembrete normal de 24h/16h antes."""
+    escala = funcao.escala
+    hoje = (datetime.now(timezone.utc) - timedelta(hours=3)).date()
+    if escala.cancelada or (escala.data and escala.data < hoje):
+        return
+    texto, houve_sucesso = _resumo_do_envio(enviar_notificacoes_da_escala(escala, funcoes=[funcao]))
+    flash(("Aviso pra pessoa: " if houve_sucesso else "Aviso pra pessoa nao enviado: ") + texto,
+          "success" if houve_sucesso else "warning")
 
 
 @bp.route("/<int:escala_id>/excluir", methods=["POST"])

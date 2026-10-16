@@ -1,6 +1,6 @@
 """Controller (C do MVC): rotas do modulo comunidade."""
 import calendar
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 from flask import render_template, redirect, url_for, flash, request, abort, session
 from flask_login import login_required, current_user
@@ -9,7 +9,10 @@ from app.imagens import salvar_imagem, remover_imagem
 from app.extensions import limiter
 from app.db_utils import delete_cascade, precarregar, primeiro_ou_404
 from app.comunidade import bp
-from app.comunidade.forms import ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm
+from app.comunidade.forms import (
+    ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm, FotoMembroForm,
+    TelefoneMembroForm,
+)
 from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade
 from app.ministerio.models import Ministerio
 from app.auth.models import User
@@ -493,6 +496,148 @@ def membros(comunidade_id):
     )
 
 
+def _membro_visivel_ou_404(comunidade_id, membro_id):
+    """(comunidade, membro, pode_editar) pro perfil de uma pessoa do
+    diretorio. Ver: admin da comunidade ou lider de algum ministerio dela
+    (quem monta escala precisa do contato). Editar os dados: so admin."""
+    from app.ministerio.routes import _eh_lider_do_ministerio
+
+    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
+    membro = primeiro_ou_404(Membro.objects(id=membro_id, comunidade_id=comunidade.id))
+    if _eh_admin_da_comunidade(comunidade, current_user):
+        return comunidade, membro, True
+    if any(_eh_lider_do_ministerio(m, current_user) for m in Ministerio.objects(comunidade_id=comunidade.id)):
+        return comunidade, membro, False
+    abort(404)
+
+
+@bp.route("/<int:comunidade_id>/membros/<int:membro_id>", methods=["GET", "POST"])
+@login_required
+def perfil_membro(comunidade_id, membro_id):
+    """Perfil de uma pessoa do diretorio: contato (com atalho pro WhatsApp e
+    pra conversa na caixa de entrada), conta vinculada, proximas escalas,
+    resumo dos ultimos 90 dias e, pra admin, editar nome/telefone/e-mail."""
+    from app.escala.models import RegistroTroca, TIPO_FUNCAO
+    from app.sms import normalizar_telefone
+    from app.whatsapp_recebidas import MensagemWhatsapp
+
+    from app.telefones import pode_editar_telefone, pode_ver_telefone
+
+    comunidade, membro, pode_editar = _membro_visivel_ou_404(comunidade_id, membro_id)
+    url_perfil = url_for("comunidade.perfil_membro", comunidade_id=comunidade.id, membro_id=membro.id)
+    form = MembroDiretorioForm(obj=membro)
+    # Privacidade do telefone (app/telefones.py): sem permissao, o numero nem
+    # chega no template.
+    ve_telefone = pode_ver_telefone(membro, current_user)
+    edita_telefone = not pode_editar and pode_editar_telefone(membro, current_user)
+    telefone_form = TelefoneMembroForm(obj=membro) if edita_telefone else None
+
+    if request.method == "POST" and request.form.get("so_telefone"):
+        # Lider de um ministerio da pessoa: so o telefone.
+        if not edita_telefone:
+            abort(404)
+        if telefone_form.validate_on_submit():
+            membro.telefone = (telefone_form.telefone.data or "").strip() or None
+            membro.save()
+            flash("Telefone atualizado.", "success")
+            return redirect(url_perfil)
+        erros = [erro for lista in telefone_form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel salvar.", "danger")
+    elif request.method == "POST":
+        if not pode_editar:
+            abort(404)
+        if form.validate_on_submit():
+            membro.nome = form.nome.data.strip()
+            membro.telefone = (form.telefone.data or "").strip() or None
+            membro.email = (form.email.data or "").strip() or None
+            membro.save()
+            flash("Dados atualizados.", "success")
+            return redirect(url_perfil)
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel salvar.", "danger")
+
+    hoje = (datetime.now(timezone.utc) - timedelta(hours=3)).date()  # Brasilia
+    funcoes = list(Funcao.objects(membro_id=membro.id, tipo=TIPO_FUNCAO))
+    escalas = {e.id: e for e in Escala.objects(id__in=list({f.escala_id for f in funcoes}))}
+    ministerios = {m.id: m for m in Ministerio.objects(id__in=list({e.ministerio_id for e in escalas.values()}))}
+
+    proximas, passadas = [], []
+    for f in funcoes:
+        escala = escalas.get(f.escala_id)
+        if escala is None or escala.cancelada or not escala.data:
+            continue
+        item = {"funcao": f, "escala": escala, "ministerio": ministerios.get(escala.ministerio_id)}
+        if escala.data >= hoje:
+            proximas.append(item)
+        elif escala.data >= hoje - timedelta(days=90):
+            passadas.append(item)
+    ordem = lambda i: (i["escala"].data, i["escala"].horario or time.min)  # noqa: E731
+    proximas.sort(key=ordem)
+    passadas.sort(key=ordem, reverse=True)
+
+    conta = User.objects(email__iexact=membro.email).first() if membro.email else None
+    telefone = normalizar_telefone(membro.telefone) if ve_telefone else None
+    conversa = MensagemWhatsapp.objects(membro_ids=membro.id, comunidade_ids=comunidade.id).first()
+
+    return render_template(
+        "comunidade/perfil_membro.html",
+        comunidade=comunidade,
+        membro=membro,
+        pode_editar=pode_editar,
+        form=form,
+        telefone_visivel=membro.telefone if ve_telefone else None,
+        tem_telefone_oculto=bool(membro.telefone) and not ve_telefone,
+        telefone_form=telefone_form,
+        foto_form=FotoMembroForm(),
+        acao_form=AcaoForm(),
+        conta=conta,
+        whatsapp_link=f"https://wa.me/{telefone.lstrip('+')}" if telefone else None,
+        conversa_telefone=conversa.telefone if conversa and pode_editar else None,
+        proximas=proximas,
+        resumo={
+            "escalas": len(passadas),
+            "presentes": sum(1 for i in passadas if i["funcao"].status == "presente"),
+            "trocas": RegistroTroca.objects(membro_id=membro.id,
+                                            criado_em__gte=datetime.now(timezone.utc) - timedelta(days=90)).count(),
+        },
+        passadas=passadas[:10],
+        status_labels=STATUS_LABELS,
+        status_cores=STATUS_CORES,
+        hoje=hoje,
+    )
+
+
+@bp.route("/<int:comunidade_id>/membros/<int:membro_id>/foto", methods=["POST"])
+@login_required
+def foto_membro(comunidade_id, membro_id):
+    """Envia (ou, com remover=1, tira) a foto de uma pessoa do diretorio --
+    so admin. Sem foto propria, o perfil usa a da conta dela no site."""
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    membro = primeiro_ou_404(Membro.objects(id=membro_id, comunidade_id=comunidade.id))
+    url_perfil = url_for("comunidade.perfil_membro", comunidade_id=comunidade.id, membro_id=membro.id)
+
+    if request.form.get("remover"):
+        if not AcaoForm().validate_on_submit():
+            abort(400)
+        remover_imagem(membro.foto)
+        membro.foto = None
+        membro.save()
+        flash("Foto removida.", "success")
+        return redirect(url_perfil)
+
+    form = FotoMembroForm()
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel salvar a foto.", "danger")
+        return redirect(url_perfil)
+    foto_antiga = membro.foto
+    membro.foto = salvar_imagem(form.foto.data)
+    membro.save()
+    remover_imagem(foto_antiga)
+    flash("Foto atualizada.", "success")
+    return redirect(url_perfil)
+
+
 @bp.route("/<int:comunidade_id>/membros/<int:membro_id>/excluir", methods=["POST"])
 @login_required
 def excluir_membro(comunidade_id, membro_id):
@@ -508,6 +653,7 @@ def excluir_membro(comunidade_id, membro_id):
         flash(f"Remova {membro.nome} das escalas antes de excluir do diretorio.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
+    remover_imagem(membro.foto)
     delete_cascade(membro)
     flash(f"{membro.nome} removido(a) do diretorio.", "success")
     return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
@@ -720,11 +866,16 @@ def lideres(comunidade_id):
         por_usuario.values(),
         key=lambda item: (item["usuario"].name or item["usuario"].username or item["usuario"].email).lower(),
     )
+    from app.telefones import pode_ver_telefone
+
     for item in lista_lideres:
-        membro_vinculado = Membro.objects(
-            comunidade_id=comunidade.id, email=item["usuario"].email
-        ).first()
-        item["telefone"] = membro_vinculado.telefone if membro_vinculado else None
+        membro_vinculado = Membro.da_conta(item["usuario"].email, comunidade_id=comunidade.id).first()
+        # Telefone so pra quem pode ver (app/telefones.py) -- esta tela abre
+        # pra qualquer pessoa da comunidade, e membro comum nao ve numero.
+        item["telefone"] = (
+            membro_vinculado.telefone
+            if membro_vinculado and pode_ver_telefone(membro_vinculado, current_user) else None
+        )
 
     return render_template("comunidade/lideres.html", comunidade=comunidade, eh_dono=eh_dono, lideres=lista_lideres)
 

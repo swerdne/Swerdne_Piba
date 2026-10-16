@@ -192,3 +192,14 @@ w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left {{ 'text-
 Precisa de import "with context" (dados_tutorial vem do context processor). #}
 <script type="application/json" id="tutorial-dados">{{ dados_tutorial(chave) | tojson }}</script>
 {% endmacro %}
+
+{# Foto da pessoa do diretorio (Membro.foto_exibida: a enviada no perfil ou a
+   da conta no site) ou, sem foto, as iniciais. `tamanho` = classes w-/h-/texto. #}
+{% macro avatar_membro(tema, membro, tamanho="w-8 h-8 text-xs") %}
+{%- set foto = membro.foto_exibida -%}
+{% if foto %}
+<img src="{{ foto }}" alt="" loading="lazy" class="{{ tamanho }} rounded-full object-cover shrink-0">
+{% else %}
+<div class="{{ tamanho }} rounded-full {{ tema.secondary_bg }} flex items-center justify-center font-semibold {{ tema.secondary_text }} shrink-0">{{ membro.iniciais }}</div>
+{% endif %}
+{%- endmacro %}

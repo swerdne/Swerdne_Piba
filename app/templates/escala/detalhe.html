@@ -10,7 +10,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial, avatar_membro with context %}
 {% from "ministerio/_envio.html" import campos_envio %}
 {% block content %}
 <div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
@@ -446,10 +446,13 @@
                     {% if funcao.membro_id %}
                         {% set pessoa = funcao.membro %}
                         <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full">
-                            <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
-                                {{ pessoa.iniciais }}
-                            </div>
+                            {{ avatar_membro(tema, pessoa) }}
+                            {% if eh_dono %}
+                            <a href="{{ url_for('comunidade.perfil_membro', comunidade_id=pessoa.comunidade_id, membro_id=pessoa.id) }}"
+                               title="Abrir perfil" class="text-sm {{ tema.text_primary }} hover:underline truncate max-w-[9rem] sm:max-w-none">{{ pessoa.nome }}</a>
+                            {% else %}
                             <span class="text-sm {{ tema.text_primary }} truncate max-w-[9rem] sm:max-w-none">{{ pessoa.nome }}</span>
+                            {% endif %}
                             {% if funcao.eh_convidado %}
                             <span class="text-[10px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-1.5 py-0.5 shrink-0"
                                   title="Participacao pontual -- nao e membro fixo da equipe">Convidado</span>

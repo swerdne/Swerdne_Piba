@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 
 from app.extensions import limiter
 from app.main import bp
-from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm, PrivacidadeForm
+from app.main.forms import FotoPerfilForm, TemaForm, AcaoForm, TrocarSenhaForm, NomeForm, PrivacidadeForm, TelefoneForm
 from app.main.themes import THEMES, obter_tema
 from app.notificacoes import Notificacao
 from app.db_utils import por_requisicao, precarregar
@@ -345,7 +345,11 @@ def dashboard():
     tema_form = TemaForm(tema=current_user.theme)
     senha_form = TrocarSenhaForm()
     nome_form = NomeForm(nome=nome_completo)
-    privacidade_form = PrivacidadeForm(exige_aprovacao_grupos=current_user.exige_aprovacao_grupos)
+    privacidade_form = PrivacidadeForm(
+        exige_aprovacao_grupos=current_user.exige_aprovacao_grupos,
+        telefone_visivel_lider=current_user.telefone_visivel_lider is not False,
+    )
+    telefone_form = TelefoneForm(telefone=current_user.telefone)
     acao_form = AcaoForm()
 
     notificacoes = list(
@@ -397,6 +401,7 @@ def dashboard():
         tem_senha=bool(current_user.password_hash),
         nome_form=nome_form,
         privacidade_form=privacidade_form,
+        telefone_form=telefone_form,
         acao_form=acao_form,
         notificacoes=notificacoes,
         notificacoes_nao_lidas=notificacoes_nao_lidas,
@@ -502,12 +507,36 @@ def salvar_privacidade():
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.exige_aprovacao_grupos = bool(form.exige_aprovacao_grupos.data)
+    current_user.telefone_visivel_lider = bool(form.telefone_visivel_lider.data)
     current_user.save()
 
     if current_user.exige_aprovacao_grupos:
         flash("Pronto! A partir de agora, voce so entra em grupos depois de aceitar o convite.", "success")
     else:
         flash("Pronto! Admins e lideres podem adicionar voce direto aos grupos.", "success")
+    if not current_user.telefone_visivel_lider:
+        flash("Seu telefone fica escondido dos lideres de ministerio (o admin da comunidade ainda ve).", "success")
+    return redirect(url_for("main.dashboard") + "#config")
+
+
+@bp.route("/perfil/telefone", methods=["POST"])
+@login_required
+def salvar_telefone():
+    """O proprio usuario cadastra/edita/apaga o seu telefone (opcional). Vale
+    tambem pros diretorios das comunidades em que ele esta (mesmo e-mail),
+    que e de onde saem os avisos -- ver app/telefones.py."""
+    from app.telefones import propagar_telefone_da_conta
+
+    form = TelefoneForm()
+    if not form.validate_on_submit():
+        erros = [erro for lista in form.errors.values() for erro in lista]
+        flash(erros[0] if erros else "Nao foi possivel salvar o telefone.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+
+    current_user.telefone = (form.telefone.data or "").strip() or None
+    current_user.save()
+    propagar_telefone_da_conta(current_user)
+    flash("Telefone salvo!" if current_user.telefone else "Telefone removido.", "success")
     return redirect(url_for("main.dashboard") + "#config")
 
 
@@ -569,6 +598,8 @@ def baixar_dados():
         "foto_perfil": current_user.foto_perfil,
         "tema": current_user.theme,
         "exige_aprovacao_para_grupos": bool(current_user.exige_aprovacao_grupos),
+        "telefone": current_user.telefone,
+        "telefone_visivel_para_lideres": current_user.telefone_visivel_lider is not False,
         "login_google_vinculado": bool(current_user.google_id),
         "login_senha_vinculado": bool(current_user.password_hash),
     }

@@ -2,9 +2,10 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
 from wtforms import BooleanField, StringField, TextAreaField, SubmitField, RadioField, PasswordField
-from wtforms.validators import DataRequired, Length, EqualTo
+from wtforms.validators import DataRequired, Length, EqualTo, Optional
 
 from app.main.themes import THEMES
+from app.telefones import validar_telefone
 
 
 class ItemForm(FlaskForm):
@@ -36,7 +37,16 @@ class TemaForm(FlaskForm):
 
 class PrivacidadeForm(FlaskForm):
     exige_aprovacao_grupos = BooleanField("Exigir minha aprovacao antes de ser adicionado(a) a um grupo")
+    telefone_visivel_lider = BooleanField("Lideres dos meus ministerios podem ver meu telefone")
     submit = SubmitField("Salvar privacidade")
+
+
+class TelefoneForm(FlaskForm):
+    telefone = StringField(
+        "Telefone (WhatsApp)",
+        validators=[Optional(), Length(max=30), validar_telefone],
+    )
+    submit = SubmitField("Salvar telefone")
 
 
 class NomeForm(FlaskForm):

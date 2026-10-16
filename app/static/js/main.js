@@ -12,6 +12,31 @@ document.querySelectorAll("form[data-confirm-excluir]").forEach(function (form) 
     });
 });
 
+// Mascara de telefone brasileiro: <input data-mascara-telefone>. Vai
+// formatando enquanto digita -- "(DD) 9XXXX-XXXX" (celular, 11 digitos) ou
+// "(DD) XXXX-XXXX" (fixo, 10). Tira o +55 colado. A validacao de verdade e
+// no servidor (app/telefones.py); aqui e so pra ajudar a digitar.
+(function () {
+    function mascarar(valor) {
+        var d = (valor || "").replace(/\D/g, "");
+        if (d.length > 11 && d.indexOf("55") === 0) d = d.slice(2);
+        d = d.slice(0, 11);
+        if (!d) return "";
+        if (d.length <= 2) return "(" + d;
+        var ddd = "(" + d.slice(0, 2) + ") ", resto = d.slice(2);
+        var corte = d.length === 11 ? 5 : 4;
+        return resto.length > corte ? ddd + resto.slice(0, corte) + "-" + resto.slice(corte) : ddd + resto;
+    }
+    document.querySelectorAll("input[data-mascara-telefone]").forEach(function (campo) {
+        if (campo.value) campo.value = mascarar(campo.value);
+        campo.addEventListener("input", function () {
+            var fim = campo.selectionStart === campo.value.length;
+            campo.value = mascarar(campo.value);
+            if (fim) campo.setSelectionRange(campo.value.length, campo.value.length);
+        });
+    });
+})();
+
 // Menu "⋯" do cabecalho (macro menu_acoes em _macros.html): fecha ao tocar
 // fora dele ou com Esc.
 (function () {

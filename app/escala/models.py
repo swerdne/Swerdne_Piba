@@ -125,6 +125,20 @@ class Membro(SequentialIdDocument):
     nome = mongoengine.StringField(required=True, max_length=120)
     telefone = mongoengine.StringField(max_length=30)
     email = mongoengine.StringField(max_length=120)
+    # Foto enviada pelo admin no perfil (comunidade.foto_membro) -- URL de
+    # app/imagens.py. Sem ela, vale a foto da conta do site (ver foto_exibida).
+    foto = mongoengine.StringField(max_length=500)
+
+    @property
+    def foto_exibida(self):
+        """Foto enviada pro membro ou, sem ela, a da conta (User) com o mesmo
+        e-mail. Uma consulta de contas por comunidade por requisicao, pra
+        lista de membros/escala nao fazer uma por pessoa."""
+        if self.foto:
+            return self.foto
+        if not self.email:
+            return None
+        return _fotos_das_contas(self.comunidade_id).get(self.email.strip().lower())
 
     @property
     def comunidade(self):
@@ -169,6 +183,25 @@ class Membro(SequentialIdDocument):
 
     def __repr__(self):
         return f"<Membro {self.nome}>"
+
+
+def _fotos_das_contas(comunidade_id):
+    """{email em minusculas: foto_perfil} das contas cujo e-mail esta no
+    diretorio da comunidade (so as que tem foto)."""
+    from app.auth.models import User
+    from app.db_utils import por_requisicao
+
+    def carregar():
+        emails = {m.email.strip() for m in Membro.objects(comunidade_id=comunidade_id, email__nin=[None, ""]).only("email")}
+        if not emails:
+            return {}
+        candidatos = list(emails | {e.lower() for e in emails})
+        return {
+            u.email.strip().lower(): u.foto_perfil
+            for u in User.objects(email__in=candidatos, foto_perfil__nin=[None, ""]).only("email", "foto_perfil")
+        }
+
+    return por_requisicao(("fotos_das_contas", comunidade_id), carregar)
 
 
 class CicloDisponibilidade(SequentialIdDocument):

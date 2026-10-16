@@ -42,6 +42,14 @@ class User(UserMixin, SequentialIdDocument):
     # Ver app/convites/adicao.py.
     exige_aprovacao_grupos = mongoengine.BooleanField(default=False)
 
+    # Telefone/WhatsApp que a propria pessoa cadastra no Perfil (formato
+    # "(DD) 9XXXX-XXXX", ver app/telefones.py) -- salvar copia pro
+    # Membro.telefone de cada diretorio com o mesmo e-mail. Desligar
+    # telefone_visivel_lider esconde o numero dos lideres de ministerio
+    # (admin da comunidade continua vendo); os avisos automaticos usam sempre.
+    telefone = mongoengine.StringField(max_length=30)
+    telefone_visivel_lider = mongoengine.BooleanField(default=True)
+
     # Acesso total a plataforma (gerencia qualquer Comunidade/Ministerio,
     # bypassa toda checagem de posse/papel) -- NUNCA atribuivel por convite
     # comum (ver app/convites/CLAUDE.md), so pelo comando

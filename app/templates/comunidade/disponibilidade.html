@@ -7,6 +7,12 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     #comunidade-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    /* Campo de data no iPhone/Android ignora width e estoura o card (largura
+       minima propria do controle nativo) -- sem aparencia nativa ele obedece. */
+    #comunidade-app input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; min-height: 2.5rem; }
+    #comunidade-app input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+    #comunidade-app details > summary { list-style: none; }
+    #comunidade-app details > summary::-webkit-details-marker { display: none; }
 </style>
 {% endblock %}
 
@@ -39,9 +45,9 @@
             </h2>
 
             {% if not ciclos %}
-            <div class="text-center py-10 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl">
-                <i class="fa-solid fa-calendar-days text-3xl {{ tema.text_secondary }}"></i>
-                <p class="mt-3 {{ tema.text_secondary }}">Nenhum ciclo cadastrado ainda.</p>
+            <div class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl">
+                <i class="fa-solid fa-calendar-days {{ tema.text_secondary }}"></i>
+                <p class="text-sm {{ tema.text_secondary }}">Nenhum ciclo cadastrado ainda.</p>
             </div>
             {% endif %}
 
@@ -76,44 +82,57 @@
             </div>
         </div>
 
-        <div>
-            <h2 class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Novo ciclo</h2>
+        {% set CAMPO = tema.page_bg ~ " block w-full min-w-0 border " ~ tema.card_border ~ " rounded-xl px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+        {% set ROTULO = "block text-xs font-semibold " ~ tema.text_secondary ~ " mb-1" %}
+        <!-- Novo ciclo: recolhido por padrao (abre sozinho se voltou com erro) -->
+        <details class="group {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl" {{ 'open' if form.errors }}>
+            <summary class="flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer select-none">
+                <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
+                    <i class="fa-solid fa-plus {{ tema.accent_text }}"></i>Novo ciclo
+                </span>
+                <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition group-open:rotate-180"></i>
+            </summary>
             <form method="POST" action="{{ url_for('comunidade.nova_disponibilidade', comunidade_id=comunidade.id, membro_id=membro.id) }}"
-                  class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-xl p-4">
+                  class="space-y-4 px-4 pb-4 border-t {{ tema.card_border }} pt-4">
                 {{ form.hidden_tag() }}
-                <div class="grid sm:grid-cols-2 gap-3">
-                    <div>
-                        {{ form.nome(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="Ex: Turno da empresa") }}
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="min-w-0">
+                        <label for="{{ form.nome.id }}" class="{{ ROTULO }}">Nome do ciclo</label>
+                        {{ form.nome(class_=CAMPO, placeholder="Ex: Turno da empresa") }}
                         {% for erro in form.nome.errors %}
                             <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
                         {% endfor %}
                     </div>
-                    <div>
-                        {{ form.data_inicio(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    <div class="min-w-0">
+                        <label for="{{ form.data_inicio.id }}" class="{{ ROTULO }}">Data de início do ciclo</label>
+                        {{ form.data_inicio(class_=CAMPO) }}
+                        <p class="text-[11px] {{ tema.text_secondary }} mt-1">Primeiro dia do primeiro segmento.</p>
                         {% for erro in form.data_inicio.errors %}
                             <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
                         {% endfor %}
                     </div>
                 </div>
 
-                <div>
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-semibold {{ tema.text_secondary }} uppercase tracking-wide">Segmentos do ciclo</span>
+                <!-- Segmentos + ajuda agrupados num bloco so -->
+                <div class="rounded-xl border {{ tema.card_border }} p-3 space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide">Segmentos do ciclo</span>
                         <button type="button" id="segmento-adicionar"
-                                class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                                class="text-xs font-semibold {{ tema.accent_text }} hover:underline shrink-0">
                             <i class="fa-solid fa-plus mr-1"></i>Adicionar segmento
                         </button>
                     </div>
-                    <p class="text-xs {{ tema.text_secondary }} mb-2">
-                        Ex.: "Trabalho" 4 dias (indisponivel) + "Folga" 4 dias -- os segmentos se repetem
-                        nessa ordem, a partir da data de inicio, pra sempre.
+                    <p class="text-xs leading-relaxed {{ tema.text_secondary }}">
+                        Ex.: <span class="font-semibold {{ tema.text_primary }}">Trabalho</span>, 4 dias, indisponível +
+                        <span class="font-semibold {{ tema.text_primary }}">Folga</span>, 4 dias.
+                        Os segmentos se repetem nessa ordem a partir da data de início, sem fim.
                     </p>
                     <div id="segmentos-lista" class="space-y-2"></div>
                 </div>
 
-                {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-4 py-2 rounded-lg transition") }}
+                {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full sm:w-auto text-white text-sm font-semibold px-6 py-2.5 rounded-full transition") }}
             </form>
-        </div>
+        </details>
 
     </main>
     {{ nav_inferior(tema, 'comunidades') }}
@@ -133,48 +152,73 @@
             });
         }
 
+        // Uma linha por segmento: nome | dias | Indisponivel | lixeira. No
+        // celular o nome ocupa a linha de cima e o resto fica embaixo, com a
+        // lixeira sempre na ponta direita (nunca numa linha sozinha).
+        var ROTULO = 'block text-[11px] font-semibold {{ tema.text_secondary }} mb-1';
+        var CAMPO = 'block w-full min-w-0 h-10 {{ tema.card_bg }} border {{ tema.card_border }} rounded-lg px-3 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}';
+        var contador = 0;
+
+        function campoComRotulo(classeCaixa, texto, campo) {
+            var caixa = document.createElement('div');
+            caixa.className = classeCaixa;
+            var rotulo = document.createElement('label');
+            rotulo.className = ROTULO;
+            rotulo.textContent = texto;
+            rotulo.htmlFor = campo.id;
+            caixa.appendChild(rotulo);
+            caixa.appendChild(campo);
+            return caixa;
+        }
+
         function novaLinha(nomePreenchido, diasPreenchido, indisponivelPreenchido) {
+            contador += 1;
             var linha = document.createElement('div');
             linha.setAttribute('data-segmento-linha', '');
-            linha.className = 'flex flex-wrap items-center gap-2';
+            linha.className = 'flex flex-wrap sm:flex-nowrap items-end gap-2 {{ tema.page_bg }} rounded-xl p-2.5';
 
             var campoNome = document.createElement('input');
             campoNome.type = 'text';
-            campoNome.placeholder = 'Nome (ex: Trabalho)';
+            campoNome.id = 'segmento-nome-' + contador;
+            campoNome.placeholder = 'Ex: Trabalho';
+            campoNome.maxLength = 40;
             campoNome.value = nomePreenchido || '';
             campoNome.setAttribute('data-segmento-nome', '');
-            campoNome.className = 'flex-1 min-w-[8rem] {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}';
+            campoNome.className = CAMPO;
 
             var campoDias = document.createElement('input');
             campoDias.type = 'number';
+            campoDias.id = 'segmento-dias-' + contador;
             campoDias.min = '1';
-            campoDias.placeholder = 'Dias';
+            campoDias.inputMode = 'numeric';
+            campoDias.placeholder = '4';
             campoDias.value = diasPreenchido || '';
             campoDias.setAttribute('data-segmento-dias', '');
-            campoDias.className = 'w-20 {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}';
+            campoDias.className = CAMPO;
 
             var rotuloIndisponivel = document.createElement('label');
-            rotuloIndisponivel.className = 'flex items-center gap-1.5 text-xs {{ tema.text_secondary }} shrink-0';
+            rotuloIndisponivel.className = 'flex items-center gap-1.5 h-10 text-xs font-medium {{ tema.text_primary }} cursor-pointer shrink-0';
             var campoIndisponivel = document.createElement('input');
             campoIndisponivel.type = 'checkbox';
             campoIndisponivel.checked = indisponivelPreenchido !== false;
             campoIndisponivel.setAttribute('data-segmento-indisponivel', '');
             campoIndisponivel.className = 'w-4 h-4 rounded';
             rotuloIndisponivel.appendChild(campoIndisponivel);
-            rotuloIndisponivel.appendChild(document.createTextNode('Indisponivel'));
+            rotuloIndisponivel.appendChild(document.createTextNode('Indisponível'));
 
             var botaoRemover = document.createElement('button');
             botaoRemover.type = 'button';
             botaoRemover.setAttribute('aria-label', 'Remover segmento');
-            botaoRemover.className = 'text-red-500 hover:text-red-400 transition shrink-0';
+            botaoRemover.title = 'Remover segmento';
+            botaoRemover.className = 'ml-auto w-10 h-10 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10 transition shrink-0';
             botaoRemover.innerHTML = '<i class="fa-solid fa-trash"></i>';
             botaoRemover.addEventListener('click', function () {
                 linha.remove();
                 renumerar();
             });
 
-            linha.appendChild(campoNome);
-            linha.appendChild(campoDias);
+            linha.appendChild(campoComRotulo('w-full sm:w-auto sm:flex-1 min-w-0', 'Nome do segmento', campoNome));
+            linha.appendChild(campoComRotulo('w-20 shrink-0', 'Dias', campoDias));
             linha.appendChild(rotuloIndisponivel);
             linha.appendChild(botaoRemover);
             lista.appendChild(linha);

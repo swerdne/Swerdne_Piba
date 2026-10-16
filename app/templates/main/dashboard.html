@@ -320,6 +320,18 @@
                             <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ email }}</p>
                         </div>
                     </div>
+                    <!-- Telefone (so a propria pessoa ve aqui; privacidade em app/telefones.py) -->
+                    <div class="flex items-center gap-3 py-3.5">
+                        <svg class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"></rect><path d="M11 18h2"></path></svg>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] {{ tema.text_secondary }}">Telefone (WhatsApp)</p>
+                            <p class="text-sm font-semibold {{ tema.text_primary if current_user.telefone else tema.text_secondary }} truncate">{{ current_user.telefone or "Não cadastrado" }}</p>
+                        </div>
+                        <button type="button" data-toggle-alvo="form-telefone"
+                                class="text-xs font-semibold {{ tema.accent_text }} hover:underline shrink-0">
+                            {{ "Editar" if current_user.telefone else "Cadastrar" }}
+                        </button>
+                    </div>
                     <div class="flex items-center gap-3 py-3.5">
                         <svg class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>
                         <div class="min-w-0">
@@ -335,6 +347,19 @@
                     {{ nome_form.nome.label(class_="block text-sm font-medium " ~ tema.text_primary) }}
                     {{ nome_form.nome(class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
                     {{ nome_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
+                </form>
+
+                <form method="POST" action="{{ url_for('main.salvar_telefone') }}" id="form-telefone"
+                      class="hidden mt-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                    {{ telefone_form.hidden_tag() }}
+                    {{ telefone_form.telefone.label(class_="block text-sm font-medium " ~ tema.text_primary) }}
+                    {{ telefone_form.telefone(class_="block w-full rounded-xl border " ~ tema.card_border ~ " " ~ tema.page_bg ~ " px-3 py-2 text-sm " ~ tema.text_primary, placeholder="(DD) 9XXXX-XXXX", maxlength=15, inputmode="tel", autocomplete="tel", **{"data-mascara-telefone": ""}) }}
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        Opcional. Com DDD, de preferência o do WhatsApp: é por ele que chegam os avisos de escala.
+                        Só você, o admin da comunidade e{% if not current_user.telefone_visivel_lider is false %} os líderes dos seus ministérios{% else %} (escondido dos líderes){% endif %} veem o número.
+                        Deixe em branco e salve para apagar.
+                    </p>
+                    {{ telefone_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
                 </form>
             </div>
 
@@ -373,6 +398,16 @@
                             <span class="block text-xs {{ tema.text_secondary }} mt-1">
                                 Desligado: admins e lideres podem te adicionar direto a uma Comunidade ou Ministerio (voce recebe um aviso).
                                 Ligado: voce recebe um convite e decide se aceita. Vale so pra novas adicoes -- voce nao sai de nenhum grupo em que ja esta.
+                            </span>
+                        </span>
+                    </label>
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        {{ privacidade_form.telefone_visivel_lider(class_="mt-1 w-4 h-4 shrink-0") }}
+                        <span>
+                            <span class="block text-sm font-semibold {{ tema.text_primary }}">Lideres dos meus ministerios podem ver meu telefone</span>
+                            <span class="block text-xs {{ tema.text_secondary }} mt-1">
+                                Desligado: so voce e o admin da comunidade veem o numero. Os avisos de escala por WhatsApp/SMS continuam chegando normalmente.
+                                Membros comuns e pessoas de outras comunidades nunca veem.
                             </span>
                         </span>
                     </label>
