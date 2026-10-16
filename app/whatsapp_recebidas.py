@@ -14,7 +14,8 @@ O envio fica em app/whatsapp.py; aqui fica o caminho de volta:
   substituir?") mudam TODAS as funcoes da pessoa na PROXIMA escala dela (nao
   cancelada, de hoje em diante) -- mesmo efeito do botao de status do site
   (lideres avisados no sino, RegistroTroca; recusa e troca viram
-  troca_solicitada). Perguntas so leem e respondem: proximas escalas,
+  troca_solicitada). Perguntas so leem e respondem: musicas do repertorio
+  da proxima escala (com links das folhas de cifras/projecao), proximas escalas,
   endereco (Comunidade.endereco/lat/lng) e horarios (dias/horario de culto
   dos ministerios + eventos dos proximos 30 dias). Na duvida (pergunta,
   negacao, incerteza, dupla negacao) nao muda nada: sem resposta
@@ -26,7 +27,7 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 
 import mongoengine
-from flask import current_app
+from flask import current_app, url_for
 
 from app.db_utils import SequentialIdDocument
 
@@ -104,6 +105,7 @@ def _normalizar(texto):
 # Mudar status de escala por engano e pior do que nao responder.
 CONFIRMAR, RECUSAR, TROCA = "confirmar", "recusar", "troca"
 CONSULTA_ESCALA, ENDERECO, HORARIOS = "consulta_escala", "endereco", "horarios"
+REPERTORIO = "repertorio"
 MUDAM_ESCALA = (CONFIRMAR, RECUSAR, TROCA)
 
 _TROCA = re.compile(
@@ -144,6 +146,9 @@ _CONSULTA_ESCALA = re.compile(
     r"|sou escalad\w*|fui escalad\w*|escalad\w* (pra|para) quando|quando (eu )?(sirvo|vou servir|toco|canto|estou|to)"
     r"|qual (e )?(a )?minha (funcao|escala)|que dia (eu )?(sirvo|toco|canto|estou|to))\b"
 )
+_REPERTORIO = re.compile(
+    r"\b(musica\w*|repertorio\w*|cifra\w*|louvores|setlist|playlist|projecao|letras?|tons)\b"
+)
 _ENDERECO = re.compile(
     r"\b(endereco|onde fica|onde e a igreja|localizacao|como (eu )?chego|qual o local|onde (vai ser|sera|e) o culto)\b"
 )
@@ -161,8 +166,8 @@ def _so_palavras(normal, essenciais):
 def interpretar_mensagem(texto):
     """Uma das intencoes acima ou None (nao reconhecida -> caixa de entrada).
 
-    Ordem: troca > recusa > pergunta da propria escala > endereco >
-    horarios > confirmacao. Confirmacao e a mais cautelosa: nunca com "?",
+    Ordem: troca > recusa > musicas do repertorio > pergunta da propria
+    escala > endereco > horarios > confirmacao. Confirmacao e a mais cautelosa: nunca com "?",
     com uma negacao em qualquer lugar ("nao confirmo ainda") ou com
     incerteza ("acho que vou") -- nesses casos fica None."""
     bruto = (texto or "").strip()
@@ -180,7 +185,12 @@ def interpretar_mensagem(texto):
         return None if incerto else TROCA
     if normal in _SO_RECUSA or _so_palavras(normal, _SO_RECUSA) or _RECUSA.search(normal):
         return None if incerto else RECUSAR
-    if _CONSULTA_ESCALA.search(normal) and (pergunta or not _CONFIRMA.search(normal)):
+    # Perguntas so ganham da confirmacao quando sao pergunta mesmo: "vou
+    # estudar as musicas, pode contar" e confirmacao, nao pedido de repertorio.
+    sem_confirmacao = pergunta or not _CONFIRMA.search(normal)
+    if _REPERTORIO.search(normal) and sem_confirmacao:
+        return REPERTORIO
+    if _CONSULTA_ESCALA.search(normal) and sem_confirmacao:
         return CONSULTA_ESCALA
     if _ENDERECO.search(normal):
         return ENDERECO
@@ -329,6 +339,38 @@ def _texto_proximas_escalas(membros):
     return "\n".join(linhas)
 
 
+def _texto_repertorio(membros):
+    """Musicas (nome + tom do dia + momento) da proxima escala da pessoa que
+    ja tem repertorio, entre as 3 proximas -- e os links das folhas de
+    cifras/projecao no site (abrem pra quem esta escalado, com login). A
+    cifra inteira nao vai: mensagem enorme."""
+    proximas = proximas_escalas_dos_membros(membros)
+    if not proximas:
+        return "Você não tem nenhuma escala marcada de hoje em diante, então não há repertório pra mostrar."
+    for escala, _ in proximas:
+        itens = escala.repertorio
+        if itens:
+            break
+    else:
+        escala = proximas[0][0]
+        quando = _quando(escala)
+        return (f"O repertório de {escala.nome}{f' ({quando})' if quando else ''} ainda não foi definido. "
+                "Assim que a liderança montar, ele aparece aqui e no site.")
+
+    quando = _quando(escala)
+    linhas = [f"🎵 Repertório de {escala.nome}{f' ({quando})' if quando else ''}:"]
+    for n, item in enumerate(itens, 1):
+        tom = item.tom or (item.musica.tom if item.musica else None)
+        extras = " · ".join(p for p in (f"Tom: {tom}" if tom else "", item.momento or "") if p)
+        linhas.append(f"{n}. {item.nome_musica}{f' — {extras}' if extras else ''}")
+    site = current_app.config.get("URL_PUBLICA") or ""
+    linhas.append("")
+    linhas.append(f"Cifras: {site}{url_for('escala.folha_repertorio', escala_id=escala.id, tipo='cifras')}")
+    linhas.append(f"Projeção: {site}{url_for('escala.folha_repertorio', escala_id=escala.id, tipo='projecao')}")
+    linhas.append("(entre com a sua conta do site pra abrir)")
+    return "\n".join(linhas)
+
+
 def _comunidades(comunidade_ids):
     from app.comunidade.models import Comunidade
 
@@ -473,9 +515,11 @@ def processar_mensagem(msg, nomes_perfil):
 
     # Perguntas: so leitura. Sem dado cadastrado (endereco/horarios), cai na
     # caixa de entrada como mensagem nao reconhecida.
-    if intencao in (CONSULTA_ESCALA, ENDERECO, HORARIOS):
+    if intencao in (CONSULTA_ESCALA, REPERTORIO, ENDERECO, HORARIOS):
         if intencao == CONSULTA_ESCALA:
             resposta = _texto_proximas_escalas(membros)
+        elif intencao == REPERTORIO:
+            resposta = _texto_repertorio(membros)
         elif intencao == ENDERECO:
             resposta = _texto_endereco(comunidade_ids)
         else:
@@ -484,7 +528,7 @@ def processar_mensagem(msg, nomes_perfil):
                                 "respondida" if resposta else "sem dado cadastrado, foi pra caixa de entrada")
         if resposta is None:
             return registro
-        registro.acao = "consulta" if intencao == CONSULTA_ESCALA else "informacao"
+        registro.acao = "consulta" if intencao in (CONSULTA_ESCALA, REPERTORIO) else "informacao"
         registro.lida = True  # respondida sozinha
         registro.save()
         _responder(telefone, resposta, comunidade_ids, registro.membro_ids)

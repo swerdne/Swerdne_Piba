@@ -86,6 +86,11 @@ def test_interpretar_resposta(texto, esperado):
     ("estou escalado pra quando?", "consulta_escala"), ("que dia eu toco?", "consulta_escala"),
     ("Qual o endereço da igreja?", "endereco"), ("onde fica?", "endereco"),
     ("que horas é o culto?", "horarios"), ("qual o horário da igreja", "horarios"),
+    ("quais as músicas do culto?", "repertorio"), ("repertório de domingo", "repertorio"),
+    ("me manda a cifra", "repertorio"), ("qual a música de domingo?", "repertorio"),
+    ("quais os louvores?", "repertorio"),
+    ("vou estudar as músicas, pode contar comigo", "confirmar"),
+    ("não vou conseguir tocar as músicas", "recusar"),
     # Ambiguas: na duvida, caixa de entrada (None) -- nunca confirma/recusa por engano
     ("não confirmo ainda", None), ("acho que vou", None), ("talvez eu não consiga", None),
     ("confirmo depois", None), ("vou ver e te aviso", None), ("não vou faltar!", None),
@@ -202,6 +207,29 @@ def test_pergunta_da_proxima_escala_responde_sem_mudar_nada(logged_in_client, en
         assert (msg.acao, msg.lida) == ("consulta", True)
         conversa = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
         assert "Perguntou da escala (respondido)" in conversa
+
+
+def test_pergunta_das_musicas_lista_o_repertorio_da_proxima_escala(logged_in_client, enviados, app, db):
+    from app.escala.models import ItemRepertorio
+
+    with app.app_context():
+        _, ministerio, membro = _igreja(logged_in_client)
+        sem_repertorio = _escala(ministerio, membro, dias=1, nome="Ensaio")
+        _postar(logged_in_client, _payload("quais as músicas do culto?", wamid="w1"))
+        assert "ainda não foi definido" in enviados[-1][1] and "Ensaio" in enviados[-1][1]
+
+        # A proxima escala COM repertorio (pula a sem repertorio).
+        culto = _escala(ministerio, membro, dias=3, nome="Culto de Domingo")
+        ItemRepertorio(escala_id=culto.id, nome_musica="Bondade de Deus", tom="G", momento="Abertura", ordem=0).save()
+        ItemRepertorio(escala_id=culto.id, nome_musica="Grande é o Senhor", ordem=1).save()
+        _postar(logged_in_client, _payload("repertório de domingo", wamid="w2"))
+
+        texto = enviados[-1][1]
+        assert "Repertório de Culto de Domingo" in texto
+        assert "1. Bondade de Deus — Tom: G · Abertura" in texto and "2. Grande é o Senhor" in texto
+        assert f"/escala/{culto.id}/repertorio/cifras" in texto and f"/escala/{culto.id}/repertorio/projecao" in texto
+        assert texto.startswith("🎵") and sem_repertorio.nome not in texto
+        assert MensagemWhatsapp.objects(wamid="w2").first().acao == "consulta"
 
 
 def test_pergunta_de_endereco_e_horario_usa_o_cadastro_ou_vai_pra_caixa(logged_in_client, enviados, app, db):
