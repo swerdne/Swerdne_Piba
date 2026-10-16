@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Lembrete automático{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+    #lembrete-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
+{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " block w-full min-w-0 border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+{% block content %}
+<div id="lembrete-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+
+    <div class="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ ministerio.nome }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">Lembrete automático</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-16 max-w-md mx-auto space-y-4">
+        <p class="text-sm {{ tema.text_secondary }}">
+            Escolha quando a equipe escalada recebe o lembrete automático de cada escala deste ministério
+            (WhatsApp, e-mail e aviso no app).
+        </p>
+
+        <form method="POST" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-4" data-lembrete-form>
+            {{ form.hidden_tag() }}
+
+            <div>
+                {{ form.dias_antes.label(class_="block text-sm font-semibold " ~ tema.text_primary ~ " mb-1") }}
+                {{ form.dias_antes(class_=CAMPO) }}
+            </div>
+
+            <div>
+                {{ form.horario.label(class_="block text-sm font-semibold " ~ tema.text_primary ~ " mb-1") }}
+                {{ form.horario(class_=CAMPO) }}
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Vazio = no mesmo horário do evento.</p>
+                {% for erro in form.horario.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+
+            <div class="flex gap-3 rounded-2xl px-4 py-3 {{ tema.page_bg }} border {{ tema.card_border }}">
+                <i class="fa-solid fa-bell {{ tema.accent_text }} mt-0.5"></i>
+                <p class="text-xs leading-relaxed {{ tema.text_primary }}" data-exemplo></p>
+            </div>
+
+            <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-3 rounded-full transition">
+                Salvar lembrete
+            </button>
+        </form>
+
+        <p class="text-xs leading-relaxed {{ tema.text_secondary }}">
+            <i class="fa-solid fa-circle-info mr-1"></i>
+            Além desse lembrete, a pessoa é avisada na hora em que é escalada e recebe outro lembrete
+            16h antes do evento, só por e-mail e no app. Mudar aqui vale para as escalas que ainda não
+            receberam o lembrete.
+        </p>
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+
+<script>
+(function () {
+    // Exemplo ao vivo: "Evento no domingo as 19:00 -> lembrete na sexta as 19:00".
+    var form = document.querySelector('[data-lembrete-form]');
+    var dias = form.querySelector('[name="dias_antes"]');
+    var horario = form.querySelector('[name="horario"]');
+    var exemplo = form.querySelector('[data-exemplo]');
+    var NOMES = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
+    var diaEvento = {{ (ministerio.dias_culto_efetivos[-1] if ministerio.dias_culto_efetivos else 6) | tojson }};
+    var horaEvento = {{ (ministerio.culto_horario.strftime('%H:%M') if ministerio.culto_horario else '19:00') | tojson }};
+
+    function noDia(d) { return (d >= 5 ? 'no ' : 'na ') + NOMES[d]; }  // no sábado/domingo, na segunda...
+
+    function atualizar() {
+        var n = parseInt(dias.value, 10) || 1;
+        var diaLembrete = ((diaEvento - n) % 7 + 7) % 7;
+        var hora = horario.value || horaEvento;
+        var semana = n === 7 ? ' da semana anterior' : '';
+        exemplo.textContent = 'Exemplo: evento ' + noDia(diaEvento) + ' às ' + horaEvento +
+            ' → lembrete ' + noDia(diaLembrete) + semana + ' às ' + hora + '.';
+    }
+    dias.addEventListener('change', atualizar);
+    horario.addEventListener('input', atualizar);
+    atualizar();
+})();
+</script>
+{% endblock %}

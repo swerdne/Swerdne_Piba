@@ -48,6 +48,7 @@
                     {{ item_menu(tema, url_for('ministerio.papeis', ministerio_id=ministerio.id), 'fa-user-group', 'Papéis e convites') }}
                     {{ item_menu(tema, url_for('ministerio.detalhe', ministerio_id=ministerio.id, checkin='1') ~ '#checkin', 'fa-location-dot', 'Check-in') }}
                     {{ item_menu(tema, url_for('ministerio.estatisticas', ministerio_id=ministerio.id), 'fa-chart-line', 'Estatísticas de comparecimento') }}
+                    {{ item_menu(tema, url_for('ministerio.lembrete', ministerio_id=ministerio.id), 'fa-bell', 'Lembrete automático') }}
                     {% if eh_admin %}
                     {{ item_menu(tema, url_for('ministerio.editar', ministerio_id=ministerio.id), 'fa-pen', 'Editar ministério') }}
                     {% endif %}

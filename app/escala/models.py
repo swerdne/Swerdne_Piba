@@ -6,7 +6,7 @@ escala de Louvor nao tem nenhuma ligacao com uma de Midia ou Kids).
 """
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 
 import mongoengine
 from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, delete_cascade, relacao_em_cache
@@ -705,6 +705,34 @@ def criar_escala_com_funcoes_padrao(
 
 def marcar_notificado(funcao):
     funcao.notificado_em = datetime.now(timezone.utc)
+
+
+# --- Lembrete automatico principal (configuravel por Ministerio) -------------
+
+LEMBRETE_DIAS_PADRAO = 1
+# Escala sem horario e ministerio sem horario de lembrete: manda de manha.
+LEMBRETE_HORARIO_SEM_HORA = time(9, 0)
+_DIAS_SEMANA_NOMES = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
+
+
+def momento_do_lembrete(escala, ministerio):
+    """Quando sai o lembrete principal (o unico com WhatsApp) desta escala:
+    `Ministerio.lembrete_dias_antes` dias antes da data, no
+    `Ministerio.lembrete_horario` -- ou, sem horario configurado, no proprio
+    horario do evento (padrao = 24h antes, como sempre foi). Naive, hora de
+    Brasilia (comparar com app.fuso.agora_brasilia). None se a escala nao tem data."""
+    if not escala.data:
+        return None
+    dias = (ministerio.lembrete_dias_antes if ministerio else None) or LEMBRETE_DIAS_PADRAO
+    hora = (ministerio.lembrete_horario if ministerio else None) or escala.horario or LEMBRETE_HORARIO_SEM_HORA
+    return datetime.combine(escala.data - timedelta(days=dias), hora)
+
+
+def descrever_lembrete(momento):
+    """"sexta, 18/10 às 19:00" -- pra mostrar na tela."""
+    if momento is None:
+        return ""
+    return f"{_DIAS_SEMANA_NOMES[momento.weekday()]}, {momento.strftime('%d/%m')} às {momento.strftime('%H:%M')}"
 
 
 def trocar_atribuicao(funcao_a, funcao_b):

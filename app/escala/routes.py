@@ -30,6 +30,8 @@ from app.escala.forms import (
     ObservacoesRepertorioForm,
 )
 from app.escala.models import (
+    descrever_lembrete,
+    momento_do_lembrete,
     Escala,
     Funcao,
     Membro,
@@ -457,6 +459,7 @@ def detalhe(escala_id):
         status_labels=STATUS_LABELS,
         status_cores=STATUS_CORES,
         local_checkin=local_do_checkin(escala.ministerio),
+        lembrete_texto=descrever_lembrete(momento_do_lembrete(escala, escala.ministerio)),
     )
 
 

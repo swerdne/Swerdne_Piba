@@ -1,7 +1,7 @@
 """Formularios Flask-WTF do modulo ministerio."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileSize
-from wtforms import StringField, TextAreaField, SubmitField, SelectMultipleField, DateField
+from wtforms import StringField, TextAreaField, SubmitField, SelectField, SelectMultipleField, DateField, TimeField
 from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import ListWidget, CheckboxInput
 
@@ -33,6 +33,18 @@ class MinisterioForm(FlaskForm):
         ],
     )
     submit = SubmitField("Salvar")
+
+
+class LembreteForm(FlaskForm):
+    """Quando sai o lembrete automatico principal das escalas do ministerio
+    (ver ministerio.routes.lembrete e escala.models.momento_do_lembrete)."""
+    dias_antes = SelectField(
+        "Quantos dias antes do evento",
+        choices=[(1, "1 dia antes (véspera)")] + [(n, f"{n} dias antes") for n in range(2, 8)],
+        coerce=int, default=1,
+    )
+    horario = TimeField("Horário do envio", validators=[Optional()])
+    submit = SubmitField("Salvar lembrete")
 
 
 class AcaoForm(FlaskForm):

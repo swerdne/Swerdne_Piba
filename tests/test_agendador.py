@@ -207,6 +207,64 @@ def test_agendador_usa_hora_de_brasilia_e_nao_a_do_servidor(logged_in_client, ap
     assert Escala.objects(id=escala.id).first().notificado_24h_em is None
 
 
+def test_lembrete_principal_sai_no_dia_e_horario_escolhidos_pelo_ministerio(logged_in_client, app, db):
+    """Ministerio configurado pra avisar 2 dias antes, num horario fixo: o
+    lembrete sai nesse momento, nao 24h antes."""
+    from app.auth.models import User
+
+    usuario = User.objects(username="ana").first()
+    ministerio = _criar_ministerio_teste(usuario.id)
+    agora = agora_brasilia().replace(microsecond=0)
+    ministerio.lembrete_dias_antes = 2
+    ministerio.lembrete_horario = (agora + timedelta(minutes=2)).time()
+    ministerio.save()
+
+    # Evento daqui a 2 dias (as 19h): o momento do lembrete e agora+2min.
+    no_alvo = criar_escala_com_funcoes_padrao(
+        ministerio_id=ministerio.id, nome="Daqui a 2 dias", departamento="Louvor",
+        data=(agora + timedelta(minutes=2)).date() + timedelta(days=2), horario=datetime.min.time().replace(hour=19),
+    )
+    # Evento daqui a 24h: no padrao seria avisado agora; com 2 dias antes, nao.
+    daqui_24h = agora + timedelta(hours=24, minutes=2)
+    em_24h = criar_escala_com_funcoes_padrao(
+        ministerio_id=ministerio.id, nome="Daqui a 24h", departamento="Louvor",
+        data=daqui_24h.date(), horario=daqui_24h.time(),
+    )
+    _escalar_membro(no_alvo, "Baixo", nome_membro="A")
+    _escalar_membro(em_24h, "Baixo", nome_membro="B")
+
+    _verificar_e_notificar(app)
+
+    assert Escala.objects(id=no_alvo.id).first().notificado_24h_em is not None
+    assert Escala.objects(id=em_24h.id).first().notificado_24h_em is None
+
+
+def test_tela_de_lembrete_so_para_quem_gerencia_e_salva(logged_in_client, outro_logged_in_client, app, db):
+    from datetime import time
+
+    from app.ministerio.models import Ministerio
+    from tests.conftest import sessao_isolada
+    from tests.test_escala import _criar_comunidade, _criar_ministerio
+
+    with sessao_isolada(app):
+        comunidade = _criar_comunidade(logged_in_client)
+        ministerio_id = _criar_ministerio(logged_in_client, comunidade.id).id
+        url = f"/ministerio/{ministerio_id}/lembrete"
+        assert "Lembrete automático" in logged_in_client.get(url).data.decode()
+        logged_in_client.post(url, data={"dias_antes": "2", "horario": "19:30"})
+        salvo = Ministerio.objects(id=ministerio_id).first()
+        assert (salvo.lembrete_dias_antes, salvo.lembrete_horario) == (2, time(19, 30))
+
+        # Voltar ao padrao (1 dia, sem horario) grava vazio.
+        logged_in_client.post(url, data={"dias_antes": "1", "horario": ""})
+        salvo = Ministerio.objects(id=ministerio_id).first()
+        assert (salvo.lembrete_dias_antes, salvo.lembrete_horario) == (None, None)
+
+    with sessao_isolada(app):
+        assert outro_logged_in_client.get(url).status_code == 404
+        assert outro_logged_in_client.post(url, data={"dias_antes": "7"}).status_code == 404
+
+
 def test_escala_sem_data_e_ignorada_pelo_agendador(logged_in_client, app, db):
     from app.auth.models import User
 

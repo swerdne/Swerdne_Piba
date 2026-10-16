@@ -153,8 +153,9 @@
         {% if escala.data %}
         <p class="text-xs {{ tema.text_secondary }} -mt-2">
             <i class="fa-solid fa-clock mr-1"></i>
-            Alem do botao acima, a equipe escalada recebe um lembrete automatico 24h antes do evento
-            (e de novo 16h antes, so por e-mail e no app).
+            Lembrete automático da equipe: <span class="font-semibold {{ tema.text_primary }}">{{ lembrete_texto }}</span>
+            (e de novo 16h antes do evento, só por e-mail e no app).
+            <a href="{{ url_for('ministerio.lembrete', ministerio_id=escala.ministerio_id) }}" class="font-semibold {{ tema.accent_text }} hover:underline">Mudar</a>
         </p>
         {% endif %}
         {% endif %}

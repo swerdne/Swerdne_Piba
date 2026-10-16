@@ -11,7 +11,7 @@ from app.imagens import salvar_imagem, remover_imagem
 from app.extensions import limiter
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.ministerio import bp
-from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm
+from app.ministerio.forms import MinisterioForm, AcaoForm, CriancaForm, CheckoutForm, LembreteForm
 from app.ministerio.models import (
     Ministerio,
     UsuarioMinisterio,
@@ -528,6 +528,31 @@ def local_checkin(ministerio_id):
         ministerio, ministerio.nome, url_for("ministerio.detalhe", ministerio_id=ministerio.id, checkin="1") + "#checkin",
         ministerio=ministerio,
     )
+
+@bp.route("/<int:ministerio_id>/lembrete", methods=["GET", "POST"])
+@login_required
+def lembrete(ministerio_id):
+    """Lider/admin escolhe quando sai o lembrete automatico principal das
+    escalas deste ministerio (o unico com WhatsApp): quantos dias antes e a
+    que horas -- ver app/escala/agendador.py."""
+    from app.escala.models import LEMBRETE_DIAS_PADRAO
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    form = LembreteForm()
+    if request.method == "GET":
+        form.dias_antes.data = ministerio.lembrete_dias_antes or LEMBRETE_DIAS_PADRAO
+        form.horario.data = ministerio.lembrete_horario
+
+    if form.validate_on_submit():
+        # Padrao (1 dia, horario do evento) fica gravado como vazio.
+        ministerio.lembrete_dias_antes = form.dias_antes.data if form.dias_antes.data != LEMBRETE_DIAS_PADRAO else None
+        ministerio.lembrete_horario = form.horario.data
+        ministerio.save()
+        flash("Lembrete automatico salvo. Vale pras escalas que ainda nao receberam o lembrete.", "success")
+        return redirect(url_for("ministerio.lembrete", ministerio_id=ministerio.id))
+
+    return render_template("ministerio/lembrete.html", ministerio=ministerio, form=form)
+
 
 @bp.route("/<int:ministerio_id>/estatisticas")
 @login_required

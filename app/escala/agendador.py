@@ -25,8 +25,9 @@ _dia_alertas_faltas = None
 
 
 def _verificar_e_notificar(app):
-    from app.escala.models import Escala
+    from app.escala.models import Escala, momento_do_lembrete
     from app.escala.routes import enviar_notificacoes_da_escala
+    from app.ministerio.models import Ministerio
     from app.escala.estatisticas import verificar_faltas_seguidas
     from app.plantao.sincronizacao import sincronizar_todos_os_turnos_ativos
 
@@ -42,11 +43,13 @@ def _verificar_e_notificar(app):
             sincronizar_todos_os_turnos_ativos()
 
             agora = agora_brasilia()  # nunca datetime.now(): o servidor roda em UTC
-            # So as que podem cair numa janela de aviso (16h-24h a frente):
-            # ler todas as escalas a cada 15 min pesava no servidor.
-            escalas = Escala.objects(
-                data__gte=agora.date(), data__lte=(agora + timedelta(hours=24) + _JANELA).date(),
-            )
+            # So as que podem cair numa janela de aviso (lembrete principal
+            # ate 7 dias antes, ver Ministerio.lembrete_dias_antes): ler todas
+            # as escalas a cada 15 min pesava no servidor.
+            escalas = list(Escala.objects(
+                data__gte=agora.date(), data__lte=(agora + timedelta(days=8)).date(),
+            ))
+            ministerios = {m.id: m for m in Ministerio.objects(id__in=list({e.ministerio_id for e in escalas}))}
 
             for escala in escalas:
                 data_hora = escala.data_hora
@@ -55,18 +58,24 @@ def _verificar_e_notificar(app):
 
                 faltam = data_hora - agora
 
-                # Marca como avisada ANTES de enviar: se o envio quebrar no
-                # meio, a escala perde o lembrete (no maximo 1 vez) em vez de
-                # mandar tudo de novo no proximo tick -- templates sao cobrados.
-                if escala.notificado_24h_em is None and abs(faltam - timedelta(hours=24)) <= _JANELA:
-                    logger.info("Notificacao automatica (24h antes): escala %s", escala.id)
+                # Lembrete principal (todos os canais, inclusive WhatsApp), no
+                # dia/horario que o ministerio escolheu (padrao: 24h antes).
+                # notificado_24h_em guarda que ele ja saiu (nome de quando era
+                # sempre 24h). Marca como avisada ANTES de enviar: se o envio
+                # quebrar no meio, a escala perde o lembrete (no maximo 1 vez)
+                # em vez de mandar tudo de novo no proximo tick -- templates
+                # sao cobrados.
+                momento = momento_do_lembrete(escala, ministerios.get(escala.ministerio_id))
+                if escala.notificado_24h_em is None and abs(agora - momento) <= _JANELA and momento < data_hora:
+                    logger.info("Lembrete automatico principal: escala %s", escala.id)
                     escala.notificado_24h_em = agora
                     escala.save()
                     enviar_notificacoes_da_escala(escala)
 
-                # 2o lembrete so pelos canais gratuitos (e-mail + sino): o
-                # WhatsApp (template cobrado) e o SMS vao uma vez so, no de
-                # 24h -- ver app/escala/CLAUDE.md, "Lembretes automaticos".
+                # 2o lembrete, sempre 16h antes, so pelos canais gratuitos
+                # (e-mail + sino): o WhatsApp (template cobrado) e o SMS vao
+                # uma vez so, no principal -- ver app/escala/CLAUDE.md,
+                # "Lembretes automaticos".
                 if escala.notificado_16h_em is None and abs(faltam - timedelta(hours=16)) <= _JANELA:
                     logger.info("Notificacao automatica (16h antes, so canais gratuitos): escala %s", escala.id)
                     escala.notificado_16h_em = agora

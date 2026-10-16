@@ -60,6 +60,13 @@ class Ministerio(SequentialIdDocument):
     checkin_culto = mongoengine.BooleanField()
     culto_horario = PureTimeField()
 
+    # Lembrete automatico principal (o unico com WhatsApp, ver
+    # app/escala/agendador.py e escala.models.momento_do_lembrete): quantos
+    # dias antes do evento (1-7) e a que horas. Vazio = padrao: 1 dia antes,
+    # no mesmo horario do evento (24h antes).
+    lembrete_dias_antes = mongoengine.IntField(min_value=1, max_value=7)
+    lembrete_horario = PureTimeField()
+
     def gerar_novo_link_convite(self):
         self.token_convite_publico = secrets.token_urlsafe(8)
         return self.token_convite_publico
