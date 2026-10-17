@@ -506,6 +506,20 @@ def test_audio_com_pergunta_responde_e_sem_fala_vai_pra_caixa(logged_in_client, 
         assert "Transcrição falhou: Azure Speech recusou: 401" in conversa
 
 
+def test_segundo_plano_monta_links_mesmo_fora_de_um_request(app):
+    """Regressao: audio "musicas do repertorio" era transcrito e ficava sem
+    resposta -- o link das folhas (url_for) quebrava na thread, fora de um
+    request. O contexto do segundo plano precisa montar URL."""
+    from flask import url_for
+
+    from app.whatsapp_recebidas import _em_segundo_plano
+
+    links = []
+    with app.app_context():  # sem request, como na thread de producao
+        _em_segundo_plano(lambda: links.append(url_for("escala.folha_repertorio", escala_id=7, tipo="cifras")))
+    assert links == ["/escala/7/repertorio/cifras"]
+
+
 def test_sem_azure_configurado_audio_so_fica_pra_ouvir(logged_in_client, enviados, app, db, monkeypatch):
     chamou = []
     monkeypatch.setattr("app.whatsapp.baixar_midia", lambda media_id: (b"x", "audio/ogg"))

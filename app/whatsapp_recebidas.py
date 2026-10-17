@@ -117,13 +117,20 @@ def baixar_audio(mensagem):
 
 def _em_segundo_plano(funcao, *args):
     """Roda `funcao(*args)` sem atrasar a resposta do webhook (a Meta
-    reenvia se demorar), com app context. Em teste roda na hora."""
+    reenvia se demorar). Em teste roda na hora.
+
+    Com um request de mentira apontando pro URL_PUBLICA (nao so app
+    context): as respostas montam links com url_for (ex: folhas de cifra do
+    repertorio), que fora de um request quebrava -- o audio era transcrito
+    e ficava sem resposta. Mesmo contexto na hora e em thread, pra o teste
+    pegar isso."""
     import threading
 
     app = current_app._get_current_object()
+    base = app.config.get("URL_PUBLICA") or "http://localhost"
 
     def trabalho():
-        with app.app_context():
+        with app.test_request_context("/", base_url=base):
             try:
                 funcao(*args)
             except Exception:
