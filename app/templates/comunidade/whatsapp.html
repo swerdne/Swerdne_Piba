@@ -66,6 +66,9 @@
                     <a href="{{ url_audio }}" download class="block text-[11px] font-semibold {{ tema.accent_text }} hover:underline mt-1">
                         <i class="fa-solid fa-download mr-1"></i>Baixar áudio (se não tocar aqui)
                     </a>
+                    {% if m.transcricao %}
+                    <p class="mt-1.5 text-sm {{ tema.text_primary }}"><span class="text-[11px] font-semibold {{ tema.text_secondary }}">Transcrição:</span> “{{ m.transcricao }}”</p>
+                    {% endif %}
                     {% else %}
                     {{ m.texto }}
                     {% endif %}

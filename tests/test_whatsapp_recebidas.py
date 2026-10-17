@@ -439,6 +439,104 @@ def test_audio_so_para_admin_e_numero_desconhecido_nao_baixa(logged_in_client, o
         assert outro_logged_in_client.get(f"/comunidade/{cid}/whatsapp/audio/{msg_id}").status_code == 404
 
 
+# --- Audio entendido (transcricao Azure Speech) ------------------------------------------------
+
+@pytest.fixture
+def fala(app, monkeypatch):
+    """Liga a transcricao e troca o Azure por um texto controlado."""
+    app.config.update(AZURE_SPEECH_KEY="chave", AZURE_SPEECH_REGION="brazilsouth")
+    monkeypatch.setattr("app.whatsapp.baixar_midia", lambda media_id: (b"OggS-voz", "audio/ogg"))
+    estado = {"texto": "Confirmo, pode contar comigo", "erro": None}
+
+    def falso_transcrever(conteudo, mime="audio/ogg"):
+        from app.transcricao import TranscricaoIndisponivel
+
+        if estado["erro"]:
+            raise TranscricaoIndisponivel(estado["erro"])
+        return estado["texto"]
+
+    monkeypatch.setattr("app.transcricao.transcrever", falso_transcrever)
+    return estado
+
+
+def test_audio_transcrito_confirma_a_escala_e_responde_com_o_que_entendeu(logged_in_client, enviados, app, db, fala):
+    with app.app_context():
+        comunidade, ministerio, membro = _igreja(logged_in_client)
+        escala = _escala(ministerio, membro)
+        _postar(logged_in_client, _payload_audio())
+
+        assert Funcao.objects(escala_id=escala.id).first().status == "confirmado"
+        assert enviados[-1][1].startswith("🎤 Entendi: “Confirmo, pode contar comigo”")
+        assert "✅ Confirmado" in enviados[-1][1]
+        msg = MensagemWhatsapp.objects(direcao="recebida").first()
+        assert (msg.transcricao, msg.acao, msg.lida) == ("Confirmo, pode contar comigo", "confirmado", True)
+        conversa = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
+        assert "Transcrição:" in conversa and "pode contar comigo" in conversa
+
+
+def test_audio_com_pergunta_responde_e_sem_fala_vai_pra_caixa(logged_in_client, enviados, app, db, fala):
+    from app.escala.models import ItemRepertorio
+
+    with app.app_context():
+        _, ministerio, membro = _igreja(logged_in_client)
+        escala = _escala(ministerio, membro)
+        ItemRepertorio(escala_id=escala.id, nome_musica="Bondade de Deus", tom="G", ordem=0).save()
+
+        fala["texto"] = "Quais são as músicas do culto?"
+        _postar(logged_in_client, _payload_audio(wamid="w1", media_id="M1"))
+        assert "Bondade de Deus — Tom: G" in enviados[-1][1]
+
+        # Sem fala reconhecivel (ou Azure fora): menu + caixa de entrada, escala intacta.
+        fala["texto"] = None
+        _postar(logged_in_client, _payload_audio(wamid="w2", media_id="M2"))
+        assert "passei para a liderança" in enviados[-1][1]
+        assert MensagemWhatsapp.objects(wamid="w2").first().lida is False
+        assert Funcao.objects(escala_id=escala.id).first().status == "nao_notificado"
+
+
+def test_sem_azure_configurado_audio_so_fica_pra_ouvir(logged_in_client, enviados, app, db, monkeypatch):
+    chamou = []
+    monkeypatch.setattr("app.whatsapp.baixar_midia", lambda media_id: (b"x", "audio/ogg"))
+    monkeypatch.setattr("app.transcricao.transcrever", lambda *a, **k: chamou.append(1) or "confirmo")
+    with app.app_context():
+        _, ministerio, membro = _igreja(logged_in_client)
+        escala = _escala(ministerio, membro)
+        _postar(logged_in_client, _payload_audio())
+        assert chamou == [] and Funcao.objects(escala_id=escala.id).first().status == "nao_notificado"
+
+
+def test_transcrever_chama_o_azure_com_ogg_opus(app, monkeypatch):
+    from app.transcricao import TranscricaoIndisponivel, transcrever
+
+    app.config.update(AZURE_SPEECH_KEY="chave", AZURE_SPEECH_REGION="brazilsouth", AZURE_SPEECH_ENDPOINT=None)
+    pedidos = []
+
+    class Resposta:
+        def __init__(self, dados, status=200):
+            self._dados, self.status_code, self.text = dados, status, str(dados)
+
+        def json(self):
+            return self._dados
+
+    respostas = [Resposta({"RecognitionStatus": "Success", "DisplayText": "Qual minha próxima escala?"}),
+                 Resposta({"RecognitionStatus": "NoMatch"}), Resposta({}, status=401)]
+
+    def falso_post(url, params=None, data=None, timeout=None, headers=None):
+        pedidos.append((url, params, headers))
+        return respostas.pop(0)
+
+    monkeypatch.setattr("app.transcricao.requests.post", falso_post)
+    with app.app_context():
+        assert transcrever(b"OggS") == "Qual minha próxima escala?"
+        assert transcrever(b"OggS") is None
+        with pytest.raises(TranscricaoIndisponivel):
+            transcrever(b"OggS")
+    url, params, headers = pedidos[0]
+    assert url == "https://brazilsouth.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1"
+    assert params["language"] == "pt-BR" and headers["Content-Type"] == "audio/ogg; codecs=opus"
+    assert headers["Ocp-Apim-Subscription-Key"] == "chave"
+
+
 # --- Caixa de entrada -------------------------------------------------------------------------------
 
 def test_caixa_de_entrada_lista_abre_e_responde(logged_in_client, enviados, app, db):

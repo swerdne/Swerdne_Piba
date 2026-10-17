@@ -73,6 +73,12 @@ class Config:
     # Brasilia -- acima disso o envio de template e bloqueado e vai pro log
     # (app/whatsapp.py::_reservar_template_do_dia). 0 desliga o teto.
     WHATSAPP_LIMITE_TEMPLATES_DIA = int(os.environ.get("WHATSAPP_LIMITE_TEMPLATES_DIA", "100"))
+    # Transcricao dos audios recebidos no WhatsApp (app/transcricao.py, Azure
+    # AI Speech): chave + regiao do recurso (ou o endpoint dele). Vazio =
+    # desligada, audio so fica pra ouvir na caixa de entrada.
+    AZURE_SPEECH_KEY = os.environ.get("AZURE_SPEECH_KEY")
+    AZURE_SPEECH_REGION = os.environ.get("AZURE_SPEECH_REGION")
+    AZURE_SPEECH_ENDPOINT = os.environ.get("AZURE_SPEECH_ENDPOINT")
 
     # Cadastro tradicional: confere se o dominio do e-mail tem registro MX (ou
     # A) antes de aceitar o cadastro (ver app/auth/dominio_email.py). Flag pra
@@ -123,6 +129,9 @@ class TestingConfig(Config):
     META_WHATSAPP_PHONE_ID = None
     META_WHATSAPP_VERIFY_TOKEN = None
     META_APP_SECRET = None
+    AZURE_SPEECH_KEY = None
+    AZURE_SPEECH_REGION = None
+    AZURE_SPEECH_ENDPOINT = None
 
     # Testes nao devem depender de DNS real (lento, instavel, e trava CI sem rede).
     VALIDAR_DOMINIO_EMAIL = False

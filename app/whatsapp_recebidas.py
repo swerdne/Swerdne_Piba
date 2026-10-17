@@ -62,6 +62,8 @@ class MensagemWhatsapp(SequentialIdDocument):
     # midia na Meta -- o arquivo fica em AudioWhatsapp (ver baixar_audio).
     media_id = mongoengine.StringField(max_length=200)
     media_mime = mongoengine.StringField(max_length=100)
+    # O que o audio dizia (app/transcricao.py), quando a transcricao esta ligada.
+    transcricao = mongoengine.StringField()
 
     @property
     def eh_audio(self):
@@ -109,24 +111,31 @@ def baixar_audio(mensagem):
     return audio
 
 
-def _baixar_audio_em_segundo_plano(mensagem):
-    """Baixa logo que chega (a URL da Meta expira; o id dura dias) sem
-    atrasar a resposta do webhook. Em teste roda na hora (sem thread)."""
+def _em_segundo_plano(funcao, *args):
+    """Roda `funcao(*args)` sem atrasar a resposta do webhook (a Meta
+    reenvia se demorar), com app context. Em teste roda na hora."""
     import threading
 
     app = current_app._get_current_object()
-    mensagem_id = mensagem.id
 
     def trabalho():
         with app.app_context():
-            registro = MensagemWhatsapp.objects(id=mensagem_id).first()
-            if registro is not None:
-                baixar_audio(registro)
+            try:
+                funcao(*args)
+            except Exception:
+                app.logger.exception("Tarefa do WhatsApp em segundo plano falhou")
 
     if app.testing:
         trabalho()
     else:
         threading.Thread(target=trabalho, daemon=True).start()
+
+
+def _baixar_audio_por_id(mensagem_id):
+    registro = MensagemWhatsapp.objects(id=mensagem_id).first()
+    if registro is not None:
+        baixar_audio(registro)
+
 
 # --- Telefone ----------------------------------------------------------------
 
@@ -584,7 +593,7 @@ def _responder_numero_desconhecido(telefone):
     _responder(telefone, TEXTO_NUMERO_DESCONHECIDO, [], [])
 
 
-def _nao_reconhecida(registro, telefone, membros, comunidade_ids):
+def _nao_reconhecida(registro, telefone, membros, comunidade_ids, prefixo=""):
     """Fica na caixa de entrada pra lideranca (continua nao lida) e a pessoa
     recebe o menu -- no maximo 1x a cada INTERVALO_MENU_AUTOMATICO, pra nao
     interromper conversa com um lider."""
@@ -595,7 +604,8 @@ def _nao_reconhecida(registro, telefone, membros, comunidade_ids):
                             "" if menu_recente else " e recebeu o menu")
     if not menu_recente:
         introducao = "Recebi sua mensagem e passei para a liderança 🙏 Se for uma destas, é só responder com o número:"
-        _responder(telefone, texto_do_menu(membros, introducao), comunidade_ids, registro.membro_ids, acao="menu")
+        _responder(telefone, prefixo + texto_do_menu(membros, introducao), comunidade_ids, registro.membro_ids,
+                   acao="menu")
     return registro
 
 
@@ -625,9 +635,6 @@ def processar_mensagem(msg, nomes_perfil):
         registro.save()
     except mongoengine.NotUniqueError:
         return None  # a mesma mensagem chegou em dois webhooks ao mesmo tempo
-    if registro.media_id and comunidade_ids:
-        _baixar_audio_em_segundo_plano(registro)  # so de quem esta em algum diretorio
-
     if not membros:
         current_app.logger.warning(
             "WhatsApp de %s: telefone nao bate com nenhum Membro de diretorio (confira se esta "
@@ -637,6 +644,56 @@ def processar_mensagem(msg, nomes_perfil):
         _responder_numero_desconhecido(telefone)
         return registro
 
+    if registro.media_id:
+        from app.transcricao import transcricao_ligada
+
+        if transcricao_ligada():
+            # Baixa, transcreve e responde em segundo plano (pode levar
+            # alguns segundos -- o webhook nao espera).
+            _em_segundo_plano(_tratar_audio, registro.id)
+            return registro
+        _em_segundo_plano(_baixar_audio_por_id, registro.id)  # so pra ouvir na caixa de entrada
+
+    return _tratar_texto(registro, telefone, texto, membros, comunidade_ids)
+
+
+def _tratar_audio(mensagem_id):
+    """Audio de quem esta no diretorio: baixa, transcreve (Azure Speech) e
+    trata o texto como se tivesse sido escrito -- a resposta comeca com o
+    que foi entendido, pra pessoa conferir. Sem fala reconhecivel ou com
+    falha: caixa de entrada + menu, como mensagem nao reconhecida."""
+    from app.transcricao import TranscricaoIndisponivel, transcrever
+
+    registro = MensagemWhatsapp.objects(id=mensagem_id).first()
+    if registro is None:
+        return
+    telefone = registro.telefone
+    membros = membros_do_telefone(telefone)
+    comunidade_ids = sorted({m.comunidade_id for m in membros})
+    audio = baixar_audio(registro)
+    texto = None
+    if audio is not None:
+        try:
+            texto = transcrever(audio.conteudo, audio.mime or registro.media_mime)
+        except TranscricaoIndisponivel as erro:
+            current_app.logger.warning("Audio do WhatsApp %s nao transcrito: %s", registro.id, erro)
+    if not texto:
+        current_app.logger.info("Audio de %s sem transcricao: foi pra caixa de entrada.", _mascarar(telefone))
+        return _nao_reconhecida(registro, telefone, membros, comunidade_ids)
+    registro.transcricao = texto[:2000]
+    registro.save()
+    current_app.logger.info("Audio de %s transcrito (%d caracteres).", _mascarar(telefone), len(texto))
+    return _tratar_texto(registro, telefone, texto, membros, comunidade_ids,
+                         prefixo=f"🎤 Entendi: “{texto[:300]}”\n\n")
+
+
+def _tratar_texto(registro, telefone, texto, membros, comunidade_ids, prefixo=""):
+    """Roteador de intencao aplicado ao texto (escrito ou transcrito do
+    audio). `prefixo` vai no comeco de toda resposta."""
+
+    def responder(resposta, acao=None):
+        _responder(telefone, prefixo + resposta, comunidade_ids, registro.membro_ids, acao=acao)
+
     intencao = interpretar_mensagem(texto)
 
     if intencao == AJUDA:
@@ -644,7 +701,7 @@ def processar_mensagem(msg, nomes_perfil):
         registro.acao = "informacao"
         registro.lida = True
         registro.save()
-        _responder(telefone, texto_do_menu(membros), comunidade_ids, registro.membro_ids, acao="menu")
+        responder(texto_do_menu(membros), acao="menu")
         return registro
 
     # Perguntas: so leitura. Sem dado cadastrado (endereco/horarios), cai na
@@ -661,15 +718,15 @@ def processar_mensagem(msg, nomes_perfil):
         current_app.logger.info("WhatsApp de %s: pergunta %s, %s.", _mascarar(telefone), intencao,
                                 "respondida" if resposta else "sem dado cadastrado, foi pra caixa de entrada")
         if resposta is None:
-            return _nao_reconhecida(registro, telefone, membros, comunidade_ids)
+            return _nao_reconhecida(registro, telefone, membros, comunidade_ids, prefixo)
         registro.acao = "consulta" if intencao in (CONSULTA_ESCALA, REPERTORIO) else "informacao"
         registro.lida = True  # respondida sozinha
         registro.save()
-        _responder(telefone, resposta, comunidade_ids, registro.membro_ids)
+        responder(resposta)
         return registro
 
     if intencao not in MUDAM_ESCALA:
-        return _nao_reconhecida(registro, telefone, membros, comunidade_ids)
+        return _nao_reconhecida(registro, telefone, membros, comunidade_ids, prefixo)
 
     escala, funcoes = proxima_escala_dos_membros(membros)
     current_app.logger.info("WhatsApp de %s: acao %s, proxima escala %s.", _mascarar(telefone), intencao,
@@ -682,7 +739,7 @@ def processar_mensagem(msg, nomes_perfil):
         registro.escala_id = escala.id
         registro.lida = True  # ja resolvida sozinha; nao precisa de atencao
         registro.save()
-    _responder(telefone, _texto_de_resposta(intencao, escala, funcoes), comunidade_ids, registro.membro_ids)
+    responder(_texto_de_resposta(intencao, escala, funcoes))
     return registro
 
 
