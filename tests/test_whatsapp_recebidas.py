@@ -95,7 +95,13 @@ def test_interpretar_resposta(texto, esperado):
     ("não confirmo ainda", None), ("acho que vou", None), ("talvez eu não consiga", None),
     ("confirmo depois", None), ("vou ver e te aviso", None), ("não vou faltar!", None),
     ("não posso perder esse culto", None), ("ok, mas que horas?", None), ("posso confirmar amanhã?", None),
-    ("bom dia", None), ("oi, tudo bem?", None), ("Amém 🙏", None), ("que horas?", None),
+    ("Amém 🙏", None), ("que horas?", None),
+    # Menu de comandos
+    ("menu", "ajuda"), ("Ajuda", "ajuda"), ("bom dia", "ajuda"), ("oi, tudo bem?", "ajuda"), ("?", "ajuda"),
+    ("o que você faz?", "ajuda"), ("quais são os comandos?", "ajuda"),
+    ("ajuda, preciso trocar", "troca"), ("bom dia, confirmo", "confirmar"),
+    ("3", "consulta_escala"), ("4", "repertorio"), ("5", "endereco"), ("6", "horarios"),
+    ("1", "confirmar"), ("2", "recusar"),
     ("vou levar meu violão", None), ("sim mas preciso falar com o pastor", None),
 ])
 def test_interpretar_mensagem(texto, esperado):
@@ -238,11 +244,13 @@ def test_pergunta_de_endereco_e_horario_usa_o_cadastro_ou_vai_pra_caixa(logged_i
     with app.app_context():
         comunidade, ministerio, _ = _igreja(logged_in_client)
 
-        # Sem nada cadastrado: nao responde, fica na caixa de entrada.
+        # Sem nada cadastrado: fica na caixa de entrada e a pessoa recebe o
+        # menu (so 1 vez, a 2a pergunta nao repete).
         _postar(logged_in_client, _payload("qual o endereço da igreja?", wamid="w1"))
         _postar(logged_in_client, _payload("que horas é o culto?", wamid="w2"))
-        assert enviados == []
+        assert len(enviados) == 1 and "passei para a liderança" in enviados[0][1]
         assert MensagemWhatsapp.objects(direcao="recebida", lida=False).count() == 2
+        enviados.clear()
 
         comunidade.endereco, comunidade.latitude, comunidade.longitude = "Rua A, 10", -20.5, -40.3
         comunidade.save()
@@ -255,16 +263,39 @@ def test_pergunta_de_endereco_e_horario_usa_o_cadastro_ou_vai_pra_caixa(logged_i
         assert "domingo às 19:00 (Louvor)" in enviados[1][1]
 
 
-def test_texto_qualquer_vai_pra_caixa_de_entrada_sem_resposta_automatica(logged_in_client, enviados, app, db):
+def test_texto_qualquer_vai_pra_caixa_de_entrada_e_recebe_o_menu_uma_vez(logged_in_client, enviados, app, db):
     with app.app_context():
         comunidade, ministerio, membro = _igreja(logged_in_client)
         escala = _escala(ministerio, membro)
         _postar(logged_in_client, _payload("Que horas é o ensaio?"))
-        assert enviados == []
+        assert len(enviados) == 1
+        assert "passei para a liderança" in enviados[0][1] and "4 - Músicas do repertório" in enviados[0][1]
         assert Funcao.objects(escala_id=escala.id).first().status == "nao_notificado"
-        msg = MensagemWhatsapp.objects.first()
+        msg = MensagemWhatsapp.objects(direcao="recebida").first()
         assert (msg.lida, msg.comunidade_ids, msg.membro_ids) == (False, [comunidade.id], [membro.id])
         assert "1 nova(s)" in logged_in_client.get(f"/comunidade/{comunidade.id}").data.decode()
+
+        # Conversa seguindo com a lideranca: sem menu de novo por 12h.
+        _postar(logged_in_client, _payload("E o ensaio de sábado?", wamid="wamid.2"))
+        assert len(enviados) == 1
+
+
+def test_menu_e_atalho_por_numero(logged_in_client, enviados, app, db):
+    from app.escala.models import ItemRepertorio
+
+    with app.app_context():
+        _, ministerio, membro = _igreja(logged_in_client)
+        escala = _escala(ministerio, membro)
+        ItemRepertorio(escala_id=escala.id, nome_musica="Bondade de Deus", tom="G", ordem=0).save()
+
+        _postar(logged_in_client, _payload("bom dia!", wamid="w1"))
+        assert enviados[-1][1].startswith("Olá, Ana! 👋") and "1 - Confirmar minha próxima escala" in enviados[-1][1]
+        assert MensagemWhatsapp.objects(wamid="w1").first().lida  # respondida sozinha, nao pede atencao
+
+        _postar(logged_in_client, _payload("4", wamid="w2"))
+        assert "Bondade de Deus — Tom: G" in enviados[-1][1]
+        _postar(logged_in_client, _payload("1", wamid="w3"))
+        assert Funcao.objects(escala_id=escala.id).first().status == "confirmado"
 
 
 def test_telefone_desconhecido_recebe_aviso_uma_vez_e_nao_aparece_em_comunidade(logged_in_client, enviados, app, db):
@@ -349,8 +380,8 @@ def test_caixa_de_entrada_lista_abre_e_responde(logged_in_client, enviados, app,
         assert MensagemWhatsapp.objects(lida=False).count() == 0  # abriu = lida
 
         logged_in_client.post(url, data={"texto": "As 19h!"})
-        assert enviados == [("+5511987654321", "As 19h!")]
-        enviada = MensagemWhatsapp.objects(direcao="enviada").first()
+        assert enviados[-1] == ("+5511987654321", "As 19h!")
+        enviada = MensagemWhatsapp.objects(direcao="enviada", texto="As 19h!").first()
         assert (enviada.texto, enviada.comunidade_ids) == ("As 19h!", [comunidade.id])
 
 
@@ -360,11 +391,12 @@ def test_resposta_fora_da_janela_de_24h_e_bloqueada(logged_in_client, enviados, 
     with app.app_context():
         comunidade, _, _ = _igreja(logged_in_client)
         _postar(logged_in_client, _payload("Oi"))
+        antes = len(enviados)  # o menu automatico
         MensagemWhatsapp.objects.update(set__criada_em=datetime.now(timezone.utc) - timedelta(hours=25))
         url = f"/comunidade/{comunidade.id}/whatsapp/5511987654321"
         assert "Já passaram 24h" in logged_in_client.get(url).data.decode()
         logged_in_client.post(url, data={"texto": "Oi!"})
-        assert enviados == []
+        assert len(enviados) == antes
 
 
 def test_caixa_de_entrada_so_para_admin_da_comunidade(logged_in_client, outro_logged_in_client, enviados, app, db):
@@ -372,8 +404,9 @@ def test_caixa_de_entrada_so_para_admin_da_comunidade(logged_in_client, outro_lo
         comunidade, _, _ = _igreja(logged_in_client)
         cid = comunidade.id
         _postar(logged_in_client, _payload("Oi"))
+        antes = len(enviados)  # o menu automatico
     with sessao_isolada(app):
         assert outro_logged_in_client.get(f"/comunidade/{cid}/whatsapp").status_code == 404
         assert outro_logged_in_client.post(f"/comunidade/{cid}/whatsapp/5511987654321",
                                            data={"texto": "x"}).status_code == 404
-        assert enviados == []
+        assert len(enviados) == antes

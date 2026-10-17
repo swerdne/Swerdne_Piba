@@ -284,7 +284,8 @@ def whatsapp(comunidade_id, telefone=None):
         conversas=conversas,
         conversa=conversa,
         rotulos_acao={"confirmado": "Confirmou a escala", "troca_solicitada": "Pediu troca",
-                      "consulta": "Perguntou da escala (respondido)", "informacao": "Dúvida respondida sozinha"},
+                      "consulta": "Perguntou da escala (respondido)", "informacao": "Dúvida respondida sozinha",
+                      "menu": "Menu de comandos automático"},
         timedelta_brasilia=timedelta(hours=3),  # Mongo devolve UTC sem fuso
         acao_form=AcaoForm(),
     )

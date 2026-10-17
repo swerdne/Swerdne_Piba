@@ -106,6 +106,22 @@ def _normalizar(texto):
 CONFIRMAR, RECUSAR, TROCA = "confirmar", "recusar", "troca"
 CONSULTA_ESCALA, ENDERECO, HORARIOS = "consulta_escala", "endereco", "horarios"
 REPERTORIO = "repertorio"
+AJUDA = "ajuda"
+
+# Menu de comandos: a pessoa manda "menu"/"ajuda"/"oi" e recebe a lista;
+# o numero sozinho escolhe a opcao (1 e 2 ja valiam como sim/nao antes).
+MENU_OPCOES = (
+    ("1", "Confirmar minha próxima escala", CONFIRMAR),
+    ("2", "Não posso ir / pedir troca", RECUSAR),
+    ("3", "Minhas próximas escalas", CONSULTA_ESCALA),
+    ("4", "Músicas do repertório", REPERTORIO),
+    ("5", "Endereço da igreja", ENDERECO),
+    ("6", "Horários dos cultos", HORARIOS),
+)
+_INTENCAO_POR_NUMERO = {numero: intencao for numero, _, intencao in MENU_OPCOES}
+# Menu automatico pra mensagem nao reconhecida: no maximo 1 a cada X, pra
+# nao interromper conversa com a lideranca pela caixa de entrada.
+INTERVALO_MENU_AUTOMATICO = timedelta(hours=12)
 MUDAM_ESCALA = (CONFIRMAR, RECUSAR, TROCA)
 
 _TROCA = re.compile(
@@ -155,6 +171,13 @@ _ENDERECO = re.compile(
 _HORARIOS = re.compile(r"\b(horario\w*|que horas|qual (a )?hora)\b")
 _ASSUNTO_CULTO = re.compile(r"\b(culto\w*|igreja|reuniao|reunioes|celebrac\w*|programac\w*)\b")
 _JOINHA = {"👍", "👍🏻", "👍🏼", "👍🏽", "👍🏾", "👍🏿", "✅"}
+_AJUDA = re.compile(
+    r"^(ajuda|menu|comandos?|opcoes|opcao|help|inicio)\b|\b(o que (voce|vc) (faz|sabe|pode)|como funciona"
+    r"|quais (sao )?(os )?comandos)\b"
+)
+# Cumprimento sozinho ("oi", "bom dia, tudo bem?") tambem abre o menu.
+_CUMPRIMENTO = {"oi", "ola", "opa", "bom", "boa", "dia", "tarde", "noite", "tudo", "bem", "td", "bele", "e", "ai",
+                "paz", "a", "do", "senhor", "irmao", "irma", "pastor", "pastora", "eae", "salve", "oii", "oie"}
 
 
 def _so_palavras(normal, essenciais):
@@ -166,8 +189,9 @@ def _so_palavras(normal, essenciais):
 def interpretar_mensagem(texto):
     """Uma das intencoes acima ou None (nao reconhecida -> caixa de entrada).
 
-    Ordem: troca > recusa > musicas do repertorio > pergunta da propria
-    escala > endereco > horarios > confirmacao. Confirmacao e a mais cautelosa: nunca com "?",
+    Ordem: numero do menu / so cumprimento > troca > recusa > musicas do
+    repertorio > pergunta da propria escala > endereco > horarios > pedido
+    de ajuda > confirmacao. Confirmacao e a mais cautelosa: nunca com "?",
     com uma negacao em qualquer lugar ("nao confirmo ainda") ou com
     incerteza ("acho que vou") -- nesses casos fica None."""
     bruto = (texto or "").strip()
@@ -177,7 +201,11 @@ def interpretar_mensagem(texto):
         return RECUSAR
     normal = _normalizar(bruto)
     if not normal:
-        return None
+        return AJUDA if bruto == "?" else None
+    if normal in _INTENCAO_POR_NUMERO:
+        return _INTENCAO_POR_NUMERO[normal]
+    if all(p in _CUMPRIMENTO for p in normal.split()):
+        return AJUDA
     pergunta = "?" in bruto
     incerto = bool(_INCERTEZA.search(normal)) or bool(_DUPLA_NEGACAO.search(normal))
 
@@ -196,6 +224,9 @@ def interpretar_mensagem(texto):
         return ENDERECO
     if _HORARIOS.search(normal) and _ASSUNTO_CULTO.search(normal):
         return HORARIOS
+    # Pedido de ajuda so depois das outras: "ajuda, preciso trocar" e troca.
+    if _AJUDA.search(normal):
+        return AJUDA
     if pergunta or incerto or _NEGACAO.search(normal):
         return None
     if _so_palavras(normal, _SO_CONFIRMA) or _CONFIRMA.search(normal):
@@ -371,6 +402,15 @@ def _texto_repertorio(membros):
     return "\n".join(linhas)
 
 
+def texto_do_menu(membros, introducao=None):
+    """Lista de comandos com atalho por numero."""
+    primeiro_nome = (membros[0].nome or "").split()[0].title() if membros and membros[0].nome else ""
+    linhas = [introducao or f"Olá{', ' + primeiro_nome if primeiro_nome else ''}! 👋 Posso te ajudar com:"]
+    linhas += [f"{numero} - {rotulo}" for numero, rotulo, _ in MENU_OPCOES]
+    linhas.append("Responda com o número ou escreva do seu jeito (ex: \"quais as músicas do culto?\").")
+    return "\n".join(linhas)
+
+
 def _comunidades(comunidade_ids):
     from app.comunidade.models import Comunidade
 
@@ -436,15 +476,15 @@ def _texto_da_mensagem(msg):
     return f"[{tipo or 'mensagem'} -- abra no WhatsApp pra ver]"
 
 
-def registrar_enviada(telefone, texto, comunidade_ids, membro_ids=(), usuario_id=None):
+def registrar_enviada(telefone, texto, comunidade_ids, membro_ids=(), usuario_id=None, acao=None):
     return MensagemWhatsapp(
         direcao=ENVIADA, telefone=telefone.lstrip("+"), texto=texto, lida=True,
         comunidade_ids=list(comunidade_ids), membro_ids=list(membro_ids),
-        enviada_por_usuario_id=usuario_id,
+        enviada_por_usuario_id=usuario_id, acao=acao,
     ).save()
 
 
-def _responder(telefone, texto, comunidade_ids, membro_ids):
+def _responder(telefone, texto, comunidade_ids, membro_ids, acao=None):
     from app.whatsapp import WhatsappNaoEnviadoError, enviar_whatsapp
 
     try:
@@ -453,7 +493,7 @@ def _responder(telefone, texto, comunidade_ids, membro_ids):
         current_app.logger.warning("Resposta automatica de WhatsApp nao enviada: %s", erro)
         return
     current_app.logger.info("Resposta automatica de WhatsApp enviada para %s.", _mascarar(telefone))
-    registrar_enviada(telefone, texto, comunidade_ids, membro_ids)
+    registrar_enviada(telefone, texto, comunidade_ids, membro_ids, acao=acao)
 
 
 TEXTO_NUMERO_DESCONHECIDO = (
@@ -475,6 +515,21 @@ def _responder_numero_desconhecido(telefone):
     if MensagemWhatsapp.objects(telefone=telefone, direcao=ENVIADA, criada_em__gte=desde).first():
         return
     _responder(telefone, TEXTO_NUMERO_DESCONHECIDO, [], [])
+
+
+def _nao_reconhecida(registro, telefone, membros, comunidade_ids):
+    """Fica na caixa de entrada pra lideranca (continua nao lida) e a pessoa
+    recebe o menu -- no maximo 1x a cada INTERVALO_MENU_AUTOMATICO, pra nao
+    interromper conversa com um lider."""
+    desde = datetime.now(timezone.utc) - INTERVALO_MENU_AUTOMATICO
+    menu_recente = MensagemWhatsapp.objects(telefone=telefone, direcao=ENVIADA, acao="menu",
+                                            criada_em__gte=desde).first()
+    current_app.logger.info("WhatsApp de %s nao reconhecido: foi pra caixa de entrada%s.", _mascarar(telefone),
+                            "" if menu_recente else " e recebeu o menu")
+    if not menu_recente:
+        introducao = "Recebi sua mensagem e passei para a liderança 🙏 Se for uma destas, é só responder com o número:"
+        _responder(telefone, texto_do_menu(membros, introducao), comunidade_ids, registro.membro_ids, acao="menu")
+    return registro
 
 
 def processar_mensagem(msg, nomes_perfil):
@@ -513,6 +568,14 @@ def processar_mensagem(msg, nomes_perfil):
 
     intencao = interpretar_mensagem(texto)
 
+    if intencao == AJUDA:
+        current_app.logger.info("WhatsApp de %s: pediu o menu.", _mascarar(telefone))
+        registro.acao = "informacao"
+        registro.lida = True
+        registro.save()
+        _responder(telefone, texto_do_menu(membros), comunidade_ids, registro.membro_ids, acao="menu")
+        return registro
+
     # Perguntas: so leitura. Sem dado cadastrado (endereco/horarios), cai na
     # caixa de entrada como mensagem nao reconhecida.
     if intencao in (CONSULTA_ESCALA, REPERTORIO, ENDERECO, HORARIOS):
@@ -527,7 +590,7 @@ def processar_mensagem(msg, nomes_perfil):
         current_app.logger.info("WhatsApp de %s: pergunta %s, %s.", _mascarar(telefone), intencao,
                                 "respondida" if resposta else "sem dado cadastrado, foi pra caixa de entrada")
         if resposta is None:
-            return registro
+            return _nao_reconhecida(registro, telefone, membros, comunidade_ids)
         registro.acao = "consulta" if intencao in (CONSULTA_ESCALA, REPERTORIO) else "informacao"
         registro.lida = True  # respondida sozinha
         registro.save()
@@ -535,8 +598,7 @@ def processar_mensagem(msg, nomes_perfil):
         return registro
 
     if intencao not in MUDAM_ESCALA:
-        current_app.logger.info("WhatsApp de %s nao reconhecido: foi pra caixa de entrada.", _mascarar(telefone))
-        return registro  # fica na caixa de entrada pra lideranca
+        return _nao_reconhecida(registro, telefone, membros, comunidade_ids)
 
     escala, funcoes = proxima_escala_dos_membros(membros)
     current_app.logger.info("WhatsApp de %s: acao %s, proxima escala %s.", _mascarar(telefone), intencao,
