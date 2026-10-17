@@ -659,6 +659,11 @@ def conversas_da_comunidade(comunidade_id):
     for m in mensagens:
         c = conversas.setdefault(m.telefone, {"telefone": m.telefone, "ultima": m, "nao_lidas": 0,
                                                "membro_ids": set(), "nome_perfil": None})
+        # A previa mostra o que a pessoa escreveu, nao o menu automatico que
+        # saiu logo depois (mesmo segundo) -- senao a pergunta some da lista.
+        if c["ultima"].direcao == ENVIADA and c["ultima"].acao == "menu" and m.criada_em and c["ultima"].criada_em \
+                and abs((c["ultima"].criada_em - m.criada_em).total_seconds()) < 60:
+            c["ultima"] = m
         if m.direcao == RECEBIDA and not m.lida:
             c["nao_lidas"] += 1
         c["membro_ids"].update(m.membro_ids or [])

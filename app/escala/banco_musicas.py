@@ -176,3 +176,113 @@ def preencher_palavras_chave_da_comunidade(comunidade_id):
         Musica.objects(id=musica.id).update(**mudancas)
     return preenchidas
 
+
+
+# --- Busca no banco (palavras-chave, trecho da letra, erro de digitacao) -----
+#
+# A tela filtra na hora por nome/artista/tom/tags (JS, sem servidor); esta
+# busca soma o que so o servidor acha: TRECHO DA LETRA ("Deus fiel"), varias
+# palavras ao mesmo tempo (todas precisam aparecer) e erro de digitacao
+# ("ressureicao" acha "ressurreicao"). Sem biblioteca externa.
+
+_PALAVRAS_VAZIAS = {"a", "o", "e", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas", "um", "uma",
+                    "que", "pra", "para", "por", "com", "se", "ao", "as", "os"}
+_ROTULO_LETRA = re.compile(r"^\s*\[[^\]]*\]\s*$")
+MAX_RESULTADOS_BUSCA = 60
+
+
+def _palavras(texto):
+    return re.findall(r"[a-z0-9]+", _sem_acento(texto or ""))
+
+
+def _texto_da_letra(musica):
+    """Letra sem acordes: a de projecao ou, sem ela, a cifra sem as linhas de acordes."""
+    from app.escala.models import eh_linha_de_acordes
+
+    if musica.letra_projecao:
+        bruto = musica.letra_projecao
+    else:
+        bruto = "\n".join(l for l in (musica.cifra_louvor or "").split("\n") if not eh_linha_de_acordes(l))
+    return "\n".join(l for l in bruto.split("\n") if not _ROTULO_LETRA.match(l))
+
+
+def _distancia_ate(a, b, limite):
+    """Distancia de edicao (Levenshtein) entre a e b, parando cedo: devolve
+    limite+1 assim que passar do limite (a maioria das comparacoes)."""
+    if abs(len(a) - len(b)) > limite:
+        return limite + 1
+    anterior = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        atual = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            atual[j] = min(anterior[j] + 1, atual[j - 1] + 1, anterior[j - 1] + (ca != cb))
+        if min(atual) > limite:
+            return limite + 1
+        anterior = atual
+    return anterior[-1]
+
+
+def _tolerancia(palavra):
+    """Quantos erros aceitar: palavra curta precisa vir certa."""
+    return 0 if len(palavra) < 4 else (1 if len(palavra) < 8 else 2)
+
+
+def buscar_no_banco(musicas, termo):
+    """[{"id", "onde"}] das musicas que tem TODAS as palavras do termo (no
+    nome/artista/tom/tags ou na letra, exata, comeco de palavra ou com poucos
+    erros), da mais relevante pra menos. `onde` = "nome", "tema" ou "letra"
+    (pra tela dizer por que apareceu).
+
+    Indice invertido (palavra -> musicas): a comparacao com erro de digitacao
+    roda 1 vez por palavra do VOCABULARIO do banco, nao por musica."""
+    termos = [p for p in _palavras(termo) if p not in _PALAVRAS_VAZIAS] or _palavras(termo)
+    if not termos:
+        return []
+    frase = " ".join(_palavras(termo))
+
+    pesos = {"nome": 3, "tema": 3, "letra": 1}
+    indice = {}  # palavra -> {musica_id: melhor campo}
+    letras, nomes = {}, {}
+    for musica in musicas:
+        nomes[musica.id] = musica.nome or ""
+        letra = _palavras(_texto_da_letra(musica))
+        letras[musica.id] = " ".join(letra)
+        campos = (("nome", _palavras(" ".join([musica.nome or "", musica.artista or "", musica.tom or ""]))),
+                  ("tema", _palavras(" ".join(musica.tags or []))), ("letra", letra))
+        for campo, palavras in campos:
+            for palavra in set(palavras):
+                atual = indice.setdefault(palavra, {}).get(musica.id)
+                if atual is None or pesos[campo] > pesos[atual]:
+                    indice[palavra][musica.id] = campo
+
+    pontos, onde = None, {}
+    for palavra in termos:
+        limite = _tolerancia(palavra)
+        achados = {}  # musica_id -> (pontos, campo)
+        for vocab, por_musica in indice.items():
+            if vocab == palavra or (len(palavra) >= 3 and vocab.startswith(palavra)):
+                fator = 2
+            elif limite and _distancia_ate(palavra, vocab, limite) <= limite:
+                fator = 1
+            else:
+                continue
+            for musica_id, campo in por_musica.items():
+                candidato = (pesos[campo] * fator, campo)
+                if candidato > achados.get(musica_id, (0, "")):
+                    achados[musica_id] = candidato
+        if pontos is None:
+            pontos = {m: p for m, (p, _) in achados.items()}
+        else:  # todas as palavras precisam aparecer
+            pontos = {m: pontos[m] + achados[m][0] for m in pontos if m in achados}
+        for musica_id, (_, campo) in achados.items():
+            if musica_id in pontos and (musica_id not in onde or onde[musica_id] == "letra"):
+                onde[musica_id] = campo
+        if not pontos:
+            return []
+
+    if len(termos) > 1:
+        for musica_id in pontos:
+            if frase in letras[musica_id]:
+                pontos[musica_id] += 4  # o trecho inteiro, na ordem, na letra
+    ordem = sorted(pontos, key=lambda m: (-pontos[m], _sem_acento(nomes[m])))
+    return [{"id": m, "onde": onde[m]} for m in ordem[:MAX_RESULTADOS_BUSCA]]

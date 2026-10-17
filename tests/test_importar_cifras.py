@@ -144,7 +144,7 @@ def test_tela_de_importacao_abre_e_repertorio_tem_o_link(logged_in_client, app, 
         ministerio = _ministerio(logged_in_client)
         tela = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio/importar")
         assert tela.status_code == 200
-        assert "Importar cifras de PDF ou Word" in tela.data.decode("utf-8")
+        assert "Importar cifras" in tela.data.decode("utf-8")
         banco = logged_in_client.get(f"/ministerio/{ministerio.id}/repertorio", follow_redirects=True)
         assert f"/ministerio/{ministerio.id}/repertorio/importar" in banco.data.decode("utf-8")  # banco local do ministerio
 

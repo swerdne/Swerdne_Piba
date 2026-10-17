@@ -52,6 +52,13 @@
                 <a href="{{ musica.link }}" target="_blank" rel="noopener" class="text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-full px-2.5 py-0.5"><i class="fa-solid fa-link mr-1"></i>Referencia</a>
                 {% endif %}
             </div>
+            {% if musica.fonte %}
+            <!-- Registro de onde veio (direitos autorais, ver ministerio/busca_web.py) -->
+            <p class="text-[11px] text-indigo-200 pt-1">
+                <i class="fa-solid fa-circle-info mr-1"></i>Fonte: {{ musica.fonte }}{% if musica.link_origem %} &middot;
+                <a href="{{ musica.link_origem }}" target="_blank" rel="noopener nofollow" class="underline hover:text-white">ver origem</a>{% endif %}
+            </p>
+            {% endif %}
         </div>
 
         <!-- Abas -->

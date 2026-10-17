@@ -8,6 +8,7 @@ from flask import render_template, redirect, url_for, flash, request, abort, jso
 from flask_login import login_required, current_user
 
 from app.imagens import salvar_imagem, remover_imagem
+from app.ministerio.busca_web import link_seguro
 from app.extensions import limiter
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.ministerio import bp
@@ -1290,6 +1291,8 @@ def dispensar_sugestao(musica_id):
 # Vale pros dois bancos (oficial: admin; local: lider do ministerio).
 
 _MAX_MUSICAS_POR_LOTE = 200
+# Cifra de uma musica tem alguns KB; corta texto absurdo (colado/editado no card).
+MAX_CIFRA_IMPORTADA = 50000
 
 
 @bp.route("/musicas/<int:comunidade_id>/importar")
@@ -1310,7 +1313,6 @@ def importar_musicas(comunidade_id=None, ministerio_id=None):
 def extrair_musica_pdf(comunidade_id=None, ministerio_id=None):
     """Le 1 arquivo (PDF ou .docx) e devolve a musica sugerida em JSON --
     nao grava nada."""
-    from app.escala.banco_musicas import musicas_oficiais
     from app.ministerio.importar_cifras import ArquivoInvalidoError, extrair_musica
 
     banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
@@ -1323,10 +1325,15 @@ def extrair_musica_pdf(comunidade_id=None, ministerio_id=None):
         musica = extrair_musica(arquivo.read(), arquivo.filename)
     except ArquivoInvalidoError as erro:
         return jsonify({"erro": str(erro)}), 422
+    return jsonify({"musica": _marcar_repetida(banco, musica)})
 
-    # Aviso de repetida (mesmo nome, sem diferenciar maiuscula) no proprio
-    # banco ou -- pra banco local -- no oficial, que o ministerio ja usa.
-    # A tela deixa desmarcada, mas a pessoa pode importar mesmo assim.
+
+def _marcar_repetida(banco, musica):
+    """Aviso de repetida (mesmo nome, sem diferenciar maiuscula) no proprio
+    banco ou -- pra banco local -- no oficial, que o ministerio ja usa. A tela
+    deixa desmarcada, mas a pessoa pode importar mesmo assim."""
+    from app.escala.banco_musicas import musicas_oficiais
+
     nome = musica["nome"]
     no_proprio_banco = banco.musicas().filter(nome__iexact=nome).first()
     musica["ja_existe"] = (
@@ -1335,7 +1342,28 @@ def extrair_musica_pdf(comunidade_id=None, ministerio_id=None):
     )
     # So da pra ATUALIZAR musica do proprio banco (lider nao mexe no oficial).
     musica["existente_id"] = no_proprio_banco.id if no_proprio_banco is not None else None
-    return jsonify({"musica": musica})
+    return musica
+
+
+@bp.route("/musicas/<int:comunidade_id>/importar/colar", methods=["POST"])
+@bp.route("/<int:ministerio_id>/repertorio/importar/colar", methods=["POST"])
+@login_required
+@limiter.limit("60 per minute")
+def colar_cifra(comunidade_id=None, ministerio_id=None):
+    """"Colar cifra": o texto que a pessoa colou vira a mesma revisao da
+    importacao de arquivo (nome/artista/tom/tags/cifra) -- so le, nao grava.
+    O servidor nunca busca link nenhum (ver ministerio/busca_web.py)."""
+    from app.ministerio.importar_cifras import ArquivoInvalidoError, extrair_musica_de_texto
+
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
+    if not AcaoForm().validate_on_submit():
+        return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
+    try:
+        musica = extrair_musica_de_texto(request.form.get("texto"))
+    except ArquivoInvalidoError as erro:
+        return jsonify({"erro": str(erro)}), 422
+    musica["link_origem"] = link_seguro(request.form.get("link_origem"))
+    return jsonify({"musica": _marcar_repetida(banco, musica)})
 
 
 @bp.route("/musicas/<int:comunidade_id>/importar/salvar", methods=["POST"])
@@ -1366,7 +1394,7 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
         nome = str(item.get("nome") or "").strip()[:150]
         if not nome:
             continue
-        cifra = str(item.get("cifra") or "").replace("\r\n", "\n").strip("\n") or None
+        cifra = str(item.get("cifra") or "").replace("\r\n", "\n").strip("\n")[:MAX_CIFRA_IMPORTADA] or None
         tom = str(item.get("tom") or "").strip()[:10] or None
 
         # Reimportacao pra corrigir: troca a cifra da musica que ja existe no
@@ -1397,6 +1425,8 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
             palavras_chave_verificadas=True,  # revisadas no card da importacao
             cifra_louvor=cifra,
             letra_projecao=projecao_da_cifra(cifra) or None if cifra else None,
+            fonte=str(item.get("fonte") or "").strip()[:120] or None,
+            link_origem=link_seguro(item.get("link_origem")),
         ))
     for musica in novas:
         musica.save()
@@ -1407,6 +1437,86 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
         total = request.form.get("total", type=int) or (len(novas) + atualizadas)
         flash(f"{total} musica(s) importada(s) para o {banco.titulo.lower()}.", "success")
     return jsonify({"criadas": len(novas) + atualizadas, "destino": _url_do_banco(banco)})
+
+
+# --- Busca: no banco (letra/palavras-chave) e na web (so dados + link) --------
+
+@bp.route("/musicas/<int:comunidade_id>/buscar")
+@bp.route("/<int:ministerio_id>/repertorio/buscar")
+@login_required
+@limiter.limit("120 per minute")
+def buscar_musicas(comunidade_id=None, ministerio_id=None):
+    """Busca do modo "No banco" que o filtro instantaneo da tela nao faz:
+    trecho da letra, varias palavras e erro de digitacao (JSON com ids, a
+    tela mostra as musicas que ja tem). Quem ve o banco, busca."""
+    from app.escala.banco_musicas import buscar_no_banco
+
+    banco = _banco_ou_404(comunidade_id, ministerio_id)
+    termo = (request.args.get("q") or "").strip()[:100]
+    if len(termo) < 2:
+        return jsonify({"resultados": []})
+    musicas = banco.musicas().only("id", "nome", "artista", "tom", "tags", "letra_projecao", "cifra_louvor")
+    return jsonify({"resultados": buscar_no_banco(musicas, termo)})
+
+
+def _chave_limite_por_usuario():
+    return f"usuario:{current_user.get_id()}"
+
+
+@bp.route("/musicas/<int:comunidade_id>/busca-web")
+@bp.route("/<int:ministerio_id>/repertorio/busca-web")
+@login_required
+@limiter.limit("20 per minute", key_func=_chave_limite_por_usuario)
+def busca_web(comunidade_id=None, ministerio_id=None):
+    """Modo "Na web": so metadados de fonte que permite integracao (Deezer)
+    + links externos pra pessoa abrir a cifra no site original -- ver
+    ministerio/busca_web.py. Quem edita este banco (lider no local, admin no
+    oficial). Erro da fonte externa volta como JSON, nunca derruba a tela."""
+    from app.ministerio.busca_web import BuscaWebIndisponivel, buscar_na_web
+
+    _banco_editavel_ou_404(comunidade_id, ministerio_id)
+    try:
+        return jsonify({"resultados": buscar_na_web(request.args.get("q"))})
+    except ValueError as erro:
+        return jsonify({"erro": str(erro)}), 400
+    except BuscaWebIndisponivel as erro:
+        return jsonify({"erro": str(erro)}), 503
+
+
+@bp.route("/musicas/<int:comunidade_id>/busca-web/adicionar", methods=["POST"])
+@bp.route("/<int:ministerio_id>/repertorio/busca-web/adicionar", methods=["POST"])
+@login_required
+def adicionar_da_web(comunidade_id=None, ministerio_id=None):
+    """Cria a musica com os DADOS do resultado da web (nome, artista, fonte,
+    link de origem) -- sem cifra: a pessoa cola a cifra no Louvor depois.
+    Ja existe com esse nome neste banco: abre a existente em vez de duplicar."""
+    from app.ministerio.busca_web import FONTE_DEEZER
+
+    banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(_url_do_banco(banco))
+    nome = (request.form.get("titulo") or "").strip()[:150]
+    if not nome:
+        flash("Resultado sem titulo.", "danger")
+        return redirect(_url_do_banco(banco))
+    existente = banco.musicas().filter(nome__iexact=nome).first()
+    if existente is not None:
+        flash(f'"{existente.nome}" ja esta neste banco -- abrimos ela.', "warning")
+        return redirect(url_for("ministerio.musica", musica_id=existente.id))
+
+    musica = banco.nova_musica(
+        nome=nome,
+        artista=(request.form.get("artista") or "").strip()[:120] or None,
+        fonte=FONTE_DEEZER,
+        link_origem=link_seguro(request.form.get("link_origem")),
+    )
+    _palavras_chave_se_faltar(musica)
+    musica.palavras_chave_verificadas = False  # a cifra colada depois completa as tags
+    musica.save()
+    flash(f'"{musica.nome}" adicionada ao {banco.titulo.lower()}. Agora cole a cifra aqui no Louvor '
+          '(de onde voce tem direito de copiar); a Projecao sai dela.', "success")
+    return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
 
 
 # --- Tela e edicao de 1 musica ---------------------------------------------------

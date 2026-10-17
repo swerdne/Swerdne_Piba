@@ -941,6 +941,11 @@ class Musica(SequentialIdDocument):
     tom = mongoengine.StringField(max_length=10)
     tags = mongoengine.ListField(mongoengine.StringField(max_length=40))
     link = mongoengine.StringField(max_length=500)
+    # De onde a musica veio (importacao): "Arquivo PDF/Word", "Texto colado",
+    # "Deezer (so dados)"... e o link de origem, quando ha -- registro de
+    # direitos autorais (ver ministerio/busca_web.py). Vazio = cadastro manual.
+    fonte = mongoengine.StringField(max_length=120)
+    link_origem = mongoengine.StringField(max_length=500)
     letra_projecao = mongoengine.StringField()
     cifra_louvor = mongoengine.StringField()
     # Cifra salva em outros tons (a original continua em cifra_louvor/tom).

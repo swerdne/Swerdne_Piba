@@ -392,22 +392,45 @@ def _comeco_da_cifra(linha):
     return eh_linha_de_acordes(linha) or bool(_ROTULO.match(linha))
 
 
+FONTE_ARQUIVO = "Arquivo PDF/Word"
+FONTE_TEXTO_COLADO = "Texto colado"
+# Cifra colada: uma musica tem alguns KB; acima disso nao e uma cifra.
+MAX_TEXTO_COLADO = 30000
+
+
 def extrair_musica(dados, nome_arquivo=""):
-    """Devolve {"nome", "artista", "tom", "cifra", "avisos": [...]} a partir
-    dos bytes de um PDF ou .docx (decide pela extensao de `nome_arquivo`).
-    Levanta ArquivoInvalidoError se nem der pra ler."""
-    avisos = []
-    linhas = _normalizar(_texto_do_arquivo(dados, nome_arquivo))
-    if not any(l.strip() for l in linhas):
+    """Devolve {"nome", "artista", "tom", "cifra", "tags", "fonte", "avisos": [...]}
+    a partir dos bytes de um PDF ou .docx (decide pela extensao de
+    `nome_arquivo`). Levanta ArquivoInvalidoError se nem der pra ler."""
+    texto = _texto_do_arquivo(dados, nome_arquivo)
+    if not texto.strip():
         vazio = (
             "Este documento esta vazio." if (nome_arquivo or "").lower().endswith(".docx")
             else "Este PDF nao tem texto (parece escaneado ou imagem) -- nao da pra extrair a cifra."
         )
         return {
             "nome": _nome_do_arquivo(nome_arquivo), "artista": "", "tom": "", "cifra": "", "tags": [],
-            "avisos": [vazio],
+            "fonte": FONTE_ARQUIVO, "avisos": [vazio],
         }
+    return _extrair_do_texto(texto, _nome_do_arquivo(nome_arquivo), "Nome tirado do nome do arquivo -- confira.",
+                             FONTE_ARQUIVO)
 
+
+def extrair_musica_de_texto(texto):
+    """Mesma extracao, pra cifra colada na tela ("Colar cifra") -- o texto
+    vem da pessoa (copiado de onde ela tem direito de copiar), o servidor
+    nunca busca pagina nenhuma. Levanta ArquivoInvalidoError se vazio/grande."""
+    texto = (texto or "").strip("\n")
+    if not texto.strip():
+        raise ArquivoInvalidoError("Cole o texto da cifra.")
+    if len(texto) > MAX_TEXTO_COLADO:
+        raise ArquivoInvalidoError(f"Texto grande demais (maximo {MAX_TEXTO_COLADO} caracteres) -- cole uma musica por vez.")
+    return _extrair_do_texto(texto, "Musica sem nome", "Nome nao encontrado no texto -- preencha.", FONTE_TEXTO_COLADO)
+
+
+def _extrair_do_texto(texto, nome_padrao, aviso_nome_padrao, fonte):
+    avisos = []
+    linhas = _normalizar(texto)
     linhas, titulo = _sem_cabecalho_e_rodape(linhas)
     linhas = _tirar_recuo_comum(linhas)
     nome, artista = _nome_artista_do_titulo(titulo) if titulo else (None, None)
@@ -445,8 +468,8 @@ def extrair_musica(dados, nome_arquivo=""):
     cifra = "\n".join(_compactar(extras_do_topo + ([""] if extras_do_topo else []) + corpo))
 
     if not nome:
-        nome = _nome_do_arquivo(nome_arquivo)
-        avisos.append("Nome tirado do nome do arquivo -- confira.")
+        nome = nome_padrao
+        avisos.append(aviso_nome_padrao)
     if not any(eh_linha_de_acordes(l) for l in cifra.split("\n")):
         avisos.append("Nao encontrei acordes -- confira se este PDF e mesmo uma cifra.")
     if not tom:
@@ -467,6 +490,7 @@ def extrair_musica(dados, nome_arquivo=""):
         "tom": tom[:10],
         "cifra": cifra,
         "tags": sugerir_tags(nome, cifra=cifra),
+        "fonte": fonte,
         "avisos": avisos,
     }
 

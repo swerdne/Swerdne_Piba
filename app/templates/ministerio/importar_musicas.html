@@ -21,7 +21,7 @@
             </a>
             <div class="min-w-0">
                 <p class="text-xs {{ tema.text_secondary }} truncate">{{ banco.titulo }} &middot; {{ comunidade.nome }}</p>
-                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Importar cifras de PDF ou Word</h1>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Importar cifras</h1>
             </div>
         </div>
         {{ logo_inicio(tema) }}
@@ -29,6 +29,39 @@
 
     <main class="px-4 sm:px-6 pt-2 pb-32 max-w-xl lg:max-w-3xl mx-auto space-y-5">
         <form id="form-csrf" class="hidden">{{ acao_form.hidden_tag() }}</form>
+
+        <!-- Direitos autorais: a cifra entra so pelo que a pessoa tem direito de trazer -->
+        <div class="flex gap-3 rounded-2xl px-4 py-3 bg-amber-500/10 border border-amber-500/30">
+            <i class="fa-solid fa-scale-balanced text-amber-500 mt-0.5"></i>
+            <p class="text-xs leading-relaxed {{ tema.text_primary }}">
+                Cifras e letras têm <span class="font-semibold">direitos autorais</span>. Importe só o que você pode usar
+                (material próprio, licenciado ou de domínio público, ou para uso no culto conforme a licença da igreja).
+                A fonte de cada música fica registrada nela.
+            </p>
+        </div>
+
+        <!-- Colar cifra: o texto vem da pessoa; o servidor nunca busca link -->
+        <details data-colar class="group {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl">
+            <summary class="flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer select-none list-none">
+                <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
+                    <i class="fa-solid fa-paste {{ tema.accent_text }}"></i>Colar o texto de uma cifra
+                </span>
+                <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition group-open:rotate-180"></i>
+            </summary>
+            <div class="px-4 pb-4 pt-1 space-y-2.5 border-t {{ tema.card_border }}">
+                <p class="text-xs {{ tema.text_secondary }} pt-2">Cole nome, artista, "Tom: X" e a cifra (acordes em cima da letra). O sistema separa tudo e você confere antes de salvar.</p>
+                <textarea data-colar-texto rows="10" maxlength="30000" spellcheck="false" aria-label="Texto da cifra"
+                          placeholder="Bondade de Deus&#10;Isaías Saad&#10;Tom: G&#10;&#10;G        D&#10;Te amo, Deus..."
+                          class="w-full font-mono text-xs leading-snug whitespace-pre {{ CAMPO }}"></textarea>
+                <input type="url" data-colar-link maxlength="500" placeholder="Link de onde copiou (opcional, fica registrado)"
+                       aria-label="Link de origem" class="w-full {{ CAMPO }}">
+                <button type="button" data-colar-ler
+                        class="w-full sm:w-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Ler cifra
+                </button>
+                <p data-colar-erro class="hidden text-xs text-red-400"></p>
+            </div>
+        </details>
 
         <p class="text-sm {{ tema.text_secondary }}">
             No site da cifra (Cifra Club, Cifras, Letras...), use <span class="font-semibold {{ tema.text_primary }}">Imprimir &rarr; Salvar como PDF</span>.
@@ -207,6 +240,9 @@
         var no = modeloMusica.content.cloneNode(true);
         var card = no.querySelector('[data-card]');
         card.querySelector('[data-arquivo]').textContent = nomeArquivo;
+        // Registro de onde veio (Musica.fonte/link_origem), mandado no salvar.
+        card.setAttribute('data-fonte', musica.fonte || '');
+        card.setAttribute('data-link-origem', musica.link_origem || '');
         ['nome', 'artista', 'cifra'].forEach(function (campo) {
             card.querySelector('[data-campo="' + campo + '"]').value = musica[campo] || '';
         });
@@ -300,6 +336,45 @@
             .catch(function () { mostrarErro(vaga, arquivo.name, 'Falha de conexao -- tente de novo.'); })
             .then(concluir);
     }
+
+    // ---- Colar cifra: mesmo card de revisao, lido do texto colado ----
+    var URL_COLAR = "{{ url_for('ministerio.colar_cifra', **banco.args) }}";
+    var colarTexto = document.querySelector('[data-colar-texto]');
+    var colarLink = document.querySelector('[data-colar-link]');
+    var colarBotao = document.querySelector('[data-colar-ler]');
+    var colarErro = document.querySelector('[data-colar-erro]');
+
+    function avisoColar(mensagem) {
+        colarErro.textContent = mensagem || '';
+        colarErro.classList.toggle('hidden', !mensagem);
+    }
+
+    colarBotao.addEventListener('click', function () {
+        if (!colarTexto.value.trim()) { avisoColar('Cole o texto da cifra.'); return; }
+        avisoColar('');
+        colarBotao.disabled = true;
+        var vaga = modeloVaga.content.cloneNode(true).querySelector('[data-vaga]');
+        vaga.querySelector('[data-arquivo]').textContent = 'Texto colado';
+        lista.prepend(vaga);
+        var dados = new FormData();
+        dados.append('csrf_token', csrf);
+        dados.append('texto', colarTexto.value);
+        dados.append('link_origem', colarLink.value.trim());
+        fetch(URL_COLAR, { method: 'POST', body: dados, credentials: 'same-origin' })
+            .then(function (r) { return r.json().catch(function () { return { erro: 'Erro ao ler o texto (' + r.status + ').' }; }); })
+            .then(function (resposta) {
+                if (resposta.musica) {
+                    mostrarMusica(vaga, 'Texto colado', resposta.musica);
+                    colarTexto.value = '';
+                    colarLink.value = '';
+                } else {
+                    vaga.remove();
+                    avisoColar(resposta.erro || 'Nao foi possivel ler o texto.');
+                }
+            })
+            .catch(function () { vaga.remove(); avisoColar('Falha de conexao -- tente de novo.'); })
+            .then(function () { colarBotao.disabled = false; atualizarResumo(); });
+    });
 
     function caminho(arquivo) {
         return arquivo.caminhoNaPasta || arquivo.webkitRelativePath || arquivo.name;
@@ -412,6 +487,8 @@
             if (atualizar.checked && card.getAttribute('data-existente-id')) {
                 item.atualizar_id = card.getAttribute('data-existente-id');
             }
+            item.fonte = card.getAttribute('data-fonte') || '';
+            item.link_origem = card.getAttribute('data-link-origem') || '';
             musicas.push(item);
         });
         if (musicas.some(function (m) { return !m.nome.trim(); })) {

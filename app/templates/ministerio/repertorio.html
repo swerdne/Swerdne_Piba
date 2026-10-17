@@ -152,12 +152,46 @@
 
         <!-- ===== Modo Lista ===== -->
         <section data-modo-conteudo="lista" class="space-y-3">
-            {% if musicas %}
+            {% if musicas or pode_gerenciar %}
             <div class="relative" data-tutorial="busca">
                 <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-sm {{ tema.text_secondary }}"></i>
-                <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tom ou tema (ex: cruz)"
-                       class="w-full pl-10 {{ CAMPO }}">
+                <input type="search" data-busca-musica placeholder="Buscar por nome, artista, tema ou trecho da letra"
+                       enterkeyhint="search" class="w-full pl-10 {{ CAMPO }}">
             </div>
+            {% if pode_gerenciar %}
+            <!-- No banco (padrao) | Na web: so dados + link externo, ver ministerio/busca_web.py -->
+            <div class="flex items-center gap-2">
+                <div class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Onde buscar">
+                    <button type="button" data-modo-busca="banco" role="tab"
+                            class="text-[11px] font-semibold px-3 py-1 rounded-full transition">No banco</button>
+                    <button type="button" data-modo-busca="web" role="tab"
+                            class="text-[11px] font-semibold px-3 py-1 rounded-full transition"><i class="fa-solid fa-globe mr-1"></i>Na web</button>
+                </div>
+            </div>
+            <section data-painel-web class="hidden space-y-3" aria-live="polite">
+                <div class="flex gap-3 rounded-2xl px-4 py-3 bg-amber-500/10 border border-amber-500/30">
+                    <i class="fa-solid fa-scale-balanced text-amber-500 mt-0.5"></i>
+                    <p class="text-xs leading-relaxed {{ tema.text_primary }}">
+                        A busca na web traz só <span class="font-semibold">título e artista</span> (fonte: Deezer).
+                        Cifras e letras têm direitos autorais: abra a cifra no site original e, ao adicionar,
+                        cole no Louvor só o que você pode usar. A fonte fica registrada na música.
+                    </p>
+                </div>
+                <button type="button" data-buscar-web
+                        class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-50">
+                    <i class="fa-solid fa-globe mr-1"></i>Buscar na web
+                </button>
+                <p data-web-estado class="hidden text-center text-sm {{ tema.text_secondary }} py-4"></p>
+                <div data-web-resultados class="space-y-2"></div>
+                <form method="POST" action="{{ url_for('ministerio.adicionar_da_web', **banco.args) }}" data-form-web class="hidden">
+                    {{ acao_form.hidden_tag() }}
+                    <input type="hidden" name="titulo"><input type="hidden" name="artista"><input type="hidden" name="link_origem">
+                </form>
+            </section>
+            {% endif %}
+            {% endif %}
+            {% if musicas %}
+            <div data-area-banco class="space-y-3">
             <!-- A lista fica escondida (nao ocupa a tela) ate pesquisar, tocar num
                  tema ou pedir "Ver todas"/"Ver marcadas" -- ver filtro no JS abaixo. -->
             <div class="flex flex-wrap gap-1.5">
@@ -231,7 +265,7 @@
 
             <div data-lista-musicas class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
                 {% for m in musicas %}
-                <div data-musica-item
+                <div data-musica-item data-id="{{ m.id }}" data-nome="{{ m.nome }}"
                      data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
                      class="flex items-center {{ tema.card_bg_hover }} transition">
                     {% if pode_marcar %}
@@ -247,6 +281,8 @@
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ m.nome }}</p>
                             <p class="text-xs {{ tema.text_secondary }} truncate">{{ m.artista or 'Artista nao informado' }}</p>
+                            <!-- Por que apareceu na busca do servidor (trecho da letra / grafia parecida) -->
+                            <p data-onde class="hidden text-[10px] font-semibold {{ tema.accent_text }}"></p>
                             {% if m.tags %}
                             <div class="flex flex-wrap gap-1 mt-1">
                                 {% for tag in m.tags %}
@@ -282,8 +318,9 @@
                     </button>
                 </div>
             </div>
+            </div>
             {% else %}
-            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
+            <div data-area-banco class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
                 <i class="fa-solid fa-music text-3xl {{ tema.text_secondary }}"></i>
                 <p class="text-sm {{ tema.text_secondary }} mt-3">Nenhuma musica neste banco ainda.</p>
             </div>
@@ -562,6 +599,17 @@
             ATIVO.forEach(function (c) { botao.classList.toggle(c, ativo); });
         }
 
+        // Busca do servidor (trecho da letra, varias palavras, erro de
+        // digitacao -- ministerio.buscar_musicas): soma, depois das que o
+        // filtro instantaneo achou, as que so o servidor acha.
+        var URL_BUSCA = "{{ url_for('ministerio.buscar_musicas', **banco.args) }}";
+        var itemPorId = {};
+        itens.forEach(function (item) { itemPorId[item.getAttribute('data-id')] = item; });
+        var extras = [];        // [{id, onde}] do servidor pro termo abaixo
+        var termoExtras = '';
+        var buscandoNoServidor = false;
+        var ROTULO_ONDE = { letra: 'Achou na letra', nome: 'Grafia parecida', tema: 'Tema parecido' };
+
         function aplicarFiltro() {
             if (!listaMusicas) return;
             var termo = semAcento(busca ? busca.value.trim() : '');
@@ -572,6 +620,17 @@
                 var caixa = item.querySelector('[data-selecionar]');
                 return filtro === 'marcadas' && caixa && caixa.checked;
             });
+            itens.forEach(function (item) { var onde = item.querySelector('[data-onde]'); if (onde) onde.classList.add('hidden'); });
+            if (termo && termo === termoExtras) {
+                extras.forEach(function (r) {
+                    var item = itemPorId[String(r.id)];
+                    if (!item || combinam.indexOf(item) !== -1) return;
+                    combinam.push(item);
+                    var onde = item.querySelector('[data-onde]');
+                    if (onde) { onde.textContent = ROTULO_ONDE[r.onde] || ''; onde.classList.toggle('hidden', !onde.textContent); }
+                });
+            }
+            if (vazia) vazia.textContent = buscandoNoServidor ? 'Procurando também na letra...' : 'Nenhuma musica encontrada.';
             itens.forEach(function (item) { item.classList.add('hidden'); });
             if (mostrarLista) combinam.slice(0, limite).forEach(function (item) { item.classList.remove('hidden'); });
 
@@ -596,7 +655,142 @@
             limite = PAGINA;
             aplicarFiltro();
         }
-        if (busca) busca.addEventListener('input', function () { limite = PAGINA; aplicarFiltro(); });
+        var esperaBusca = null;
+        function buscarNoServidor() {
+            var bruto = busca.value.trim();
+            var termo = semAcento(bruto);
+            if (termo.length < 3 || modoBusca === 'web') { buscandoNoServidor = false; aplicarFiltro(); return; }
+            buscandoNoServidor = true;
+            fetch(URL_BUSCA + '?q=' + encodeURIComponent(bruto), { credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : { resultados: [] }; })
+                .catch(function () { return { resultados: [] }; })  // sem servidor: fica o filtro da tela
+                .then(function (dados) {
+                    if (semAcento(busca.value.trim()) !== termo) return;  // a pessoa ja digitou outra coisa
+                    extras = dados.resultados || [];
+                    termoExtras = termo;
+                    buscandoNoServidor = false;
+                    aplicarFiltro();
+                });
+        }
+        if (busca) busca.addEventListener('input', function () {
+            limite = PAGINA;
+            aplicarFiltro();
+            clearTimeout(esperaBusca);
+            esperaBusca = setTimeout(buscarNoServidor, 350);
+        });
+
+        // ---- Modo "Na web" (so quem edita este banco): titulo/artista do
+        // Deezer + links externos; "Adicionar" cria a musica sem cifra.
+        var modoBusca = 'banco';
+        var botoesModoBusca = document.querySelectorAll('[data-modo-busca]');
+        var painelWeb = document.querySelector('[data-painel-web]');
+        var areasBanco = document.querySelectorAll('[data-area-banco]');
+        var URL_BUSCA_WEB = "{{ url_for('ministerio.busca_web', **banco.args) }}";
+        var botaoBuscarWeb = document.querySelector('[data-buscar-web]');
+        var estadoWeb = document.querySelector('[data-web-estado]');
+        var resultadosWeb = document.querySelector('[data-web-resultados]');
+        var formWeb = document.querySelector('[data-form-web]');
+        var nomesNoBanco = {};
+        itens.forEach(function (item) { nomesNoBanco[semAcento(item.getAttribute('data-nome'))] = item.querySelector('a').href; });
+
+        function trocarModoBusca(novo) {
+            modoBusca = novo;
+            botoesModoBusca.forEach(function (b) { realcar(b, b.getAttribute('data-modo-busca') === novo); });
+            if (painelWeb) painelWeb.classList.toggle('hidden', novo !== 'web');
+            areasBanco.forEach(function (a) { a.classList.toggle('hidden', novo === 'web'); });
+            if (busca) busca.placeholder = novo === 'web'
+                ? 'Nome da música ou artista (ex: Bondade de Deus)'
+                : 'Buscar por nome, artista, tema ou trecho da letra';
+        }
+
+        function estadoDaWeb(texto, erro) {
+            estadoWeb.textContent = texto || '';
+            estadoWeb.classList.toggle('hidden', !texto);
+            estadoWeb.classList.toggle('text-red-400', !!erro);
+        }
+
+        function linkExterno(href, icone, texto) {
+            var a = document.createElement('a');
+            a.href = href;
+            a.target = '_blank';
+            a.rel = 'noopener nofollow';
+            a.className = 'inline-flex items-center gap-1 text-xs font-semibold {{ tema.accent_text }} hover:underline';
+            var i = document.createElement('i');
+            i.className = icone;
+            a.appendChild(i);
+            a.appendChild(document.createTextNode(texto));
+            return a;
+        }
+
+        function cardDaWeb(r) {
+            // So textContent/atributos -- nada do resultado externo vira HTML.
+            var card = document.createElement('div');
+            card.className = '{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 space-y-2';
+            var titulo = document.createElement('p');
+            titulo.className = 'text-sm font-semibold {{ tema.text_primary }}';
+            titulo.textContent = r.titulo;
+            var sub = document.createElement('p');
+            sub.className = 'text-xs {{ tema.text_secondary }}';
+            sub.textContent = [r.artista, r.album].filter(Boolean).join(' · ') + ' — fonte: ' + r.fonte;
+            var acoes = document.createElement('div');
+            acoes.className = 'flex flex-wrap items-center gap-x-4 gap-y-2';
+            var jaTem = nomesNoBanco[semAcento(r.titulo)];
+            if (jaTem) {
+                acoes.appendChild(linkExterno(jaTem, 'fa-solid fa-circle-check', ' Já está no banco'));
+                acoes.lastChild.removeAttribute('target');
+            } else {
+                var adicionar = document.createElement('button');
+                adicionar.type = 'button';
+                adicionar.className = '{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-full transition';
+                adicionar.textContent = '+ Adicionar ao banco';
+                adicionar.addEventListener('click', function () {
+                    formWeb.querySelector('[name="titulo"]').value = r.titulo;
+                    formWeb.querySelector('[name="artista"]').value = r.artista || '';
+                    formWeb.querySelector('[name="link_origem"]').value = r.link_origem || '';
+                    adicionar.disabled = true;
+                    formWeb.submit();
+                });
+                acoes.appendChild(adicionar);
+            }
+            acoes.appendChild(linkExterno(r.links.cifraclub, 'fa-solid fa-guitar', ' Ver cifra no Cifra Club'));
+            acoes.appendChild(linkExterno(r.links.youtube, 'fa-brands fa-youtube', ' YouTube'));
+            card.appendChild(titulo);
+            card.appendChild(sub);
+            card.appendChild(acoes);
+            return card;
+        }
+
+        function buscarNaWeb() {
+            var termo = (busca && busca.value.trim()) || '';
+            if (termo.length < 2) { estadoDaWeb('Digite o nome da música ou do artista.', true); return; }
+            resultadosWeb.textContent = '';
+            estadoDaWeb('Buscando na web...');
+            botaoBuscarWeb.disabled = true;
+            fetch(URL_BUSCA_WEB + '?q=' + encodeURIComponent(termo), { credentials: 'same-origin' })
+                .then(function (r) {
+                    if (r.status === 429) return { erro: 'Muitas buscas seguidas -- espere um minuto e tente de novo.' };
+                    return r.json().catch(function () { return { erro: 'A busca na web nao respondeu (' + r.status + ').' }; });
+                })
+                .catch(function () { return { erro: 'Sem conexao -- tente de novo.' }; })
+                .then(function (dados) {
+                    botaoBuscarWeb.disabled = false;
+                    if (dados.erro) { estadoDaWeb(dados.erro, true); return; }
+                    var lista = dados.resultados || [];
+                    if (!lista.length) { estadoDaWeb('Nada encontrado na web para "' + termo + '". Tente o nome exato ou o artista.'); return; }
+                    estadoDaWeb('');
+                    lista.forEach(function (r) { resultadosWeb.appendChild(cardDaWeb(r)); });
+                });
+        }
+
+        botoesModoBusca.forEach(function (b) {
+            b.addEventListener('click', function () { trocarModoBusca(b.getAttribute('data-modo-busca')); });
+        });
+        if (botaoBuscarWeb) botaoBuscarWeb.addEventListener('click', buscarNaWeb);
+        if (busca) busca.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && modoBusca === 'web') { e.preventDefault(); buscarNaWeb(); }
+        });
+        // Comeca sempre em "No banco" (a web fica discreta, a um toque).
+        if (botoesModoBusca.length) trocarModoBusca('banco');
         if (botaoTodas) botaoTodas.addEventListener('click', function () { trocarFiltro('todas'); });
         if (botaoMarcadas) botaoMarcadas.addEventListener('click', function () { trocarFiltro('marcadas'); });
         if (botaoMarcadasBarra) botaoMarcadasBarra.addEventListener('click', function () {
