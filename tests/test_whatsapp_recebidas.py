@@ -84,7 +84,7 @@ def test_interpretar_resposta(texto, esperado):
     # Perguntas
     ("qual minha próxima escala?", "consulta_escala"), ("Quando é meu culto?", "consulta_escala"),
     ("estou escalado pra quando?", "consulta_escala"), ("que dia eu toco?", "consulta_escala"),
-    ("Qual o endereço da igreja?", "endereco"), ("onde fica?", "endereco"),
+    ("Qual o endereço da igreja?", "endereco"), ("onde fica?", "endereco"), ("Local da igreja.", "endereco"),
     ("que horas é o culto?", "horarios"), ("qual o horário da igreja", "horarios"),
     ("quais as músicas do culto?", "repertorio"), ("repertório de domingo", "repertorio"),
     ("me manda a cifra", "repertorio"), ("qual a música de domingo?", "repertorio"),
@@ -504,6 +504,31 @@ def test_audio_com_pergunta_responde_e_sem_fala_vai_pra_caixa(logged_in_client, 
         assert len(enviados) == total
         conversa = logged_in_client.get(f"/comunidade/{comunidade_id}/whatsapp/5511987654321").data.decode()
         assert "Transcrição falhou: Azure Speech recusou: 401" in conversa
+
+
+def test_saudacao_usa_o_cadastro_principal_quando_o_telefone_se_repete(logged_in_client, enviados, app, db):
+    """Regressao: o mesmo telefone em cadastros de teste de outra comunidade
+    ("Emily") fazia o Ruan ser saudado como Emily. Vale quem tem escala futura."""
+    with app.app_context():
+        comunidade, ministerio, _ = _igreja(logged_in_client, telefone="(21) 90000-0000")
+        Membro(comunidade_id=comunidade.id + 1000, nome="Emily Teste", telefone="21999123998").save()
+        ruan = Membro(comunidade_id=comunidade.id, nome="Ruan Cardozo", telefone="(21) 99912-3998").save()
+        _escala(ministerio, ruan)
+        _postar(logged_in_client, _payload("Oi", de="552199123998"))
+        assert enviados[-1][1].startswith("Olá, Ruan! 👋")
+
+
+def test_audio_transcrito_que_nao_e_comando_responde_mesmo_depois_do_menu(logged_in_client, enviados, app, db, fala):
+    """Regressao: "Oi" (menu) e logo depois um audio que o Azure ouviu como
+    "Sul da igreja." ficava sem resposta (limite de 12h do menu)."""
+    with app.app_context():
+        _igreja(logged_in_client)
+        _postar(logged_in_client, _payload("Oi", wamid="w-oi"))
+        fala["texto"] = "Sul da igreja."
+        _postar(logged_in_client, _payload_audio(wamid="w-audio"))
+        assert enviados[-1][1].startswith("🎤 Entendi: “Sul da igreja.”")
+        assert "Não reconheci um pedido" in enviados[-1][1] and "5 - Endereço da igreja" in enviados[-1][1]
+        assert MensagemWhatsapp.objects(wamid="w-audio").first().lida is False  # fica pra lideranca
 
 
 def test_segundo_plano_monta_links_mesmo_fora_de_um_request(app):

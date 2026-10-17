@@ -251,7 +251,8 @@ _REPERTORIO = re.compile(
     r"\b(musica\w*|repertorio\w*|cifra\w*|louvores|setlist|playlist|projecao|letras?|tons)\b"
 )
 _ENDERECO = re.compile(
-    r"\b(endereco|onde fica|onde e a igreja|localizacao|como (eu )?chego|qual o local|onde (vai ser|sera|e) o culto)\b"
+    r"\b(endereco|onde fica|onde e a igreja|localizacao|local da igreja|como (eu )?chego|qual o local"
+    r"|onde (vai ser|sera|e) o culto)\b"
 )
 _HORARIOS = re.compile(r"\b(horario\w*|que horas|qual (a )?hora)\b")
 _ASSUNTO_CULTO = re.compile(r"\b(culto\w*|igreja|reuniao|reunioes|celebrac\w*|programac\w*)\b")
@@ -487,9 +488,30 @@ def _texto_repertorio(membros):
     return "\n".join(linhas)
 
 
+def membro_principal(membros):
+    """O cadastro que "e a pessoa" quando o mesmo telefone esta em varios
+    (diretorios de comunidades diferentes, cadastro de teste...): quem tem
+    escala futura, depois quem ja foi escalado mais vezes, depois o mais
+    recente. Antes era o primeiro da lista -- Ruan era saudado como "Emily",
+    um cadastro de teste antigo com o telefone dele."""
+    from app.escala.models import TIPO_FUNCAO, Escala, Funcao
+
+    if len(membros) <= 1:
+        return membros[0] if membros else None
+    funcoes = list(Funcao.objects(membro_id__in=[m.id for m in membros], tipo=TIPO_FUNCAO).only("membro_id", "escala_id"))
+    futuras = {e.id for e in Escala.objects(id__in=list({f.escala_id for f in funcoes}), data__gte=_hoje_brasilia(),
+                                              cancelada__ne=True).only("id")}
+    com_futura = {f.membro_id for f in funcoes if f.escala_id in futuras}
+    total = {}
+    for f in funcoes:
+        total[f.membro_id] = total.get(f.membro_id, 0) + 1
+    return max(membros, key=lambda m: (m.id in com_futura, total.get(m.id, 0), m.id))
+
+
 def texto_do_menu(membros, introducao=None):
     """Lista de comandos com atalho por numero."""
-    primeiro_nome = (membros[0].nome or "").split()[0].title() if membros and membros[0].nome else ""
+    principal = membro_principal(membros)
+    primeiro_nome = (principal.nome or "").split()[0].title() if principal and principal.nome else ""
     linhas = [introducao or f"Olá{', ' + primeiro_nome if primeiro_nome else ''}! 👋 Posso te ajudar com:"]
     linhas += [f"{numero} - {rotulo}" for numero, rotulo, _ in MENU_OPCOES]
     linhas.append("Responda com o número ou escreva do seu jeito (ex: \"quais as músicas do culto?\").")
@@ -613,7 +635,7 @@ def _nao_reconhecida(registro, telefone, membros, comunidade_ids, prefixo=""):
                                             criada_em__gte=desde).first()
     current_app.logger.info("WhatsApp de %s nao reconhecido: foi pra caixa de entrada%s.", _mascarar(telefone),
                             "" if menu_recente else " e recebeu o menu")
-    if not menu_recente:
+    if prefixo or not menu_recente:  # audio ("Entendi: ...") responde sempre
         introducao = "Recebi sua mensagem e passei para a liderança 🙏 Se for uma destas, é só responder com o número:"
         _responder(telefone, prefixo + texto_do_menu(membros, introducao), comunidade_ids, registro.membro_ids,
                    acao="menu")
@@ -767,6 +789,15 @@ def _tratar_texto(registro, telefone, texto, membros, comunidade_ids, prefixo=""
         return registro
 
     if intencao not in MUDAM_ESCALA:
+        if prefixo:
+            # Audio transcrito que nao e comando: responde SEMPRE (sem o
+            # limite de 12h do menu), mostrando o que foi ouvido -- a
+            # transcricao pode ter errado ("Sul da igreja") e a pessoa
+            # precisa saber pra repetir ou escrever. Continua nao lida.
+            current_app.logger.info("Audio de %s transcrito mas nao reconhecido.", _mascarar(telefone))
+            introducao = "Não reconheci um pedido nisso. Se for uma destas, responda com o número:"
+            responder(texto_do_menu(membros, introducao), acao="menu")
+            return registro
         return _nao_reconhecida(registro, telefone, membros, comunidade_ids, prefixo)
 
     escala, funcoes = proxima_escala_dos_membros(membros)
