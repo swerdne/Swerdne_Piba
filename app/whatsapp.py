@@ -120,6 +120,39 @@ def enviar_whatsapp(destinatario, corpo):
     })
 
 
+MAX_MIDIA_BYTES = 16 * 1024 * 1024  # limite de audio do proprio WhatsApp
+
+
+def baixar_midia(media_id):
+    """(bytes, mime) de uma midia RECEBIDA (ex: audio da caixa de entrada).
+    A Meta da so o id no webhook: primeiro pega a URL (vale poucos minutos),
+    depois baixa com o mesmo token. Levanta WhatsappNaoEnviadoError."""
+    token, _ = _config_ou_erro()
+    cabecalho = {"Authorization": f"Bearer {token}"}
+    try:
+        info = requests.get(f"https://graph.facebook.com/{_API_VERSAO}/{media_id}", headers=cabecalho,
+                            timeout=_TIMEOUT_SEGUNDOS)
+        dados = info.json() if info.status_code < 300 else {}
+        url = dados.get("url")
+        if not url:
+            raise WhatsappNaoEnviadoError(f"Meta nao devolveu a midia {media_id}: {info.status_code} {info.text[:300]}")
+        if int(dados.get("file_size") or 0) > MAX_MIDIA_BYTES:
+            raise WhatsappNaoEnviadoError("Midia maior que o limite.")
+        resposta = requests.get(url, headers=cabecalho, timeout=_TIMEOUT_SEGUNDOS * 2, stream=True)
+        if resposta.status_code >= 300:
+            raise WhatsappNaoEnviadoError(f"Download da midia falhou: {resposta.status_code}")
+        partes, total = [], 0
+        for pedaco in resposta.iter_content(64 * 1024):
+            total += len(pedaco)
+            if total > MAX_MIDIA_BYTES:
+                raise WhatsappNaoEnviadoError("Midia maior que o limite.")
+            partes.append(pedaco)
+    except (requests.RequestException, ValueError) as erro:
+        raise WhatsappNaoEnviadoError(f"Falha ao baixar midia: {erro}") from erro
+    mime = (dados.get("mime_type") or resposta.headers.get("Content-Type") or "application/octet-stream").split(";")[0]
+    return b"".join(partes), mime.strip()[:100]
+
+
 def trocar_foto_do_perfil(caminho_imagem, app_id=None):
     """Troca a foto de perfil do numero de WhatsApp Business (comando
     `flask whatsapp-foto-perfil`). A Meta nao aceita a imagem direto no

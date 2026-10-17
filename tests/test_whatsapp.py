@@ -58,6 +58,38 @@ def test_teto_diario_de_templates_bloqueia_e_registra_no_log(app, db, monkeypatc
     assert "Teto diario de templates de WhatsApp atingido" in caplog.text
 
 
+def test_baixar_midia_pega_a_url_e_baixa_com_o_token(app, monkeypatch):
+    from app.whatsapp import baixar_midia
+
+    app.config.update(META_WHATSAPP_TOKEN="TOKENFAKE", META_WHATSAPP_PHONE_ID="1234567890")
+    pedidos = []
+
+    class Info:
+        status_code, text = 200, ""
+
+        def json(self):
+            return {"url": "https://lookaside.fbsbx.com/whatsapp_business/abc", "mime_type": "audio/ogg; codecs=opus",
+                    "file_size": 9}
+
+    class Arquivo:
+        status_code, headers = 200, {"Content-Type": "audio/ogg"}
+
+        def iter_content(self, tamanho):
+            yield b"OggS-"
+            yield b"1234"
+
+    def falso_get(url, headers=None, timeout=None, stream=False):
+        pedidos.append((url, headers))
+        return Arquivo() if stream else Info()
+
+    monkeypatch.setattr("app.whatsapp.requests.get", falso_get)
+    with app.app_context():
+        conteudo, mime = baixar_midia("MEDIA123")
+    assert (conteudo, mime) == (b"OggS-1234", "audio/ogg")
+    assert pedidos[0][0].endswith("/MEDIA123") and pedidos[1][0].startswith("https://lookaside")
+    assert all(h == {"Authorization": "Bearer TOKENFAKE"} for _, h in pedidos)
+
+
 def test_enviar_whatsapp_com_config_mas_telefone_invalido_levanta_erro(app):
     app.config["META_WHATSAPP_TOKEN"] = "TOKENFAKE"
     app.config["META_WHATSAPP_PHONE_ID"] = "1234567890"

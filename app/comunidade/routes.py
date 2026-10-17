@@ -291,6 +291,30 @@ def whatsapp(comunidade_id, telefone=None):
     )
 
 
+@bp.route("/<int:comunidade_id>/whatsapp/audio/<int:mensagem_id>")
+@login_required
+def whatsapp_audio(comunidade_id, mensagem_id):
+    """Toca o audio recebido na caixa de entrada (so admin da comunidade da
+    conversa): o arquivo guardado ou, se ainda nao baixou, direto da Meta."""
+    import io
+
+    from flask import send_file
+
+    from app.whatsapp_recebidas import RECEBIDA, MensagemWhatsapp, baixar_audio
+
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    mensagem = primeiro_ou_404(MensagemWhatsapp.objects(
+        id=mensagem_id, comunidade_ids=comunidade.id, direcao=RECEBIDA, media_id__ne=None,
+    ))
+    audio = baixar_audio(mensagem)
+    if audio is None:
+        return "Áudio indisponível (a Meta não entregou o arquivo). Ouça direto no WhatsApp.", 404
+    resposta = send_file(io.BytesIO(audio.conteudo), mimetype=audio.mime or "audio/ogg",
+                         download_name=f"audio-whatsapp-{mensagem.id}.ogg", conditional=True)
+    resposta.headers["Cache-Control"] = "private, max-age=86400"
+    return resposta
+
+
 @bp.route("/<int:comunidade_id>/estatisticas")
 @login_required
 def estatisticas(comunidade_id):

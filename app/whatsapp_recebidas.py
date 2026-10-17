@@ -58,10 +58,75 @@ class MensagemWhatsapp(SequentialIdDocument):
     # "confirmado" / "troca_solicitada" quando a mensagem mudou status de escala.
     acao = mongoengine.StringField(max_length=20)
     escala_id = mongoengine.IntField()
+    # Audio recebido (msg.type == "audio", inclusive mensagem de voz): o id da
+    # midia na Meta -- o arquivo fica em AudioWhatsapp (ver baixar_audio).
+    media_id = mongoengine.StringField(max_length=200)
+    media_mime = mongoengine.StringField(max_length=100)
+
+    @property
+    def eh_audio(self):
+        return bool(self.media_id)
     enviada_por_usuario_id = mongoengine.IntField()  # resposta escrita na caixa de entrada
     lida = mongoengine.BooleanField(default=False)
     criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
+
+
+class AudioWhatsapp(SequentialIdDocument):
+    """O arquivo de um audio recebido, separado da mensagem pra lista da
+    caixa de entrada nao carregar os bytes. Baixado da Meta logo que chega
+    (em segundo plano, ver baixar_audio) ou na hora de tocar, se ainda nao."""
+    meta = {"collection": "audios_whatsapp", "indexes": [{"fields": ["mensagem_id"], "unique": True}]}
+    _nome_sequencia = "audios_whatsapp"
+
+    mensagem_id = mongoengine.IntField(required=True)
+    mime = mongoengine.StringField(max_length=100)
+    conteudo = mongoengine.BinaryField(required=True)
+    baixado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+
+def baixar_audio(mensagem):
+    """AudioWhatsapp da mensagem: o guardado ou, sem ele, baixado da Meta
+    agora (e guardado). None se nao der (sem config, midia expirada...) --
+    o motivo vai pro log."""
+    from app.whatsapp import WhatsappNaoEnviadoError, baixar_midia
+
+    if not mensagem.media_id:
+        return None
+    guardado = AudioWhatsapp.objects(mensagem_id=mensagem.id).first()
+    if guardado is not None:
+        return guardado
+    try:
+        conteudo, mime = baixar_midia(mensagem.media_id)
+    except WhatsappNaoEnviadoError as erro:
+        current_app.logger.warning("Audio do WhatsApp %s nao baixado: %s", mensagem.id, erro)
+        return None
+    audio = AudioWhatsapp(mensagem_id=mensagem.id, mime=mime or mensagem.media_mime, conteudo=conteudo)
+    try:
+        audio.save()
+    except mongoengine.NotUniqueError:  # dois downloads ao mesmo tempo: vale o primeiro
+        return AudioWhatsapp.objects(mensagem_id=mensagem.id).first()
+    return audio
+
+
+def _baixar_audio_em_segundo_plano(mensagem):
+    """Baixa logo que chega (a URL da Meta expira; o id dura dias) sem
+    atrasar a resposta do webhook. Em teste roda na hora (sem thread)."""
+    import threading
+
+    app = current_app._get_current_object()
+    mensagem_id = mensagem.id
+
+    def trabalho():
+        with app.app_context():
+            registro = MensagemWhatsapp.objects(id=mensagem_id).first()
+            if registro is not None:
+                baixar_audio(registro)
+
+    if app.testing:
+        trabalho()
+    else:
+        threading.Thread(target=trabalho, daemon=True).start()
 
 # --- Telefone ----------------------------------------------------------------
 
@@ -473,6 +538,8 @@ def _texto_da_mensagem(msg):
         return escolha.get("title", "")
     if tipo == "reaction":
         return (msg.get("reaction") or {}).get("emoji", "")
+    if tipo == "audio":
+        return "🎤 Mensagem de voz" if (msg.get("audio") or {}).get("voice") else "🎤 Áudio"
     return f"[{tipo or 'mensagem'} -- abra no WhatsApp pra ver]"
 
 
@@ -548,14 +615,18 @@ def processar_mensagem(msg, nomes_perfil):
         "WhatsApp recebido de %s (tipo %s): %d membro(s) com esse telefone, comunidade(s) %s.",
         _mascarar(telefone), msg.get("type"), len(membros), comunidade_ids or "nenhuma",
     )
+    audio = (msg.get("audio") or {}) if msg.get("type") == "audio" else {}
     registro = MensagemWhatsapp(
         wamid=wamid, direcao=RECEBIDA, telefone=telefone, nome_perfil=nomes_perfil.get(telefone),
         texto=texto, membro_ids=[m.id for m in membros], comunidade_ids=comunidade_ids,
+        media_id=str(audio.get("id") or "")[:200] or None, media_mime=str(audio.get("mime_type") or "")[:100] or None,
     )
     try:
         registro.save()
     except mongoengine.NotUniqueError:
         return None  # a mesma mensagem chegou em dois webhooks ao mesmo tempo
+    if registro.media_id and comunidade_ids:
+        _baixar_audio_em_segundo_plano(registro)  # so de quem esta em algum diretorio
 
     if not membros:
         current_app.logger.warning(

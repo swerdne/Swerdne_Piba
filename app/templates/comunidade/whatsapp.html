@@ -59,7 +59,16 @@
             {% else %}
             <div class="flex justify-start">
                 <div class="balao {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-3.5 py-2 text-sm shadow-sm">
+                    {% if m.eh_audio %}
+                    {% set url_audio = url_for('comunidade.whatsapp_audio', comunidade_id=comunidade.id, mensagem_id=m.id) %}
+                    <p class="text-xs font-semibold {{ tema.text_secondary }} mb-1.5">{{ m.texto }}</p>
+                    <audio controls preload="none" src="{{ url_audio }}" class="w-64 h-10" style="max-width: 100%"></audio>
+                    <a href="{{ url_audio }}" download class="block text-[11px] font-semibold {{ tema.accent_text }} hover:underline mt-1">
+                        <i class="fa-solid fa-download mr-1"></i>Baixar áudio (se não tocar aqui)
+                    </a>
+                    {% else %}
                     {{ m.texto }}
+                    {% endif %}
                     {% if m.acao %}
                     {% set cor_acao = {'confirmado': 'text-emerald-500', 'troca_solicitada': 'text-red-500'} %}
                     {% set icone_acao = {'confirmado': 'fa-circle-check', 'troca_solicitada': 'fa-rotate'} %}

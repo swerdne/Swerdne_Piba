@@ -366,6 +366,79 @@ def test_comando_foto_perfil_sem_config_falha_com_mensagem(app):
     assert resultado.exit_code == 1 and "nao configurado" in resultado.output
 
 
+# --- Audio na caixa de entrada ------------------------------------------------------------------
+
+def _payload_audio(de="5511987654321", wamid="wamid.audio", media_id="MEDIA123"):
+    return {"entry": [{"changes": [{"value": {
+        "contacts": [{"wa_id": de, "profile": {"name": "Ana"}}],
+        "messages": [{"from": de, "id": wamid, "type": "audio",
+                      "audio": {"id": media_id, "mime_type": "audio/ogg; codecs=opus", "voice": True}}],
+    }}]}]}
+
+
+def test_audio_recebido_e_baixado_e_toca_na_caixa_de_entrada(logged_in_client, enviados, app, db, monkeypatch):
+    from app.whatsapp_recebidas import AudioWhatsapp
+
+    baixados = []
+
+    def falso_baixar(media_id):
+        baixados.append(media_id)
+        return b"OggS-audio-falso", "audio/ogg"
+
+    monkeypatch.setattr("app.whatsapp.baixar_midia", falso_baixar)
+    with app.app_context():
+        comunidade, _, _ = _igreja(logged_in_client)
+        _postar(logged_in_client, _payload_audio())
+
+        msg = MensagemWhatsapp.objects(direcao="recebida").first()
+        assert (msg.media_id, msg.texto, msg.lida) == ("MEDIA123", "🎤 Mensagem de voz", False)  # fica pra lideranca
+        assert baixados == ["MEDIA123"] and AudioWhatsapp.objects(mensagem_id=msg.id).count() == 1
+
+        conversa = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
+        url = f"/comunidade/{comunidade.id}/whatsapp/audio/{msg.id}"
+        assert f'<audio controls preload="none" src="{url}"' in conversa
+
+        resposta = logged_in_client.get(url)
+        assert resposta.status_code == 200 and resposta.data == b"OggS-audio-falso"
+        assert resposta.mimetype == "audio/ogg"
+        assert baixados == ["MEDIA123"]  # tocou o guardado, sem baixar de novo
+
+
+def test_audio_nao_baixado_tenta_na_hora_e_avisa_se_falhar(logged_in_client, enviados, app, db, monkeypatch):
+    from app.whatsapp import WhatsappNaoEnviadoError
+
+    def falha(media_id):
+        raise WhatsappNaoEnviadoError("expirou")
+
+    monkeypatch.setattr("app.whatsapp.baixar_midia", falha)
+    with app.app_context():
+        comunidade, _, _ = _igreja(logged_in_client)
+        _postar(logged_in_client, _payload_audio())
+        msg = MensagemWhatsapp.objects(direcao="recebida").first()
+
+        resposta = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/audio/{msg.id}")
+        assert resposta.status_code == 404 and "Ouça direto no WhatsApp" in resposta.data.decode()
+
+        # Na hora de tocar a Meta ja responde: baixa, guarda e toca.
+        monkeypatch.setattr("app.whatsapp.baixar_midia", lambda media_id: (b"agora-vai", "audio/ogg"))
+        assert logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/audio/{msg.id}").data == b"agora-vai"
+
+
+def test_audio_so_para_admin_e_numero_desconhecido_nao_baixa(logged_in_client, outro_logged_in_client, enviados,
+                                                            app, db, monkeypatch):
+    baixados = []
+    monkeypatch.setattr("app.whatsapp.baixar_midia", lambda media_id: baixados.append(media_id) or (b"x", "audio/ogg"))
+    with sessao_isolada(app):
+        comunidade, _, _ = _igreja(logged_in_client)
+        cid = comunidade.id
+        _postar(logged_in_client, _payload_audio())
+        _postar(logged_in_client, _payload_audio(de="5521999990000", wamid="wamid.outro", media_id="DESCONHECIDO"))
+        msg_id = MensagemWhatsapp.objects(wamid="wamid.audio").first().id
+        assert baixados == ["MEDIA123"]  # de fora de qualquer diretorio nao guarda audio
+    with sessao_isolada(app):
+        assert outro_logged_in_client.get(f"/comunidade/{cid}/whatsapp/audio/{msg_id}").status_code == 404
+
+
 # --- Caixa de entrada -------------------------------------------------------------------------------
 
 def test_caixa_de_entrada_lista_abre_e_responde(logged_in_client, enviados, app, db):
