@@ -478,7 +478,8 @@ def test_audio_com_pergunta_responde_e_sem_fala_vai_pra_caixa(logged_in_client, 
     from app.escala.models import ItemRepertorio
 
     with app.app_context():
-        _, ministerio, membro = _igreja(logged_in_client)
+        comunidade, ministerio, membro = _igreja(logged_in_client)
+        comunidade_id = comunidade.id
         escala = _escala(ministerio, membro)
         ItemRepertorio(escala_id=escala.id, nome_musica="Bondade de Deus", tom="G", ordem=0).save()
 
@@ -486,12 +487,23 @@ def test_audio_com_pergunta_responde_e_sem_fala_vai_pra_caixa(logged_in_client, 
         _postar(logged_in_client, _payload_audio(wamid="w1", media_id="M1"))
         assert "Bondade de Deus — Tom: G" in enviados[-1][1]
 
-        # Sem fala reconhecivel (ou Azure fora): menu + caixa de entrada, escala intacta.
+        # Sem fala reconhecivel: aviso curto + caixa de entrada, escala intacta.
         fala["texto"] = None
         _postar(logged_in_client, _payload_audio(wamid="w2", media_id="M2"))
-        assert "passei para a liderança" in enviados[-1][1]
-        assert MensagemWhatsapp.objects(wamid="w2").first().lida is False
+        assert "não consegui entender" in enviados[-1][1]
+        msg = MensagemWhatsapp.objects(wamid="w2").first()
+        assert (msg.lida, msg.status_transcricao) == (False, "sem_fala")
         assert Funcao.objects(escala_id=escala.id).first().status == "nao_notificado"
+
+        # Azure recusou: o motivo fica guardado (diagnostico) e aparece pro admin;
+        # o aviso nao se repete dentro de 30 min.
+        total = len(enviados)
+        fala["erro"] = "Azure Speech recusou: 401 chave invalida"
+        _postar(logged_in_client, _payload_audio(wamid="w3", media_id="M3"))
+        assert MensagemWhatsapp.objects(wamid="w3").first().status_transcricao.startswith("erro: Azure Speech recusou: 401")
+        assert len(enviados) == total
+        conversa = logged_in_client.get(f"/comunidade/{comunidade_id}/whatsapp/5511987654321").data.decode()
+        assert "Transcrição falhou: Azure Speech recusou: 401" in conversa
 
 
 def test_sem_azure_configurado_audio_so_fica_pra_ouvir(logged_in_client, enviados, app, db, monkeypatch):
@@ -503,6 +515,8 @@ def test_sem_azure_configurado_audio_so_fica_pra_ouvir(logged_in_client, enviado
         escala = _escala(ministerio, membro)
         _postar(logged_in_client, _payload_audio())
         assert chamou == [] and Funcao.objects(escala_id=escala.id).first().status == "nao_notificado"
+        assert MensagemWhatsapp.objects(direcao="recebida").first().status_transcricao == "desligada"
+        assert "escreva a mensagem" in enviados[-1][1]  # nunca silencio
 
 
 def test_transcrever_chama_o_azure_com_ogg_opus(app, monkeypatch):

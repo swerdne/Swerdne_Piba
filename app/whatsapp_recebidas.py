@@ -64,6 +64,10 @@ class MensagemWhatsapp(SequentialIdDocument):
     media_mime = mongoengine.StringField(max_length=100)
     # O que o audio dizia (app/transcricao.py), quando a transcricao esta ligada.
     transcricao = mongoengine.StringField()
+    # O que aconteceu na transcricao (diagnostico, lido pelo banco/caixa de
+    # entrada): "ok", "desligada" (sem AZURE_SPEECH_*), "sem_fala", "sem_arquivo"
+    # ou "erro: <motivo do Azure>".
+    status_transcricao = mongoengine.StringField(max_length=400)
 
     @property
     def eh_audio(self):
@@ -652,7 +656,12 @@ def processar_mensagem(msg, nomes_perfil):
             # alguns segundos -- o webhook nao espera).
             _em_segundo_plano(_tratar_audio, registro.id)
             return registro
-        _em_segundo_plano(_baixar_audio_por_id, registro.id)  # so pra ouvir na caixa de entrada
+        # Sem AZURE_SPEECH_*: so guarda pra ouvir na caixa de entrada.
+        current_app.logger.info("Audio de %s: transcricao desligada (sem AZURE_SPEECH_KEY/REGION).", _mascarar(telefone))
+        registro.status_transcricao = "desligada"
+        registro.save()
+        _em_segundo_plano(_baixar_audio_por_id, registro.id)
+        return _audio_nao_entendido(registro, telefone, comunidade_ids, TEXTO_AUDIO_SEM_TRANSCRICAO)
 
     return _tratar_texto(registro, telefone, texto, membros, comunidade_ids)
 
@@ -671,20 +680,45 @@ def _tratar_audio(mensagem_id):
     membros = membros_do_telefone(telefone)
     comunidade_ids = sorted({m.comunidade_id for m in membros})
     audio = baixar_audio(registro)
-    texto = None
+    texto, status = None, "sem_arquivo"
     if audio is not None:
         try:
             texto = transcrever(audio.conteudo, audio.mime or registro.media_mime)
+            status = "ok" if texto else "sem_fala"
         except TranscricaoIndisponivel as erro:
             current_app.logger.warning("Audio do WhatsApp %s nao transcrito: %s", registro.id, erro)
+            status = f"erro: {erro}"[:400]
+    registro.status_transcricao = status
     if not texto:
-        current_app.logger.info("Audio de %s sem transcricao: foi pra caixa de entrada.", _mascarar(telefone))
-        return _nao_reconhecida(registro, telefone, membros, comunidade_ids)
+        registro.save()
+        current_app.logger.info("Audio de %s sem transcricao (%s): foi pra caixa de entrada.", _mascarar(telefone), status)
+        return _audio_nao_entendido(registro, telefone, comunidade_ids)
     registro.transcricao = texto[:2000]
     registro.save()
     current_app.logger.info("Audio de %s transcrito (%d caracteres).", _mascarar(telefone), len(texto))
     return _tratar_texto(registro, telefone, texto, membros, comunidade_ids,
                          prefixo=f"🎤 Entendi: “{texto[:300]}”\n\n")
+
+
+TEXTO_AUDIO_NAO_ENTENDIDO = ("🎤 Recebi seu áudio, mas não consegui entender agora. Ele ficou para a liderança ouvir. "
+                             "Se quiser uma resposta na hora, mande de novo falando perto do celular ou escreva "
+                             "(ex: \"qual minha próxima escala?\", ou \"menu\").")
+TEXTO_AUDIO_SEM_TRANSCRICAO = ("🎤 Recebi seu áudio e passei para a liderança ouvir. Para eu responder na hora, "
+                               "escreva a mensagem (ex: \"confirmo\", \"qual minha próxima escala?\" ou \"menu\").")
+# Aviso de audio nao entendido: no maximo 1 a cada X por numero (varios
+# audios seguidos nao viram varias respostas iguais).
+INTERVALO_AVISO_AUDIO = timedelta(minutes=30)
+
+
+def _audio_nao_entendido(registro, telefone, comunidade_ids, texto=TEXTO_AUDIO_NAO_ENTENDIDO):
+    """Audio que o sistema nao conseguiu entender (ou transcricao
+    desligada): fica nao lido na caixa de entrada e a pessoa recebe um aviso
+    curto -- nunca silencio (o menu automatico tem limite de 12h)."""
+    desde = datetime.now(timezone.utc) - INTERVALO_AVISO_AUDIO
+    if not MensagemWhatsapp.objects(telefone=telefone, direcao=ENVIADA, acao="aviso_audio",
+                                    criada_em__gte=desde).first():
+        _responder(telefone, texto, comunidade_ids, registro.membro_ids, acao="aviso_audio")
+    return registro
 
 
 def _tratar_texto(registro, telefone, texto, membros, comunidade_ids, prefixo=""):

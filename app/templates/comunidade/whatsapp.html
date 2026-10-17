@@ -68,6 +68,11 @@
                     </a>
                     {% if m.transcricao %}
                     <p class="mt-1.5 text-sm {{ tema.text_primary }}"><span class="text-[11px] font-semibold {{ tema.text_secondary }}">Transcrição:</span> “{{ m.transcricao }}”</p>
+                    {% elif m.status_transcricao and m.status_transcricao != 'ok' %}
+                    <!-- Por que nao transcreveu (diagnostico pro admin) -->
+                    <p class="mt-1.5 text-[11px] {{ tema.text_secondary }}">
+                        <i class="fa-solid fa-circle-info mr-1"></i>{{ {'desligada': 'Transcrição desligada (falta AZURE_SPEECH_KEY/REGION no App Service).', 'sem_fala': 'Sem fala que desse para entender.', 'sem_arquivo': 'Não deu para baixar o áudio da Meta.'}.get(m.status_transcricao, 'Transcrição falhou: ' ~ m.status_transcricao[6:]) }}
+                    </p>
                     {% endif %}
                     {% else %}
                     {{ m.texto }}
