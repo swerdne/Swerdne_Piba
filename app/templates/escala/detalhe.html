@@ -3,15 +3,14 @@
 
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
     #escala-rapida { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
 </style>
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial, avatar_membro with context %}
-{% from "ministerio/_envio.html" import campos_envio %}
+{% from "ministerio/_envio.html" import campos_envio_tardio %}
 {% block content %}
 <div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -501,7 +500,7 @@
                                 {{ formularios_status[funcao.id].hidden_tag() }}
                                 {{ formularios_status[funcao.id].status(
                                     class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                                    data_status_select=funcao.id
+                                    data_status_select=funcao.id, data_status_atual=(funcao.status or 'nao_notificado')
                                 ) }}
                                 <div class="hidden mt-2 space-y-1.5 w-full sm:w-56" data-troca-campos="{{ funcao.id }}">
                                     {{ formularios_status[funcao.id].troca_sugestao_membro_id(
@@ -576,7 +575,7 @@
                                 {{ formularios_status[funcao.id].hidden_tag() }}
                                 {{ formularios_status[funcao.id].status(
                                     class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                                    data_status_select=funcao.id
+                                    data_status_select=funcao.id, data_status_atual=(funcao.status or 'nao_notificado')
                                 ) }}
                                 <div class="hidden mt-2 space-y-1.5 w-full sm:w-56" data-troca-campos="{{ funcao.id }}">
                                     {{ formularios_status[funcao.id].troca_sugestao_membro_id(
@@ -760,7 +759,7 @@
                    class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 transition">
                     <i class="fa-solid fa-guitar"></i>Cifras
                 </a>
-                {% if eh_dono and opcoes_envio %}
+                {% if eh_dono %}
                 <!-- Envia pra um ministerio inteiro ou uma funcao dele, sem sair daqui (ver escala.routes.compartilhar_repertorio) -->
                 <details class="col-span-2 group border {{ tema.card_border }} rounded-xl overflow-hidden">
                     <summary class="flex items-center justify-center gap-2 {{ tema.text_primary }} text-sm font-semibold py-2.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden hover:bg-black/5 transition">
@@ -769,7 +768,7 @@
                     </summary>
                     <form method="POST" action="{{ url_for('escala.compartilhar_repertorio', escala_id=escala.id) }}" class="border-t {{ tema.card_border }} p-3 space-y-3">
                         {{ acao_form.hidden_tag() }}
-                        {{ campos_envio(opcoes_envio, escala.ministerio_id, tema, (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring)) }}
+                        {{ campos_envio_tardio(escala.ministerio.comunidade_id, escala.ministerio_id, tema) }}
                         <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
                             <i class="fa-solid fa-paper-plane mr-1"></i>Enviar repertorio
                         </button>
@@ -1224,7 +1223,7 @@
                 }
             } else {
                 if (campos) campos.classList.add('hidden');
-                select.form.submit();
+                window.salvarStatus(select);
             }
         });
     });

@@ -107,10 +107,10 @@ def pode_editar_telefone(membro, usuario):
 
 
 def _eh_admin(membro, usuario):
-    from app.comunidade.models import Comunidade
+    from app.comunidade.models import comunidade_por_id
     from app.comunidade.routes import _eh_admin_da_comunidade
 
-    comunidade = Comunidade.objects(id=membro.comunidade_id).first()
+    comunidade = comunidade_por_id(membro.comunidade_id)
     return comunidade is not None and _eh_admin_da_comunidade(comunidade, usuario)
 
 

@@ -2,11 +2,10 @@
 {% block title %}{{ banco.titulo }} - {{ comunidade.nome }}{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior, tutorial with context %}
-{% from "ministerio/_envio.html" import campos_envio %}
+{% from "ministerio/_envio.html" import campos_envio_tardio %}
 {% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
 {% set CHIP = "shrink-0 text-xs font-semibold rounded-full px-3 py-1.5 border transition" %}
 
@@ -264,44 +263,25 @@
             {% endif %}
 
             <div data-lista-musicas class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
-                {% for m in musicas %}
-                <div data-musica-item data-id="{{ m.id }}" data-nome="{{ m.nome }}"
-                     data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}"
-                     class="flex items-center {{ tema.card_bg_hover }} transition">
-                    {% if pode_marcar %}
-                    <!-- Area de clique grande em volta do quadradinho: errar por pouco nao abre a musica -->
-                    <label class="self-stretch flex items-center pl-4 pr-3 cursor-pointer shrink-0">
-                        <input type="checkbox" data-selecionar value="{{ m.id }}" aria-label="Selecionar {{ m.nome }}" class="w-5 h-5 cursor-pointer">
-                    </label>
-                    {% endif %}
-                    <a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="flex flex-1 min-w-0 items-center gap-3 pr-4 py-3 {{ '' if pode_marcar else 'pl-4' }}">
-                        <div class="w-11 h-11 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0 font-extrabold text-sm">
-                            {{ m.tom or '-' }}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ m.nome }}</p>
-                            <p class="text-xs {{ tema.text_secondary }} truncate">{{ m.artista or 'Artista nao informado' }}</p>
-                            <!-- Por que apareceu na busca do servidor (trecho da letra / grafia parecida) -->
-                            <p data-onde class="hidden text-[10px] font-semibold {{ tema.accent_text }}"></p>
-                            {% if m.tags %}
-                            <div class="flex flex-wrap gap-1 mt-1">
-                                {% for tag in m.tags %}
-                                <span class="text-[10px] font-semibold rounded-full px-2 py-0.5 border {{ tema.card_border }} {{ tema.text_secondary }}">{{ tag }}</span>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="flex flex-col gap-1 shrink-0 text-[10px] font-semibold">
-                            <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.letra_projecao else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao de projecao">
-                                <i class="fa-solid fa-display mr-0.5"></i>Projecao
-                            </span>
-                            <span class="rounded-full px-2 py-0.5 text-center {{ 'bg-emerald-500/15 text-emerald-600' if m.cifra_louvor else 'bg-black/5 ' ~ tema.text_secondary }}" title="Versao do louvor (cifra)">
-                                <i class="fa-solid fa-guitar mr-0.5"></i>Louvor
-                            </span>
-                        </div>
-                    </a>
-                </div>
-                {% endfor %}
+                {#- Linha compacta: centenas de musicas -- espaco/comentario repetido por
+                    linha virava mais de 1 MB de HTML pro celular processar. Classes
+                    montadas uma vez aqui fora; mesmos atributos/comportamento de antes. -#}
+                {%- set C_LINHA = "flex items-center " ~ tema.card_bg_hover ~ " transition" -%}
+                {%- set C_LINK = "flex flex-1 min-w-0 items-center gap-3 pr-4 py-3" ~ ("" if pode_marcar else " pl-4") -%}
+                {%- set C_TOM = "w-11 h-11 rounded-xl " ~ tema.accent_soft_bg ~ " " ~ tema.accent_text ~ " flex items-center justify-center shrink-0 font-extrabold text-sm" -%}
+                {%- set C_NOME = "text-sm font-semibold " ~ tema.text_primary ~ " truncate" -%}
+                {%- set C_ARTISTA = "text-xs " ~ tema.text_secondary ~ " truncate" -%}
+                {%- set C_ONDE = "hidden text-[10px] font-semibold " ~ tema.accent_text -%}
+                {%- set C_TAG = "text-[10px] font-semibold rounded-full px-2 py-0.5 border " ~ tema.card_border ~ " " ~ tema.text_secondary -%}
+                {%- set C_SIM = "rounded-full px-2 py-0.5 text-center bg-emerald-500/15 text-emerald-600" -%}
+                {%- set C_NAO = "rounded-full px-2 py-0.5 text-center bg-black/5 " ~ tema.text_secondary -%}
+                {%- for m in musicas %}
+<div data-musica-item data-id="{{ m.id }}" data-nome="{{ m.nome }}" data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}" class="{{ C_LINHA }}">
+{%- if pode_marcar %}<label class="self-stretch flex items-center pl-4 pr-3 cursor-pointer shrink-0"><input type="checkbox" data-selecionar value="{{ m.id }}" aria-label="Selecionar {{ m.nome }}" class="w-5 h-5 cursor-pointer"></label>{% endif -%}
+<a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="{{ C_LINK }}"><div class="{{ C_TOM }}">{{ m.tom or '-' }}</div><div class="flex-1 min-w-0"><p class="{{ C_NOME }}">{{ m.nome }}</p><p class="{{ C_ARTISTA }}">{{ m.artista or 'Artista nao informado' }}</p><p data-onde class="{{ C_ONDE }}"></p>
+{%- if m.tags %}<div class="flex flex-wrap gap-1 mt-1">{% for tag in m.tags %}<span class="{{ C_TAG }}">{{ tag }}</span>{% endfor %}</div>{% endif -%}
+</div><div class="flex flex-col gap-1 shrink-0 text-[10px] font-semibold"><span class="{{ C_SIM if m.letra_projecao else C_NAO }}" title="Versao de projecao"><i class="fa-solid fa-display mr-0.5"></i>Projecao</span><span class="{{ C_SIM if m.cifra_louvor else C_NAO }}" title="Versao do louvor (cifra)"><i class="fa-solid fa-guitar mr-0.5"></i>Louvor</span></div></a></div>
+                {%- endfor %}
             </div>
             <p data-busca-vazia class="hidden text-center text-sm {{ tema.text_secondary }} py-6">Nenhuma musica encontrada.</p>
             <!-- Mostra a lista aos poucos (ver PAGINA no JS) -->
@@ -346,7 +326,7 @@
                     </optgroup>
                     {% endfor %}
                 </select>
-                {{ campos_envio(opcoes_envio, banco.ministerio.id if banco.ministerio else None, tema, CAMPO) }}
+                {{ campos_envio_tardio(comunidade.id, banco.ministerio.id if banco.ministerio else None, tema) }}
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
                     <i class="fa-solid fa-paper-plane mr-1"></i>Enviar
                 </button>

@@ -118,16 +118,28 @@ def _juntar(fica, sai):
             fica.versoes_cifra.append(versao)
 
 
+# Comunidades ja conferidas neste processo: musica "antiga" (sem
+# comunidade_id) so existe de antes da migracao -- nenhum codigo atual cria
+# uma --, entao depois da 1a conferencia nao precisa ir ao banco de novo a
+# cada tela (era 1 consulta a mais na escala e no banco de musicas).
+_COMUNIDADES_UNIFICADAS = set()
+
+
 def unificar_banco_da_comunidade(comunidade_id):
     """Idempotente. Devolve quantas musicas antigas foram migradas (0 = ja
     estava tudo migrado)."""
+    from flask import current_app
+
     from app.ministerio.models import ministerios_da_comunidade
 
+    if comunidade_id in _COMUNIDADES_UNIFICADAS and not current_app.testing:
+        return 0
     ids_ministerios = [m.id for m in ministerios_da_comunidade(comunidade_id)]
     if not ids_ministerios:
         return 0
     pendentes = [m.id for m in Musica.objects(comunidade_id=None, ministerio_id__in=ids_ministerios).only("id")]
     if not pendentes:
+        _COMUNIDADES_UNIFICADAS.add(comunidade_id)
         return 0
 
     Musica.objects(id__in=pendentes).update(set__comunidade_id=comunidade_id, set__oficial=True)
@@ -149,6 +161,7 @@ def unificar_banco_da_comunidade(comunidade_id):
         ItemRepertorio.objects(musica_id__in=ids_saem).update(set__musica_id=fica.id)
         Musica.objects(id__in=ids_saem).delete()
 
+    _COMUNIDADES_UNIFICADAS.add(comunidade_id)
     return len(pendentes)
 
 

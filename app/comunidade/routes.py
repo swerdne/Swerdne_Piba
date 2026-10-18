@@ -13,7 +13,7 @@ from app.comunidade.forms import (
     ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm, FotoMembroForm,
     TelefoneMembroForm,
 )
-from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade
+from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade, comunidade_por_id
 from app.ministerio.models import Ministerio
 from app.auth.models import User
 from app.escala.models import (
@@ -78,7 +78,7 @@ def _comunidade_do_usuario_ou_404(comunidade_id):
     Sem essa checagem, qualquer pessoa logada poderia mexer numa comunidade de
     outra conta so adivinhando o id na URL.
     """
-    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
+    comunidade = comunidade_por_id(comunidade_id) or abort(404)
     if not _eh_admin_da_comunidade(comunidade, current_user):
         abort(404)
     return comunidade
@@ -90,7 +90,7 @@ def _comunidade_visivel_ou_404(comunidade_id):
     usado para ligar notificacoes in-app (ver
     app/escala/routes.py::enviar_notificacoes_da_escala).
     """
-    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
+    comunidade = comunidade_por_id(comunidade_id) or abort(404)
     eh_dono = _eh_admin_da_comunidade(comunidade, current_user)
     eh_membro_vinculado = eh_dono or _eh_membro_da_comunidade(comunidade, current_user) or Membro.objects(
         comunidade_id=comunidade.id, email=current_user.email
@@ -528,7 +528,7 @@ def _membro_visivel_ou_404(comunidade_id, membro_id):
     (quem monta escala precisa do contato). Editar os dados: so admin."""
     from app.ministerio.routes import _eh_lider_do_ministerio
 
-    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
+    comunidade = comunidade_por_id(comunidade_id) or abort(404)
     membro = primeiro_ou_404(Membro.objects(id=membro_id, comunidade_id=comunidade.id))
     if _eh_admin_da_comunidade(comunidade, current_user):
         return comunidade, membro, True

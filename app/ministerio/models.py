@@ -73,10 +73,10 @@ class Ministerio(SequentialIdDocument):
 
     @property
     def comunidade(self):
-        from app.comunidade.models import Comunidade
+        from app.comunidade.models import comunidade_por_id
         return relacao_em_cache(
             self, "comunidade", self.comunidade_id,
-            lambda: Comunidade.objects(id=self.comunidade_id).first(),
+            lambda: comunidade_por_id(self.comunidade_id),
         )
 
     @property

@@ -31,6 +31,7 @@ from app.escala.forms import (
 )
 from app.escala.models import (
     descrever_lembrete,
+    diretorio_da_comunidade,
     momento_do_lembrete,
     Escala,
     Funcao,
@@ -337,7 +338,7 @@ def detalhe(escala_id):
     diretorio_vazio = False
 
     comunidade_id = escala.ministerio.comunidade_id
-    diretorio_geral = list(Membro.objects(comunidade_id=comunidade_id).order_by("nome"))
+    diretorio_geral = list(diretorio_da_comunidade(comunidade_id))
     # Uma unica leitura das funcoes pra pagina inteira (rota + template) --
     # `escala.funcoes` e uma consulta nova a cada acesso, e o template chegava
     # a chamar isso dentro do loop da grade.
@@ -445,7 +446,6 @@ def detalhe(escala_id):
         formulario_anexo=_form_anexo(escala, funcoes),
         formulario_item_banco=_form_item_banco(escala),
         repertorios_prontos=_repertorios_pra_escala(escala) if eh_dono else [],
-        opcoes_envio=_opcoes_envio(escala) if eh_dono else [],
         formulario_observacoes=ObservacoesRepertorioForm(observacoes_repertorio=escala.observacoes_repertorio),
         anexos=_anexos_visiveis(escala, eh_dono, funcoes),
         ensaios=ensaios,
@@ -600,7 +600,7 @@ def excluir_item_repertorio(item_id):
 def adicionar_membro(funcao_id):
     funcao = _funcao_do_usuario_ou_404(funcao_id)
     comunidade_id = funcao.escala.ministerio.comunidade_id
-    diretorio = list(Membro.objects(comunidade_id=comunidade_id).order_by("nome"))
+    diretorio = list(diretorio_da_comunidade(comunidade_id))
 
     if not diretorio:
         flash(
@@ -795,21 +795,37 @@ def atualizar_status(funcao_id):
     )
     funcao = funcao_bruta if eh_proprio_escalado else _funcao_do_usuario_ou_404(funcao_id)
     escala_id = funcao.escala_id
+    # Salvar rapido (static/js/main.js, salvarStatus): a tela manda por
+    # fetch e recebe JSON -- sem recarregar a escala inteira (eram ~18
+    # consultas a mais e a pagina toda de novo pelo 4G a cada toque).
+    quer_json = request.headers.get("X-Requested-With") == "fetch"
+
+    def responder(ok, mensagem=None, categoria="success"):
+        if quer_json:
+            atual = funcao.status or "nao_notificado"
+            return jsonify({"ok": ok, "mensagem": mensagem, "status": atual,
+                            "rotulo": STATUS_LABELS.get(atual, atual),
+                            "cor": STATUS_CORES.get(atual, "")}), (200 if ok else 400)
+        if mensagem:
+            flash(mensagem, categoria)
+        return _destino_apos_status(escala_id)
 
     if funcao.membro_id is None:
-        flash("Essa funcao nao tem ninguem escalado.", "danger")
-        return _destino_apos_status(escala_id)
+        return responder(False, "Essa funcao nao tem ninguem escalado.", "danger")
 
-    comunidade_id = funcao.escala.ministerio.comunidade_id
     form = StatusForm()
-    form.troca_sugestao_membro_id.choices = [(0, "Ninguem em especial")] + [
-        (m.id, m.nome)
-        for m in Membro.objects(comunidade_id=comunidade_id).order_by("nome")
-    ]
+    # O diretorio inteiro so e preciso pra validar a SUGESTAO de substituto
+    # de um pedido de troca; nos outros status era uma consulta a toa.
+    if request.form.get("status") == "troca_solicitada":
+        form.troca_sugestao_membro_id.choices = [(0, "Ninguem em especial")] + [
+            (m.id, m.nome) for m in diretorio_da_comunidade(funcao.escala.ministerio.comunidade_id)
+        ]
+    else:
+        enviado = request.form.get("troca_sugestao_membro_id", type=int) or 0
+        form.troca_sugestao_membro_id.choices = [(0, "Ninguem em especial")] + ([(enviado, "")] if enviado else [])
 
     if not form.validate_on_submit():
-        flash("Status invalido.", "danger")
-        return _destino_apos_status(escala_id)
+        return responder(False, "Status invalido.", "danger")
 
     status_anterior = funcao.status
     status_novo = form.status.data
@@ -818,8 +834,7 @@ def atualizar_status(funcao_id):
     # alguem presente na mao -- fica sem check-in, visivel na escala.
     if (eh_proprio_escalado and status_novo == "presente" and status_anterior != "presente"
             and checkin_ligado(funcao.escala, "escala")):
-        flash("Para marcar presença, faça o check-in no local, em Minha escala.", "warning")
-        return _destino_apos_status(escala_id)
+        return responder(False, "Para marcar presença, faça o check-in no local, em Minha escala.", "warning")
     funcao.status = status_novo
     if status_novo != "presente":
         funcao.limpar_checkin()
@@ -855,7 +870,7 @@ def atualizar_status(funcao_id):
                 mensagem += f" Motivo: {funcao.troca_motivo}"
         _notificar_lideres_do_ministerio(funcao.escala, titulo, mensagem, tipo=status_novo)
 
-    return _destino_apos_status(escala_id)
+    return responder(True)
 
 
 @bp.route("/<int:escala_id>/checkin", methods=["POST"])
@@ -1005,7 +1020,7 @@ def aprovar_troca(funcao_id):
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     comunidade_id = funcao.escala.ministerio.comunidade_id
-    diretorio = list(Membro.objects(comunidade_id=comunidade_id).order_by("nome"))
+    diretorio = list(diretorio_da_comunidade(comunidade_id))
 
     form = TrocaAprovarForm()
     form.membro_id.choices = [(0, "Selecione quem assume")] + [(m.id, m.nome) for m in diretorio]
@@ -1887,11 +1902,6 @@ def adicionar_musica_do_banco(escala_id):
     ).save()
     flash(f'"{musica.nome}" adicionada ao repertorio.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
-
-
-def _opcoes_envio(escala):
-    from app.ministerio.compartilhamento import opcoes_de_envio
-    return opcoes_de_envio(escala.ministerio.comunidade_id, current_user.id)
 
 
 def _repertorios_pra_escala(escala):

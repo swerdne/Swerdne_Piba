@@ -58,8 +58,8 @@ class Convite(SequentialIdDocument):
     @property
     def comunidade(self):
         """So valido quando escopo_tipo == 'comunidade' -- ver escopo_nome/escopo_obj."""
-        from app.comunidade.models import Comunidade
-        return relacao_em_cache(self, "comunidade", self.escopo_id, lambda: Comunidade.objects(id=self.escopo_id).first())
+        from app.comunidade.models import comunidade_por_id
+        return relacao_em_cache(self, "comunidade", self.escopo_id, lambda: comunidade_por_id(self.escopo_id))
 
     @property
     def ministerio(self):

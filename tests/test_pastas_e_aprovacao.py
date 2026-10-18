@@ -231,8 +231,11 @@ def test_compartilhar_so_com_quem_serve_numa_funcao(logged_in_client, outro_logg
         pasta_id = PastaMusicas.objects(nome="Noite").first().id
 
         tela = logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
-        # Caixa de marcar da funcao, com quantas pessoas recebem.
-        assert f'value="{lid}|Teclado"' in tela and "Teclado <span" in tela and "(1 pessoa)" in tela
+        # A lista de envio carrega sob demanda (campos_envio_tardio): a tela
+        # tem o lugar, e a caixa de marcar da funcao vem da rota de opcoes.
+        assert "data-envio-carregar=" in tela
+        opcoes = logged_in_client.get(f"/ministerio/envio/{cid}/opcoes?padrao={lid}").data.decode("utf-8")
+        assert f'value="{lid}|Teclado"' in opcoes and "Teclado <span" in opcoes and "(1 pessoa)" in opcoes
 
         _enviar(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", lid, "teclado")  # sem diferenciar maiuscula
         pasta = PastaMusicas.objects(id=pasta_id).first()

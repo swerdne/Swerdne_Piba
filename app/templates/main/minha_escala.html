@@ -2,7 +2,6 @@
 {% block title %}Minha escala{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
     .me-dias { scrollbar-width: none; }
     .me-dias::-webkit-scrollbar { display: none; }
@@ -122,8 +121,8 @@
                 <div class="flex items-center justify-between gap-3">
                     <p class="text-lg font-extrabold {{ tema.text_primary }}">{{ funcao.nome }}</p>
                     <span class="flex items-center gap-1.5 text-xs font-semibold {{ tema.text_secondary }} shrink-0">
-                        <span class="w-2 h-2 rounded-full {{ status_cores.get(funcao.status or 'nao_notificado', 'bg-gray-500') }}"></span>
-                        {{ status_labels.get(funcao.status or 'nao_notificado') }}
+                        <span data-status-ponto="{{ funcao.id }}" class="w-2 h-2 rounded-full {{ status_cores.get(funcao.status or 'nao_notificado', 'bg-gray-500') }}"></span>
+                        <span data-status-rotulo="{{ funcao.id }}">{{ status_labels.get(funcao.status or 'nao_notificado') }}</span>
                     </span>
                 </div>
                 {% if not selecionada.cancelada %}
@@ -131,7 +130,7 @@
                     {{ form.hidden_tag() }}
                     <input type="hidden" name="voltar" value="{{ request.full_path }}">
                     <label class="block text-xs {{ tema.text_secondary }}">Atualizar minha presenca</label>
-                    {{ form.status(data_status_select=funcao.id,
+                    {{ form.status(data_status_select=funcao.id, data_status_atual=(funcao.status or 'nao_notificado'),
                         class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
                     <div class="hidden space-y-2" data-troca-campos="{{ funcao.id }}">
                         {{ form.troca_sugestao_membro_id(id=("troca_sugestao_" ~ funcao.id),
@@ -300,7 +299,7 @@
                 if (campos) campos.classList.remove('hidden');
             } else {
                 if (campos) campos.classList.add('hidden');
-                select.form.submit();
+                window.salvarStatus(select);
             }
         });
     });

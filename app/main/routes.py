@@ -178,7 +178,7 @@ def _comunidades_do_usuario(usuario):
         donas = list(Comunidade.objects(id__in=ids_admin).order_by("nome")) if ids_admin else []
 
     ids_dono = {c.id for c in donas}
-    ids_membro = set(Membro.da_conta(usuario.email).distinct("comunidade_id"))
+    ids_membro = {m.comunidade_id for m in Membro.da_conta_na_requisicao(usuario.email)}
     ids_membro |= {
         row.comunidade_id for row in
         UsuarioComunidade.objects(usuario_id=usuario.id, papel="membro")
@@ -425,7 +425,8 @@ def _repertorios_compartilhados(usuario, limite=6):
             lista.append({"pasta": pasta, "envio": meu, "novo": meu.visto_em is None})
     lista.sort(key=lambda r: (not r["novo"], -(r["envio"].enviado_em.timestamp() if r["envio"].enviado_em else 0)))
     lista = lista[:limite]
-    remetentes = {u.id: u for u in User.objects(id__in=[r["envio"].enviado_por_id for r in lista])}
+    ids_remetentes = [r["envio"].enviado_por_id for r in lista]
+    remetentes = {u.id: u for u in User.objects(id__in=ids_remetentes)} if ids_remetentes else {}
     for r in lista:
         quem = remetentes.get(r["envio"].enviado_por_id)
         r["remetente"] = (quem.name or quem.username or quem.email) if quem else "alguem"

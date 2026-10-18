@@ -13,6 +13,18 @@ from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, del
 PAPEIS_COMUNIDADE = ("admin", "membro")
 
 
+def comunidade_por_id(comunidade_id):
+    """Comunidade pelo id, uma consulta por requisicao: a mesma tela pedia a
+    comunidade em varios lugares (permissao, cabecalho, ministerio.comunidade,
+    musica.comunidade...) e cada pedido era uma ida ao banco (~60 ms em
+    producao). Fora de requisicao (agendador), so busca."""
+    from app.db_utils import por_requisicao
+
+    if comunidade_id is None:
+        return None
+    return por_requisicao(("comunidade", comunidade_id), lambda: Comunidade.objects(id=comunidade_id).first())
+
+
 class Comunidade(SequentialIdDocument):
     meta = {"collection": "comunidades"}
     _nome_sequencia = "comunidades"
@@ -110,7 +122,7 @@ class UsuarioComunidade(SequentialIdDocument):
 
     @property
     def comunidade(self):
-        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: comunidade_por_id(self.comunidade_id))
 
     def __repr__(self):
         return f"<UsuarioComunidade {self.usuario_id} papel={self.papel} da comunidade {self.comunidade_id}>"
@@ -137,7 +149,7 @@ class Evento(SequentialIdDocument):
 
     @property
     def comunidade(self):
-        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: comunidade_por_id(self.comunidade_id))
 
     def __repr__(self):
         return f"<Evento {self.nome!r} da comunidade {self.comunidade_id}>"

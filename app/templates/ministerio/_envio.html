@@ -34,3 +34,14 @@
     <p data-envio-resumo class="text-xs {{ tema.text_secondary }}"></p>
 </div>
 {% endmacro %}
+
+{# Mesmo formulario, carregado SO quando aparece na tela (ministerio.opcoes_envio):
+   montar as opcoes custa 5 consultas ao banco e quase ninguem abre o envio
+   em cada visita -- a escala e o banco de musicas carregavam isso sempre.
+   static/js/main.js ([data-envio-carregar]) busca e liga as caixas. #}
+{% macro campos_envio_tardio(comunidade_id, ministerio_padrao, tema) %}
+<div data-envio-carregar="{{ url_for('ministerio.opcoes_envio', comunidade_id=comunidade_id, padrao=ministerio_padrao) }}"
+     class="text-xs {{ tema.text_secondary }} py-2">
+    <i class="fa-solid fa-spinner fa-spin mr-1"></i>Carregando ministérios e funções...
+</div>
+{% endmacro %}

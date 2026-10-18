@@ -142,8 +142,8 @@ class Membro(SequentialIdDocument):
 
     @property
     def comunidade(self):
-        from app.comunidade.models import Comunidade
-        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
+        from app.comunidade.models import comunidade_por_id
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: comunidade_por_id(self.comunidade_id))
 
     @property
     def ciclos_disponibilidade(self):
@@ -158,10 +158,16 @@ class Membro(SequentialIdDocument):
     @classmethod
     def ids_da_conta(cls, email):
         """Ids de Membro.da_conta(email), uma consulta por requisicao."""
+        return [m.id for m in cls.da_conta_na_requisicao(email)]
+
+    @classmethod
+    def da_conta_na_requisicao(cls, email):
+        """Membros (id + comunidade) da conta, uma consulta por requisicao:
+        o Inicio pedia isso duas vezes (ids e comunidades da pessoa)."""
         from app.db_utils import por_requisicao
 
         chave = ("membros_da_conta", (email or "").strip().lower())
-        return por_requisicao(chave, lambda: [m.id for m in cls.da_conta(email).only("id")])
+        return por_requisicao(chave, lambda: list(cls.da_conta(email).only("id", "comunidade_id")))
 
     @classmethod
     def da_conta(cls, email, **filtros):
@@ -185,6 +191,16 @@ class Membro(SequentialIdDocument):
         return f"<Membro {self.nome}>"
 
 
+def diretorio_da_comunidade(comunidade_id):
+    """Todo o diretorio (Membro) da comunidade por nome, uma consulta por
+    requisicao: a tela da Escala carregava a lista pro <select> e de novo
+    pras fotos (e o perfil, o salvar status...)."""
+    from app.db_utils import por_requisicao
+
+    return por_requisicao(("diretorio", comunidade_id),
+                          lambda: list(Membro.objects(comunidade_id=comunidade_id).order_by("nome")))
+
+
 def _fotos_das_contas(comunidade_id):
     """{email em minusculas: foto_perfil} das contas cujo e-mail esta no
     diretorio da comunidade (so as que tem foto)."""
@@ -192,7 +208,7 @@ def _fotos_das_contas(comunidade_id):
     from app.db_utils import por_requisicao
 
     def carregar():
-        emails = {m.email.strip() for m in Membro.objects(comunidade_id=comunidade_id, email__nin=[None, ""]).only("email")}
+        emails = {m.email.strip() for m in diretorio_da_comunidade(comunidade_id) if (m.email or "").strip()}
         if not emails:
             return {}
         candidatos = list(emails | {e.lower() for e in emails})
@@ -1041,8 +1057,8 @@ class PastaMusicas(SequentialIdDocument):
 
     @property
     def comunidade(self):
-        from app.comunidade.models import Comunidade
-        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: Comunidade.objects(id=self.comunidade_id).first())
+        from app.comunidade.models import comunidade_por_id
+        return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: comunidade_por_id(self.comunidade_id))
 
     @property
     def ministerio(self):

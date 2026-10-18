@@ -795,7 +795,7 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
    ministerio" desliga as funcoes dele (ja estao incluidas). O botao de
    enviar do form so liga com algo marcado. */
 (function () {
-    document.querySelectorAll('[data-envio]').forEach(function (caixa) {
+    function ligarEnvio(caixa) {
         var resumo = caixa.querySelector('[data-envio-resumo]');
         var form = caixa.closest('form');
         var botoes = form ? form.querySelectorAll('[type="submit"]') : [];
@@ -823,5 +823,93 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
 
         caixa.addEventListener('change', atualizar);
         atualizar();
+    }
+    document.querySelectorAll('[data-envio]').forEach(ligarEnvio);
+
+    // Carregado so quando aparece na tela (ministerio/_envio.html,
+    // campos_envio_tardio): dentro de um <details> fechado, so ao abrir.
+    function carregar(lugar) {
+        if (lugar.getAttribute('data-carregando')) return;
+        lugar.setAttribute('data-carregando', '1');
+        fetch(lugar.getAttribute('data-envio-carregar'), { credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+            .then(function (html) {
+                var molde = document.createElement('div');
+                molde.innerHTML = html;
+                var caixa = molde.querySelector('[data-envio]');
+                if (!caixa) throw new Error('vazio');
+                lugar.replaceWith(caixa);
+                ligarEnvio(caixa);
+            })
+            .catch(function () {
+                lugar.removeAttribute('data-carregando');
+                lugar.textContent = 'Não deu para carregar os ministérios. Toque para tentar de novo.';
+                lugar.addEventListener('click', function () { carregar(lugar); }, { once: true });
+            });
+    }
+    var lugares = document.querySelectorAll('[data-envio-carregar]');
+    lugares.forEach(function (lugar) {
+        var form = lugar.closest('form');
+        if (form) form.querySelectorAll('[type="submit"]').forEach(function (b) { b.disabled = true; });
     });
+    if ('IntersectionObserver' in window) {
+        var observador = new IntersectionObserver(function (entradas) {
+            entradas.forEach(function (e) {
+                if (e.isIntersecting) { observador.unobserve(e.target); carregar(e.target); }
+            });
+        }, { rootMargin: '200px' });
+        lugares.forEach(function (lugar) { observador.observe(lugar); });
+    } else {
+        lugares.forEach(carregar);
+    }
 })();
+
+/* Salvar status sem recarregar (escala.atualizar_status responde JSON com
+   o cabecalho X-Requested-With: fetch). So o caminho mais comum -- confirmar
+   / voltar pra "nao notificado" -- vai rapido; troca (tem motivo/sugestao)
+   e "presente" (mexe no check-in e em outras partes da tela) continuam com
+   o envio normal da pagina. Qualquer falha de rede tambem cai no envio
+   normal, entao nunca se perde um toque. */
+window.salvarStatus = function (select) {
+    var form = select.form;
+    var anterior = select.getAttribute('data-status-atual') || '';
+    var novo = select.value;
+    var rapido = window.fetch && (novo === 'confirmado' || novo === 'nao_notificado') && anterior !== 'presente';
+    if (!rapido) { form.submit(); return; }
+
+    var id = select.getAttribute('data-status-select');
+    var aviso = form.querySelector('[data-status-aviso]');
+    if (!aviso) {
+        aviso = document.createElement('span');
+        aviso.setAttribute('data-status-aviso', '');
+        aviso.className = 'block text-[11px] font-semibold mt-1';
+        select.insertAdjacentElement('afterend', aviso);
+    }
+    function avisar(texto, erro) {
+        aviso.textContent = texto;
+        aviso.classList.toggle('text-red-500', !!erro);
+        aviso.classList.toggle('text-emerald-600', !erro);
+    }
+
+    var dados = new FormData(form);
+    select.disabled = true;
+    avisar('Salvando...');
+    fetch(form.action, { method: 'POST', body: dados, credentials: 'same-origin',
+                         headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+            if (!res.ok || !res.j.ok) { var e = new Error('recusado'); e.mensagem = res.j.mensagem; throw e; }
+            select.setAttribute('data-status-atual', res.j.status);
+            document.querySelectorAll('[data-status-rotulo="' + id + '"]').forEach(function (el) { el.textContent = res.j.rotulo; });
+            document.querySelectorAll('[data-status-ponto="' + id + '"]').forEach(function (el) {
+                el.className = el.className.replace(/\bbg-\S+/g, '').trim() + ' ' + res.j.cor;
+            });
+            avisar('\u2713 Salvo');
+            setTimeout(function () { if (aviso.textContent === '\u2713 Salvo') aviso.textContent = ''; }, 2500);
+        })
+        .catch(function (e) {
+            if (e && e.mensagem) { select.value = anterior; avisar(e.mensagem, true); return; }
+            form.submit();  // sem rede/servidor: envio normal da pagina
+        })
+        .then(function () { select.disabled = false; });
+};

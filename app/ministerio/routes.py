@@ -936,7 +936,11 @@ def _tags_do_texto(texto):
 
 
 def _ministerios_da_comunidade(comunidade_id):
-    return list(Ministerio.objects(comunidade_id=comunidade_id).order_by("nome"))
+    # Mesma lista (e mesma memoria da requisicao) de models.ministerios_da_comunidade:
+    # o banco de musicas pedia isso 3 vezes por tela.
+    from app.ministerio.models import ministerios_da_comunidade
+
+    return list(ministerios_da_comunidade(comunidade_id))
 
 
 def _pode_ver_banco(comunidade, usuario):
@@ -956,7 +960,7 @@ def _pode_ver_banco(comunidade, usuario):
 def _banco_ou_404(comunidade_id=None, ministerio_id=None):
     """Banco OFICIAL (comunidade_id) ou LOCAL (ministerio_id), ja com a
     permissao de edicao da conta logada. Junta os bancos antigos na 1a vez."""
-    from app.comunidade.models import Comunidade
+    from app.comunidade.models import comunidade_por_id
     from app.comunidade.routes import _eh_admin_da_comunidade
     from app.escala.banco_musicas import Banco, unificar_banco_da_comunidade
 
@@ -964,7 +968,7 @@ def _banco_ou_404(comunidade_id=None, ministerio_id=None):
     if ministerio_id is not None:
         ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
         comunidade_id = ministerio.comunidade_id
-    comunidade = primeiro_ou_404(Comunidade.objects(id=comunidade_id))
+    comunidade = comunidade_por_id(comunidade_id) or abort(404)
     if not _pode_ver_banco(comunidade, current_user):
         abort(404)
     unificar_banco_da_comunidade(comunidade.id)
@@ -1129,17 +1133,34 @@ def _temas_populares(musicas, limite=10):
     return [grafia[chave] for chave, _ in contagem.most_common(limite)]
 
 
+def _lista_leve_do_banco(banco):
+    """Musicas do banco pra LISTA: so nome/artista/tom/tags e se tem projecao
+    e cifra (True/False, calculado no proprio MongoDB). Antes vinham a letra
+    e a cifra INTEIRAS de todas (centenas de musicas = megabytes de Sao
+    Paulo pro Chile a cada visita) so pra pintar os selos Projecao/Louvor."""
+    from types import SimpleNamespace
+
+    pipeline = [
+        {"$project": {"nome": 1, "artista": 1, "tom": 1, "tags": 1,
+                      "tem_projecao": {"$gt": ["$letra_projecao", ""]},
+                      "tem_cifra": {"$gt": ["$cifra_louvor", ""]}}},
+        {"$sort": {"nome": 1}},
+    ]
+    return [
+        SimpleNamespace(id=d["_id"], nome=d.get("nome") or "", artista=d.get("artista"), tom=d.get("tom"),
+                        tags=d.get("tags") or [], letra_projecao=bool(d.get("tem_projecao")),
+                        cifra_louvor=bool(d.get("tem_cifra")))
+        for d in banco.musicas().aggregate(pipeline)
+    ]
+
+
 def _render_banco(banco):
     from app.escala.banco_musicas import preencher_palavras_chave_da_comunidade, sugestoes_dos_ministerios
-
-    from app.ministerio.compartilhamento import opcoes_de_envio
 
     # Musica sem palavras-chave ganha as dela sozinha (uma vez por musica).
     preencher_palavras_chave_da_comunidade(banco.comunidade.id)
     lidera = _ministerios_que_lidera(banco.comunidade)
-    musicas = list(banco.musicas().only(
-        "id", "nome", "artista", "tom", "tags", "letra_projecao", "cifra_louvor"
-    ).order_by("nome"))
+    musicas = _lista_leve_do_banco(banco)
     ministerios = _ministerios_da_comunidade(banco.comunidade.id)
     nome_ministerio = {m.id: m.nome for m in ministerios}
     sugestoes = []
@@ -1166,7 +1187,6 @@ def _render_banco(banco):
         ministerios=ministerios,
         repertorios=_repertorios_por_ministerio(banco.comunidade, ministerios),
         ministerios_que_lidera=lidera,
-        opcoes_envio=opcoes_de_envio(banco.comunidade.id, current_user.id) if lidera else [],
         repertorios_escalas=_repertorios_das_escalas(banco.comunidade),
         voltar_url=voltar,
         temas_populares=_temas_populares(musicas),
@@ -1221,10 +1241,10 @@ def nova_musica(comunidade_id=None, ministerio_id=None):
 
 def _sugestao_do_admin_ou_404(musica_id):
     from app.comunidade.routes import _eh_admin_da_comunidade
-    from app.comunidade.models import Comunidade
+    from app.comunidade.models import comunidade_por_id
 
     musica = primeiro_ou_404(Musica.objects(id=musica_id, oficial=False))
-    comunidade = primeiro_ou_404(Comunidade.objects(id=musica.comunidade_id))
+    comunidade = comunidade_por_id(musica.comunidade_id) or abort(404)
     if not _eh_admin_da_comunidade(comunidade, current_user):
         abort(404)
     return musica, comunidade
@@ -1864,6 +1884,25 @@ def baixar_pasta(pasta_id):
 # - CRIAR / EDITAR / ENVIAR: lider do ministerio dono, admin, ou quem criou.
 # Quem recebe ve na tela inicial (main.dashboard) ate abrir.
 
+@bp.route("/envio/<int:comunidade_id>/opcoes")
+@login_required
+def opcoes_envio(comunidade_id):
+    """Pedaco do formulario "pra quem enviar o repertorio", carregado pela
+    tela so quando ele aparece (ver ministerio/_envio.html,
+    campos_envio_tardio) -- montar custa 5 consultas e a escala/banco faziam
+    isso em toda visita. So nomes de ministerios/funcoes e contagens --
+    libera pra quem ve o banco da comunidade (inclui quem criou um
+    repertorio sem liderar); quem pode ENVIAR e conferido no envio."""
+    from app.comunidade.models import comunidade_por_id
+    from app.ministerio.compartilhamento import opcoes_de_envio
+
+    comunidade = comunidade_por_id(comunidade_id) or abort(404)
+    if not _pode_ver_banco(comunidade, current_user):
+        abort(404)
+    return render_template("ministerio/_envio_opcoes.html", padrao=request.args.get("padrao", type=int),
+                           opcoes=opcoes_de_envio(comunidade.id, current_user.id))
+
+
 def _ministerios_que_lidera(comunidade):
     """Ministerios da comunidade em que a conta pode criar repertorio
     (admin da comunidade lidera todos)."""
@@ -1973,13 +2012,10 @@ def pasta(pasta_id):
 
     ids_pessoas = [c.usuario_id for c in pasta.compartilhada_com] + [pasta.criada_por_id]
     pessoas = {u.id: u for u in User.objects(id__in=ids_pessoas)}
-    from app.ministerio.compartilhamento import opcoes_de_envio
-
     lidera = _ministerios_que_lidera(pasta.comunidade) if pode_editar else []
     return render_template(
         "ministerio/pasta.html",
         pasta=pasta,
-        opcoes_envio=opcoes_de_envio(pasta.comunidade_id, current_user.id) if pode_compartilhar else [],
         ministerios_que_lidera=lidera,
         itens=itens,
         da_comunidade=da_comunidade,

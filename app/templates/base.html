@@ -12,8 +12,21 @@
     pagina que exibe o nome, sem cada template precisar declarar de novo. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Fontes e icones NAO travam a primeira exibicao (media=print +
+         onload): no celular a pagina aparece na hora com a fonte do sistema
+         e os icones entram assim que chegam (do 2o acesso em diante ja estao
+         em cache). Icones: um unico lugar pro site inteiro (antes cada
+         template incluia o Font Awesome no proprio head). -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet"
+          media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+          media="print" onload="this.media='all'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    </noscript>
 
     <!-- PWA: instalavel como app (icone proprio, sem barra de navegador) --
     ver app/static/manifest.webmanifest e app/static/js/service-worker.js -->

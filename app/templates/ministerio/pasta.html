@@ -2,11 +2,10 @@
 {% block title %}{{ pasta.nome }}{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior with context %}
-{% from "ministerio/_envio.html" import campos_envio %}
+{% from "ministerio/_envio.html" import campos_envio_tardio %}
 {% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
 
 {% block content %}
@@ -120,7 +119,7 @@
             </div>
             <form method="POST" action="{{ url_for('ministerio.compartilhar_pasta', pasta_id=pasta.id) }}" class="space-y-3">
                 {{ acao_form.hidden_tag() }}
-                {{ campos_envio(opcoes_envio, pasta.ministerio_id, tema, CAMPO) }}
+                {{ campos_envio_tardio(pasta.comunidade_id, pasta.ministerio_id, tema) }}
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
                     <i class="fa-solid fa-paper-plane mr-1"></i>Enviar
                 </button>

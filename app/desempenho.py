@@ -74,6 +74,10 @@ def registrar_desempenho(app):
     @app.before_request
     def iniciar_cronometro():
         g.inicio_requisicao = time.perf_counter()
+        # A memoria de db_utils.por_requisicao vale SO pra esta requisicao:
+        # quando o app context sobrevive a varias (testes, contexto reaproveitado),
+        # uma lista guardada antes (ex: o diretorio) nao pode vazar pra proxima.
+        g.pop("_memoria_requisicao", None)
 
     @app.after_request
     def informar_tempo(resposta):
