@@ -2,9 +2,10 @@
 // So roda na 1a pagina da sessao -- quem decide e o script inline do
 // base.html, que mostra o #abertura e carrega este arquivo. Nunca segura a
 // tela: assim que a pagina por baixo esta pronta (evento load), a
-// animacao acelera ate o logo pronto (no maximo ~0,5 s) e some. Se a
-// pagina ficou pronta antes de a animacao comecar, pula direto pro logo
-// formado (0,3 s) e some.
+// animacao acelera ate o logo pronto (no maximo ~0,5 s), o logo sobe, o
+// nome "TyBenson" entra letra a letra (~1 s) e tudo some. Se a pagina ficou
+// pronta antes de a animacao comecar, pula direto pro logo formado + nome.
+// Sem pressa (pagina ainda carregando), o nome entra 0,6 s depois do laser.
 (function () {
     var cena = document.getElementById("abertura");
     if (!cena) return;
@@ -15,7 +16,8 @@
     var LOGO = { x: 150, y: 128, w: 420, h: 420 * 689 / 840 };
     var MB = LOGO.y + LOGO.h + 20;
     var T = { laser0: 2.0, laser1: 3.3 };
-    var SEGURA_LOGO = 0.3;  // segundos mostrando o logo pronto antes de sumir
+    var NOME_APOS_LASER = 0.6;  // sem pressa: espera isso depois do laser pra mostrar o nome
+    var SEGURA_NOME_MS = 1000;  // tempo do nome entrar letra a letra antes de sumir
     var ACELERA_EM = 0.45;  // pronta a pagina, chega no logo pronto nesse tempo
     var LIMITE_MS = 8000;   // trava de seguranca: some de qualquer jeito
     var reduzir = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -42,9 +44,9 @@
 
     var ctx = cv.getContext && cv.getContext("2d");
     if (!ctx || reduzir) {
-        // Sem canvas ou com "reduzir movimento": so o logo parado, some quando a pagina fica pronta.
-        cena.classList.add("abertura-estatica");
-        var esperar = function () { paginaPronta ? setTimeout(encerrar, 250) : setTimeout(esperar, 50); };
+        // Sem canvas ou com "reduzir movimento": logo e nome parados, some quando a pagina fica pronta.
+        cena.classList.add("abertura-estatica", "abertura-nomeada");
+        var esperar = function () { paginaPronta ? setTimeout(encerrar, 600) : setTimeout(esperar, 50); };
         esperar();
         return;
     }
@@ -54,7 +56,7 @@
     var logo = new Image();
     var escala = 1, N = 0, tx, ty, sx, sy, atraso, dur, curva, tam, tinta, balde, P;
     var baldes = [], corBalde = [], faiscas = [];
-    var t = 0, ultimo = 0, rodando = false, chegouNoLogoEm = 0;
+    var t = 0, ultimo = 0, rodando = false, nomeadaEm = 0;
     var VIAJANDO = ["rgb(92,225,255)", "rgb(59,130,255)"];
 
     function limitar(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -244,9 +246,12 @@
             t += dt;
         }
         desenhar(t, dt);
-        if (t >= T.laser1) {
-            if (!chegouNoLogoEm) chegouNoLogoEm = agora;
-            if (paginaPronta && agora - chegouNoLogoEm >= SEGURA_LOGO * 1000) {
+        if (!nomeadaEm && t >= T.laser1 && (paginaPronta || t >= T.laser1 + NOME_APOS_LASER)) {
+            cena.classList.add("abertura-nomeada");
+            nomeadaEm = agora;
+        }
+        if (nomeadaEm) {
+            if (paginaPronta && agora - nomeadaEm >= SEGURA_NOME_MS) {
                 clearTimeout(trava);
                 return encerrar();
             }

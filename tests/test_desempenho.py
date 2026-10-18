@@ -36,6 +36,8 @@ def test_abertura_do_app_so_na_primeira_pagina_e_sem_baixar_nada_a_toa(client):
     html = client.get("/auth/login").data.decode("utf-8")
     assert 'sessionStorage.getItem("abertura-vista")' in html
     assert '<div id="abertura"' in html and "#abertura{display:none}" in html
+    assert "abertura-nomeada" in html and "Pessoas · Equipes · Propósito" in html
+    assert '<div id="mini-carregando"' in html and "logo-mini.webp" in html
     script = re.search(r'"(/static/js/abertura\.js\?v=[0-9a-f]{10})"', html)
     logo = re.search(r'data-logo="(/static/img/logo-abertura\.webp\?v=[0-9a-f]{10})"', html)
     assert script and logo

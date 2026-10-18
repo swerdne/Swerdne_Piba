@@ -116,7 +116,33 @@ document.querySelectorAll("form").forEach(function (form) {
     var barra = document.getElementById("barra-carregamento");
     if (!barra) return;
 
+    // Mini logo (#mini-carregando em base.html): so aparece se a proxima
+    // pagina demorar mais de MINI_ATRASO_MS -- resposta rapida nem pisca.
+    // Some sozinha depois de MINI_LIMITE_MS: link que baixa arquivo (sem
+    // atributo download) nao troca de pagina e ela ficaria presa na tela.
+    var mini = document.getElementById("mini-carregando");
+    var MINI_ATRASO_MS = 250, MINI_LIMITE_MS = 10000;
+    var miniTimers = [];
+    function esconderMini() {
+        miniTimers.forEach(clearTimeout);
+        miniTimers = [];
+        if (mini) mini.classList.remove("ligado");
+    }
+    if (mini) {
+        // Deixa o logo pequeno (7 KB) em cache depois que a pagina carrega,
+        // pra ele ja aparecer pronto na 1a troca de pagina.
+        window.addEventListener("load", function () {
+            var url = getComputedStyle(mini).getPropertyValue("--mini-logo").match(/url\(["']?([^"')]+)/);
+            if (url) setTimeout(function () { new Image().src = url[1]; }, 1500);
+        });
+    }
+
     function iniciar() {
+        if (mini) {
+            esconderMini();
+            miniTimers.push(setTimeout(function () { mini.classList.add("ligado"); }, MINI_ATRASO_MS));
+            miniTimers.push(setTimeout(esconderMini, MINI_LIMITE_MS));
+        }
         barra.classList.add("carregando");
         barra.style.width = "20%";
         // Cresce aos poucos, cada vez mais devagar -- da a sensacao de
@@ -133,6 +159,7 @@ document.querySelectorAll("form").forEach(function (form) {
     // envio travado. Zera os dois, senao a tela "volta travada".
     window.addEventListener("pageshow", function (evento) {
         if (!evento.persisted) return;
+        esconderMini();
         barra.classList.remove("carregando");
         barra.style.width = "0%";
         document.querySelectorAll("[data-travado-no-envio]").forEach(function (botao) {

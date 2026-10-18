@@ -64,13 +64,41 @@
             background:#02030F linear-gradient(135deg,#0B0B3C 0%,#060628 30%,#02030F 68%,#010209 100%);
             transition:opacity .4s ease,transform .4s ease}
         #abertura.abertura-saindo{opacity:0;transform:scale(1.035);pointer-events:none}
-        #abertura .abertura-quadro{position:relative;width:min(92vw,600px,calc(100svh * .9));aspect-ratio:720/600}
+        #abertura .abertura-quadro{position:relative;width:min(92vw,600px,calc(100svh * .9));aspect-ratio:720/600;container-type:inline-size}
         #abertura canvas{position:absolute;inset:0;width:100%;height:100%}
         #abertura .abertura-halo{position:absolute;inset:-8%;opacity:0;pointer-events:none;
             background:radial-gradient(closest-side,rgba(5,221,240,.17),rgba(3,103,235,.08) 55%,transparent 78%)}
         #abertura img{display:none;position:absolute;left:20.8%;top:21.3%;width:58.3%}
         #abertura.abertura-estatica img{display:block}
         #abertura.abertura-estatica canvas{display:none}
+        /* Depois do laser: logo sobe e encolhe, o nome entra letra a letra embaixo */
+        #abertura canvas,#abertura .abertura-halo,#abertura img{transform-origin:50% 50%;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+        #abertura.abertura-nomeada canvas,#abertura.abertura-nomeada .abertura-halo{transform:translateY(-10%) scale(.88)}
+        #abertura.abertura-nomeada img{transform:translateY(-17.4%) scale(.88)}
+        #abertura .abertura-marca{position:absolute;left:0;right:0;top:69%;display:flex;flex-direction:column;align-items:center;gap:2.4cqw;pointer-events:none}
+        #abertura .abertura-nome{margin:0;font:700 11.5cqw/1 "Poppins",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:-.01em;white-space:nowrap}
+        #abertura .abertura-nome span{display:inline-block;opacity:0;transform:translateY(.28em);filter:blur(5px);
+            transition:opacity .5s ease,transform .65s cubic-bezier(.2,.8,.2,1),filter .5s ease;transition-delay:calc(var(--i) * 55ms)}
+        #abertura.abertura-nomeada .abertura-nome span{opacity:1;transform:none;filter:none}
+        #abertura .abertura-lema{font:600 2.35cqw/1 "Poppins",system-ui,-apple-system,sans-serif;letter-spacing:.34em;color:#7C8AA5;text-transform:uppercase;white-space:nowrap;
+            opacity:0;transform:translateY(6px);transition:opacity .6s ease .6s,transform .6s ease .6s}
+        #abertura.abertura-nomeada .abertura-lema{opacity:1;transform:none}
+        @media (prefers-reduced-motion:reduce){ #abertura *{transition:none!important} }
+
+        /* Mini logo de carregamento na troca de pagina (logica em main.js,
+           junto da barra fina): so aparece se a espera passar de 250 ms. */
+        #mini-carregando{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .18s ease,visibility 0s linear .18s}
+        #mini-carregando.ligado{opacity:1;visibility:visible;transition:opacity .18s ease}
+        #mini-carregando .mini-cartao{display:grid;place-items:center;width:84px;height:84px;border-radius:22px;background:rgba(2,3,15,.88);box-shadow:0 10px 30px rgba(2,3,15,.35)}
+        #mini-carregando .mini-logo{position:relative;width:52px;aspect-ratio:1100/902;animation:mini-respira 1.2s ease-in-out infinite}
+        #mini-carregando .mini-base,#mini-carregando .mini-brilho{position:absolute;inset:0}
+        #mini-carregando.ligado .mini-base{background:var(--mini-logo) center/contain no-repeat;opacity:.9}
+        #mini-carregando.ligado .mini-brilho{background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.95) 50%,transparent 65%) 0 0/260% 100% no-repeat;
+            -webkit-mask:var(--mini-logo) center/contain no-repeat;mask:var(--mini-logo) center/contain no-repeat;mix-blend-mode:screen;animation:mini-varre 1.1s cubic-bezier(.45,0,.25,1) infinite}
+        #mini-carregando .mini-logo::after{content:"";position:absolute;inset:-60%;border-radius:50%;z-index:-1;background:radial-gradient(closest-side,rgba(110,226,220,.18),transparent 70%)}
+        @keyframes mini-varre{0%{background-position:130% 0}100%{background-position:-30% 0}}
+        @keyframes mini-respira{0%,100%{transform:scale(.96)}50%{transform:scale(1)}}
+        @media (prefers-reduced-motion:reduce){ #mini-carregando .mini-logo,#mini-carregando .mini-brilho{animation:none} #mini-carregando .mini-brilho{opacity:0} }
     </style>
     <script>
         (function () {
@@ -98,12 +126,20 @@
     perceptivel quando o banco esta "acordando" apos um tempo sem uso, ver
     pool_pre_ping em app/config.py). Logica de mostrar/animar em main.js. -->
     <div id="barra-carregamento" class="{{ tema.accent_bg if tema else 'bg-indigo-600' }}"></div>
+    <div id="mini-carregando" role="status" aria-label="Carregando"
+         style="--mini-logo:url('{{ url_for('static', filename='img/logo-mini.webp') }}')">
+        <div class="mini-cartao"><div class="mini-logo"><div class="mini-base"></div><div class="mini-brilho"></div></div></div>
+    </div>
     <div id="abertura" role="status" aria-label="Carregando o TyBenson"
          data-logo="{{ url_for('static', filename='img/logo-abertura.webp') }}">
         <div class="abertura-quadro">
             <div id="abertura-halo" class="abertura-halo"></div>
             <canvas id="abertura-canvas" aria-hidden="true"></canvas>
             <img src="{{ url_for('static', filename='img/logo-abertura.webp') }}" alt="" loading="lazy">
+            <div class="abertura-marca" aria-hidden="true">
+                <p class="abertura-nome"><span style="--i:0;color:#F4F8FF">T</span><span style="--i:1;color:#F4F8FF">y</span><span style="--i:2;color:#3D6FF2">B</span><span style="--i:3;color:#4786EE">e</span><span style="--i:4;color:#519DE9">n</span><span style="--i:5;color:#5AB4E5">s</span><span style="--i:6;color:#64CBE0">o</span><span style="--i:7;color:#6EE2DC">n</span></p>
+                <div class="abertura-lema">Pessoas · Equipes · Propósito</div>
+            </div>
         </div>
     </div>
     {% with messages = get_flashed_messages(with_categories=true) %}
