@@ -5,7 +5,7 @@
     "start_url": "/dashboard",
     "scope": "/",
     "display": "standalone",
-    "background_color": "#030712",
+    "background_color": "#02030F",
     "theme_color": "#4f46e5",
     "orientation": "portrait-primary",
     "share_target": {

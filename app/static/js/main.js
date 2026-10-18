@@ -353,6 +353,107 @@ if ("serviceWorker" in navigator) {
     });
 }
 
+// Instalar o app ([data-instalar] = o que aparece so quando da pra instalar;
+// [data-instalar-botao] = o que instala). Android/Chrome: o pedido do
+// navegador (beforeinstallprompt, guardado cedo no <head> do base.html) abre
+// a instalacao num toque. iPhone: a Apple nao deixa instalar por botao, entao
+// abre o passo a passo (Compartilhar > Adicionar a Tela de Inicio). Android
+// sem o pedido (Firefox etc.): passo a passo pelo menu do navegador. Ja
+// instalado (aberto como app) ou computador sem suporte: nada aparece.
+// [data-instalar-dispensavel] some por 30 dias com "Agora nao".
+(function () {
+    var alvos = document.querySelectorAll("[data-instalar]");
+    if (!alvos.length) return;
+    var instalado = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+    if (instalado) return;
+
+    var ua = navigator.userAgent;
+    var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    // Chrome do Android (e Samsung, que tambem tem "Chrome/" no nome) manda o
+    // pedido quando da pra instalar; sem pedido = ja instalado. So os outros
+    // (Firefox...) precisam do passo a passo pelo menu.
+    var androidSemPedido = /Android/.test(ua) && !/Chrome\//.test(ua);
+    var CHAVE_DISPENSA = "instalar-app-dispensado-ate";
+
+    function dispensado() {
+        try { return Number(localStorage.getItem(CHAVE_DISPENSA) || 0) > Date.now(); } catch (e) { return false; }
+    }
+    function mostrar() {
+        alvos.forEach(function (el) {
+            if (el.hasAttribute("data-instalar-dispensavel") && dispensado()) return;
+            el.hidden = false;
+        });
+    }
+    function esconder() {
+        alvos.forEach(function (el) { el.hidden = true; });
+    }
+
+    function passoAPasso() {
+        var passos = ios
+            ? ["Toque em <b>Compartilhar</b> " + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>' +
+               " (no Safari fica na barra de baixo; no Chrome, na barra de endereço).",
+               "Role a lista e toque em <b>Adicionar à Tela de Início</b>.",
+               "Toque em <b>Adicionar</b>. O ícone do TyBenson aparece na tela inicial."]
+            : ["Toque no menu do navegador <b>⋮</b> (no canto de cima).",
+               "Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.",
+               "Confirme. O ícone do TyBenson aparece na tela inicial."];
+        if (!document.getElementById("estilo-instalar-app")) {
+            // ::backdrop nao da pra por inline; e o reset do Tailwind zera a
+            // margem que centraliza o <dialog>.
+            var estilo = document.createElement("style");
+            estilo.id = "estilo-instalar-app";
+            estilo.textContent = "dialog[data-instalar-dialogo]::backdrop{background:rgba(2,3,15,.55)}";
+            document.head.appendChild(estilo);
+        }
+        var dialogo = document.createElement("dialog");
+        dialogo.setAttribute("aria-label", "Como instalar o app");
+        dialogo.setAttribute("data-instalar-dialogo", "");
+        dialogo.style.cssText = "margin:auto;border:0;border-radius:24px;padding:0;max-width:min(92vw,380px);width:100%;color:#111827;background:#fff;box-shadow:0 20px 50px rgba(0,0,0,.35)";
+        dialogo.innerHTML =
+            '<div style="padding:22px 22px 18px;font-family:inherit">' +
+            '<p style="margin:0 0 4px;font-size:18px;font-weight:800">Instalar o TyBenson</p>' +
+            '<p style="margin:0 0 16px;font-size:13px;color:#6b7280">' + (ios ? "No iPhone é assim (leva 10 segundos):" : "Pelo navegador é assim:") + "</p>" +
+            '<ol style="margin:0;padding:0;list-style:none;display:grid;gap:12px">' +
+            passos.map(function (texto, i) {
+                return '<li style="display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.45">' +
+                    '<span style="flex:none;width:26px;height:26px;border-radius:50%;background:#4f46e5;color:#fff;font-weight:700;font-size:13px;display:grid;place-items:center">' + (i + 1) + "</span>" +
+                    "<span>" + texto + "</span></li>";
+            }).join("") +
+            "</ol>" +
+            '<button type="button" data-fechar style="margin-top:20px;width:100%;border:0;border-radius:999px;background:#4f46e5;color:#fff;font-weight:700;font-size:15px;padding:12px">Entendi</button>' +
+            "</div>";
+        document.body.appendChild(dialogo);
+        dialogo.addEventListener("close", function () { dialogo.remove(); });
+        dialogo.addEventListener("click", function (e) {
+            if (e.target === dialogo || e.target.closest("[data-fechar]")) dialogo.close();
+        });
+        if (dialogo.showModal) dialogo.showModal(); else dialogo.setAttribute("open", "");
+    }
+
+    document.addEventListener("click", function (e) {
+        if (e.target.closest("[data-instalar-dispensar]")) {
+            try { localStorage.setItem(CHAVE_DISPENSA, String(Date.now() + 30 * 24 * 3600 * 1000)); } catch (erro) { /* sem storage: so esconde agora */ }
+            document.querySelectorAll("[data-instalar-dispensavel]").forEach(function (el) { el.hidden = true; });
+            return;
+        }
+        if (!e.target.closest("[data-instalar-botao]")) return;
+        var pedido = window.pedidoInstalarApp;
+        if (pedido) {
+            pedido.prompt();
+            pedido.userChoice.then(function (escolha) {
+                if (escolha.outcome === "accepted") esconder();
+            }).catch(function () {});
+            window.pedidoInstalarApp = null;  // o navegador so deixa usar 1 vez
+        } else {
+            passoAPasso();
+        }
+    });
+
+    window.addEventListener("appinstalled", esconder);
+    if (window.pedidoInstalarApp || ios || androidSemPedido) mostrar();
+    document.addEventListener("pode-instalar-app", mostrar);
+})();
+
 // Aviso de troca/perda de sessao nesta aba. O cookie de sessao do Flask-Login
 // e compartilhado por todo o navegador (nao por aba) -- logar com outra conta
 // numa aba troca a sessao usada por todas as outras abas do mesmo dominio,

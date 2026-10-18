@@ -102,6 +102,13 @@
         @media (prefers-reduced-motion:reduce){ #mini-carregando .mini-logo,#mini-carregando .mini-brilho{animation:none} #mini-carregando .mini-brilho{opacity:0} }
     </style>
     <script>
+        // Pedido de instalacao do Android/Chrome: guardado aqui no <head>
+        // porque pode chegar antes do main.js (ver "Instalar o app" la).
+        window.addEventListener("beforeinstallprompt", function (e) {
+            e.preventDefault();
+            window.pedidoInstalarApp = e;
+            document.dispatchEvent(new Event("pode-instalar-app"));
+        });
         (function () {
             try {
                 if (sessionStorage.getItem("abertura-vista")) return;

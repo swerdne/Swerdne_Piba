@@ -55,6 +55,29 @@
                 <p class="text-sm {{ tema.text_secondary }} mt-0.5">Bem-vindo de volta ao TyBenson</p>
             </div>
 
+            <!-- Instalar o app (logica em main.js, "Instalar o app"): so aparece
+                 se der pra instalar neste aparelho e ainda nao foi instalado;
+                 "Agora nao" esconde por 30 dias (o Perfil sempre tem a opcao). -->
+            <div data-instalar data-instalar-dispensavel hidden
+                 class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M12 7v7m-3-3l3 3 3-3"></path></svg>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-bold {{ tema.text_primary }}">Instale o TyBenson no celular</p>
+                    <p class="text-xs {{ tema.text_secondary }}">Abre direto da tela inicial, em tela cheia.</p>
+                    <div class="flex items-center gap-3 mt-2.5">
+                        <button type="button" data-instalar-botao
+                                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-bold px-4 py-2 rounded-full transition">
+                            Instalar app
+                        </button>
+                        <button type="button" data-instalar-dispensar class="text-xs font-semibold {{ tema.text_secondary }} hover:underline">
+                            Agora não
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
             <!-- Proxima escala -->
             <div class="rounded-3xl p-6 text-white space-y-2.5"
@@ -294,6 +317,17 @@
                 <p class="text-xs {{ tema.text_secondary }}">JPG ou PNG, ate 2 MB.</p>
                 {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
             </form>
+
+            <!-- Instalar o app: opcao fixa no Perfil (nunca dispensada) -->
+            <button type="button" data-instalar data-instalar-botao hidden
+                    class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center gap-3 text-left {{ tema.card_bg_hover }} transition">
+                <span class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 {{ tema.accent_soft_bg }} {{ tema.accent_text }}"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M12 7v7m-3-3l3 3 3-3"></path></svg></span>
+                <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-bold {{ tema.text_primary }}">Instalar o app no celular</span>
+                    <span class="block text-xs {{ tema.text_secondary }}">Ícone na tela inicial, abre em tela cheia</span>
+                </span>
+                {{ chevron("w-4 h-4 shrink-0 " ~ tema.text_secondary) }}
+            </button>
 
             <!-- Informacoes pessoais -->
             <div>

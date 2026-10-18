@@ -108,6 +108,12 @@
             Nao tem conta?
             <a href="{{ url_for('auth.register') }}" class="text-indigo-400 font-medium hover:text-indigo-300 hover:underline">Cadastre-se</a>
         </p>
+        <p class="text-center mt-4" data-instalar hidden>
+            <button type="button" data-instalar-botao class="inline-flex items-center gap-1.5 text-sm text-indigo-400 font-medium hover:text-indigo-300 hover:underline">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M12 7v7m-3-3l3 3 3-3"></path></svg>
+                Instalar o app no celular
+            </button>
+        </p>
         <p class="text-center text-xs text-gray-500 mt-4">
             <a href="{{ url_for('main.privacidade') }}" class="hover:text-gray-300 hover:underline">Privacidade</a>
             &middot; <a href="{{ url_for('main.termos') }}" class="hover:text-gray-300 hover:underline">Termos</a>

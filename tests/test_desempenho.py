@@ -66,3 +66,17 @@ def test_gunicorn_um_processo_com_threads():
     import pathlib
     config = runpy.run_path(str(pathlib.Path(__file__).resolve().parents[1] / "gunicorn.conf.py"))
     assert config["workers"] == 1 and config["worker_class"] == "gthread" and config["threads"] > 1
+
+
+def test_instalar_app_aparece_no_inicio_perfil_e_login(logged_in_client, client):
+    """Os pontos de "Instalar o app" vem escondidos (hidden): main.js so
+    mostra quando da pra instalar no aparelho e o app ainda nao esta
+    instalado. O pedido do Chrome e guardado cedo no <head>."""
+    inicio = logged_in_client.get("/dashboard").data.decode("utf-8")
+    assert inicio.count("data-instalar-botao") == 2  # cartao do inicio + item do Perfil
+    assert "data-instalar data-instalar-dispensavel hidden" in inicio and "data-instalar-dispensar" in inicio
+    assert 'addEventListener("beforeinstallprompt"' in inicio
+
+    logged_in_client.get("/auth/logout")
+    login = client.get("/auth/login").data.decode("utf-8")
+    assert 'data-instalar hidden' in login and "Instalar o app no celular" in login
