@@ -33,7 +33,7 @@
     <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">
         {% if comunidade.imagem %}
         <div class="flex justify-center mb-4">
-            <img src="{{ comunidade.imagem }}" alt="" class="w-20 h-20 rounded-full object-cover border {{ tema.card_border }} shadow-sm">
+            <img decoding="async" src="{{ comunidade.imagem }}" alt="" class="w-20 h-20 rounded-full object-cover border {{ tema.card_border }} shadow-sm">
         </div>
         {% endif %}
 

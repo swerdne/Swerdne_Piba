@@ -56,10 +56,14 @@
   top: 0;
   left: 0;
   height: 3px;
-  width: 0%;
+  /* Largura cheia encolhida por scaleX (main.js): anima so transform, sem
+     redesenhar a cada quadro como animar width fazia (pesava no iPhone). */
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
   z-index: 9999;
   opacity: 0;
-  transition: width 400ms ease-out, opacity 200ms ease-out;
+  transition: transform 400ms ease-out, opacity 200ms ease-out;
 }
 #barra-carregamento.carregando {
   opacity: 1;
@@ -71,8 +75,17 @@
 /* Manchas de cor do fundo das telas (cores em themes.py: blob_1/2/3). Eram
    blur-3xl + animacao infinita -- filtro de desfoque grande redesenhado a
    cada quadro, o que mais travava a rolagem e a troca de pagina no celular.
-   Agora a borda suave vem de uma mascara radial: desenhada uma vez, parada. */
+   Depois viraram mascara radial -- mas mascara, no Safari, e desenhada numa
+   passada separada fora da tela. Agora e so um degrade radial na cor do
+   texto (classe text-<cor>/<opacidade>, em themes.py e nos templates):
+   mesmo visual, desenho comum, mais leve no iPhone. */
 .fundo-blob {
-  -webkit-mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 100%);
-  mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 100%);
+  background-image: radial-gradient(closest-side, currentColor 0%, transparent 100%);
+  background-image: radial-gradient(closest-side, currentColor 0%, color-mix(in srgb, currentColor 55%, transparent) 45%, transparent 100%);
 }
+
+/* 100vh no iPhone conta a barra do Safari escondida: a tela "sobra" e rola
+   a toa. 100dvh e a altura visivel de verdade (100vh fica de reserva pra
+   iOS antigo). Fora das camadas do Tailwind, entao vale sobre o utilitario. */
+.min-h-screen { min-height: 100vh; min-height: 100dvh; }
+.h-screen { height: 100vh; height: 100dvh; }

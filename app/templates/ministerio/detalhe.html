@@ -31,7 +31,7 @@
                     <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
                 </a>
                 {% if ministerio.imagem %}
-                    <img src="{{ ministerio.imagem }}" alt="" class="w-9 h-9 rounded-xl object-cover shrink-0 shadow-sm">
+                    <img decoding="async" src="{{ ministerio.imagem }}" alt="" class="w-9 h-9 rounded-xl object-cover shrink-0 shadow-sm">
                 {% endif %}
                 <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">{{ ministerio.nome }}</span>
             </div>

@@ -29,7 +29,7 @@ import "with context" por causa do sino.
     {{ sino_avisos(tema) }}
     <a href="{{ url_for('main.dashboard') }}" title="Ir para o inicio" aria-label="Ir para o inicio"
        class="inline-flex w-8 h-8 opacity-90 hover:opacity-100 transition shrink-0">
-        <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-full h-full object-contain">
+        <img decoding="async" src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-full h-full object-contain">
     </a>
 </div>
 {% endmacro %}
@@ -43,7 +43,7 @@ import "with context" por causa do sino.
 {% elif chave == 'comunidades' %}
 <svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path></svg>
 {% elif current_user.foto_perfil %}
-<img src="{{ current_user.foto_perfil }}" alt="" class="{{ tamanho }} rounded-full object-cover shrink-0">
+<img decoding="async" src="{{ current_user.foto_perfil }}" alt="" class="{{ tamanho }} rounded-full object-cover shrink-0">
 {% else %}
 <span class="{{ tamanho }} rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-[10px] font-bold flex items-center justify-center shrink-0">{{ (current_user.name or current_user.username or current_user.email)[0]|upper }}</span>
 {% endif %}
@@ -89,7 +89,7 @@ data-nav-pill marca o elemento que recebe o fundo de "ativo".
 
 <aside class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col {{ tema.card_bg }} border-r {{ tema.card_border }} px-5 py-7">
     <a href="{{ url_for('main.dashboard') }}" data-ir-painel="inicio" class="flex items-center gap-3 px-2 mb-9">
-        <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-10 h-10 object-contain shrink-0">
+        <img decoding="async" src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-10 h-10 object-contain shrink-0">
         <span class="leading-tight">
             {{ nome_marca(tema.text_primary, "text-lg") }}
             <span class="block text-[11px] {{ tema.text_secondary }}">By Swerdne</span>
@@ -198,7 +198,7 @@ Precisa de import "with context" (dados_tutorial vem do context processor). #}
 {% macro avatar_membro(tema, membro, tamanho="w-8 h-8 text-xs") %}
 {%- set foto = membro.foto_exibida -%}
 {% if foto %}
-<img src="{{ foto }}" alt="" loading="lazy" class="{{ tamanho }} rounded-full object-cover shrink-0">
+<img decoding="async" src="{{ foto }}" alt="" loading="lazy" class="{{ tamanho }} rounded-full object-cover shrink-0">
 {% else %}
 <div class="{{ tamanho }} rounded-full {{ tema.secondary_bg }} flex items-center justify-center font-semibold {{ tema.secondary_text }} shrink-0">{{ membro.iniciais }}</div>
 {% endif %}

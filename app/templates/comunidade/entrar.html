@@ -18,7 +18,7 @@
     <div class="relative z-10 max-w-md w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-6 text-center space-y-4">
 
         {% if imagem_escopo %}
-        <img src="{{ imagem_escopo }}" alt="" class="w-16 h-16 mx-auto rounded-2xl object-cover shadow-sm">
+        <img decoding="async" src="{{ imagem_escopo }}" alt="" class="w-16 h-16 mx-auto rounded-2xl object-cover shadow-sm">
         {% else %}
         <div class="w-14 h-14 mx-auto rounded-2xl {{ tema.accent_soft_bg }} flex items-center justify-center">
             <i class="fa-solid {{ 'fa-people-group' if tipo_escopo == 'ministerio' else 'fa-user-plus' }} {{ tema.accent_text }} text-xl"></i>

@@ -38,7 +38,7 @@
         <!-- Cabecalho comum as 3 abas: logo + nome na esquerda, sino na mesma linha -->
         <header class="flex items-center justify-between gap-4 mb-6 lg:mb-0 lg:absolute lg:top-10 lg:right-10 lg:z-10">
             <div class="flex items-center gap-2.5 min-w-0 lg:hidden">
-                <img src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-9 h-9 object-contain shrink-0">
+                <img decoding="async" src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-9 h-9 object-contain shrink-0">
                 <div class="leading-tight">
                     {{ nome_marca(tema.text_primary, "text-base") }}
                     <span class="block text-[10px] {{ tema.text_secondary }}">By Swerdne</span>
@@ -181,7 +181,7 @@
                     {% for item in comunidades %}
                     <a href="{{ item.url }}" class="flex items-center gap-3 px-4 py-3.5 {{ tema.card_bg_hover }} transition">
                         {% if item.comunidade.imagem %}
-                        <img src="{{ item.comunidade.imagem }}" alt="" class="w-10 h-10 rounded-xl object-cover shrink-0">
+                        <img decoding="async" loading="lazy" src="{{ item.comunidade.imagem }}" alt="" class="w-10 h-10 rounded-xl object-cover shrink-0">
                         {% else %}
                         <div class="w-10 h-10 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
                             {{ icone_pessoa("w-5 h-5") }}
@@ -293,7 +293,7 @@
 
             <div class="flex flex-col items-center gap-2.5">
                 <label for="input-foto" class="relative cursor-pointer" title="Trocar foto">
-                    <img id="preview-foto" {% if foto_perfil %}src="{{ foto_perfil }}"{% endif %} alt="Foto de perfil"
+                    <img decoding="async" id="preview-foto" {% if foto_perfil %}src="{{ foto_perfil }}"{% endif %} alt="Foto de perfil"
                          class="w-24 h-24 rounded-full object-cover border {{ tema.card_border }} {{ '' if foto_perfil else 'hidden' }}">
                     <div id="preview-inicial"
                          class="w-24 h-24 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center text-3xl font-extrabold {{ tema.accent_text }} {{ 'hidden' if foto_perfil else '' }}">

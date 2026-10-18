@@ -27,7 +27,7 @@
                     <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
                 </a>
                 {% if comunidade.imagem %}
-                    <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-xl object-cover shrink-0 shadow-sm">
+                    <img decoding="async" src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-xl object-cover shrink-0 shadow-sm">
                 {% endif %}
                 <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">{{ comunidade.nome }}</span>
             </div>
@@ -177,7 +177,7 @@
             <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}"
                class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3.5 transition">
                 {% if ministerio.imagem %}
-                    <img src="{{ ministerio.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
+                    <img decoding="async" loading="lazy" src="{{ ministerio.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
                 {% else %}
                     <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
                         <i class="fa-solid fa-sitemap text-xs"></i>

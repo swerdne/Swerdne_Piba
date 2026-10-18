@@ -128,14 +128,6 @@ document.querySelectorAll("form").forEach(function (form) {
         miniTimers = [];
         if (mini) mini.classList.remove("ligado");
     }
-    if (mini) {
-        // Deixa o logo pequeno (7 KB) em cache depois que a pagina carrega,
-        // pra ele ja aparecer pronto na 1a troca de pagina.
-        window.addEventListener("load", function () {
-            var url = getComputedStyle(mini).getPropertyValue("--mini-logo").match(/url\(["']?([^"')]+)/);
-            if (url) setTimeout(function () { new Image().src = url[1]; }, 1500);
-        });
-    }
 
     function iniciar() {
         if (mini) {
@@ -144,14 +136,14 @@ document.querySelectorAll("form").forEach(function (form) {
             miniTimers.push(setTimeout(esconderMini, MINI_LIMITE_MS));
         }
         barra.classList.add("carregando");
-        barra.style.width = "20%";
+        barra.style.transform = "scaleX(0.2)";
         // Cresce aos poucos, cada vez mais devagar -- da a sensacao de
         // progresso real sem prometer um tempo exato (nao sabemos quanto
         // vai demorar). Nunca chega a 100% sozinha de proposito: 100%
         // pareceria "pronto" e a pagina ainda nao trocou.
-        setTimeout(function () { barra.style.width = "45%"; }, 150);
-        setTimeout(function () { barra.style.width = "65%"; }, 500);
-        setTimeout(function () { barra.style.width = "80%"; }, 1500);
+        setTimeout(function () { barra.style.transform = "scaleX(0.45)"; }, 150);
+        setTimeout(function () { barra.style.transform = "scaleX(0.65)"; }, 500);
+        setTimeout(function () { barra.style.transform = "scaleX(0.80)"; }, 1500);
     }
 
     // Voltar pelo navegador reaproveita a pagina da memoria (bfcache) do
@@ -161,7 +153,7 @@ document.querySelectorAll("form").forEach(function (form) {
         if (!evento.persisted) return;
         esconderMini();
         barra.classList.remove("carregando");
-        barra.style.width = "0%";
+        barra.style.transform = "scaleX(0)";
         document.querySelectorAll("[data-travado-no-envio]").forEach(function (botao) {
             botao.disabled = false;
             botao.removeAttribute("data-travado-no-envio");

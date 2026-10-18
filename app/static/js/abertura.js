@@ -12,7 +12,12 @@
     var cv = document.getElementById("abertura-canvas");
     var halo = document.getElementById("abertura-halo");
 
-    var W = 720, H = 600, STEP = 3, PS = STEP - 0.6;
+    // iPhone (e aparelho com poucos nucleos): amostra o logo a cada 4 px em
+    // vez de 3 -- ~45% menos particulas, o logo continua cheio.
+    var ua = navigator.userAgent;
+    var ehIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    var aparelhoLeve = ehIos || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+    var W = 720, H = 600, STEP = aparelhoLeve ? 4 : 3, PS = STEP - 0.6;
     var LOGO = { x: 150, y: 128, w: 420, h: 420 * 689 / 840 };
     var MB = LOGO.y + LOGO.h + 20;
     var T = { laser0: 2.1, laser1: 3.4 };
@@ -31,6 +36,8 @@
         setTimeout(function () {
             cena.remove();
             document.documentElement.classList.remove("com-abertura");
+            // O iOS tem um teto de memoria pra canvas: devolve tudo na hora.
+            [cv, liso, buf].forEach(function (c) { if (c) { c.width = 0; c.height = 0; } });
         }, reduzir ? 200 : 400);
     }
     var trava = setTimeout(encerrar, LIMITE_MS);
@@ -103,6 +110,7 @@
         var ac = amostra.getContext("2d", { willReadFrequently: true });
         desenharLogo(ac);
         var dados = ac.getImageData(0, 0, W, H).data, pts = [];
+        amostra.width = amostra.height = 0;  // so servia pra ler os pixels
         for (var y = 0; y < H - STEP; y += STEP) {
             for (var x = 0; x < W - STEP; x += STEP) {
                 var i = ((y + (STEP >> 1)) * W + x + (STEP >> 1)) * 4;
@@ -182,11 +190,16 @@
         if (!pronto) {
             var entrada = limitar(tempo / 0.5, 0, 1), i, k, p;
             for (i = 0; i < N; i++) P[i] = limitar((tempo - atraso[i]) / dur[i], 0, 1);
+            // Desenho em lote: 1 caminho por cor x estado (parada/viajando) e
+            // um unico fill -- antes era 1 fillRect + 1 troca de opacidade por
+            // particula (~7 mil por quadro), o que mais pesava no iPhone.
             for (k = 0; k < 2; k++) {
                 ctx.fillStyle = VIAJANDO[k];
+                for (var viajando = 0; viajando < 2; viajando++) {
+                ctx.beginPath();
                 for (i = 0; i < N; i++) {
                     p = P[i];
-                    if (p >= 1 || tinta[i] !== k) continue;
+                    if (p >= 1 || tinta[i] !== k || (p > 0) !== (viajando === 1)) continue;
                     var x, y, s;
                     if (p <= 0) {
                         x = sx[i] + Math.sin(tempo * 1.3 + i) * 5;
@@ -199,21 +212,25 @@
                         y = sy[i] + dy * e + (dx / d) * desvio;
                         s = tam[i] + (PS - tam[i]) * e;
                     }
-                    ctx.globalAlpha = entrada * (p <= 0 ? 0.75 : 0.95);
-                    ctx.fillRect(x - s / 2, y - s / 2, s, s);
+                    ctx.rect(x - s / 2, y - s / 2, s, s);
+                }
+                ctx.globalAlpha = entrada * (viajando ? 0.95 : 0.75);
+                ctx.fill();
                 }
             }
             ctx.globalAlpha = 1;
             var clarao = [];
             for (var b = 0; b < baldes.length; b++) {
                 ctx.fillStyle = corBalde[b];
+                ctx.beginPath();
                 var lista = baldes[b];
                 for (var j = 0; j < lista.length; j++) {
                     i = lista[j];
                     if (P[i] < 1 || tx[i] < laserX) continue;
                     if (tx[i] < laserX + 26) { clarao.push(i); continue; }
-                    ctx.fillRect(tx[i] - PS / 2, ty[i] - PS / 2, PS, PS);
+                    ctx.rect(tx[i] - PS / 2, ty[i] - PS / 2, PS, PS);
                 }
+                ctx.fill();
             }
             if (clarao.length) {
                 ctx.fillStyle = "#FFFFFF";

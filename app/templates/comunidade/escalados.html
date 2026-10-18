@@ -63,7 +63,7 @@
                    class="group relative flex flex-col gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition">
                     <span class="absolute -top-6 -right-6 w-20 h-20 rounded-full {{ cor }} opacity-10"></span>
                     {% if ministerio.imagem %}
-                    <img src="{{ ministerio.imagem }}" alt="" class="w-11 h-11 rounded-2xl object-cover shadow-sm">
+                    <img decoding="async" loading="lazy" src="{{ ministerio.imagem }}" alt="" class="w-11 h-11 rounded-2xl object-cover shadow-sm">
                     {% else %}
                     <span class="w-11 h-11 rounded-2xl {{ cor }} text-white flex items-center justify-center shadow-sm">
                         <i class="fa-solid {{ 'fa-child-reaching' if ministerio.eh_kids else icone }}"></i>

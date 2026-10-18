@@ -70,7 +70,7 @@
                     <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) }}"
                        class="flex items-center gap-3 flex-1 min-w-0" data-selecao-link>
                         {% if comunidade.imagem %}
-                            <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
+                            <img decoding="async" loading="lazy" src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
                         {% else %}
                             <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
                                 <i class="fa-solid fa-people-group text-sm"></i>
@@ -115,7 +115,7 @@
             <a href="{{ url_for('comunidade.escalados', comunidade_id=comunidade.id) }}"
                class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 transition">
                 {% if comunidade.imagem %}
-                    <img src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
+                    <img decoding="async" loading="lazy" src="{{ comunidade.imagem }}" alt="" class="w-9 h-9 rounded-full object-cover shrink-0">
                 {% else %}
                     <div class="w-9 h-9 rounded-full {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
                         <i class="fa-solid fa-people-group text-sm"></i>
