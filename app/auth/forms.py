@@ -11,7 +11,8 @@ from app.auth.dominio_email import dominio_aceita_email
 class LoginForm(FlaskForm):
     email = StringField("E-mail", validators=[DataRequired(), Email()])
     password = PasswordField("Senha", validators=[DataRequired()])
-    remember = BooleanField("Lembrar de mim")
+    # Marcado por padrao: desmarcar so faz sentido em aparelho compartilhado.
+    remember = BooleanField("Lembrar de mim", default=True)
     submit = SubmitField("Entrar")
 
 

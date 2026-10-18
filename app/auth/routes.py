@@ -93,7 +93,7 @@ def register():
         user.set_password(form.password.data)
         user.save()
 
-        login_user(user)
+        login_user(user, remember=True)
         return _redirecionar_apos_login()
     return render_template("auth/register.html", form=form)
 
@@ -241,6 +241,6 @@ def google_callback():
 
     user.save()
 
-    login_user(user)
+    login_user(user, remember=True)  # sem isso caia ao fechar o app (ver REMEMBER_COOKIE_DURATION)
     flash("Login com Google realizado com sucesso!", "success")
     return _redirecionar_apos_login()

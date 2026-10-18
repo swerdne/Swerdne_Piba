@@ -47,6 +47,32 @@ def test_login_funciona_apos_registro_e_logout(client, app, db):
     assert client.get("/auth/sessao-atual").get_json()["usuario_id"] is not None
 
 
+def test_login_continua_depois_de_fechar_o_app(client, app, db):
+    """O cookie de sessao some quando o navegador/app fecha (no iPhone, o
+    app instalado e fechado pelo sistema o tempo todo). O "lembrar de mim"
+    de 1 ano, renovado a cada acesso, refaz o login sozinho."""
+    from datetime import datetime, timedelta, timezone
+    from email.utils import parsedate_to_datetime
+
+    resposta = client.post("/auth/register", data=_dados_registro())
+    lembrar = [c for c in resposta.headers.getlist("Set-Cookie") if c.startswith("remember_token=")]
+    assert lembrar and "HttpOnly" in lembrar[0]
+    expira = parsedate_to_datetime(lembrar[0].split("Expires=")[1].split(";")[0])
+    assert expira - datetime.now(timezone.utc) > timedelta(days=360)
+
+    client.delete_cookie("session")  # "fechou o app"
+    assert client.get("/auth/sessao-atual").get_json()["usuario_id"] is not None
+
+    client.get("/auth/logout")  # sair de verdade apaga o lembrar tambem
+    client.delete_cookie("session")
+    assert client.get("/auth/sessao-atual").get_json() == {"usuario_id": None}
+
+
+def test_lembrar_de_mim_vem_marcado_no_login(client):
+    html = client.get("/auth/login").data.decode("utf-8")
+    assert 'id="remember"' in html and "checked" in html.split('id="remember"')[0].rsplit("<input", 1)[1] + html.split('id="remember"')[1].split(">", 1)[0]
+
+
 def test_cadastro_recusa_dominio_sem_mx(client, app, monkeypatch):
     """VALIDAR_DOMINIO_EMAIL fica desligado por padrao em teste (sem rede) --
     liga so aqui e simula um dominio que nao aceita e-mail."""

@@ -1,6 +1,7 @@
 """Classes de configuracao por ambiente."""
 import os
 import tempfile
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,6 +10,15 @@ load_dotenv()
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "troque-esta-chave")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Login que dura: o cookie "lembrar de mim" do Flask-Login vale 1 ano e
+    # e renovado a cada acesso -- quem usa o app nunca e deslogado sozinho.
+    # Sem ele, o login vivia so no cookie de sessao, que o navegador apaga
+    # ao fechar (no iPhone o app instalado e fechado pelo sistema o tempo
+    # todo, e a pessoa caia na tela de login de novo).
+    REMEMBER_COOKIE_DURATION = timedelta(days=365)
+    REMEMBER_COOKIE_REFRESH_EACH_REQUEST = True
+    REMEMBER_COOKIE_HTTPONLY = True
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 
