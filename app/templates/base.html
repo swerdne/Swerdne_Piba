@@ -97,11 +97,13 @@
            apagava). Animacoes so rodam com .ligado.
            Parada, fica com opacidade 1% (invisivel a olho) em vez de
            escondida: assim o Safari ja deixa o logo desenhado e nao precisa
-           desenhar imagem nova no meio da navegacao. .ligado entra no mesmo
-           toque (main.js) e o atraso de 250 ms e da propria transicao CSS --
-           nao depende de timer de JS rodando enquanto a pagina ja esta indo. */
+           desenhar imagem nova no meio da navegacao (era por isso que no
+           iPhone so o cartao escuro aparecia, sem o logo). .ligado entra por
+           timer de JS 250 ms depois do toque (main.js) -- testado: no iPhone
+           o timer roda; ja um transition-delay iniciado no toque ficava
+           parado durante a navegacao e o logo nunca passava de 1%. */
         #mini-carregando{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:.01;transition:opacity .18s ease}
-        #mini-carregando.ligado{opacity:1;transition:opacity .18s ease .25s}
+        #mini-carregando.ligado{opacity:1;transition:opacity .18s ease}
         #mini-carregando .mini-logo{position:relative;width:52px;height:43px}
         #mini-carregando .mini-logo img{display:block;width:52px;height:43px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.18))}
         #mini-carregando .mini-brilho{position:absolute;left:0;top:0;width:52px;height:43px;overflow:hidden;
