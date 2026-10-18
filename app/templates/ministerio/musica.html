@@ -174,6 +174,44 @@
             </div>
             {% endif %}
 
+            {% if pode_gerenciar and aberta_eh_original and not musica.cifra_louvor %}
+            <!-- Trazer a cifra: abre no site original, copia e cola aqui (o servidor nunca busca a pagina) -->
+            <form method="POST" action="{{ url_for('ministerio.colar_cifra_musica', musica_id=musica.id) }}"
+                  data-trazer-cifra class="{{ tema.card_bg }} border-2 {{ tema.accent_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                {{ acao_form.hidden_tag() }}
+                <div>
+                    <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-guitar mr-1 {{ tema.accent_text }}"></i>Trazer a cifra</p>
+                    <p class="text-xs leading-relaxed {{ tema.text_secondary }} mt-0.5">
+                        1. Abra a cifra no site &middot; 2. Copie (acordes e letra) &middot; 3. Cole aqui e salve.
+                        O tom e a Projeção saem sozinhos.
+                    </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ links_externos.cifraclub }}" target="_blank" rel="noopener nofollow"
+                       class="inline-flex items-center gap-1.5 text-xs font-semibold {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white rounded-full px-3.5 py-2 transition">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>Ver cifra no Cifra Club
+                    </a>
+                    <a href="{{ links_externos.youtube }}" target="_blank" rel="noopener nofollow"
+                       class="inline-flex items-center gap-1.5 text-xs font-semibold border {{ tema.card_border }} {{ tema.text_primary }} rounded-full px-3.5 py-2 hover:bg-black/5 transition">
+                        <i class="fa-brands fa-youtube text-red-500"></i>YouTube
+                    </a>
+                </div>
+                <textarea name="texto" rows="10" maxlength="30000" required spellcheck="false" wrap="off" aria-label="Cifra copiada"
+                          placeholder="Cole aqui a cifra copiada do site&#10;&#10;Tom: G&#10;&#10;G              D&#10;Primeira linha da letra..."
+                          class="w-full mu-mono whitespace-pre overflow-x-auto {{ CAMPO }}"></textarea>
+                {% if not musica.link_origem %}
+                <input type="url" name="link_origem" maxlength="500" placeholder="Link de onde copiou (opcional, fica registrado)"
+                       aria-label="Link de origem" class="w-full {{ CAMPO }}">
+                {% endif %}
+                <p class="text-[11px] leading-relaxed {{ tema.text_secondary }}">
+                    <i class="fa-solid fa-scale-balanced mr-1"></i>Cifras têm direitos autorais: traga só o que você pode usar. A fonte fica registrada na música.
+                </p>
+                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-floppy-disk mr-1"></i>Salvar cifra colada
+                </button>
+            </form>
+            {% endif %}
+
             {% if pode_gerenciar %}
             <form method="POST" action="{{ url_for('ministerio.salvar_louvor_musica', musica_id=musica.id) }}"
                   data-guardar-rascunho="musica-{{ musica.id }}-louvor-{{ 'original' if aberta_eh_original else tom_aberto }}" data-aba-do-form="louvor"

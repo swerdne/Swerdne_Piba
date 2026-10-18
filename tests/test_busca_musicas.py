@@ -189,6 +189,40 @@ def test_adicionar_da_web_cria_sem_cifra_com_fonte_e_nao_duplica(logged_in_clien
         assert "Fonte: Deezer" in pagina and "https://www.deezer.com/track/1" in pagina
 
 
+def test_trazer_a_cifra_na_musica_adicionada_pela_web(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        ministerio = _ministerio(logged_in_client)
+        logged_in_client.post(f"/ministerio/{ministerio.id}/repertorio/busca-web/adicionar", data={
+            "titulo": "Bondade de Deus", "artista": "Isaias Saad", "link_origem": "https://www.deezer.com/track/1",
+        })
+        musica = Musica.objects(nome="Bondade de Deus").first()
+        pagina = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode()
+        assert "Trazer a cifra" in pagina
+        assert "https://www.cifraclub.com.br/?q=Bondade+de+Deus+Isaias+Saad" in pagina
+
+        resposta = logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor/colar", data={"texto": CIFRA})
+        assert resposta.status_code == 302 and resposta.headers["Location"].endswith("#louvor")
+        musica = Musica.objects(id=musica.id).first()
+        assert "Te amo, Deus" in musica.cifra_louvor and "Isaias Saad" not in musica.cifra_louvor  # topo vira dados
+        assert musica.tom == "G" and musica.letra_projecao  # tom do texto + projecao gerada
+        assert musica.fonte == busca_web.FONTE_DEEZER + " + cifra colada"
+        assert "Trazer a cifra" not in logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode()
+        musica_id = musica.id
+    with sessao_isolada(app):
+        assert outro_logged_in_client.post(f"/ministerio/repertorio/{musica_id}/louvor/colar",
+                                           data={"texto": CIFRA}).status_code == 404
+
+
+def test_trazer_a_cifra_com_texto_vazio_avisa(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        musica = _musica(ministerio, "Sem Cifra")
+        resposta = logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor/colar", data={"texto": "  "},
+                                         follow_redirects=True)
+        assert "Cole o texto da cifra" in resposta.data.decode()
+        assert Musica.objects(id=musica.id).first().cifra_louvor is None
+
+
 def test_link_seguro_so_aceita_http():
     assert busca_web.link_seguro("https://x.com/a") == "https://x.com/a"
     assert busca_web.link_seguro("javascript:alert(1)") is None

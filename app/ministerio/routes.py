@@ -8,7 +8,7 @@ from flask import render_template, redirect, url_for, flash, request, abort, jso
 from flask_login import login_required, current_user
 
 from app.imagens import salvar_imagem, remover_imagem
-from app.ministerio.busca_web import link_seguro
+from app.ministerio.busca_web import link_seguro, links_externos
 from app.extensions import limiter
 from app.db_utils import delete_cascade, primeiro_ou_404
 from app.ministerio import bp
@@ -1553,6 +1553,7 @@ def musica(musica_id):
         projecao_espelha=projecao_espelha_cifra(musica) and aberta_eh_original,
         blocos=blocos_da_letra(musica.letra_projecao),
         acao_form=AcaoForm(),
+        links_externos=links_externos(musica.nome, musica.artista or ""),
     )
 
 
@@ -1634,6 +1635,49 @@ def salvar_louvor_musica(musica_id):
     musica.save()
     flash(f"Cifra salva no tom {tom}. A original em {musica.tom} continua guardada.", "success")
     return redirect(url_for("ministerio.musica", musica_id=musica.id, tom=tom) + "#louvor")
+
+
+@bp.route("/repertorio/<int:musica_id>/louvor/colar", methods=["POST"])
+@login_required
+def colar_cifra_musica(musica_id):
+    """Quadro "Trazer a cifra" da musica sem cifra (ex: adicionada pela
+    busca na web): a pessoa abre a cifra no site original, copia e cola aqui.
+    O texto passa pelo mesmo formatador da importacao (tira nome/artista do
+    topo, acha "Tom: X" ou identifica pelos acordes) e vira a cifra original
+    + projecao. O servidor nunca busca a pagina (ver busca_web.py)."""
+    from app.ministerio.importar_cifras import ArquivoInvalidoError, FONTE_TEXTO_COLADO, extrair_musica_de_texto
+
+    musica, _ = _musica_editavel_ou_404(musica_id)
+    voltar = url_for("ministerio.musica", musica_id=musica.id) + "#louvor"
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(voltar)
+    try:
+        lido = extrair_musica_de_texto(request.form.get("texto"))
+    except ArquivoInvalidoError as erro:
+        flash(str(erro), "danger")
+        return redirect(voltar)
+    if not lido["cifra"].strip():
+        flash("Nao encontrei a cifra no texto colado -- confira se copiou os acordes e a letra.", "danger")
+        return redirect(voltar)
+
+    cifra_antiga = musica.cifra_louvor
+    musica.cifra_louvor = lido["cifra"][:MAX_CIFRA_IMPORTADA]
+    mensagem = "Cifra salva."
+    if not musica.tom and lido["tom"]:
+        musica.tom = lido["tom"]
+        mensagem += f" Tom {lido['tom']} -- confira em Dados da musica."
+    if not musica.artista and lido["artista"]:
+        musica.artista = lido["artista"]
+    if musica.fonte and FONTE_TEXTO_COLADO.lower() not in musica.fonte.lower():
+        musica.fonte = f"{musica.fonte} + cifra colada"[:120]
+    elif not musica.fonte:
+        musica.fonte = FONTE_TEXTO_COLADO
+    musica.link_origem = musica.link_origem or link_seguro(request.form.get("link_origem"))
+    mensagem += _texto_tags_novas(_palavras_chave_se_faltar(musica))
+    if _espelhar_projecao(musica, cifra_antiga):
+        mensagem += " Projecao montada a partir da cifra."
+    return _salvar_musica(musica, "louvor", mensagem)
 
 
 @bp.route("/repertorio/<int:musica_id>/louvor/excluir-versao", methods=["POST"])
