@@ -73,7 +73,8 @@
         #abertura.abertura-estatica canvas{display:none}
         /* Depois do laser: logo sobe e encolhe, o nome entra letra a letra embaixo */
         #abertura canvas,#abertura .abertura-halo,#abertura img{transform-origin:50% 50%;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
-        #abertura.abertura-nomeada canvas,#abertura.abertura-nomeada .abertura-halo{transform:translateY(-10%) scale(.88)}
+        #abertura.abertura-nomeada .abertura-halo{transform:translateY(-10%) scale(.88)}
+        #abertura.abertura-nomeada canvas{transform:translateY(var(--abertura-sobe,0)) scale(.88)}
         #abertura.abertura-nomeada img{transform:translateY(-17.4%) scale(.88)}
         #abertura .abertura-marca{position:absolute;left:0;right:0;top:69%;display:flex;flex-direction:column;align-items:center;gap:2.4cqw;pointer-events:none}
         #abertura .abertura-nome{margin:0;font:700 11.5cqw/1 "Poppins",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:-.01em;white-space:nowrap}

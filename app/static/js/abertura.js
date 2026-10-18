@@ -15,7 +15,7 @@
     var W = 720, H = 600, STEP = 3, PS = STEP - 0.6;
     var LOGO = { x: 150, y: 128, w: 420, h: 420 * 689 / 840 };
     var MB = LOGO.y + LOGO.h + 20;
-    var T = { laser0: 2.0, laser1: 3.3 };
+    var T = { laser0: 2.1, laser1: 3.4 };
     var NOME_APOS_LASER = 0.6;  // sem pressa: espera isso depois do laser pra mostrar o nome
     var SEGURA_NOME_MS = 1000;  // tempo do nome entrar letra a letra antes de sumir
     var ACELERA_EM = 0.45;  // pronta a pagina, chega no logo pronto nesse tempo
@@ -54,7 +54,7 @@
     var liso = document.createElement("canvas"), lctx = liso.getContext("2d");
     var buf = document.createElement("canvas"), bctx = buf.getContext("2d");
     var logo = new Image();
-    var escala = 1, N = 0, tx, ty, sx, sy, atraso, dur, curva, tam, tinta, balde, P;
+    var escala = 1, ox = 0, oy = 0, quadroTela = null, N = 0, tx, ty, sx, sy, atraso, dur, curva, tam, tinta, balde, P;
     var baldes = [], corBalde = [], faiscas = [];
     var t = 0, ultimo = 0, rodando = false, nomeadaEm = 0;
     var VIAJANDO = ["rgb(92,225,255)", "rgb(59,130,255)"];
@@ -68,13 +68,32 @@
         c.drawImage(logo, LOGO.x, LOGO.y, LOGO.w, LOGO.h);
     }
 
+    // O canvas cobre a TELA INTEIRA (as particulas nascem espalhadas por ela
+    // toda), mas as contas continuam no quadro logico W x H do logo: o
+    // quadro (.abertura-quadro) vira a regiao onde o logo e montado.
+    function logico(c) { c.setTransform(escala, 0, 0, escala, ox, oy); }
+    function pixel(c) { c.setTransform(1, 0, 0, 1, 0, 0); }
+
     function ajustar() {
-        var larg = cv.clientWidth || 360;
+        var vw = window.innerWidth, vh = window.innerHeight;
+        var r = cv.parentElement.getBoundingClientRect();
         var dpr = Math.min(2, window.devicePixelRatio || 1);
-        var pw = Math.round(larg * dpr), ph = Math.round(larg * dpr * H / W);
-        [cv, liso, buf].forEach(function (c) { c.width = pw; c.height = ph; });
-        escala = pw / W;
-        lctx.setTransform(escala, 0, 0, escala, 0, 0);
+        cv.style.left = -r.left + "px";
+        cv.style.top = -r.top + "px";
+        cv.style.width = vw + "px";
+        cv.style.height = vh + "px";
+        // Logo sobe/encolhe em volta do centro do quadro (nao da tela).
+        cv.style.transformOrigin = (r.left + r.width / 2) + "px " + (r.top + r.height / 2) + "px";
+        cena.style.setProperty("--abertura-sobe", (-0.1 * r.height) + "px");
+        [cv, liso, buf].forEach(function (c) { c.width = Math.round(vw * dpr); c.height = Math.round(vh * dpr); });
+        escala = r.width / W * dpr;
+        ox = r.left * dpr;
+        oy = r.top * dpr;
+        quadroTela = { x0: -r.left / (r.width / W), x1: (vw - r.left) / (r.width / W),
+                       y0: -r.top / (r.width / W), y1: (vh - r.top) / (r.width / W) };
+        pixel(lctx);
+        lctx.clearRect(0, 0, liso.width, liso.height);
+        logico(lctx);
         desenharLogo(lctx);
     }
 
@@ -95,15 +114,13 @@
         atraso = new Float32Array(N); dur = new Float32Array(N); curva = new Float32Array(N);
         tam = new Float32Array(N); tinta = new Uint8Array(N); balde = new Uint16Array(N); P = new Float32Array(N);
         var mapa = {};
-        var g = function () { return (Math.random() + Math.random() + Math.random() - 1.5) / 1.5; };
         pts.forEach(function (p, i) {
             tx[i] = p[0]; ty[i] = p[1];
-            var longe = Math.random() < 0.12;
-            var a = Math.random() * Math.PI * 2, r = longe ? 220 + Math.random() * 170 : 40 + Math.abs(g()) * 190;
-            sx[i] = W / 2 + Math.cos(a) * r * 1.15;
-            sy[i] = 260 + Math.sin(a) * r * 0.9;
-            atraso[i] = 0.2 + Math.random() * 0.75;
-            dur[i] = 0.6 + Math.random() * 0.3;
+            // Nasce em qualquer ponto da tela e viaja ate o seu lugar no logo.
+            sx[i] = quadroTela.x0 + Math.random() * (quadroTela.x1 - quadroTela.x0);
+            sy[i] = quadroTela.y0 + Math.random() * (quadroTela.y1 - quadroTela.y0);
+            atraso[i] = 0.15 + Math.random() * 0.7;
+            dur[i] = 0.8 + Math.random() * 0.4;
             curva[i] = (Math.random() - 0.5) * 80;
             tam[i] = 2 + Math.random() * 1.6;
             tinta[i] = Math.random() < 0.55 ? 0 : 1;
@@ -120,9 +137,10 @@
 
     // Brilho do laser so sobre os tracos do logo (mascara = logo lisa).
     function forja(lx) {
-        bctx.setTransform(escala, 0, 0, escala, 0, 0);
+        pixel(bctx);
         bctx.globalCompositeOperation = "source-over";
-        bctx.clearRect(0, 0, W, H);
+        bctx.clearRect(0, 0, buf.width, buf.height);
+        logico(bctx);
         var g = bctx.createLinearGradient(lx - 140, 0, lx + 16, 0);
         g.addColorStop(0, "rgba(255,255,255,0)");
         g.addColorStop(0.72, "rgba(255,255,255,.55)");
@@ -131,18 +149,21 @@
         bctx.fillStyle = g;
         bctx.fillRect(lx - 140, LOGO.y - 10, 156, LOGO.h + 20);
         bctx.globalCompositeOperation = "destination-in";
-        bctx.setTransform(1, 0, 0, 1, 0, 0);
+        pixel(bctx);
         bctx.drawImage(liso, 0, 0);
         bctx.globalCompositeOperation = "source-over";
         ctx.globalCompositeOperation = "lighter";
-        ctx.drawImage(buf, 0, 0, W, H);
+        pixel(ctx);
+        ctx.drawImage(buf, 0, 0);
+        logico(ctx);
         ctx.globalCompositeOperation = "source-over";
     }
 
     function desenhar(tempo, dt) {
-        ctx.setTransform(escala, 0, 0, escala, 0, 0);
+        pixel(ctx);
         ctx.globalAlpha = 1;
-        ctx.clearRect(0, 0, W, H);
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        logico(ctx);
 
         var laserLigado = tempo >= T.laser0 && tempo < T.laser1;
         var pronto = tempo >= T.laser1;
@@ -153,7 +174,8 @@
         if (laserLigado || pronto) {
             ctx.save();
             ctx.beginPath(); ctx.rect(0, 0, pronto ? W : laserX, MB); ctx.clip();
-            ctx.drawImage(liso, 0, 0, W, H);
+            pixel(ctx);
+            ctx.drawImage(liso, 0, 0);
             ctx.restore();
         }
 
