@@ -29,6 +29,22 @@ def test_respostas_de_texto_saem_comprimidas_quando_o_navegador_aceita(client):
     assert b"<html" in gzip.decompress(pagina.data)
 
 
+def test_abertura_do_app_so_na_primeira_pagina_e_sem_baixar_nada_a_toa(client):
+    """A animacao de abertura e decidida no navegador (sessionStorage): o
+    HTML so traz a cena escondida + o script inline; abertura.js e o logo so
+    sao baixados quando ela de fato aparece."""
+    html = client.get("/auth/login").data.decode("utf-8")
+    assert 'sessionStorage.getItem("abertura-vista")' in html
+    assert '<div id="abertura"' in html and "#abertura{display:none}" in html
+    script = re.search(r'"(/static/js/abertura\.js\?v=[0-9a-f]{10})"', html)
+    logo = re.search(r'data-logo="(/static/img/logo-abertura\.webp\?v=[0-9a-f]{10})"', html)
+    assert script and logo
+    assert not re.search(r'<script[^>]+abertura\.js', html)  # nunca carregado direto
+    assert 'loading="lazy"' in html.split('<div id="abertura"', 1)[1].split("</div>\n    </div>", 1)[0]
+    assert client.get(script.group(1)).status_code == 200
+    assert client.get(logo.group(1)).status_code == 200
+
+
 def test_imagem_nao_e_recomprimida(client):
     resposta = client.get("/static/img/logo-icone.png", headers={"Accept-Encoding": "gzip"})
     assert resposta.status_code == 200

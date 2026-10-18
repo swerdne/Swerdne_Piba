@@ -54,6 +54,39 @@
     <meta property="og:image:height" content="512">
     <meta name="twitter:card" content="summary">
 
+    <!-- Abertura do app (logo por particulas, ver static/js/abertura.js): so
+    na 1a pagina da sessao (sessionStorage) -- as outras trocas de pagina
+    ficam so com a barra fina. Decidido aqui no <head>, antes de pintar,
+    pra nao piscar a pagina por baixo. CSS inline: nao depende do Tailwind. -->
+    <style>
+        #abertura{display:none}
+        .com-abertura #abertura{display:grid;place-items:center;position:fixed;inset:0;z-index:9999;
+            background:#02030F linear-gradient(135deg,#0B0B3C 0%,#060628 30%,#02030F 68%,#010209 100%);
+            transition:opacity .4s ease,transform .4s ease}
+        #abertura.abertura-saindo{opacity:0;transform:scale(1.035);pointer-events:none}
+        #abertura .abertura-quadro{position:relative;width:min(92vw,600px,calc(100svh * .9));aspect-ratio:720/600}
+        #abertura canvas{position:absolute;inset:0;width:100%;height:100%}
+        #abertura .abertura-halo{position:absolute;inset:-8%;opacity:0;pointer-events:none;
+            background:radial-gradient(closest-side,rgba(5,221,240,.17),rgba(3,103,235,.08) 55%,transparent 78%)}
+        #abertura img{display:none;position:absolute;left:20.8%;top:21.3%;width:58.3%}
+        #abertura.abertura-estatica img{display:block}
+        #abertura.abertura-estatica canvas{display:none}
+    </style>
+    <script>
+        (function () {
+            try {
+                if (sessionStorage.getItem("abertura-vista")) return;
+                sessionStorage.setItem("abertura-vista", "1");
+            } catch (e) { return; }
+            document.documentElement.classList.add("com-abertura");
+            var s = document.createElement("script");
+            s.src = "{{ url_for('static', filename='js/abertura.js') }}";
+            s.async = true;
+            s.onerror = function () { document.documentElement.classList.remove("com-abertura"); };
+            document.head.appendChild(s);
+        })();
+    </script>
+
     {% block head %}{% endblock %}
 </head>
 {% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register', 'auth.esqueci_senha', 'auth.redefinir_senha') %}
@@ -65,6 +98,14 @@
     perceptivel quando o banco esta "acordando" apos um tempo sem uso, ver
     pool_pre_ping em app/config.py). Logica de mostrar/animar em main.js. -->
     <div id="barra-carregamento" class="{{ tema.accent_bg if tema else 'bg-indigo-600' }}"></div>
+    <div id="abertura" role="status" aria-label="Carregando o TyBenson"
+         data-logo="{{ url_for('static', filename='img/logo-abertura.webp') }}">
+        <div class="abertura-quadro">
+            <div id="abertura-halo" class="abertura-halo"></div>
+            <canvas id="abertura-canvas" aria-hidden="true"></canvas>
+            <img src="{{ url_for('static', filename='img/logo-abertura.webp') }}" alt="" loading="lazy">
+        </div>
+    </div>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="max-w-5xl mx-auto w-full px-4 mt-4 space-y-2 {% if eh_pagina_auth %}relative z-10{% endif %}">
