@@ -132,7 +132,9 @@ def test_busca_web_traz_so_metadados_e_links_externos(logged_in_client, app, db,
         primeiro = resultados[0]
         assert (primeiro["titulo"], primeiro["artista"], primeiro["link_origem"]) == (
             "Bondade de Deus", "Isaias Saad", "https://www.deezer.com/track/1")
-        assert primeiro["links"]["cifraclub"] == "https://www.cifraclub.com.br/?q=Bondade+de+Deus+Isaias+Saad"
+        # Direto na pagina da musica (artista/musica); a busca fica de reserva.
+        assert primeiro["links"]["cifraclub"] == "https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/"
+        assert primeiro["links"]["cifraclub_busca"] == "https://www.cifraclub.com.br/?q=Bondade+de+Deus+Isaias+Saad"
         assert "youtube.com/results" in primeiro["links"]["youtube"]
         assert "cifra" not in primeiro and "letra" not in primeiro  # nunca conteudo protegido
         assert resultados[1]["link_origem"] is None  # javascript: descartado
@@ -232,7 +234,8 @@ def test_compartilhar_pro_app_salva_na_musica_que_a_pessoa_foi_completar(logged_
         musica = _musica(ministerio, "Bondade de Deus", artista="Isaias Saad")
 
         ida = logged_in_client.get(f"/ministerio/repertorio/{musica.id}/abrir-cifra")
-        assert ida.status_code == 302 and ida.headers["Location"].startswith("https://www.cifraclub.com.br/?q=")
+        assert ida.status_code == 302
+        assert ida.headers["Location"] == "https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/"
 
         tela = logged_in_client.post("/ministerio/compartilhar-cifra", data={
             "titulo": "Bondade de Deus - Cifra Club", "texto": CIFRA, "link": "https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/",
@@ -285,6 +288,23 @@ def test_compartilhar_so_o_link_explica_como_mandar_o_texto(logged_in_client, ou
         assert "ministerio:" not in tela
         assert outro_logged_in_client.post("/ministerio/compartilhar-cifra/salvar", data={
             "texto": CIFRA, "banco": f"ministerio:{ministerio_id}"}).status_code == 404
+
+
+def test_ver_cifra_vai_direto_pra_pagina_da_musica(logged_in_client, app, db):
+    from app.ministerio.busca_web import links_externos
+
+    assert links_externos("Bondade de Deus (Ao Vivo)", "Isaías Saad")["cifraclub"] ==         "https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/"
+    assert links_externos("Deus é Deus", "Delino Marçal")["cifraclub"] ==         "https://www.cifraclub.com.br/delino-marcal/deus-e-deus/"
+    assert links_externos("Sem artista", "")["cifraclub"].startswith("https://www.cifraclub.com.br/?q=")
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        # Link do Cifra Club ja salvo na musica tem prioridade.
+        musica = _musica(ministerio, "Oceanos", artista="Hillsong",
+                         link_origem="https://www.cifraclub.com.br/hillsong-united/oceans-onde-meus-pes-podem-falhar/")
+        ida = logged_in_client.get(f"/ministerio/repertorio/{musica.id}/abrir-cifra")
+        assert ida.headers["Location"] == "https://www.cifraclub.com.br/hillsong-united/oceans-onde-meus-pes-podem-falhar/"
+        sem_artista = _musica(ministerio, "Sem Artista")
+        assert "?q=Sem+Artista" in logged_in_client.get(f"/ministerio/repertorio/{sem_artista.id}/abrir-cifra").headers["Location"]
 
 
 def test_app_instalado_aparece_no_compartilhar(client):

@@ -18,8 +18,10 @@ A cifra nunca e baixada de site nenhum:
 Sempre no backend, com cache, tempo maximo e erro tratado -- busca externa
 fora do ar nunca derruba a tela (a rota devolve {"erro": ...}).
 """
+import re
 import threading
 import time
+import unicodedata
 from urllib.parse import quote_plus, urlparse
 
 import requests
@@ -50,13 +52,32 @@ def link_seguro(link):
     return link if partes.scheme in ("http", "https") and partes.netloc else None
 
 
+def _slug_cifraclub(texto):
+    """"Isaías Saad" -> "isaias-saad", "Bondade de Deus (Ao Vivo)" ->
+    "bondade-de-deus": o formato dos enderecos do Cifra Club (minusculas, sem
+    acento, hifen no lugar de espaco/pontuacao, sem o "(Ao Vivo)")."""
+    texto = re.sub(r"\([^)]*\)|\[[^\]]*\]", " ", texto or "")
+    texto = unicodedata.normalize("NFD", texto).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", texto).strip("-")
+
+
 def links_externos(titulo, artista=""):
-    """Onde a PESSOA abre a cifra/video no site original (o servidor nao le)."""
+    """Onde a PESSOA abre a cifra/video no site original (o servidor nao le
+    a pagina, so monta o endereco). Com artista: direto na pagina da musica
+    no Cifra Club (cifraclub.com.br/artista/musica/); sem artista, ou se o
+    endereco nao existir la, a busca do site (cifraclub_busca)."""
     consulta = quote_plus(f"{titulo} {artista}".strip())
+    busca = f"https://www.cifraclub.com.br/?q={consulta}"
+    slug_artista, slug_musica = _slug_cifraclub(artista), _slug_cifraclub(titulo)
     return {
-        "cifraclub": f"https://www.cifraclub.com.br/?q={consulta}",
+        "cifraclub": f"https://www.cifraclub.com.br/{slug_artista}/{slug_musica}/" if slug_artista and slug_musica else busca,
+        "cifraclub_busca": busca,
         "youtube": f"https://www.youtube.com/results?search_query={consulta}",
     }
+
+
+def eh_link_do_cifraclub(link):
+    return bool(link) and (urlparse(link).netloc or "").lower().endswith("cifraclub.com.br")
 
 
 def _do_cache(chave):

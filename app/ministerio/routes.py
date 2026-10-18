@@ -1718,8 +1718,13 @@ def abrir_cifra_no_site(musica_id):
     qual musica a pessoa foi completar e abre a busca do site. Se ela
     compartilhar a cifra pro app (compartilhar_cifra), a musica ja vem
     escolhida. O servidor nao le o site -- so redireciona o navegador."""
+    from app.ministerio.busca_web import eh_link_do_cifraclub
+
     musica, _ = _musica_editavel_ou_404(musica_id)
     session["cifra_para_musica"] = musica.id
+    # Link do Cifra Club ja salvo na musica > pagina montada com artista/nome > busca.
+    if eh_link_do_cifraclub(musica.link_origem):
+        return redirect(musica.link_origem)
     return redirect(links_externos(musica.nome, musica.artista or "")["cifraclub"])
 
 
