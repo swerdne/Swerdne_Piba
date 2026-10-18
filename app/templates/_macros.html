@@ -203,3 +203,28 @@ Precisa de import "with context" (dados_tutorial vem do context processor). #}
 <div class="{{ tamanho }} rounded-full {{ tema.secondary_bg }} flex items-center justify-center font-semibold {{ tema.secondary_text }} shrink-0">{{ membro.iniciais }}</div>
 {% endif %}
 {%- endmacro %}
+
+{# Paleta de cores do dia (codigo de roupa) de uma Escala -- escala/detalhe.html
+   e main/minha_escala.html. Nada quando a escala nao tem paleta. Bolinhas =
+   cor da blusa e da calca dos modelos prontos (Escala.paleta_cores). #}
+{% macro cartao_paleta(tema, escala, url_editar=None) %}
+{% if escala.paleta_do_dia %}
+<div data-paleta-do-dia class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3">
+    {% if escala.paleta_cores %}
+    <span class="flex items-center gap-1 shrink-0" aria-hidden="true">
+        <span class="w-6 h-6 rounded-full border-2 border-gray-300" style="background: {{ escala.paleta_cores[1] }}" title="Blusa"></span>
+        <span class="w-6 h-6 rounded-full border-2 border-gray-300" style="background: {{ escala.paleta_cores[2] }}" title="Calça"></span>
+    </span>
+    {% else %}
+    <i class="fa-solid fa-shirt text-lg {{ tema.accent_text }} shrink-0"></i>
+    {% endif %}
+    <div class="flex-1 min-w-0">
+        <p class="text-[11px] font-bold uppercase tracking-wide {{ tema.text_secondary }}">Roupa do dia</p>
+        <p class="text-sm font-semibold {{ tema.text_primary }}">{{ escala.paleta_do_dia[:1]|upper }}{{ escala.paleta_do_dia[1:] }}</p>
+    </div>
+    {% if url_editar %}
+    <a href="{{ url_editar }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline shrink-0">Mudar</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endmacro %}

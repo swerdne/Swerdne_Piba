@@ -94,6 +94,8 @@
                 {% endfor %}
             </div>
 
+            {% include "escala/_campo_paleta.html" %}
+
             {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold py-2.5 rounded-full transition") }}
         </form>
     </main>

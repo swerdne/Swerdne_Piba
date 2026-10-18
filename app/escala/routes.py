@@ -250,11 +250,22 @@ def nova(ministerio_id):
             horario=form.horario.data,
             horario_fim=form.horario_fim.data,
             cor_selecionada=form.cor.data or None,
+            **_paleta_do_form(form),
         )
         flash(f'Escala "{escala.nome}" criada!', "success")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     return render_template("escala/nova.html", form=form, ministerio=ministerio)
+
+
+def _paleta_do_form(form):
+    """{paleta_roupa, paleta_roupa_texto} do form (EscalaForm/EditarEscalaForm):
+    texto so vale na Personalizada; preset ou vazio limpa o texto."""
+    from app.escala.models import PALETA_PERSONALIZADA
+
+    chave = form.paleta.data or None
+    texto = (form.paleta_texto.data or "").strip()[:120] if chave == PALETA_PERSONALIZADA else None
+    return {"paleta_roupa": chave, "paleta_roupa_texto": texto or None}
 
 
 @bp.route("/<int:escala_id>/editar", methods=["GET", "POST"])
@@ -268,6 +279,8 @@ def editar(escala_id):
         # obj= so casa por nome de atributo -- o campo se chama "cor" mas o
         # model guarda em cor_selecionada, entao precisa popular na mao.
         form.cor.data = escala.cor_selecionada or ""
+        form.paleta.data = escala.paleta_roupa or ""
+        form.paleta_texto.data = escala.paleta_roupa_texto or ""
 
     if form.validate_on_submit():
         nome_antigo = escala.nome
@@ -285,6 +298,9 @@ def editar(escala_id):
         escala.horario = form.horario.data
         escala.horario_fim = form.horario_fim.data
         escala.cor_selecionada = form.cor.data or None
+        # Paleta nao trava a ocorrencia de rodizio (o sync nao mexe nela).
+        for campo, valor in _paleta_do_form(form).items():
+            setattr(escala, campo, valor)
 
         if mudou_data_horario:
             # A data/horario mudou -- as notificacoes automaticas de 24h/16h
@@ -1188,6 +1204,13 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
     """
     escalados = [f for f in (escala.funcoes if funcoes is None else funcoes) if f.membro_id is not None]
     data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
+    # O template aprovado na Meta tem 4 variaveis fixas (nome, funcao,
+    # escala, data) -- mandar uma 5a faz a Meta recusar. A roupa do dia vai
+    # junto do nome da escala, na mesma variavel (sem quebra de linha, que
+    # variavel de template nao aceita).
+    escala_no_whatsapp = escala.nome
+    if escala.paleta_do_dia:
+        escala_no_whatsapp = f"{escala.nome} · roupa do dia: {escala.paleta_do_dia}"
 
     tarefas = [
         {
@@ -1197,7 +1220,7 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
             "mensagem": mensagem_para(escala, funcao, funcao.membro),
             "assunto": f"Voce foi escalado(a): {funcao.nome} - {escala.nome}",
             "wa_template": "pibachurch_escalado",
-            "wa_parametros": [funcao.membro.nome, funcao.nome, escala.nome, data_texto],
+            "wa_parametros": [funcao.membro.nome, funcao.nome, escala_no_whatsapp, data_texto],
         }
         for funcao in escalados
     ]

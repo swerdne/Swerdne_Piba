@@ -52,6 +52,25 @@ CORES_DISPONIVEIS = {
     "ciano": "bg-cyan-500",
 }
 
+# Paleta de cores do dia (codigo de roupa: blusa + calca) de uma Escala
+# (Escala.paleta_roupa guarda a CHAVE). Cada item: (chave, nome curto da
+# lista, descricao que vai na mensagem, cor da blusa, cor da calca). As
+# cores sao so pras bolinhas da tela (style inline, nao classe Tailwind).
+# "Personalizada" fica sempre no fim: texto livre em paleta_roupa_texto.
+_JEANS = "#3b5b8c"
+PALETAS_ROUPA = [
+    ("branco-jeans", "Branco e Jeans", "blusa branca e calça jeans", "#ffffff", _JEANS),
+    ("preto-jeans", "Preto e Jeans", "blusa preta e calça jeans", "#111111", _JEANS),
+    ("total-black", "Total Black", "blusa preta e calça preta", "#111111", "#111111"),
+    ("total-white", "Total White", "blusa branca e calça branca", "#ffffff", "#ffffff"),
+    ("marinho-jeans", "Azul-marinho e Jeans", "blusa azul-marinho e calça jeans", "#1f2a5c", _JEANS),
+    ("cinza-preto", "Cinza e Preto", "blusa cinza e calça preta", "#9ca3af", "#111111"),
+    ("vinho-preto", "Vinho/Bordô e Preto", "blusa vinho (bordô) e calça preta", "#7b1e3a", "#111111"),
+    ("branco-preto", "Branco e Preto", "blusa branca e calça preta", "#ffffff", "#111111"),
+]
+PALETA_PERSONALIZADA = "personalizada"
+PALETAS_POR_CHAVE = {p[0]: p for p in PALETAS_ROUPA}
+
 # Departamento -> funcoes padrao sugeridas ao criar uma escala nova (template).
 # O usuario pode adicionar, renomear ou excluir livremente depois.
 DEPARTAMENTOS = {
@@ -400,6 +419,11 @@ class Escala(SequentialIdDocument):
     # tanto na lista de Escalas quanto no calendario do Ministerio. None =
     # usa a cor do departamento (comportamento de sempre).
     cor_selecionada = mongoengine.StringField(max_length=20)
+    # Paleta de cores do dia (codigo de roupa: blusa + calca) -- chave de
+    # PALETAS_ROUPA ou PALETA_PERSONALIZADA (texto livre em
+    # paleta_roupa_texto). Vazio = sem codigo de roupa. Ver paleta_do_dia.
+    paleta_roupa = mongoengine.StringField(max_length=30)
+    paleta_roupa_texto = mongoengine.StringField(max_length=120)
     # Observacoes gerais do repertorio (saem no fim da folha de projecao e
     # das cifras, ver escala.routes.folha_repertorio).
     observacoes_repertorio = mongoengine.StringField(max_length=2000)
@@ -467,6 +491,23 @@ class Escala(SequentialIdDocument):
         if self.cor_selecionada and self.cor_selecionada in CORES_DISPONIVEIS:
             return CORES_DISPONIVEIS[self.cor_selecionada]
         return DEPARTAMENTO_CORES.get(self.departamento, "bg-gray-500")
+
+    @property
+    def paleta_do_dia(self):
+        """Texto do codigo de roupa ("blusa branca e calça jeans", ou o que
+        foi digitado na Personalizada) -- None sem paleta. E o que vai na
+        tela e nos avisos (WhatsApp/e-mail/SMS)."""
+        if self.paleta_roupa == PALETA_PERSONALIZADA:
+            return (self.paleta_roupa_texto or "").strip() or None
+        paleta = PALETAS_POR_CHAVE.get(self.paleta_roupa or "")
+        return paleta[2] if paleta else None
+
+    @property
+    def paleta_cores(self):
+        """(nome curto, cor da blusa, cor da calca) do preset -- pras bolinhas
+        da tela; None na Personalizada ou sem paleta."""
+        paleta = PALETAS_POR_CHAVE.get(self.paleta_roupa or "")
+        return (paleta[1], paleta[3], paleta[4]) if paleta else None
 
     @property
     def data_hora(self):
@@ -703,12 +744,14 @@ class PresencaEnsaio(SequentialIdDocument):
     precisao_m = mongoengine.IntField()
 
 def criar_escala_com_funcoes_padrao(
-    ministerio_id, nome, departamento, data=None, horario=None, horario_fim=None, cor_selecionada=None
+    ministerio_id, nome, departamento, data=None, horario=None, horario_fim=None, cor_selecionada=None,
+    paleta_roupa=None, paleta_roupa_texto=None,
 ):
     """Cria uma escala nova ja com as funcoes padrao do departamento escolhido."""
     escala = Escala(
         ministerio_id=ministerio_id, nome=nome, departamento=departamento, data=data, horario=horario,
         horario_fim=horario_fim, cor_selecionada=cor_selecionada,
+        paleta_roupa=paleta_roupa, paleta_roupa_texto=paleta_roupa_texto,
     )
     escala.save()
 
@@ -771,7 +814,10 @@ def trocar_atribuicao(funcao_a, funcao_b):
 def mensagem_para(escala, funcao, membro):
     modelo = MENSAGENS_POR_DEPARTAMENTO.get(escala.departamento, MENSAGENS_POR_DEPARTAMENTO["_padrao"])
     data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
-    return modelo.format(membro=membro.nome, funcao=funcao.nome, escala=escala.nome, data=data_texto)
+    mensagem = modelo.format(membro=membro.nome, funcao=funcao.nome, escala=escala.nome, data=data_texto)
+    if escala.paleta_do_dia:
+        mensagem += f"\nRoupa do dia: {escala.paleta_do_dia}."
+    return mensagem
 
 
 def resumos_para_calendario_em_lote(escalas):

@@ -8,7 +8,7 @@ from markupsafe import Markup
 
 from app.escala.models import (
     DEPARTAMENTOS, CORES_DISPONIVEIS, TIPOS_ANEXO, TAMANHO_MAXIMO_ANEXO,
-    TONS, TONS_MAIORES, TONS_MENORES, eh_tom_valido,
+    TONS, TONS_MAIORES, TONS_MENORES, eh_tom_valido, PALETAS_ROUPA, PALETA_PERSONALIZADA,
 )
 
 
@@ -55,8 +55,28 @@ class TomField(SelectField):
 # None) -- sempre a 1a opcao, pra nao forcar o usuario a escolher uma cor.
 _CHOICES_COR = [("", "Cor do departamento (padrao)")] + [(chave, chave.capitalize()) for chave in CORES_DISPONIVEIS]
 
+# Paleta de cores do dia (codigo de roupa): "" = sem paleta; Personalizada
+# sempre no fim (texto livre em paleta_texto).
+_CHOICES_PALETA = (
+    [("", "Sem paleta definida")]
+    + [(chave, nome) for chave, nome, *_ in PALETAS_ROUPA]
+    + [(PALETA_PERSONALIZADA, "Personalizada (escrever)")]
+)
 
-class EscalaForm(FlaskForm):
+
+class _PaletaDoDia:
+    """Campos da paleta (mesmo par em criar e editar). Personalizada exige o texto."""
+    paleta = SelectField("Paleta de cores do dia (roupa)", choices=_CHOICES_PALETA, validators=[Optional()])
+    # Sem Optional(): ele encerraria a validacao antes de validate_paleta_texto
+    # (Personalizada com texto vazio passava). Vazio ainda vale nos outros casos.
+    paleta_texto = StringField("Qual a combinacao?", validators=[Length(max=120)])
+
+    def validate_paleta_texto(self, campo):
+        if self.paleta.data == PALETA_PERSONALIZADA and not (campo.data or "").strip():
+            raise ValidationError("Escreva a combinacao de roupa (ex: blusa azul royal e calca jeans escura).")
+
+
+class EscalaForm(_PaletaDoDia, FlaskForm):
     nome = StringField("Nome da escala", validators=[DataRequired(), Length(max=80)])
     departamento = SelectField(
         "Departamento",
@@ -70,7 +90,7 @@ class EscalaForm(FlaskForm):
     submit = SubmitField("Criar escala")
 
 
-class EditarEscalaForm(FlaskForm):
+class EditarEscalaForm(_PaletaDoDia, FlaskForm):
     nome = StringField("Nome da escala", validators=[DataRequired(), Length(max=80)])
     data = DateField("Data do ensaio/evento", validators=[Optional()])
     horario = TimeField("Horario de inicio", validators=[Optional()])

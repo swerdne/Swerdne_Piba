@@ -8,7 +8,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, cartao_paleta with context %}
 {% set DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'] %}
 {% set DIAS_LONGOS = ['Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'] %}
 
@@ -71,6 +71,8 @@
             </p>
             {% endif %}
         </div>
+
+        {% if not selecionada.cancelada %}{{ cartao_paleta(tema, selecionada) }}{% endif %}
 
         <!-- Check-in por localizacao (app/escala/checkin.py): Presente so no local -->
         <div data-checkin-csrf class="hidden">{{ acao_form.hidden_tag() }}</div>

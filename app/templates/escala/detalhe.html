@@ -9,7 +9,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial, avatar_membro with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial, avatar_membro, cartao_paleta with context %}
 {% from "ministerio/_envio.html" import campos_envio_tardio %}
 {% block content %}
 <div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
@@ -89,6 +89,8 @@
     </header>
 
     <main class="px-4 sm:px-6 py-6 space-y-4 pb-16">
+
+        {{ cartao_paleta(tema, escala, url_for('escala.editar', escala_id=escala.id) if eh_dono else None) }}
 
         <!-- Legenda de status -->
         <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs {{ tema.text_secondary }}">

@@ -1,0 +1,29 @@
+{# Paleta de cores do dia (codigo de roupa: blusa + calca) -- usado em
+   escala/nova.html e escala/editar.html. A caixa de texto so aparece na
+   "Personalizada" (JS abaixo); sem JS ela fica sempre visivel. #}
+<div data-paleta>
+    {{ form.paleta.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
+    {{ form.paleta(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, data_paleta_select="") }}
+    <div data-paleta-texto class="mt-2">
+        {{ form.paleta_texto(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
+            placeholder="Ex: blusa azul royal e calça jeans escura", maxlength="120", **{"aria-label": "Combinação de roupa personalizada"}) }}
+    </div>
+    <p class="text-xs {{ tema.text_secondary }} mt-1">Opcional. Aparece na escala e vai no aviso de WhatsApp/e-mail da equipe.</p>
+    {% for erro in form.paleta.errors + form.paleta_texto.errors %}
+        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+    {% endfor %}
+</div>
+<script>
+(function () {
+    var bloco = document.currentScript.previousElementSibling;
+    var select = bloco.querySelector('[data-paleta-select]');
+    var texto = bloco.querySelector('[data-paleta-texto]');
+    function atualizar() {
+        var personalizada = select.value === 'personalizada';
+        texto.classList.toggle('hidden', !personalizada);
+        if (personalizada && document.activeElement === select) texto.querySelector('input').focus();
+    }
+    select.addEventListener('change', atualizar);
+    atualizar();
+})();
+</script>
