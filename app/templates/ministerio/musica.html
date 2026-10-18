@@ -181,12 +181,13 @@
                 <div>
                     <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-guitar mr-1 {{ tema.accent_text }}"></i>Trazer a cifra</p>
                     <p class="text-xs leading-relaxed {{ tema.text_secondary }} mt-0.5">
-                        1. Abra a cifra no site &middot; 2. Copie (acordes e letra) &middot; 3. Cole aqui e salve.
+                        1. Abra a cifra no site &middot; 2. Copie (acordes e letra) &middot; 3. Volte e toque em <span class="font-semibold">Colar cifra</span>.
+                        No Android, dá também para selecionar e <span class="font-semibold">Compartilhar</span> direto pro app.
                         O tom e a Projeção saem sozinhos.
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <a href="{{ links_externos.cifraclub }}" target="_blank" rel="noopener nofollow"
+                    <a href="{{ url_for('ministerio.abrir_cifra_no_site', musica_id=musica.id) }}" target="_blank" rel="noopener nofollow"
                        class="inline-flex items-center gap-1.5 text-xs font-semibold {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white rounded-full px-3.5 py-2 transition">
                         <i class="fa-solid fa-arrow-up-right-from-square"></i>Ver cifra no Cifra Club
                     </a>
@@ -195,9 +196,18 @@
                         <i class="fa-brands fa-youtube text-red-500"></i>YouTube
                     </a>
                 </div>
-                <textarea name="texto" rows="10" maxlength="30000" required spellcheck="false" wrap="off" aria-label="Cifra copiada"
-                          placeholder="Cole aqui a cifra copiada do site&#10;&#10;Tom: G&#10;&#10;G              D&#10;Primeira linha da letra..."
-                          class="w-full mu-mono whitespace-pre overflow-x-auto {{ CAMPO }}"></textarea>
+                <!-- Le o que foi copiado e salva sozinho (main.js, [data-colar-area]) -->
+                <button type="button" data-colar-area="#texto-cifra-colada"
+                        class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-bold py-3 rounded-full transition">
+                    <i class="fa-solid fa-paste mr-1"></i>Colar cifra
+                </button>
+                <p data-colar-aviso class="hidden text-xs text-center"></p>
+                <details>
+                    <summary class="text-xs font-semibold {{ tema.accent_text }} cursor-pointer select-none">Ou colar à mão</summary>
+                    <textarea id="texto-cifra-colada" name="texto" rows="10" maxlength="30000" spellcheck="false" wrap="off" aria-label="Cifra copiada"
+                              placeholder="Cole aqui a cifra copiada do site&#10;&#10;Tom: G&#10;&#10;G              D&#10;Primeira linha da letra..."
+                              class="mt-2 w-full mu-mono whitespace-pre overflow-x-auto {{ CAMPO }}"></textarea>
+                </details>
                 {% if not musica.link_origem %}
                 <input type="url" name="link_origem" maxlength="500" placeholder="Link de onde copiou (opcional, fica registrado)"
                        aria-label="Link de origem" class="w-full {{ CAMPO }}">
@@ -205,8 +215,8 @@
                 <p class="text-[11px] leading-relaxed {{ tema.text_secondary }}">
                     <i class="fa-solid fa-scale-balanced mr-1"></i>Cifras têm direitos autorais: traga só o que você pode usar. A fonte fica registrada na música.
                 </p>
-                <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
-                    <i class="fa-solid fa-floppy-disk mr-1"></i>Salvar cifra colada
+                <button type="submit" class="w-full border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold py-2.5 rounded-full hover:bg-black/5 transition">
+                    <i class="fa-solid fa-floppy-disk mr-1"></i>Salvar cifra colada à mão
                 </button>
             </form>
             {% endif %}

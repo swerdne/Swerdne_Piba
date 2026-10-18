@@ -8,6 +8,16 @@
     "background_color": "#030712",
     "theme_color": "#4f46e5",
     "orientation": "portrait-primary",
+    "share_target": {
+        "action": "/ministerio/compartilhar-cifra",
+        "method": "POST",
+        "enctype": "application/x-www-form-urlencoded",
+        "params": {
+            "title": "titulo",
+            "text": "texto",
+            "url": "link"
+        }
+    },
     "icons": [
         {
             "src": "/static/img/icon-192.png",

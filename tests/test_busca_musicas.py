@@ -7,6 +7,7 @@ import pytest
 
 from app.escala.banco_musicas import buscar_no_banco
 from app.escala.models import Musica
+from app.ministerio.models import Ministerio
 from app.ministerio import busca_web
 from app.ministerio.importar_cifras import ArquivoInvalidoError, extrair_musica_de_texto
 from tests.conftest import sessao_isolada
@@ -198,7 +199,7 @@ def test_trazer_a_cifra_na_musica_adicionada_pela_web(logged_in_client, outro_lo
         musica = Musica.objects(nome="Bondade de Deus").first()
         pagina = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode()
         assert "Trazer a cifra" in pagina
-        assert "https://www.cifraclub.com.br/?q=Bondade+de+Deus+Isaias+Saad" in pagina
+        assert f"/ministerio/repertorio/{musica.id}/abrir-cifra" in pagina and "Colar cifra" in pagina
 
         resposta = logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor/colar", data={"texto": CIFRA})
         assert resposta.status_code == 302 and resposta.headers["Location"].endswith("#louvor")
@@ -221,6 +222,77 @@ def test_trazer_a_cifra_com_texto_vazio_avisa(logged_in_client, app, db):
                                          follow_redirects=True)
         assert "Cole o texto da cifra" in resposta.data.decode()
         assert Musica.objects(id=musica.id).first().cifra_louvor is None
+
+
+def test_compartilhar_pro_app_salva_na_musica_que_a_pessoa_foi_completar(logged_in_client, app, db):
+    """Ver cifra no Cifra Club (lembra a musica) -> seleciona e Compartilha
+    pro app -> a tela ja oferece salvar naquela musica."""
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        musica = _musica(ministerio, "Bondade de Deus", artista="Isaias Saad")
+
+        ida = logged_in_client.get(f"/ministerio/repertorio/{musica.id}/abrir-cifra")
+        assert ida.status_code == 302 and ida.headers["Location"].startswith("https://www.cifraclub.com.br/?q=")
+
+        tela = logged_in_client.post("/ministerio/compartilhar-cifra", data={
+            "titulo": "Bondade de Deus - Cifra Club", "texto": CIFRA, "link": "https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/",
+        }).data.decode()
+        assert "Salvar em &#34;Bondade de Deus&#34;" in tela or 'Salvar em "Bondade de Deus"' in tela
+        assert "Tom G" in tela and "Te amo, Deus" in tela
+
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor/colar", data={
+            "texto": CIFRA, "link_origem": "https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/"})
+        musica = Musica.objects(id=musica.id).first()
+        assert musica.tom == "G" and "Te amo, Deus" in musica.cifra_louvor
+        assert musica.link_origem == "https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/"
+
+
+def test_compartilhar_cria_musica_nova_ou_completa_a_de_mesmo_nome(logged_in_client, app, db):
+    with app.app_context():
+        ministerio = _ministerio(logged_in_client)
+        tela = logged_in_client.post("/ministerio/compartilhar-cifra", data={"texto": CIFRA}).data.decode()
+        # Admin da comunidade: o destino oferecido e o banco oficial.
+        assert f'value="comunidade:{ministerio.comunidade_id}"' in tela
+
+        logged_in_client.post("/ministerio/compartilhar-cifra/salvar", data={
+            "texto": CIFRA, "nome": "Bondade de Deus", "banco": f"ministerio:{ministerio.id}"})
+        nova = Musica.objects(nome="Bondade de Deus").first()
+        assert nova and nova.oficial is False and nova.fonte == "Texto colado" and nova.tom == "G" and nova.letra_projecao
+
+        # De novo com o mesmo nome: nao duplica (ja tem cifra -> abre a existente).
+        resposta = logged_in_client.post("/ministerio/compartilhar-cifra/salvar", data={
+            "texto": CIFRA, "nome": "bondade de deus", "banco": f"ministerio:{ministerio.id}"})
+        assert resposta.headers["Location"].endswith(f"/repertorio/{nova.id}#louvor")
+        assert Musica.objects(nome__iexact="bondade de deus").count() == 1
+
+        # Musica de mesmo nome SEM cifra: e completada.
+        vazia = _musica(ministerio, "Ele Vive")
+        logged_in_client.post("/ministerio/compartilhar-cifra/salvar", data={
+            "texto": CIFRA.replace("Bondade de Deus", "Ele Vive"), "nome": "Ele Vive", "banco": f"ministerio:{ministerio.id}"})
+        assert "Te amo, Deus" in Musica.objects(id=vazia.id).first().cifra_louvor
+
+
+def test_compartilhar_so_o_link_explica_como_mandar_o_texto(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        _ministerio(logged_in_client)
+        tela = logged_in_client.post("/ministerio/compartilhar-cifra", data={
+            "titulo": "Bondade de Deus - Cifra Club", "texto": "https://www.cifraclub.com.br/x/y/"}).data.decode()
+        assert "Chegou só o link" in tela and "selecione o texto da cifra" in tela
+        ministerio_id = Ministerio.objects.first().id
+    with sessao_isolada(app):
+        # Quem nao lidera nada nao recebe opcao de banco; e nao salva em banco alheio.
+        tela = outro_logged_in_client.post("/ministerio/compartilhar-cifra", data={"texto": CIFRA}).data.decode()
+        assert "ministerio:" not in tela
+        assert outro_logged_in_client.post("/ministerio/compartilhar-cifra/salvar", data={
+            "texto": CIFRA, "banco": f"ministerio:{ministerio_id}"}).status_code == 404
+
+
+def test_app_instalado_aparece_no_compartilhar(client):
+    import json as _json
+
+    manifesto = _json.loads(client.get("/static/manifest.webmanifest").data)
+    assert manifesto["share_target"]["action"] == "/ministerio/compartilhar-cifra"
+    assert manifesto["share_target"]["params"]["text"] == "texto"
 
 
 def test_link_seguro_so_aceita_http():

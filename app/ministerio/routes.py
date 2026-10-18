@@ -4,7 +4,7 @@ import random
 import string
 from datetime import date, datetime, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, request, abort, jsonify
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify, session
 from flask_login import login_required, current_user
 
 from app.imagens import salvar_imagem, remover_imagem
@@ -23,9 +23,10 @@ from app.ministerio.models import (
 )
 from app.escala.models import (
     resumos_para_calendario_em_lote, Musica, ItemRepertorio, VersaoCifra,
-    blocos_da_letra, projecao_da_cifra, tem_acordes, detectar_tom,
+    blocos_da_letra, projecao_da_cifra, tem_acordes, detectar_tom, eh_linha_de_acordes,
     TONS_MAIORES, TONS_MENORES,
 )
+from app.comunidade.models import comunidade_por_id
 from app.escala.forms import MusicaForm, LetraProjecaoForm, CifraLouvorForm
 from app.convites.forms import ConvidarForm
 from app.convites.models import Convite
@@ -1680,6 +1681,16 @@ def colar_cifra_musica(musica_id):
     if not lido["cifra"].strip():
         flash("Nao encontrei a cifra no texto colado -- confira se copiou os acordes e a letra.", "danger")
         return redirect(voltar)
+    session.pop("cifra_para_musica", None)
+    return _salvar_musica(musica, "louvor", _aplicar_cifra_colada(musica, lido, request.form.get("link_origem")))
+
+
+def _aplicar_cifra_colada(musica, lido, link_origem=None):
+    """Poe na musica a cifra lida de um texto colado/compartilhado (resultado
+    de importar_cifras.extrair_musica_de_texto): cifra original, tom/artista/
+    tags so se vazios, projecao espelhada e a fonte registrada. Nao salva;
+    devolve a mensagem pro aviso."""
+    from app.ministerio.importar_cifras import FONTE_TEXTO_COLADO
 
     cifra_antiga = musica.cifra_louvor
     musica.cifra_louvor = lido["cifra"][:MAX_CIFRA_IMPORTADA]
@@ -1693,11 +1704,129 @@ def colar_cifra_musica(musica_id):
         musica.fonte = f"{musica.fonte} + cifra colada"[:120]
     elif not musica.fonte:
         musica.fonte = FONTE_TEXTO_COLADO
-    musica.link_origem = musica.link_origem or link_seguro(request.form.get("link_origem"))
+    musica.link_origem = musica.link_origem or link_seguro(link_origem)
     mensagem += _texto_tags_novas(_palavras_chave_se_faltar(musica))
     if _espelhar_projecao(musica, cifra_antiga):
         mensagem += " Projecao montada a partir da cifra."
-    return _salvar_musica(musica, "louvor", mensagem)
+    return mensagem
+
+
+@bp.route("/repertorio/<int:musica_id>/abrir-cifra")
+@login_required
+def abrir_cifra_no_site(musica_id):
+    """"Ver cifra no Cifra Club" da musica sem cifra: lembra (na sessao)
+    qual musica a pessoa foi completar e abre a busca do site. Se ela
+    compartilhar a cifra pro app (compartilhar_cifra), a musica ja vem
+    escolhida. O servidor nao le o site -- so redireciona o navegador."""
+    musica, _ = _musica_editavel_ou_404(musica_id)
+    session["cifra_para_musica"] = musica.id
+    return redirect(links_externos(musica.nome, musica.artista or "")["cifraclub"])
+
+
+def _bancos_que_edito():
+    """[(rotulo, args do banco)] dos bancos em que a conta pode cadastrar:
+    o oficial de cada comunidade em que e admin; o local de cada ministerio
+    que lidera (admin so ve o oficial, pra lista nao ficar enorme)."""
+    from app.comunidade.models import UsuarioComunidade
+    from app.comunidade.routes import _eh_admin_da_comunidade
+    from app.ministerio.models import UsuarioMinisterio
+
+    bancos = []
+    ids_comunidades = {p.comunidade_id for p in UsuarioComunidade.objects(usuario_id=current_user.id)}
+    ids_lidera = {p.ministerio_id for p in UsuarioMinisterio.objects(usuario_id=current_user.id, papel="lider")}
+    ids_comunidades |= {m.comunidade_id for m in Ministerio.objects(id__in=list(ids_lidera))}
+    for comunidade_id in sorted(ids_comunidades):
+        comunidade = comunidade_por_id(comunidade_id)
+        if comunidade is None:
+            continue
+        if _eh_admin_da_comunidade(comunidade, current_user):
+            bancos.append((f"Banco oficial · {comunidade.nome}", {"comunidade_id": comunidade.id}))
+            continue
+        for ministerio in _ministerios_da_comunidade(comunidade.id):
+            if ministerio.id in ids_lidera:
+                bancos.append((f"Banco do {ministerio.nome} · {comunidade.nome}", {"ministerio_id": ministerio.id}))
+    return bancos
+
+
+@bp.route("/compartilhar-cifra", methods=["GET", "POST"])
+@login_required
+def compartilhar_cifra():
+    """Destino do "Compartilhar" do celular (share_target do
+    manifest.webmanifest): a pessoa seleciona a cifra no site/app de cifras
+    e compartilha pro app. Aqui so le e mostra (nome, tom, previa) -- salvar
+    e um segundo toque (salvar_cifra_compartilhada / colar_cifra_musica, com
+    CSRF). Chegou so o link (compartilhou a pagina, nao o texto): explica
+    como mandar o texto -- o servidor nunca busca a pagina."""
+    from app.ministerio.importar_cifras import ArquivoInvalidoError, extrair_musica_de_texto
+
+    texto = (request.values.get("texto") or "").strip()
+    titulo = (request.values.get("titulo") or "").strip()[:200]
+    link = link_seguro(request.values.get("link")) or next(
+        (p for p in texto.split() if link_seguro(p)), None)
+    lido, erro = None, None
+    if texto and not (link and texto == link):
+        try:
+            lido = extrair_musica_de_texto(texto)
+            if not lido["cifra"].strip() or not any(eh_linha_de_acordes(l) for l in lido["cifra"].split("\n")):
+                lido, erro = None, "sem_acordes"
+        except ArquivoInvalidoError:
+            erro = "sem_acordes"
+    else:
+        erro = "so_link"
+
+    musica_alvo = None
+    alvo_id = session.get("cifra_para_musica")
+    if lido and alvo_id:
+        candidata = Musica.objects(id=alvo_id).first()
+        if candidata is not None and not candidata.cifra_louvor:
+            from werkzeug.exceptions import NotFound
+
+            try:
+                musica_alvo, _ = _musica_editavel_ou_404(candidata.id)
+            except NotFound:  # nao edita mais essa musica: escolhe o banco
+                musica_alvo = None
+    return render_template(
+        "ministerio/compartilhar_cifra.html", texto=texto, titulo=titulo, link=link, lido=lido, erro=erro,
+        musica_alvo=musica_alvo, bancos=_bancos_que_edito() if lido else [], acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/compartilhar-cifra/salvar", methods=["POST"])
+@login_required
+def salvar_cifra_compartilhada():
+    """Salva a cifra compartilhada como musica NOVA no banco escolhido --
+    ou completa a de mesmo nome que ainda nao tem cifra (sem duplicar)."""
+    from app.ministerio.importar_cifras import ArquivoInvalidoError, FONTE_TEXTO_COLADO, extrair_musica_de_texto
+
+    destino = request.form.get("banco") or ""
+    tipo, _, numero = destino.partition(":")
+    if tipo not in ("comunidade", "ministerio") or not numero.isdigit():
+        abort(404)
+    banco = _banco_editavel_ou_404(**{f"{tipo}_id": int(numero)})
+    if not AcaoForm().validate_on_submit():
+        flash("Sessao expirada -- compartilhe de novo.", "danger")
+        return redirect(_url_do_banco(banco))
+    try:
+        lido = extrair_musica_de_texto(request.form.get("texto"))
+    except ArquivoInvalidoError as erro:
+        flash(str(erro), "danger")
+        return redirect(_url_do_banco(banco))
+    nome = (request.form.get("nome") or lido["nome"]).strip()[:150] or lido["nome"]
+    link = request.form.get("link_origem")
+    session.pop("cifra_para_musica", None)
+
+    existente = banco.musicas().filter(nome__iexact=nome).first()
+    if existente is not None:
+        if existente.cifra_louvor:
+            flash(f'"{existente.nome}" ja tem cifra neste banco -- abrimos ela pra voce conferir.', "warning")
+            return redirect(url_for("ministerio.musica", musica_id=existente.id) + "#louvor")
+        return _salvar_musica(existente, "louvor", _aplicar_cifra_colada(existente, lido, link))
+
+    musica = banco.nova_musica(nome=nome, artista=lido["artista"] or None, fonte=FONTE_TEXTO_COLADO,
+                               link_origem=link_seguro(link))
+    mensagem = _aplicar_cifra_colada(musica, lido, link)
+    musica.fonte = FONTE_TEXTO_COLADO
+    return _salvar_musica(musica, "louvor", f'"{musica.nome}" criada no {banco.titulo.lower()}. ' + mensagem)
 
 
 @bp.route("/repertorio/<int:musica_id>/louvor/excluir-versao", methods=["POST"])

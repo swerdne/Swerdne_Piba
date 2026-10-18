@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Cifra compartilhada{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }}">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="min-w-0">
+            <p class="text-xs {{ tema.text_secondary }}">Compartilhado pra cá</p>
+            <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight">Salvar cifra</h1>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-4 pb-24 max-w-xl mx-auto space-y-4">
+        {% if erro %}
+        <!-- Nao veio o texto da cifra: so o link (ou texto sem acordes) -->
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-3">
+            <p class="text-sm font-bold {{ tema.text_primary }}">
+                <i class="fa-solid fa-circle-info mr-1 {{ tema.accent_text }}"></i>
+                {% if erro == 'so_link' %}Chegou só o link da página{% else %}Não encontrei acordes no texto{% endif %}
+            </p>
+            <p class="text-sm leading-relaxed {{ tema.text_secondary }}">
+                Para trazer a cifra, <span class="font-semibold {{ tema.text_primary }}">selecione o texto da cifra</span> no site
+                (toque e segure, arraste até o fim) e toque em <span class="font-semibold {{ tema.text_primary }}">Compartilhar</span>
+                (ou <span class="font-semibold {{ tema.text_primary }}">Copiar</span> e use o botão "Colar cifra" na música).
+            </p>
+            {% if titulo %}<p class="text-xs {{ tema.text_secondary }}">Página: {{ titulo }}</p>{% endif %}
+            {% if link %}
+            <a href="{{ link }}" target="_blank" rel="noopener nofollow"
+               class="inline-flex items-center gap-1.5 text-sm font-semibold {{ tema.accent_text }} hover:underline">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir a página de novo
+            </a>
+            {% endif %}
+        </div>
+        {% else %}
+        <!-- Previa do que foi lido -->
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">Cifra lida</p>
+            <p class="text-lg font-extrabold {{ tema.text_primary }}">{{ lido.nome }}</p>
+            <p class="text-sm {{ tema.text_secondary }}">{{ lido.artista or 'Artista não identificado' }}{% if lido.tom %} · Tom {{ lido.tom }}{% endif %}</p>
+            <details>
+                <summary class="text-xs font-semibold {{ tema.accent_text }} cursor-pointer select-none">Ver a cifra</summary>
+                <pre class="mt-2 text-xs leading-snug whitespace-pre overflow-x-auto font-mono {{ tema.text_primary }}">{{ lido.cifra }}</pre>
+            </details>
+        </div>
+
+        {% if musica_alvo %}
+        <!-- Veio do "Ver cifra no Cifra Club" de uma musica: salva nela -->
+        <form method="POST" action="{{ url_for('ministerio.colar_cifra_musica', musica_id=musica_alvo.id) }}"
+              class="{{ tema.card_bg }} border-2 {{ tema.accent_border }} rounded-3xl shadow-sm p-4 space-y-3">
+            {{ acao_form.hidden_tag() }}
+            <textarea name="texto" class="hidden">{{ texto }}</textarea>
+            <input type="hidden" name="link_origem" value="{{ link or '' }}">
+            <p class="text-sm {{ tema.text_primary }}">Você abriu o site para completar <span class="font-bold">{{ musica_alvo.nome }}</span>.</p>
+            <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-3 rounded-full transition">
+                <i class="fa-solid fa-floppy-disk mr-1"></i>Salvar em "{{ musica_alvo.nome }}"
+            </button>
+        </form>
+        {% endif %}
+
+        {% if bancos %}
+        <form method="POST" action="{{ url_for('ministerio.salvar_cifra_compartilhada') }}"
+              class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+            {{ acao_form.hidden_tag() }}
+            <textarea name="texto" class="hidden">{{ texto }}</textarea>
+            <input type="hidden" name="link_origem" value="{{ link or '' }}">
+            <p class="text-sm font-semibold {{ tema.text_primary }}">{{ 'Ou salvar como música nova' if musica_alvo else 'Salvar como música' }}</p>
+            <div>
+                <label for="nome-musica" class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Nome</label>
+                <input id="nome-musica" type="text" name="nome" maxlength="150" value="{{ lido.nome }}" required class="{{ CAMPO }}">
+            </div>
+            <div>
+                <label for="banco-destino" class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Banco</label>
+                <select id="banco-destino" name="banco" class="{{ CAMPO }}">
+                    {% for rotulo, args in bancos %}
+                    <option value="{{ 'comunidade:' ~ args.comunidade_id if args.comunidade_id else 'ministerio:' ~ args.ministerio_id }}">{{ rotulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <p class="text-[11px] {{ tema.text_secondary }}">Se já existir uma música com esse nome sem cifra, ela é completada (não duplica).</p>
+            <button type="submit" class="w-full {{ tema.accent_bg if not musica_alvo else '' }} {{ tema.accent_bg_hover if not musica_alvo else '' }} {{ 'text-white' if not musica_alvo else 'border ' ~ tema.card_border ~ ' ' ~ tema.text_primary }} text-sm font-semibold py-3 rounded-full transition">
+                <i class="fa-solid fa-plus mr-1"></i>Salvar no banco escolhido
+            </button>
+        </form>
+        {% elif not musica_alvo %}
+        <p class="text-sm {{ tema.text_secondary }}">Só líderes de ministério e administradores cadastram músicas.</p>
+        {% endif %}
+
+        <p class="text-[11px] leading-relaxed {{ tema.text_secondary }}">
+            <i class="fa-solid fa-scale-balanced mr-1"></i>Cifras têm direitos autorais: traga só o que você pode usar. A fonte fica registrada na música.
+        </p>
+        {% endif %}
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+</div>
+{% endblock %}

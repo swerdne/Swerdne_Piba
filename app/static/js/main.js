@@ -913,3 +913,53 @@ window.salvarStatus = function (select) {
         })
         .then(function () { select.disabled = false; });
 };
+
+/* Botao "Colar cifra" ([data-colar-area="<seletor do textarea>"]): le a
+   area de transferencia (o que a pessoa copiou no site de cifras), poe no
+   campo e ja envia -- o form do botao, ou clica em [data-depois-clicar].
+   Sem permissao/suporte (navegador antigo, a pessoa negou): abre o campo
+   pra colar a mao e explica. O texto vem da pessoa; o servidor nunca busca
+   site nenhum. */
+(function () {
+    document.querySelectorAll('[data-colar-area]').forEach(function (botao) {
+        var form = botao.closest('form');
+        var caixa = botao.closest('form, details, section') || document;
+        var aviso = (form || caixa).querySelector('[data-colar-aviso]') || caixa.querySelector('[data-colar-aviso]');
+
+        function avisar(texto, erro) {
+            if (!aviso) return;
+            aviso.textContent = texto;
+            aviso.classList.remove('hidden');
+            aviso.classList.toggle('text-red-500', !!erro);
+        }
+
+        function colarAMao(campo, texto) {
+            var detalhes = campo.closest('details');
+            if (detalhes) detalhes.open = true;
+            campo.focus();
+            avisar(texto, true);
+        }
+
+        botao.addEventListener('click', function () {
+            var campo = document.querySelector(botao.getAttribute('data-colar-area'));
+            if (!campo) return;
+            if (!navigator.clipboard || !navigator.clipboard.readText) {
+                colarAMao(campo, 'Este navegador não deixa ler o que foi copiado: toque e segure na caixa e escolha Colar.');
+                return;
+            }
+            navigator.clipboard.readText().then(function (texto) {
+                if (!texto || !texto.trim()) {
+                    avisar('Nada copiado ainda: copie a cifra no site (acordes e letra) e toque de novo.', true);
+                    return;
+                }
+                campo.value = texto;
+                avisar('Cifra colada, salvando...');
+                var depois = botao.getAttribute('data-depois-clicar');
+                if (depois) { var alvo = document.querySelector(depois); if (alvo) alvo.click(); return; }
+                if (form) { if (form.requestSubmit) form.requestSubmit(); else form.submit(); }
+            }).catch(function () {
+                colarAMao(campo, 'Sem permissão para ler o que foi copiado: toque e segure na caixa e escolha Colar.');
+            });
+        });
+    });
+})();

@@ -54,10 +54,18 @@
                           class="w-full font-mono text-xs leading-snug whitespace-pre {{ CAMPO }}"></textarea>
                 <input type="url" data-colar-link maxlength="500" placeholder="Link de onde copiou (opcional, fica registrado)"
                        aria-label="Link de origem" class="w-full {{ CAMPO }}">
-                <button type="button" data-colar-ler
-                        class="w-full sm:w-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
-                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Ler cifra
-                </button>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <!-- Le o que foi copiado e ja manda ler (main.js, [data-colar-area]) -->
+                    <button type="button" data-colar-area="[data-colar-texto]" data-depois-clicar="[data-colar-ler]"
+                            class="w-full sm:w-auto {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
+                        <i class="fa-solid fa-paste mr-1"></i>Colar o que copiei
+                    </button>
+                    <button type="button" data-colar-ler
+                            class="w-full sm:w-auto border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full hover:bg-black/5 transition">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Ler cifra
+                    </button>
+                </div>
+                <p data-colar-aviso class="hidden text-xs"></p>
                 <p data-colar-erro class="hidden text-xs text-red-400"></p>
             </div>
         </details>
