@@ -12,12 +12,17 @@
     var cv = document.getElementById("abertura-canvas");
     var halo = document.getElementById("abertura-halo");
 
-    // iPhone (e aparelho com poucos nucleos): amostra o logo a cada 4 px em
-    // vez de 3 -- ~45% menos particulas, o logo continua cheio.
-    var ua = navigator.userAgent;
-    var ehIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-    var aparelhoLeve = ehIos || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
-    var W = 720, H = 600, STEP = aparelhoLeve ? 4 : 3, PS = STEP - 0.6;
+    var W = 720, H = 600, STEP = 3, PS = STEP - 0.6;
+    // Particulas so em aparelho que aguenta. O Safari nao conta qual iPhone
+    // e, entao a animacao se mede: nos primeiros quadros (descarta os 3
+    // primeiros, de aquecimento), se desenhar custar mais que LIMITE_DESENHO_MS
+    // em media ou os quadros vierem espacados demais (abaixo de 10 fps), pula direto
+    // pro logo pronto + nome. Modo Pouca Energia (iOS a 30 fps, ~33 ms entre
+    // quadros) continua com particulas. Aparelho claramente fraco (2 GB de
+    // memoria ou 2 nucleos) nem tenta: logo parado + nome.
+    var QUADROS_MEDIDOS = 10, LIMITE_DESENHO_MS = 9, LIMITE_INTERVALO_MS = 100;
+    var aparelhoFraco = (navigator.deviceMemory && navigator.deviceMemory <= 2) ||
+                        (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2);
     var LOGO = { x: 150, y: 128, w: 420, h: 420 * 689 / 840 };
     var MB = LOGO.y + LOGO.h + 20;
     var T = { laser0: 2.1, laser1: 3.4 };
@@ -50,8 +55,8 @@
     }
 
     var ctx = cv.getContext && cv.getContext("2d");
-    if (!ctx || reduzir) {
-        // Sem canvas ou com "reduzir movimento": logo e nome parados, some quando a pagina fica pronta.
+    if (!ctx || reduzir || aparelhoFraco) {
+        // Sem canvas, "reduzir movimento" ou aparelho fraco: logo e nome parados, some quando a pagina fica pronta.
         cena.classList.add("abertura-estatica", "abertura-nomeada");
         var esperar = function () { paginaPronta ? setTimeout(encerrar, 600) : setTimeout(esperar, 50); };
         esperar();
@@ -272,10 +277,11 @@
         halo.style.opacity = tempo < T.laser0 ? 0 : limitar((tempo - T.laser0) / 1.2, 0, 1);
     }
 
-    var velocidadeRapida = 0;
+    var velocidadeRapida = 0, medidos = -3, somaDesenho = 0, somaIntervalo = 0;
     function quadro(agora) {
         if (!rodando) return;
-        var dt = Math.min(0.05, (agora - ultimo) / 1000);
+        var intervalo = agora - ultimo;
+        var dt = Math.min(0.05, intervalo / 1000);
         ultimo = agora;
         if (paginaPronta && t < T.laser1) {
             // Pagina pronta: chega no logo pronto em ate ACELERA_EM segundos.
@@ -284,7 +290,20 @@
         } else {
             t += dt;
         }
+        var inicioDesenho = performance.now();
         desenhar(t, dt);
+        if (medidos < QUADROS_MEDIDOS && t < T.laser1) {
+            if (medidos >= 0) {
+                somaDesenho += performance.now() - inicioDesenho;
+                somaIntervalo += intervalo;
+            }
+            medidos++;
+            if (medidos === QUADROS_MEDIDOS &&
+                (somaDesenho / QUADROS_MEDIDOS > LIMITE_DESENHO_MS || somaIntervalo / QUADROS_MEDIDOS > LIMITE_INTERVALO_MS)) {
+                t = T.laser1;  // aparelho nao aguenta: logo pronto, sem particulas
+                cena.setAttribute("data-abertura-leve", "");
+            }
+        }
         if (!nomeadaEm && t >= T.laser1 && (paginaPronta || t >= T.laser1 + NOME_APOS_LASER)) {
             cena.classList.add("abertura-nomeada");
             nomeadaEm = agora;

@@ -94,9 +94,14 @@
            coisas novas assim que a navegacao comeca, e o logo que so era
            pedido nessa hora nunca aparecia. Brilho = faixa branca mascarada
            pelo logo, andando por transform (sem mix-blend-mode, que o Safari
-           apagava). Animacoes so rodam com .ligado. */
-        #mini-carregando{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .18s ease,visibility 0s linear .18s}
-        #mini-carregando.ligado{opacity:1;visibility:visible;transition:opacity .18s ease}
+           apagava). Animacoes so rodam com .ligado.
+           Parada, fica com opacidade 1% (invisivel a olho) em vez de
+           escondida: assim o Safari ja deixa o logo desenhado e nao precisa
+           desenhar imagem nova no meio da navegacao. .ligado entra no mesmo
+           toque (main.js) e o atraso de 250 ms e da propria transicao CSS --
+           nao depende de timer de JS rodando enquanto a pagina ja esta indo. */
+        #mini-carregando{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:.01;transition:opacity .18s ease}
+        #mini-carregando.ligado{opacity:1;transition:opacity .18s ease .25s}
         #mini-carregando .mini-logo{position:relative;width:52px;height:43px}
         #mini-carregando .mini-logo img{display:block;width:52px;height:43px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.18))}
         #mini-carregando .mini-brilho{position:absolute;left:0;top:0;width:52px;height:43px;overflow:hidden;
@@ -145,10 +150,10 @@
     perceptivel quando o banco esta "acordando" apos um tempo sem uso, ver
     pool_pre_ping em app/config.py). Logica de mostrar/animar em main.js. -->
     <div id="barra-carregamento" class="{{ tema.accent_bg if tema else 'bg-indigo-600' }}"></div>
-    <div id="mini-carregando" role="status" aria-label="Carregando"
+    <div id="mini-carregando" role="status" aria-label="Carregando" aria-hidden="true"
          style="--mini-logo:url('{{ url_for('static', filename='img/logo-mini.webp') }}')">
         <div class="mini-logo">
-            <img src="{{ url_for('static', filename='img/logo-mini.webp') }}" width="52" height="43" alt="" decoding="async">
+            <img src="{{ url_for('static', filename='img/logo-mini.webp') }}" width="52" height="43" alt="">
             <div class="mini-brilho"></div>
         </div>
     </div>

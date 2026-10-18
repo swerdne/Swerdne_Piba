@@ -116,24 +116,34 @@ document.querySelectorAll("form").forEach(function (form) {
     var barra = document.getElementById("barra-carregamento");
     if (!barra) return;
 
-    // Mini logo (#mini-carregando em base.html): so aparece se a proxima
-    // pagina demorar mais de MINI_ATRASO_MS -- resposta rapida nem pisca.
-    // Some sozinha depois de MINI_LIMITE_MS: link que baixa arquivo (sem
-    // atributo download) nao troca de pagina e ela ficaria presa na tela.
+    // Mini logo (#mini-carregando em base.html): liga no MESMO toque e a
+    // transicao CSS espera 250 ms antes de aparecer (resposta rapida nem
+    // pisca) -- no iPhone, timer de JS iniciado depois do toque nem sempre
+    // roda enquanto o Safari ja carrega a proxima pagina. Some sozinha
+    // depois de MINI_LIMITE_MS: link que baixa arquivo (sem atributo
+    // download) nao troca de pagina e ela ficaria presa na tela.
     var mini = document.getElementById("mini-carregando");
-    var MINI_ATRASO_MS = 250, MINI_LIMITE_MS = 10000;
-    var miniTimers = [];
+    var MINI_LIMITE_MS = 10000;
+    var miniTimer = 0;
     function esconderMini() {
-        miniTimers.forEach(clearTimeout);
-        miniTimers = [];
-        if (mini) mini.classList.remove("ligado");
+        clearTimeout(miniTimer);
+        if (!mini) return;
+        mini.classList.remove("ligado");
+        mini.setAttribute("aria-hidden", "true");
+    }
+    if (mini) {
+        // Logo ja decodificado na memoria antes de qualquer toque.
+        var miniImg = mini.querySelector("img");
+        if (miniImg && miniImg.decode) miniImg.decode().catch(function () {});
     }
 
     function iniciar() {
         if (mini) {
             esconderMini();
-            miniTimers.push(setTimeout(function () { mini.classList.add("ligado"); }, MINI_ATRASO_MS));
-            miniTimers.push(setTimeout(esconderMini, MINI_LIMITE_MS));
+            void mini.offsetWidth;  // reinicia a transicao se ja estava ligado
+            mini.classList.add("ligado");
+            mini.setAttribute("aria-hidden", "false");
+            miniTimer = setTimeout(esconderMini, MINI_LIMITE_MS);
         }
         barra.classList.add("carregando");
         barra.style.transform = "scaleX(0.2)";
