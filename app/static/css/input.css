@@ -56,17 +56,27 @@
   top: 0;
   left: 0;
   height: 3px;
-  /* Largura cheia encolhida por scaleX (main.js): anima so transform, sem
-     redesenhar a cada quadro como animar width fazia (pesava no iPhone). */
+  /* Largura cheia encolhida por scaleX: anima so transform, sem redesenhar
+     a cada quadro como animar width fazia (pesava no iPhone). O crescimento
+     e todo do @keyframes (nao de timers no JS): no iPhone a tela antiga
+     congela na navegacao e so animacao ja entregue antes continua andando. */
   width: 100%;
   transform: scaleX(0);
   transform-origin: 0 50%;
   z-index: 9999;
   opacity: 0;
-  transition: transform 400ms ease-out, opacity 200ms ease-out;
+  transition: opacity 200ms ease-out;
 }
 #barra-carregamento.carregando {
   opacity: 1;
+  animation: barra-progresso 4s cubic-bezier(.1, .6, .3, 1) forwards;
+}
+@keyframes barra-progresso {
+  0% { transform: scaleX(0); }
+  4% { transform: scaleX(.2); }
+  12% { transform: scaleX(.45); }
+  35% { transform: scaleX(.65); }
+  100% { transform: scaleX(.85); }
 }
 
 /* Acordes destacados na cifra (static/js/transpor.js e escala.models.cifra_em_html). */

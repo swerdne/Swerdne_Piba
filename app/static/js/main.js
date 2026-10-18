@@ -116,19 +116,24 @@ document.querySelectorAll("form").forEach(function (form) {
     var barra = document.getElementById("barra-carregamento");
     if (!barra) return;
 
-    // Mini logo (#mini-carregando em base.html): liga MINI_ATRASO_MS depois
-    // do toque (resposta rapida nem pisca), por timer de JS -- no iPhone o
-    // timer roda durante a navegacao, mas um transition-delay do CSS
-    // iniciado no toque ficava congelado (logo preso em 1%, conferido em
-    // gravacao de tela). Some sozinha depois de MINI_LIMITE_MS: link que
-    // baixa arquivo (sem atributo download) nao troca de pagina e ela
-    // ficaria presa na tela.
+    // Mini logo (#mini-carregando em base.html) e barra: as duas animacoes
+    // ja vem prontas no CSS (atraso de 250 ms do mini logo e o crescimento
+    // da barra sao do proprio CSS), so liga a classe no toque.
+    // iPhone: depois do toque o Safari CONGELA a tela antiga ate a nova
+    // chegar -- nada que muda depois disso aparece (nem timer de JS, nem
+    // transicao iniciada no toque; conferido em gravacoes de tela). So
+    // continua andando animacao que ja foi entregue a tela antes da
+    // navegacao comecar. Por isso, no iPhone, o link espera 2 quadros
+    // (~30 ms) com a animacao ligada e so entao abre a proxima pagina.
+    // Some sozinha depois de MINI_LIMITE_MS: link que baixa arquivo (sem
+    // atributo download) nao troca de pagina e ela ficaria presa na tela.
     var mini = document.getElementById("mini-carregando");
-    var MINI_ATRASO_MS = 250, MINI_LIMITE_MS = 10000;
-    var miniTimer = 0, miniLigar = 0;
+    var MINI_LIMITE_MS = 10000;
+    var miniTimer = 0;
+    var ua = navigator.userAgent;
+    var ehIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
     function esconderMini() {
         clearTimeout(miniTimer);
-        clearTimeout(miniLigar);
         if (!mini) return;
         mini.classList.remove("ligado");
         mini.setAttribute("aria-hidden", "true");
@@ -142,21 +147,16 @@ document.querySelectorAll("form").forEach(function (form) {
     function iniciar() {
         if (mini) {
             esconderMini();
-            miniLigar = setTimeout(function () {
-                mini.classList.add("ligado");
-                mini.setAttribute("aria-hidden", "false");
-            }, MINI_ATRASO_MS);
+            void mini.offsetWidth;  // recomeca a animacao se ja estava ligado
+            mini.classList.add("ligado");
+            mini.setAttribute("aria-hidden", "false");
             miniTimer = setTimeout(esconderMini, MINI_LIMITE_MS);
         }
+        // Cresce aos poucos e nunca chega a 100% sozinha (100% pareceria
+        // "pronto" com a pagina ainda trocando) -- @keyframes em input.css.
+        barra.classList.remove("carregando");
+        void barra.offsetWidth;
         barra.classList.add("carregando");
-        barra.style.transform = "scaleX(0.2)";
-        // Cresce aos poucos, cada vez mais devagar -- da a sensacao de
-        // progresso real sem prometer um tempo exato (nao sabemos quanto
-        // vai demorar). Nunca chega a 100% sozinha de proposito: 100%
-        // pareceria "pronto" e a pagina ainda nao trocou.
-        setTimeout(function () { barra.style.transform = "scaleX(0.45)"; }, 150);
-        setTimeout(function () { barra.style.transform = "scaleX(0.65)"; }, 500);
-        setTimeout(function () { barra.style.transform = "scaleX(0.80)"; }, 1500);
     }
 
     // Voltar pelo navegador reaproveita a pagina da memoria (bfcache) do
@@ -166,7 +166,6 @@ document.querySelectorAll("form").forEach(function (form) {
         if (!evento.persisted) return;
         esconderMini();
         barra.classList.remove("carregando");
-        barra.style.transform = "scaleX(0)";
         document.querySelectorAll("[data-travado-no-envio]").forEach(function (botao) {
             botao.disabled = false;
             botao.removeAttribute("data-travado-no-envio");
@@ -191,6 +190,14 @@ document.querySelectorAll("form").forEach(function (form) {
         }
 
         iniciar();
+        if (ehIos) {
+            // Entrega a animacao a tela antes de navegar (ver comentario acima).
+            evento.preventDefault();
+            var foi = false;
+            var ir = function () { if (!foi) { foi = true; window.location.href = destino.href; } };
+            requestAnimationFrame(function () { requestAnimationFrame(ir); });
+            setTimeout(ir, 120);  // garantia se o navegador pular quadros
+        }
     });
 
     document.querySelectorAll("form").forEach(function (form) {
