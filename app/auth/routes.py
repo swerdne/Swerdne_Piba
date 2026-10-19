@@ -74,7 +74,8 @@ MOCK_GOOGLE_USER = {
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.objects(email=form.email.data).first()
+        # iexact: contas antigas foram gravadas com maiuscula (ver normalizar_email).
+        user = User.objects(email__iexact=form.email.data).first()
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             return _redirecionar_apos_login()
@@ -103,7 +104,7 @@ def register():
 def esqueci_senha():
     form = EsqueciSenhaForm()
     if form.validate_on_submit():
-        user = User.objects(email=form.email.data).first()
+        user = User.objects(email__iexact=form.email.data).first()
         # So gera token se a conta existe E tem senha (conta so-Google nao
         # tem senha pra redefinir por aqui -- ela define a primeira senha
         # direto na aba Configuracoes, ja logada). A mensagem de sucesso e
@@ -123,10 +124,30 @@ def esqueci_senha():
                     f"Clique no link abaixo pra escolher uma nova senha (valido por 1 hora):\n{link}\n\n"
                     "Se voce nao pediu isso, pode ignorar este e-mail -- sua senha continua a mesma.",
                 )
-            except EmailNaoEnviadoError:
-                pass
+            except EmailNaoEnviadoError as erro:
+                # Antes era "pass": a falha sumia sem rastro. A tela continua
+                # igual (nao revela se a conta existe), mas o log diz o motivo.
+                current_app.logger.warning("Redefinicao de senha: e-mail nao enviado: %s", erro)
+        elif user:
+            # Conta so do Google (sem senha): explica como entrar, em vez de
+            # silencio -- a pessoa ficava esperando um link que nunca vinha.
+            # Vai so pro dono do e-mail, entao nao revela nada a terceiros.
+            try:
+                enviar_email(
+                    user.email,
+                    "Como entrar no TyBenson",
+                    "Recebemos um pedido pra redefinir a senha da sua conta TyBenson, mas ela foi criada "
+                    "com o Google e nao tem senha.\n\n"
+                    "Pra entrar, use o botao \"Entrar com o Google\" na tela de login. Se quiser tambem "
+                    "uma senha, depois de entrar abra Perfil e crie uma.\n\n"
+                    "Se voce nao pediu isso, pode ignorar este e-mail.",
+                )
+            except EmailNaoEnviadoError as erro:
+                current_app.logger.warning("Aviso de conta Google: e-mail nao enviado: %s", erro)
+        else:
+            current_app.logger.info("Redefinicao de senha: nenhuma conta com esse e-mail")
 
-        flash("Se esse e-mail tiver uma conta com senha, enviamos um link de redefinicao.", "success")
+        flash("Se esse e-mail tiver uma conta, enviamos as instrucoes. Confira tambem o spam.", "success")
         return redirect(url_for("auth.login"))
     return render_template("auth/esqueci_senha.html", form=form)
 
@@ -226,7 +247,7 @@ def google_callback():
     user = User.objects(google_id=google_id).first()
     if user is None:
         # Se ja existe uma conta tradicional com o mesmo e-mail, vincula o Google a ela
-        user = User.objects(email=email).first()
+        user = User.objects(email__iexact=email).first()
         if user is None:
             # O Google ja validou a posse do e-mail -- nao precisa do fluxo de confirmacao.
             user = User(google_id=google_id, email=email, name=name, foto_perfil=foto_perfil, email_confirmado=True)

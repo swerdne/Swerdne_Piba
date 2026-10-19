@@ -134,7 +134,7 @@ def test_esqueci_senha_gera_token_para_conta_com_senha(client, app, db):
 
     response = client.post("/auth/esqueci-senha", data={"email": "carla@example.com"}, follow_redirects=True)
     assert response.status_code == 200
-    assert "enviamos um link".encode() in response.data
+    assert "enviamos as instrucoes".encode() in response.data
 
     with app.app_context():
         usuario = User.objects(email="carla@example.com").first()
@@ -148,7 +148,7 @@ def test_esqueci_senha_com_email_inexistente_mostra_mesma_mensagem(client):
     response = client.post(
         "/auth/esqueci-senha", data={"email": "ninguem@example.com"}, follow_redirects=True
     )
-    assert "enviamos um link".encode() in response.data
+    assert "enviamos as instrucoes".encode() in response.data
 
 
 def test_esqueci_senha_conta_so_google_nao_gera_token(app, db):
@@ -162,6 +162,42 @@ def test_esqueci_senha_conta_so_google_nao_gera_token(app, db):
     with app.app_context():
         usuario = User.objects(email="so-google2@example.com").first()
         assert usuario.token_redefinicao_senha is None
+
+
+def test_esqueci_senha_acha_conta_com_maiuscula_e_espaco_do_iphone(client, app, db, monkeypatch):
+    """No iPhone o teclado poe a 1a letra em maiuscula e o preenchimento
+    deixa espaco no fim: antes a busca exata nao achava a conta e o e-mail
+    nunca saia (a tela dizia "enviamos" mesmo assim)."""
+    enviados = []
+    monkeypatch.setattr("app.auth.routes.enviar_email", lambda para, assunto, corpo: enviados.append((para, corpo)))
+    client.post("/auth/register", data=_dados_registro(), follow_redirects=True)
+    client.get("/auth/logout")
+
+    client.post("/auth/esqueci-senha", data={"email": "  Carla@Example.com "}, follow_redirects=True)
+    assert len(enviados) == 1 and enviados[0][0] == "carla@example.com" and "/auth/redefinir-senha/" in enviados[0][1]
+
+    # conta antiga gravada com maiuscula tambem e achada (login e redefinicao)
+    with app.app_context():
+        u = User(username="velho", email="Velho@Example.com"); u.set_password("senha12345"); u.save()
+    client.post("/auth/esqueci-senha", data={"email": "velho@example.com"}, follow_redirects=True)
+    assert len(enviados) == 2 and enviados[1][0] == "Velho@Example.com"
+    client.post("/auth/login", data={"email": "VELHO@example.com ", "password": "senha12345"})
+    assert client.get("/auth/sessao-atual").get_json()["usuario_id"] is not None
+
+
+def test_esqueci_senha_conta_so_google_recebe_explicacao(app, db, monkeypatch):
+    enviados = []
+    monkeypatch.setattr("app.auth.routes.enviar_email", lambda para, assunto, corpo: enviados.append((para, assunto, corpo)))
+    with app.app_context():
+        User(google_id="google-777", email="so-google3@example.com", name="So Google", email_confirmado=True).save()
+    app.test_client().post("/auth/esqueci-senha", data={"email": "so-google3@example.com"}, follow_redirects=True)
+    assert len(enviados) == 1 and "Entrar com o Google" in enviados[0][2]
+
+
+def test_campo_de_email_e_de_email_no_celular(client):
+    html = client.get("/auth/esqueci-senha").data.decode()
+    campo = html.split('name="email"')[0].rsplit("<input", 1)[1] + html.split('name="email"')[1].split(">", 1)[0]
+    assert 'type="email"' in campo and 'autocapitalize="none"' in campo
 
 
 def test_redefinir_senha_com_token_valido(client, app, db):

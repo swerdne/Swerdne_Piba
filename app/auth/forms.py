@@ -8,8 +8,27 @@ from app.auth.models import User
 from app.auth.dominio_email import dominio_aceita_email
 
 
+def normalizar_email(valor):
+    """E-mail sem espaco nas pontas e em minusculas. No iPhone o teclado
+    poe a 1a letra em maiuscula ("Fulano@...") e o preenchimento automatico
+    as vezes deixa um espaco no fim -- com a comparacao exata, "Esqueci
+    minha senha" nao achava a conta e o e-mail nunca saia."""
+    return valor.strip().lower() if isinstance(valor, str) else valor
+
+
+# Campo de e-mail de verdade no celular: teclado com @, sem maiuscula
+# automatica nem corretor.
+_ATRIBUTOS_EMAIL = {"type": "email", "autocapitalize": "none", "autocorrect": "off",
+                    "spellcheck": "false", "autocomplete": "email", "inputmode": "email"}
+
+
+def _campo_email():
+    return StringField("E-mail", validators=[DataRequired(), Email()],
+                       filters=[normalizar_email], render_kw=dict(_ATRIBUTOS_EMAIL))
+
+
 class LoginForm(FlaskForm):
-    email = StringField("E-mail", validators=[DataRequired(), Email()])
+    email = _campo_email()
     password = PasswordField("Senha", validators=[DataRequired()])
     # Marcado por padrao: desmarcar so faz sentido em aparelho compartilhado.
     remember = BooleanField("Lembrar de mim", default=True)
@@ -17,7 +36,7 @@ class LoginForm(FlaskForm):
 
 
 class EsqueciSenhaForm(FlaskForm):
-    email = StringField("E-mail", validators=[DataRequired(), Email()])
+    email = _campo_email()
     submit = SubmitField("Enviar link de redefinicao")
 
 
@@ -32,7 +51,7 @@ class RedefinirSenhaForm(FlaskForm):
 
 class RegisterForm(FlaskForm):
     username = StringField("Usuario", validators=[DataRequired(), Length(min=3, max=80)])
-    email = StringField("E-mail", validators=[DataRequired(), Email()])
+    email = _campo_email()
     password = PasswordField("Senha", validators=[DataRequired(), Length(min=8)])
     confirm = PasswordField(
         "Confirme a senha",
@@ -45,7 +64,7 @@ class RegisterForm(FlaskForm):
             raise ValidationError("Este nome de usuario ja esta em uso.")
 
     def validate_email(self, field):
-        if User.objects(email=field.data).first():
+        if User.objects(email__iexact=field.data).first():
             raise ValidationError(
                 "Este e-mail ja esta cadastrado. Faca login ou use 'Entrar com o Google'."
             )
