@@ -67,6 +67,12 @@ class Ministerio(SequentialIdDocument):
     lembrete_dias_antes = mongoengine.IntField(min_value=1, max_value=7)
     lembrete_horario = PureTimeField()
 
+    # Quem ja estava escalado antes da inclusao automatica nos Papeis (ver
+    # papeis_auto.py) entra uma vez so, na 1a vez que a tela de Papeis abre;
+    # depois disso so escalar de novo inclui (quem foi removido a mao nao
+    # volta sozinho).
+    papeis_escalados_sincronizados = mongoengine.BooleanField(default=False)
+
     def gerar_novo_link_convite(self):
         self.token_convite_publico = secrets.token_urlsafe(8)
         return self.token_convite_publico
@@ -153,8 +159,9 @@ class UsuarioMinisterio(SequentialIdDocument):
     Escala/Funcao, mecanismo separado e ja existente (Funcao.eh_convidado,
     ver app/escala/CLAUDE.md), nao um papel de ministerio.
 
-    Concedido sempre via convite aceito (app/convites) -- nunca criado
-    automaticamente. Quem administra a Comunidade (dono original ou
+    Concedido por convite/adicao na tela de Papeis (app/convites) ou, como
+    "membro", automaticamente pra quem e escalado no ministerio
+    (app/ministerio/papeis_auto.py). Quem administra a Comunidade (dono original ou
     UsuarioComunidade papel=admin) tem as mesmas permissoes de um lider em
     QUALQUER ministerio dela, mesmo sem uma linha aqui -- ver
     ministerio.routes._eh_lider_do_ministerio."""

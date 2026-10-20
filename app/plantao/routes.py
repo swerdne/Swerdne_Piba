@@ -303,6 +303,12 @@ def adicionar_membro_fila(turno_id):
 
     EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id).save()
 
+    # Quem entra na fila do rodizio vai ser escalado: entra nos Papeis do
+    # ministerio como membro (ver app/ministerio/papeis_auto.py).
+    from app.ministerio.papeis_auto import incluir_escalado_no_ministerio
+    if incluir_escalado_no_ministerio(membro, turno.ministerio):
+        flash(f"{membro.nome} tambem entrou nos Papeis do ministerio como membro.", "info")
+
     sincronizar_turno(turno)
 
     flash(f"{membro.nome} adicionado(a) a fila do rodizio.", "success")

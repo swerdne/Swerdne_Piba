@@ -658,6 +658,7 @@ def adicionar_membro(funcao_id):
     funcao.save()
 
     flash(f"{membro.nome} adicionado(a) em {funcao.nome}.", "success")
+    _incluir_nos_papeis(membro, funcao.escala.ministerio)
     for aviso in avisos_conflito:
         flash(aviso, "warning")
     _avisar_recem_escalado(funcao)
@@ -1073,6 +1074,7 @@ def aprovar_troca(funcao_id):
     funcao.troca_sugestao_membro_id = None
     _fixar_se_gerada_por_rodizio(funcao.escala)
     funcao.save()
+    _incluir_nos_papeis(novo_membro, funcao.escala.ministerio)
 
     if membro_antigo_email:
         usuario_antigo = User.objects(email=membro_antigo_email).first()
@@ -1585,6 +1587,15 @@ def _resumo_do_envio(resultado):
         or resultado["sms_enviados"] or resultado["whatsapp_enviados"]
     )
     return (", ".join(partes) + "." if partes else "Nada foi enviado."), houve_sucesso
+
+
+def _incluir_nos_papeis(membro, ministerio):
+    """Quem e escalado entra nos Papeis do ministerio como membro (ver
+    app/ministerio/papeis_auto.py). Convidado pontual nao passa por aqui."""
+    from app.ministerio.papeis_auto import incluir_escalado_no_ministerio
+
+    if incluir_escalado_no_ministerio(membro, ministerio):
+        flash(f"{membro.nome} tambem entrou nos Papeis do ministerio como membro.", "info")
 
 
 def _avisar_recem_escalado(funcao):

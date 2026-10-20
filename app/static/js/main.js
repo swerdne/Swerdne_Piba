@@ -889,6 +889,8 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
     document.querySelectorAll('form[data-verificar-adicao-url]').forEach(function (form) {
         var email = form.querySelector('input[name="email"]');
         var papel = form.querySelector('select[name="papel"]');
+        // Papeis do ministerio: caixa "Lider" no lugar do select (marcada = lider).
+        var caixaLider = form.querySelector('[data-papel-lider]');
         var aviso = form.querySelector('[data-aviso-adicao]');
         var botao = form.querySelector('[type="submit"]');
         if (!email || !aviso) return;
@@ -906,7 +908,7 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
             var consulta = ++ultimaConsulta;
             var url = form.getAttribute('data-verificar-adicao-url') +
                 '&email=' + encodeURIComponent(valor) +
-                '&papel=' + encodeURIComponent(papel ? papel.value : '');
+                '&papel=' + encodeURIComponent(papel ? papel.value : (caixaLider && caixaLider.checked ? 'lider' : 'membro'));
             fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (dados) {
@@ -927,6 +929,7 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
             espera = setTimeout(verificar, 400);
         });
         if (papel) papel.addEventListener('change', verificar);
+        if (caixaLider) caixaLider.addEventListener('change', verificar);
     });
 })();
 

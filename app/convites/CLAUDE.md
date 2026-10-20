@@ -20,6 +20,8 @@ Hierarquia (do maior pro menor alcance):
 - `UsuarioMinisterio` (`app/ministerio/models.py`) — `usuario_id`, `ministerio_id`, `papel` (`lider`|`membro`), `UniqueConstraint(usuario_id, ministerio_id)`. **Não** tem papel `convidado` — ver acima.
 - `User.eh_super_admin` (`app/auth/models.py`) — bool, default `False`.
 
+**Exceção automática:** quem é escalado num ministério vira `membro` dele sem convite (`app/ministerio/papeis_auto.py`, regras no CLAUDE.md raiz); e na tela de Papéis do ministério o admin da comunidade alterna líder sim/não direto (`ministerio.alternar_lider`), sem o convite de "muda_papel" — decisão do dono do produto.
+
 **Enquanto pendente, o convite não concede NENHUM acesso** — a linha de papel só é criada no aceite (ver `_aplicar_papel` em `routes.py`).
 
 ## Quem pode convidar com qual papel (hierarquia)

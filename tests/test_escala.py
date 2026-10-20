@@ -1367,13 +1367,12 @@ def test_membro_escalado_solicita_troca_notifica_lider(logged_in_client, outro_l
         _escalar(logged_in_client, baixo.id, membro_bruno.id)
         baixo_id, carla_id, escala_id = baixo.id, membro_carla.id, escala.id
 
-        # Sem papel de ministerio, bruno nao consegue nem VER a escala apos
+        # Sem papel de ministerio, bruno nao conseguiria nem VER a escala apos
         # a mudanca de status (_escala_visivel_ou_404 so libera leitura pra
-        # quem gerencia, e' membro do Ministerio, ou convidado -- um Membro
-        # escalado comum, sem nenhum dos tres, nao teria acesso; na pratica,
-        # quem chega a se auto-escalar ja aceitou convite pro Ministerio).
+        # quem gerencia, e' membro do Ministerio, ou convidado). Escalar ja o
+        # incluiu nos Papeis como membro (ver app/ministerio/papeis_auto.py).
         bruno = User.objects(email="bruno@example.com").first()
-        UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=ministerio.id, papel="membro").save()
+        assert UsuarioMinisterio.objects(usuario_id=bruno.id, ministerio_id=ministerio.id).first().papel == "membro"
 
     with sessao_isolada(app):
         resposta = outro_logged_in_client.post(

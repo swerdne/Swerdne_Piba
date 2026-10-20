@@ -663,7 +663,14 @@ def papeis(ministerio_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
     papeis_permitidos = _papeis_convidaveis_no_ministerio(ministerio, current_user)
 
-    form = ConvidarForm()
+    # Na tela o papel virou uma caixa "Lider" (sim/nao): todo mundo entra
+    # como membro e so a caixa marcada da lider. O POST chega com
+    # "lider=sim" em vez do campo "papel" -- traduz antes de validar.
+    dados = None
+    if request.method == "POST" and "papel" not in request.form:
+        dados = request.form.copy()
+        dados["papel"] = "lider" if request.form.get("lider") == "sim" else "membro"
+    form = ConvidarForm(formdata=dados) if dados is not None else ConvidarForm()
     form.papel.choices = [(p, p.capitalize()) for p in papeis_permitidos]
 
     if form.validate_on_submit():
@@ -681,6 +688,15 @@ def papeis(ministerio_id):
         )
         flash(mensagem, categoria)
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+    # Quem ja estava escalado antes da inclusao automatica entra uma vez so
+    # (ver app/ministerio/papeis_auto.py).
+    from app.ministerio.papeis_auto import sincronizar_escalados_antigos
+    from app.fuso import hoje_brasilia
+
+    incluidos = sincronizar_escalados_antigos(ministerio, hoje_brasilia())
+    if incluidos:
+        flash(f"{incluidos} pessoa(s) que ja estavam escaladas entraram como membro.", "info")
 
     papeis_atuais = list(
         UsuarioMinisterio.objects(ministerio_id=ministerio.id).order_by("papel")
@@ -701,6 +717,7 @@ def papeis(ministerio_id):
         form=form,
         link_convite=link_convite,
         pode_convidar=bool(papeis_permitidos),
+        pode_dar_lider="lider" in papeis_permitidos,
         papeis_atuais=papeis_atuais,
         convites_pendentes=convites_pendentes,
         acao_form=AcaoForm(),
@@ -773,6 +790,28 @@ def remover_papel(ministerio_id, usuario_ministerio_id):
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
     papel.delete()
     flash(f"{nome} removido(a) do ministerio.", "success")
+    return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+
+@bp.route("/<int:ministerio_id>/papeis/<int:usuario_ministerio_id>/lider", methods=["POST"])
+@login_required
+def alternar_lider(ministerio_id, usuario_ministerio_id):
+    """Caixa "Lider: sim/nao" de cada pessoa da lista de Papeis. So quem pode
+    conceder "lider" (admin da comunidade -- hierarquia em
+    app/convites/CLAUDE.md); lider comum nao promove nem rebaixa outro."""
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    papel = primeiro_ou_404(UsuarioMinisterio.objects(id=usuario_ministerio_id, ministerio_id=ministerio.id))
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+    if "lider" not in _papeis_convidaveis_no_ministerio(ministerio, current_user):
+        flash("Voce nao tem permissao para mudar quem e lider.", "danger")
+        return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
+
+    papel.papel = "lider" if request.form.get("lider") == "sim" else "membro"
+    papel.save()
+    nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
+    flash(f"{nome} agora e {'lider' if papel.papel == 'lider' else 'membro'} do ministerio.", "success")
     return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
 

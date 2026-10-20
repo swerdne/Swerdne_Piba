@@ -65,17 +65,25 @@
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Adicionar pessoa</h2>
             <form method="POST" data-verificar-adicao-url="{{ url_for('convites.verificar_adicao', escopo_tipo='ministerio', escopo_id=ministerio.id) }}" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
                 {{ form.hidden_tag() }}
-                <div class="grid sm:grid-cols-[1fr_auto] gap-3">
-                    <div>
-                        {{ form.email(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="E-mail da pessoa") }}
-                        {% for erro in form.email.errors %}
-                            <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
-                        {% endfor %}
-                    </div>
-                    <div>
-                        {{ form.papel(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
-                    </div>
+                <div>
+                    {{ form.email(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="E-mail da pessoa") }}
+                    {% for erro in form.email.errors %}
+                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
+                    {% endfor %}
                 </div>
+                {# Papel: todo mundo entra como membro; a caixa so diz se e lider
+                   (a rota traduz lider=sim -> papel). Lider comum nao da lider. #}
+                {% if pode_dar_lider %}
+                <label class="flex items-center gap-2 text-sm font-medium {{ tema.text_primary }} cursor-pointer w-fit">
+                    <input type="checkbox" name="lider" value="sim" data-papel-lider
+                           class="w-4 h-4 rounded {{ tema.card_border }}">
+                    Lider deste ministerio
+                </label>
+                {% endif %}
+                <p class="text-xs {{ tema.text_secondary }}">
+                    Quem e escalado numa escala deste ministerio ja entra aqui sozinho como membro --
+                    adicione por e-mail so quem ainda nao foi escalado.
+                </p>
                 <p class="text-xs {{ tema.text_secondary }}">
                     Quem ja tem conta entra na hora. Se a pessoa ainda nao tem conta, ou ativou
                     "exigir minha aprovacao" nas configuracoes dela, vai um convite por e-mail e ela so entra depois de aceitar.
@@ -132,7 +140,24 @@
                         <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ papel.usuario.name or papel.usuario.username or papel.usuario.email }}</p>
                         <p class="text-xs {{ tema.text_secondary }} truncate">{{ papel.usuario.email }}</p>
                     </div>
+                    {% if pode_dar_lider %}
+                    {# Lider: sim/nao -- um toque troca (admin da comunidade). #}
+                    {% set eh_lider = papel.papel == 'lider' %}
+                    <form method="POST" action="{{ url_for('ministerio.alternar_lider', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}" class="shrink-0">
+                        {{ acao_form.hidden_tag() }}
+                        <input type="hidden" name="lider" value="{{ 'nao' if eh_lider else 'sim' }}">
+                        <button type="submit" role="switch" aria-checked="{{ 'true' if eh_lider else 'false' }}"
+                                aria-label="Lider: {{ 'sim' if eh_lider else 'nao' }}"
+                                class="flex items-center gap-1.5 text-[11px] font-semibold {{ tema.text_secondary }}">
+                            Lider
+                            <span class="relative inline-block w-9 h-5 rounded-full transition {{ tema.accent_bg if eh_lider else tema.secondary_bg }}">
+                                <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all" style="left: {{ '18px' if eh_lider else '2px' }}"></span>
+                            </span>
+                        </button>
+                    </form>
+                    {% else %}
                     <span class="text-[11px] font-semibold uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded-full px-2.5 py-1 shrink-0">{{ papel.papel }}</span>
+                    {% endif %}
                     {% if pode_convidar %}
                     <form method="POST" action="{{ url_for('ministerio.remover_papel', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}"
                           onsubmit="return confirm('Remover {{ papel.usuario.name or papel.usuario.email }} deste ministerio?');">
