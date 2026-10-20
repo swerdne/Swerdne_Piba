@@ -126,6 +126,20 @@
                     </p>
                     {% endif %}
 
+                    {% elif m.midia_nao_guardada %}
+                    {# Chegou antes de a caixa guardar midia: o arquivo nao existe aqui. #}
+                    {% set rotulo_antigo = {'image': ('fa-image', 'Foto'), 'sticker': ('fa-face-smile', 'Figurinha'), 'video': ('fa-film', 'Vídeo'), 'document': ('fa-file-lines', 'Documento')}[m.midia_nao_guardada] %}
+                    <div class="flex items-center gap-3 rounded-xl {{ tema.secondary_bg }} px-3 py-2.5 -mx-0.5">
+                        <span class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
+                            <i class="fa-solid {{ rotulo_antigo[0] }} text-lg"></i>
+                        </span>
+                        <span class="min-w-0">
+                            <span class="block text-sm font-semibold {{ tema.text_primary }}">{{ rotulo_antigo[1] }} recebida</span>
+                            <span class="block text-[11px] {{ tema.text_secondary }} leading-snug">Chegou antes da atualização de 20/10 e não ficou guardada.
+                                <a href="https://wa.me/{{ conversa.telefone }}" target="_blank" rel="noopener" class="{{ tema.accent_text }} font-semibold hover:underline">Ver no WhatsApp</a></span>
+                        </span>
+                    </div>
+
                     {% else %}
                     <p class="wa-texto">{{ m.texto | whatsapp }}</p>
                     {% endif %}
@@ -232,7 +246,7 @@
                     </div>
                     <div class="flex items-center justify-between gap-2 mt-0.5">
                         <p class="text-xs {{ tema.text_primary if c.nao_lidas else tema.text_secondary }} truncate">
-                            {% if ultima.direcao == 'enviada' %}<i class="fa-solid {{ 'fa-robot' if not ultima.enviada_por_usuario_id else 'fa-reply' }} mr-1 opacity-70"></i>{% endif %}{{ (ultima.texto or '').split('\n')[0] }}
+                            {% if ultima.direcao == 'enviada' %}<i class="fa-solid {{ 'fa-robot' if not ultima.enviada_por_usuario_id else 'fa-reply' }} mr-1 opacity-70"></i>{% endif %}{{ (ultima.texto_exibicao or '').split('\n')[0] }}
                         </p>
                         {% if c.nao_lidas %}
                         <span class="min-w-5 h-5 px-1.5 rounded-full {{ tema.accent_bg }} text-white text-[11px] font-bold flex items-center justify-center shrink-0">{{ c.nao_lidas }}</span>

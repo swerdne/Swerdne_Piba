@@ -38,6 +38,9 @@ JANELA_RESPOSTA = timedelta(hours=24)
 RECEBIDA = "recebida"
 ENVIADA = "enviada"
 
+ROTULO_MIDIA = {"image": "📷 Foto", "sticker": "😀 Figurinha", "video": "🎬 Vídeo", "document": "📄 Documento"}
+_PLACEHOLDER_ANTIGO = re.compile(r"^\[(image|sticker|video|document) -- abra no WhatsApp pra ver\]$")
+
 
 class MensagemWhatsapp(SequentialIdDocument):
     meta = {
@@ -82,6 +85,24 @@ class MensagemWhatsapp(SequentialIdDocument):
     @property
     def eh_audio(self):
         return self.tipo_midia == "audio"
+
+    @property
+    def midia_nao_guardada(self):
+        """Foto/figurinha/video/documento que chegou ANTES da caixa de entrada
+        guardar midia (20/10/2026): o codigo antigo so gravava o texto
+        "[image -- abra no WhatsApp pra ver]" e descartava o id da midia --
+        sem o id a Meta nao entrega o arquivo depois, entao nao ha como
+        recuperar. Devolve o tipo, pra tela mostrar um cartao em vez do texto cru."""
+        if self.media_id or not self.texto:
+            return None
+        achado = _PLACEHOLDER_ANTIGO.match(self.texto)
+        return achado.group(1) if achado else None
+
+    @property
+    def texto_exibicao(self):
+        """Texto pra lista de conversas (sem o "[image -- ...]" antigo)."""
+        tipo = self.midia_nao_guardada
+        return ROTULO_MIDIA.get(tipo, self.texto) if tipo else self.texto
     enviada_por_usuario_id = mongoengine.IntField()  # resposta escrita na caixa de entrada
     lida = mongoengine.BooleanField(default=False)
     criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))

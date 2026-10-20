@@ -142,3 +142,27 @@ def test_formatacao_do_whatsapp_vira_html_seguro():
     assert str(formatar("<script>x</script>")) == "&lt;script&gt;x&lt;/script&gt;"
     link = str(formatar("mapa https://maps.google.com/?q=-20_67 fim"))
     assert 'href="https://maps.google.com/?q=-20_67"' in link and "<em>" not in link
+
+
+def test_foto_antiga_sem_midia_vira_cartao_e_a_nova_aparece_como_imagem(logged_in_client, enviados, meta, app, db):
+    """Foto/figurinha recebidas antes de 20/10 so tem o texto "[image -- ...]"
+    (o codigo antigo descartava o id da midia, nao da pra recuperar): a tela
+    mostra um cartao, nao o texto cru. Uma foto nova chega e aparece como <img>."""
+    with app.app_context():
+        comunidade, _, membro = _igreja(logged_in_client)
+        antiga = MensagemWhatsapp(direcao="recebida", telefone="5511987654321", comunidade_ids=[comunidade.id],
+                                  membro_ids=[membro.id], texto="[sticker -- abra no WhatsApp pra ver]").save()
+        assert antiga.midia_nao_guardada == "sticker" and antiga.texto_exibicao == "😀 Figurinha"
+
+        lista = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp").data.decode()
+        assert "😀 Figurinha" in lista and "abra no WhatsApp pra ver" not in lista
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
+        assert "Figurinha recebida" in html and "não ficou guardada" in html and "abra no WhatsApp pra ver" not in html
+
+        _postar(logged_in_client, _msg("image", {"id": "FOTO1", "mime_type": "image/jpeg"}, wamid="nova"))
+        nova = MensagemWhatsapp.objects(media_tipo="image").first()
+        html = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
+        url = f"/comunidade/{comunidade.id}/whatsapp/midia/{nova.id}"
+        assert f'<img src="{url}" alt="Foto enviada"' in html
+        imagem = logged_in_client.get(url)
+        assert imagem.status_code == 200 and imagem.mimetype == "image/jpeg" and imagem.data == FOTO
