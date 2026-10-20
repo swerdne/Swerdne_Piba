@@ -68,6 +68,8 @@ def _descrever_envio(payload):
     destino = destino[:4] + "*****" + destino[-4:] if len(destino) > 8 else destino
     if payload.get("type") == "template":
         return f"template {payload['template']['name']} para {destino}"
+    if payload.get("type") == "interactive":
+        return f"mensagem com botoes ({payload['interactive']['type']}) para {destino}"
     return f"texto livre para {destino}"
 
 
@@ -117,6 +119,51 @@ def enviar_whatsapp(destinatario, corpo):
         "to": numero_destino.lstrip("+"),
         "type": "text",
         "text": {"body": corpo},
+    })
+
+
+def enviar_whatsapp_interativo(destinatario, corpo, botoes=None, lista=None, rodape=None):
+    """Mensagem com botoes de tocar -- mesma janela de 24h do texto livre
+    (nao e template, nao precisa de aprovacao da Meta).
+
+    `botoes`: ate 3 [(id, titulo)] (titulo ate 20 caracteres) -- aparecem
+    como botoes embaixo da mensagem. `lista`: (texto do botao, [(id, titulo,
+    descricao)]) com ate 10 linhas (titulo ate 24, descricao ate 72) -- um
+    botao abre a lista de opcoes. O toque volta no webhook como
+    interactive.button_reply/list_reply com o `id` (ver
+    whatsapp_recebidas._id_do_botao). Levanta WhatsappNaoEnviadoError (quem
+    chama cai pro texto simples)."""
+    token, phone_id = _config_ou_erro()
+
+    numero_destino = normalizar_telefone(destinatario)
+    if numero_destino is None:
+        raise WhatsappNaoEnviadoError(f"Telefone invalido: {destinatario!r}")
+
+    if botoes:
+        interativo = {
+            "type": "button",
+            "body": {"text": corpo[:1024]},
+            "action": {"buttons": [{"type": "reply", "reply": {"id": i[:256], "title": t[:20]}}
+                                   for i, t in botoes[:3]]},
+        }
+    else:
+        texto_botao, linhas = lista
+        interativo = {
+            "type": "list",
+            "body": {"text": corpo[:1024]},
+            "action": {"button": texto_botao[:20], "sections": [{"title": "Opções", "rows": [
+                {"id": i[:200], "title": t[:24], **({"description": d[:72]} if d else {})}
+                for i, t, d in linhas[:10]
+            ]}]},
+        }
+    if rodape:
+        interativo["footer"] = {"text": rodape[:60]}
+
+    _chamar_api(token, phone_id, {
+        "messaging_product": "whatsapp",
+        "to": numero_destino.lstrip("+"),
+        "type": "interactive",
+        "interactive": interativo,
     })
 
 
@@ -201,13 +248,17 @@ def trocar_foto_do_perfil(caminho_imagem, app_id=None):
                   json={"messaging_product": "whatsapp", "profile_picture_handle": enviado["h"]})
 
 
-def enviar_whatsapp_template(destinatario, nome_template, parametros):
+def enviar_whatsapp_template(destinatario, nome_template, parametros, botoes_payload=None):
     """Envia uma mensagem via Template aprovado pela Meta -- unico jeito de
     mandar WhatsApp PROATIVO (fora da janela de 24h), ver
     app/escala/routes.py::enviar_notificacoes_da_escala e afins.
 
     `parametros` e uma lista de strings, na ordem das variaveis {{1}},
     {{2}}... do corpo do template cadastrado no WhatsApp Manager.
+    `botoes_payload`: so pra template cadastrado COM botoes de resposta
+    rapida -- um payload por botao, na ordem (ex: "confirmar:12"); volta no
+    webhook em button.payload quando a pessoa toca. Template sem botoes
+    recusa esse campo, por isso so vai quando pedido.
     """
     token, phone_id = _config_ou_erro()
 
@@ -231,6 +282,10 @@ def enviar_whatsapp_template(destinatario, nome_template, parametros):
             "components": [{
                 "type": "body",
                 "parameters": [{"type": "text", "text": p} for p in parametros],
-            }],
+            }] + [
+                {"type": "button", "sub_type": "quick_reply", "index": str(i),
+                 "parameters": [{"type": "payload", "payload": payload}]}
+                for i, payload in enumerate(botoes_payload or [])
+            ],
         },
     })

@@ -150,7 +150,7 @@ def test_confirmo_confirma_a_proxima_escala_e_avisa_lideres(logged_in_client, en
         assert {f.status for f in Funcao.objects(escala_id=depois.id)} == {"nao_notificado"}
         assert Notificacao.objects(escala_id=proxima.id, tipo="confirmado").count() == 2
         assert len(enviados) == 1 and enviados[0][0] == "+551187654321"
-        assert "Confirmado" in enviados[0][1] and "Vocal, Violao" in enviados[0][1]
+        assert "Presença confirmada" in enviados[0][1] and "Vocal, Violao" in enviados[0][1]
         recebida = MensagemWhatsapp.objects(direcao="recebida").first()
         assert (recebida.acao, recebida.escala_id, recebida.lida) == ("confirmado", proxima.id, True)
         assert MensagemWhatsapp.objects(direcao="enviada").count() == 1
@@ -170,7 +170,7 @@ def test_nao_posso_pede_troca_com_a_mensagem_como_motivo(logged_in_client, envia
         assert "vou viajar" in funcao.troca_motivo
         assert RegistroTroca.objects(escala_id=escala.id).count() == 1
         assert Notificacao.objects(escala_id=escala.id, tipo="troca_solicitada").count() == 1
-        assert "não pode" in enviados[0][1]
+        assert "avisamos a liderança" in enviados[0][1]
 
 
 def test_escala_cancelada_e_presente_nao_mudam(logged_in_client, enviados, app, db):
@@ -206,7 +206,7 @@ def test_pergunta_da_proxima_escala_responde_sem_mudar_nada(logged_in_client, en
         _postar(logged_in_client, _payload("qual minha próxima escala?"))
 
         texto = enviados[0][1]
-        assert "Culto de Domingo (Louvor)" in texto and "Culto Jovem" in texto and "Cancelada" not in texto
+        assert "*Culto de Domingo* (Louvor)" in texto and "Culto Jovem" in texto and "Cancelada" not in texto
         assert texto.index("Culto de Domingo") < texto.index("Culto Jovem")
         assert {f.status for f in Funcao.objects(membro_id=membro.id)} == {"nao_notificado"}
         msg = MensagemWhatsapp.objects(direcao="recebida").first()
@@ -231,8 +231,8 @@ def test_pergunta_das_musicas_lista_o_repertorio_da_proxima_escala(logged_in_cli
         _postar(logged_in_client, _payload("repertório de domingo", wamid="w2"))
 
         texto = enviados[-1][1]
-        assert "Repertório de Culto de Domingo" in texto
-        assert "1. Bondade de Deus — Tom: G · Abertura" in texto and "2. Grande é o Senhor" in texto
+        assert "Repertório · Culto de Domingo" in texto
+        assert "1️⃣ Bondade de Deus · Tom *G* · Abertura" in texto and "2️⃣ Grande é o Senhor" in texto
         assert f"/escala/{culto.id}/repertorio/cifras" in texto and f"/escala/{culto.id}/repertorio/projecao" in texto
         assert texto.startswith("🎵") and sem_repertorio.nome not in texto
         assert MensagemWhatsapp.objects(wamid="w2").first().acao == "consulta"
@@ -269,7 +269,7 @@ def test_texto_qualquer_vai_pra_caixa_de_entrada_e_recebe_o_menu_uma_vez(logged_
         escala = _escala(ministerio, membro)
         _postar(logged_in_client, _payload("Que horas é o ensaio?"))
         assert len(enviados) == 1
-        assert "passei para a liderança" in enviados[0][1] and "4 - Músicas do repertório" in enviados[0][1]
+        assert "passei para a liderança" in enviados[0][1] and "4️⃣ Músicas do repertório" in enviados[0][1]
         assert Funcao.objects(escala_id=escala.id).first().status == "nao_notificado"
         msg = MensagemWhatsapp.objects(direcao="recebida").first()
         assert (msg.lida, msg.comunidade_ids, msg.membro_ids) == (False, [comunidade.id], [membro.id])
@@ -289,11 +289,11 @@ def test_menu_e_atalho_por_numero(logged_in_client, enviados, app, db):
         ItemRepertorio(escala_id=escala.id, nome_musica="Bondade de Deus", tom="G", ordem=0).save()
 
         _postar(logged_in_client, _payload("bom dia!", wamid="w1"))
-        assert enviados[-1][1].startswith("Olá, Ana! 👋") and "1 - Confirmar minha próxima escala" in enviados[-1][1]
+        assert enviados[-1][1].startswith("Olá, *Ana*! 👋") and "1️⃣ Confirmar minha próxima escala" in enviados[-1][1]
         assert MensagemWhatsapp.objects(wamid="w1").first().lida  # respondida sozinha, nao pede atencao
 
         _postar(logged_in_client, _payload("4", wamid="w2"))
-        assert "Bondade de Deus — Tom: G" in enviados[-1][1]
+        assert "Bondade de Deus · Tom *G*" in enviados[-1][1]
         _postar(logged_in_client, _payload("1", wamid="w3"))
         assert Funcao.objects(escala_id=escala.id).first().status == "confirmado"
 
@@ -467,7 +467,7 @@ def test_audio_transcrito_confirma_a_escala_e_responde_com_o_que_entendeu(logged
 
         assert Funcao.objects(escala_id=escala.id).first().status == "confirmado"
         assert enviados[-1][1].startswith("🎤 Entendi: “Confirmo, pode contar comigo”")
-        assert "✅ Confirmado" in enviados[-1][1]
+        assert "✅ *Presença confirmada!*" in enviados[-1][1]
         msg = MensagemWhatsapp.objects(direcao="recebida").first()
         assert (msg.transcricao, msg.acao, msg.lida) == ("Confirmo, pode contar comigo", "confirmado", True)
         conversa = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
@@ -485,7 +485,7 @@ def test_audio_com_pergunta_responde_e_sem_fala_vai_pra_caixa(logged_in_client, 
 
         fala["texto"] = "Quais são as músicas do culto?"
         _postar(logged_in_client, _payload_audio(wamid="w1", media_id="M1"))
-        assert "Bondade de Deus — Tom: G" in enviados[-1][1]
+        assert "Bondade de Deus · Tom *G*" in enviados[-1][1]
 
         # Sem fala reconhecivel: aviso curto + caixa de entrada, escala intacta.
         fala["texto"] = None
@@ -515,7 +515,7 @@ def test_saudacao_usa_o_cadastro_principal_quando_o_telefone_se_repete(logged_in
         ruan = Membro(comunidade_id=comunidade.id, nome="Ruan Cardozo", telefone="(21) 99912-3998").save()
         _escala(ministerio, ruan)
         _postar(logged_in_client, _payload("Oi", de="552199123998"))
-        assert enviados[-1][1].startswith("Olá, Ruan! 👋")
+        assert enviados[-1][1].startswith("Olá, *Ruan*! 👋")
 
 
 def test_audio_transcrito_que_nao_e_comando_responde_mesmo_depois_do_menu(logged_in_client, enviados, app, db, fala):
@@ -527,7 +527,7 @@ def test_audio_transcrito_que_nao_e_comando_responde_mesmo_depois_do_menu(logged
         fala["texto"] = "Sul da igreja."
         _postar(logged_in_client, _payload_audio(wamid="w-audio"))
         assert enviados[-1][1].startswith("🎤 Entendi: “Sul da igreja.”")
-        assert "Não reconheci um pedido" in enviados[-1][1] and "5 - Endereço da igreja" in enviados[-1][1]
+        assert "Não reconheci um pedido" in enviados[-1][1] and "5️⃣ Endereço da igreja" in enviados[-1][1]
         assert MensagemWhatsapp.objects(wamid="w-audio").first().lida is False  # fica pra lideranca
 
 

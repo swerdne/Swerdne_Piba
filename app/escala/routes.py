@@ -1177,10 +1177,12 @@ def _disparar_notificacoes_em_paralelo(tarefas):
                 except SmsNaoEnviadoError:
                     pass
                 try:
+                    extra = {"botoes_payload": tarefa["wa_botoes"]} if tarefa.get("wa_botoes") else {}
                     enviar_whatsapp_template(
                         destinatario=tarefa["telefone"],
                         nome_template=tarefa["wa_template"],
                         parametros=tarefa["wa_parametros"],
+                        **extra,
                     )
                     resultado["whatsapp_ok"] = True
                 except WhatsappNaoEnviadoError:
@@ -1232,8 +1234,12 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
             "telefone": funcao.membro.telefone if canais_pagos else None,
             "mensagem": mensagem_para(escala, funcao, funcao.membro),
             "assunto": f"Voce foi escalado(a): {funcao.nome} - {escala.nome}",
-            "wa_template": "pibachurch_escalado",
+            "wa_template": current_app.config.get("WHATSAPP_TEMPLATE_ESCALADO") or "pibachurch_escalado",
             "wa_parametros": [funcao.membro.nome, funcao.nome, escala_no_whatsapp, data_texto],
+            # Botoes "Confirmo"/"Nao posso" do template (se cadastrado com eles):
+            # o toque volta no webhook com o id da escala (whatsapp_recebidas).
+            "wa_botoes": ([f"confirmar:{escala.id}", f"recusar:{escala.id}"]
+                          if current_app.config.get("WHATSAPP_TEMPLATE_ESCALADO_BOTOES") else None),
         }
         for funcao in escalados
     ]

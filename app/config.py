@@ -83,6 +83,11 @@ class Config:
     # Brasilia -- acima disso o envio de template e bloqueado e vai pro log
     # (app/whatsapp.py::_reservar_template_do_dia). 0 desliga o teto.
     WHATSAPP_LIMITE_TEMPLATES_DIA = int(os.environ.get("WHATSAPP_LIMITE_TEMPLATES_DIA", "100"))
+    # Aviso de escala: nome do template na Meta e se ele foi cadastrado COM os
+    # botoes "Confirmo"/"Nao posso" (resposta rapida). Template com botoes so
+    # funciona depois de aprovado na Meta -- ate la fica o de sempre, sem botoes.
+    WHATSAPP_TEMPLATE_ESCALADO = os.environ.get("WHATSAPP_TEMPLATE_ESCALADO", "pibachurch_escalado")
+    WHATSAPP_TEMPLATE_ESCALADO_BOTOES = os.environ.get("WHATSAPP_TEMPLATE_ESCALADO_BOTOES", "").lower() in ("1", "true", "sim")
     # Transcricao dos audios recebidos no WhatsApp (app/transcricao.py, Azure
     # AI Speech): chave + regiao do recurso (ou o endpoint dele). Vazio =
     # desligada, audio so fica pra ouvir na caixa de entrada.

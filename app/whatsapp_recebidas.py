@@ -324,6 +324,31 @@ def _quando(escala):
     return texto
 
 
+_NUMEROS = ("1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟")
+
+
+def _numero(n):
+    return _NUMEROS[n - 1] if 1 <= n <= len(_NUMEROS) else f"{n}."
+
+
+def _quando_completo(escala):
+    """'dom, 26/10 às 19:00' (vazio sem data)."""
+    if not escala.data:
+        return ""
+    return f"{_DIAS_SEMANA_CURTO[escala.data.weekday()]}, {_quando(escala)}"
+
+
+def _primeiro_nome(membros):
+    principal = membro_principal(membros) if membros else None
+    return (principal.nome or "").split()[0].title() if principal and principal.nome else ""
+
+
+# Botoes de resposta (mensagem interativa, ver app/whatsapp.py): o id leva a
+# escala, pra o toque mudar ESSA escala mesmo que chegue depois de outra.
+def botoes_da_escala(escala_id):
+    return [(f"confirmar:{escala_id}", "👍 Confirmo"), (f"recusar:{escala_id}", "❌ Não posso")]
+
+
 def proxima_escala_dos_membros(membros):
     """(escala, funcoes da pessoa nela) da proxima escala nao cancelada de hoje
     em diante -- ou (None, [])."""
@@ -383,20 +408,26 @@ def aplicar_resposta(acao, funcoes, texto):
 
 
 def _texto_de_resposta(acao, escala, funcoes):
+    """Resposta a confirmar/recusar/troca -- em blocos, nome em negrito,
+    pra bater o olho e entender do que se trata."""
     if escala is None:
-        return "Não encontramos nenhuma escala futura no seu nome. Se achar que é um engano, fale com a liderança."
+        return ("🤔 Não encontrei nenhuma escala futura no seu nome.\n\n"
+                "Se achar que é um engano, fale com a liderança.")
     nomes = ", ".join(f.nome for f in funcoes)
-    quando = _quando(escala)
-    onde = f"{escala.nome}" + (f" ({quando})" if quando else "")
+    pessoa = funcoes[0].membro.nome if funcoes and funcoes[0].membro else ""
+    quando = _quando_completo(escala)
+    detalhes = ((f"👤 *{pessoa}*\n" if pessoa else "") + f"🎵 {nomes}\n📅 *{escala.nome}*"
+                + (f" · {quando}" if quando else ""))
     if acao == CONFIRMAR:
         if all(f.status == "presente" for f in funcoes):
-            return f"Sua presença em {onde} já está registrada. Obrigado!"
-        return f"✅ Confirmado: {nomes} em {onde}. Obrigado!"
+            return f"📍 *Sua presença já está registrada!*\n\n{detalhes}\n\nObrigado! 🙏"
+        return f"✅ *Presença confirmada!*\n\n{detalhes}\n\nObrigado por servir! 🙏"
     if acao == TROCA:
-        return (f"🔄 Pedido de troca registrado: {nomes} em {onde}. A liderança foi avisada e vai combinar "
-                "quem te substitui. Você continua na escala até eles confirmarem a troca.")
-    return (f"Certo, avisamos a liderança que você não pode estar em {onde} ({nomes}). "
-            "Eles vão providenciar a troca.")
+        return (f"🔄 *Pedido de troca registrado*\n\n{detalhes}\n\n"
+                "A liderança já foi avisada e vai combinar quem te substitui. "
+                "Você continua na escala até eles confirmarem a troca.")
+    return (f"❌ *Tudo bem, avisamos a liderança*\n\n{detalhes}\n\n"
+            "Eles vão providenciar alguém no seu lugar. 💙")
 
 
 # --- Perguntas (so leitura, nada muda) ------------------------------------------------
@@ -418,23 +449,34 @@ def proximas_escalas_dos_membros(membros, limite=3):
     return [(e, [f for f in funcoes if f.escala_id == e.id]) for e in escalas]
 
 
+_ICONE_STATUS = {"confirmado": "✅", "presente": "📍", "troca_solicitada": "🔄"}
+
+
 def _texto_proximas_escalas(membros):
     proximas = proximas_escalas_dos_membros(membros)
     if not proximas:
-        return "Você não tem nenhuma escala marcada de hoje em diante."
-    linhas = ["📅 Suas próximas escalas:"]
+        return "📭 Você não tem nenhuma escala marcada de hoje em diante."
+    blocos = ["📅 *Suas próximas escalas*"]
     for escala, funcoes in proximas:
-        quando = ""
-        if escala.data:
-            quando = f"{_DIAS_SEMANA_CURTO[escala.data.weekday()]}, {_quando(escala)}"
         ministerio = escala.ministerio.nome if escala.ministerio else ""
         funcoes_txt = ", ".join(
-            f.nome + (f" ({_STATUS_NO_WHATSAPP[f.status]})" if f.status in _STATUS_NO_WHATSAPP else "")
+            f"{f.nome} {_ICONE_STATUS.get(f.status, '⏳')}"
+            + (f" _{_STATUS_NO_WHATSAPP[f.status]}_" if f.status in _STATUS_NO_WHATSAPP else "")
             for f in funcoes
         )
-        linhas.append(f"• {escala.nome}{f' ({ministerio})' if ministerio else ''} — {quando} — {funcoes_txt}")
-    linhas.append("Para a próxima, responda \"confirmo\" ou \"não posso\".")
-    return "\n".join(linhas)
+        quando = _quando_completo(escala)
+        blocos.append(f"▪️ *{escala.nome}*" + (f" ({ministerio})" if ministerio else "")
+                      + (f"\n🗓️ {quando}" if quando else "") + f"\n🎵 {funcoes_txt}")
+    return "\n\n".join(blocos)
+
+
+def botoes_para_proxima(membros):
+    """Botoes Confirmo/Nao posso da proxima escala, se a pessoa ainda nao
+    confirmou (sem botao quando ja esta tudo confirmado/presente)."""
+    escala, funcoes = proxima_escala_dos_membros(membros)
+    if escala is None or all(f.status in ("confirmado", "presente") for f in funcoes):
+        return None
+    return botoes_da_escala(escala.id)
 
 
 def _texto_repertorio(membros):
@@ -452,20 +494,23 @@ def _texto_repertorio(membros):
     else:
         escala = proximas[0][0]
         quando = _quando(escala)
-        return (f"O repertório de {escala.nome}{f' ({quando})' if quando else ''} ainda não foi definido. "
+        return (f"🎵 O repertório de *{escala.nome}*{f' ({quando})' if quando else ''} ainda não foi definido.\n\n"
                 "Assim que a liderança montar, ele aparece aqui e no site.")
 
-    quando = _quando(escala)
-    linhas = [f"🎵 Repertório de {escala.nome}{f' ({quando})' if quando else ''}:"]
+    quando = _quando_completo(escala)
+    linhas = [f"🎵 *Repertório · {escala.nome}*"]
+    if quando:
+        linhas.append(f"📅 {quando}")
+    linhas.append("")
     for n, item in enumerate(itens, 1):
         tom = item.tom or (item.musica.tom if item.musica else None)
-        extras = " · ".join(p for p in (f"Tom: {tom}" if tom else "", item.momento or "") if p)
-        linhas.append(f"{n}. {item.nome_musica}{f' — {extras}' if extras else ''}")
+        extras = " · ".join(p for p in (f"Tom *{tom}*" if tom else "", item.momento or "") if p)
+        linhas.append(f"{_numero(n)} {item.nome_musica}{f' · {extras}' if extras else ''}")
     site = current_app.config.get("URL_PUBLICA") or ""
     linhas.append("")
-    linhas.append(f"Cifras: {site}{url_for('escala.folha_repertorio', escala_id=escala.id, tipo='cifras')}")
-    linhas.append(f"Projeção: {site}{url_for('escala.folha_repertorio', escala_id=escala.id, tipo='projecao')}")
-    linhas.append("(entre com a sua conta do site pra abrir)")
+    linhas.append(f"📄 Cifras: {site}{url_for('escala.folha_repertorio', escala_id=escala.id, tipo='cifras')}")
+    linhas.append(f"📺 Projeção: {site}{url_for('escala.folha_repertorio', escala_id=escala.id, tipo='projecao')}")
+    linhas.append("_(entre com a sua conta do site pra abrir)_")
     return "\n".join(linhas)
 
 
@@ -489,14 +534,36 @@ def membro_principal(membros):
     return max(membros, key=lambda m: (m.id in com_futura, total.get(m.id, 0), m.id))
 
 
+def _saudacao(membros):
+    nome = _primeiro_nome(membros)
+    return f"Olá{', *' + nome + '*' if nome else ''}! 👋"
+
+
 def texto_do_menu(membros, introducao=None):
-    """Lista de comandos com atalho por numero."""
-    principal = membro_principal(membros)
-    primeiro_nome = (principal.nome or "").split()[0].title() if principal and principal.nome else ""
-    linhas = [introducao or f"Olá{', ' + primeiro_nome if primeiro_nome else ''}! 👋 Posso te ajudar com:"]
-    linhas += [f"{numero} - {rotulo}" for numero, rotulo, _ in MENU_OPCOES]
-    linhas.append("Responda com o número ou escreva do seu jeito (ex: \"quais as músicas do culto?\").")
+    """Lista de comandos com atalho por numero (versao em texto -- vai quando
+    a mensagem com lista de opcoes nao pode ser enviada)."""
+    linhas = [introducao or f"{_saudacao(membros)} Como posso te ajudar?", ""]
+    linhas += [f"{_numero(int(numero))} {rotulo}" for numero, rotulo, _ in MENU_OPCOES]
+    linhas += ["", "Responda com o *número* ou escreva do seu jeito (ex: \"quais as músicas do culto?\")."]
     return "\n".join(linhas)
+
+
+# Rotulo curto (lista do WhatsApp: titulo ate 24) + descricao de cada opcao.
+_MENU_LISTA = {
+    "1": ("👍 Confirmar presença", "Confirmar minha próxima escala"),
+    "2": ("❌ Não posso ir", "Avisar a liderança / pedir troca"),
+    "3": ("📅 Minhas escalas", "Ver minhas próximas escalas"),
+    "4": ("🎵 Músicas", "Repertório do próximo culto"),
+    "5": ("📍 Endereço", "Onde fica a igreja"),
+    "6": ("⛪ Horários", "Dias e horários dos cultos"),
+}
+
+
+def menu_interativo(membros, introducao=None):
+    """(corpo, lista) do menu como lista de opcoes de tocar."""
+    corpo = introducao or f"{_saudacao(membros)}\n\nComo posso te ajudar? Toque em *Ver opções* 👇"
+    linhas = [(f"menu:{numero}",) + _MENU_LISTA[numero] for numero, _, _ in MENU_OPCOES]
+    return corpo, ("Ver opções", linhas)
 
 
 def _comunidades(comunidade_ids):
@@ -512,9 +579,9 @@ def _texto_endereco(comunidade_ids):
     for comunidade in _comunidades(comunidade_ids):
         if not comunidade.endereco and comunidade.latitude is None:
             continue
-        linha = f"📍 {comunidade.nome}: {comunidade.endereco or 'veja no mapa'}"
+        linha = f"📍 *{comunidade.nome}*\n{comunidade.endereco or 'Veja no mapa:'}"
         if comunidade.latitude is not None and comunidade.longitude is not None:
-            linha += f"\nhttps://maps.google.com/?q={comunidade.latitude:.6f},{comunidade.longitude:.6f}"
+            linha += f"\n🗺️ https://maps.google.com/?q={comunidade.latitude:.6f},{comunidade.longitude:.6f}"
         linhas.append(linha)
     return "\n\n".join(linhas) or None
 
@@ -537,13 +604,22 @@ def _texto_horarios(comunidade_ids):
                                       data__lte=hoje + timedelta(days=30)).order_by("data").limit(3))
         if not cultos and not eventos:
             continue
-        linhas.append(f"⛪ {comunidade.nome}")
-        for quando, nomes in cultos.items():
-            linhas.append(f"• Culto: {quando} ({', '.join(nomes)})")
-        for e in eventos:
-            hora = f" às {e.horario.strftime('%H:%M')}" if e.horario else ""
-            local = f" — {e.local}" if e.local else ""
-            linhas.append(f"• {e.nome}: {_DIAS_SEMANA_CURTO[e.data.weekday()]}, {e.data.strftime('%d/%m')}{hora}{local}")
+        if linhas:
+            linhas.append("")
+        linhas.append(f"⛪ *{comunidade.nome}*")
+        if cultos:
+            linhas.append("")
+            linhas.append("🕖 *Cultos*")
+            for quando, nomes in cultos.items():
+                linhas.append(f"▪️ {quando} ({', '.join(nomes)})")
+        if eventos:
+            linhas.append("")
+            linhas.append("📌 *Próximos eventos*")
+            for e in eventos:
+                hora = f" às {e.horario.strftime('%H:%M')}" if e.horario else ""
+                local = f" · {e.local}" if e.local else ""
+                linhas.append(f"▪️ *{e.nome}*: {_DIAS_SEMANA_CURTO[e.data.weekday()]}, "
+                              f"{e.data.strftime('%d/%m')}{hora}{local}")
     return "\n".join(linhas) or None
 
 
@@ -574,8 +650,28 @@ def registrar_enviada(telefone, texto, comunidade_ids, membro_ids=(), usuario_id
     ).save()
 
 
-def _responder(telefone, texto, comunidade_ids, membro_ids, acao=None):
-    from app.whatsapp import WhatsappNaoEnviadoError, enviar_whatsapp
+def _responder(telefone, texto, comunidade_ids, membro_ids, acao=None, botoes=None, lista=None,
+               texto_simples=None):
+    """Resposta automatica. Com `botoes`/`lista` vai como mensagem de tocar
+    (app/whatsapp.enviar_whatsapp_interativo); se ela falhar, cai pro texto
+    (`texto_simples`, ou o proprio texto + como responder escrevendo) -- a
+    pessoa nunca fica sem resposta."""
+    from app.whatsapp import WhatsappNaoEnviadoError, enviar_whatsapp, enviar_whatsapp_interativo
+
+    if botoes or lista:
+        try:
+            enviar_whatsapp_interativo("+" + telefone, texto, botoes=botoes, lista=lista)
+        except WhatsappNaoEnviadoError as erro:
+            current_app.logger.info("Mensagem com botoes nao enviada (%s); indo em texto simples.", erro)
+        else:
+            current_app.logger.info("Resposta automatica (com botoes) enviada para %s.", _mascarar(telefone))
+            opcoes = [t for _, t in botoes] if botoes else [linha[1] for linha in lista[1]]
+            registrar_enviada(telefone, texto + "\n[opções: " + " | ".join(opcoes) + "]", comunidade_ids,
+                              membro_ids, acao=acao)
+            return
+        if texto_simples is None:
+            texto_simples = texto + ("\n\nResponda *confirmo* ou *não posso*." if botoes else "")
+        texto = texto_simples
 
     try:
         enviar_whatsapp("+" + telefone, texto)
@@ -617,9 +713,66 @@ def _nao_reconhecida(registro, telefone, membros, comunidade_ids, prefixo=""):
     current_app.logger.info("WhatsApp de %s nao reconhecido: foi pra caixa de entrada%s.", _mascarar(telefone),
                             "" if menu_recente else " e recebeu o menu")
     if prefixo or not menu_recente:  # audio ("Entendi: ...") responde sempre
-        introducao = "Recebi sua mensagem e passei para a liderança 🙏 Se for uma destas, é só responder com o número:"
-        _responder(telefone, prefixo + texto_do_menu(membros, introducao), comunidade_ids, registro.membro_ids,
-                   acao="menu")
+        introducao = "Recebi sua mensagem e passei para a liderança 🙏"
+        corpo, lista = menu_interativo(membros, prefixo + introducao + "\n\nSe for uma destas, toque em *Ver opções* 👇")
+        _responder(telefone, corpo, comunidade_ids, registro.membro_ids, acao="menu", lista=lista,
+                   texto_simples=prefixo + texto_do_menu(
+                       membros, introducao + " Se for uma destas, é só responder com o número:"))
+    return registro
+
+
+def _id_do_botao(msg):
+    """Id de um toque em botao: resposta rapida de template (button.payload)
+    ou botao/lista de mensagem interativa (interactive.*_reply.id)."""
+    tipo = msg.get("type")
+    if tipo == "button":
+        return (msg.get("button") or {}).get("payload") or None
+    if tipo == "interactive":
+        interativo = msg.get("interactive") or {}
+        escolha = interativo.get("button_reply") or interativo.get("list_reply") or {}
+        return escolha.get("id") or None
+    return None
+
+
+def _tratar_botao(registro, telefone, id_botao, texto, membros, comunidade_ids):
+    """"confirmar:12"/"recusar:12" mudam a escala 12 (a do aviso tocado, nao
+    "a proxima"); "menu:3" e a opcao 3 do menu. Id desconhecido (template sem
+    payload manda o proprio texto do botao) -> None, e quem chama trata o
+    texto como mensagem escrita."""
+    from app.escala.models import TIPO_FUNCAO, Escala, Funcao
+
+    acao, _, valor = id_botao.partition(":")
+    if acao == "menu" and valor in _INTENCAO_POR_NUMERO:
+        return _tratar_texto(registro, telefone, valor, membros, comunidade_ids)
+    if acao not in ("confirmar", "recusar", "troca") or not valor.isdigit():
+        return None
+
+    def responder(resposta, **extra):
+        _responder(telefone, resposta, comunidade_ids, registro.membro_ids, **extra)
+
+    escala = Escala.objects(id=int(valor)).first()
+    funcoes = (list(Funcao.objects(escala_id=escala.id, membro_id__in=[m.id for m in membros], tipo=TIPO_FUNCAO))
+               if escala else [])
+    current_app.logger.info("WhatsApp de %s: tocou %s (escala %s, %d funcao(oes) da pessoa).",
+                            _mascarar(telefone), acao, valor, len(funcoes))
+    if not funcoes:
+        responder("🤔 Não encontrei você nessa escala — talvez a liderança tenha mudado.\n\n"
+                  + _texto_proximas_escalas(membros), botoes=botoes_para_proxima(membros))
+        return registro
+    if escala.cancelada:
+        responder(f"🚫 *{escala.nome}* foi cancelada. Não precisa responder.")
+        return registro
+    if escala.data and escala.data < _hoje_brasilia():
+        responder(f"⌛ *{escala.nome}* já passou. Obrigado mesmo assim! 🙏")
+        return registro
+
+    intencao = CONFIRMAR if acao == "confirmar" else (TROCA if acao == "troca" else RECUSAR)
+    aplicar_resposta(CONFIRMAR if intencao == CONFIRMAR else RECUSAR, funcoes, texto)
+    registro.acao = "confirmado" if intencao == CONFIRMAR else "troca_solicitada"
+    registro.escala_id = escala.id
+    registro.lida = True
+    registro.save()
+    responder(_texto_de_resposta(intencao, escala, funcoes))
     return registro
 
 
@@ -657,6 +810,12 @@ def processar_mensagem(msg, nomes_perfil):
         )
         _responder_numero_desconhecido(telefone)
         return registro
+
+    id_botao = _id_do_botao(msg)
+    if id_botao:
+        tratado = _tratar_botao(registro, telefone, id_botao, texto, membros, comunidade_ids)
+        if tratado is not None:
+            return tratado
 
     if registro.media_id:
         from app.transcricao import transcricao_ligada
@@ -735,8 +894,9 @@ def _tratar_texto(registro, telefone, texto, membros, comunidade_ids, prefixo=""
     """Roteador de intencao aplicado ao texto (escrito ou transcrito do
     audio). `prefixo` vai no comeco de toda resposta."""
 
-    def responder(resposta, acao=None):
-        _responder(telefone, prefixo + resposta, comunidade_ids, registro.membro_ids, acao=acao)
+    def responder(resposta, acao=None, botoes=None, lista=None, texto_simples=None):
+        _responder(telefone, prefixo + resposta, comunidade_ids, registro.membro_ids, acao=acao, botoes=botoes,
+                   lista=lista, texto_simples=(prefixo + texto_simples) if texto_simples else None)
 
     intencao = interpretar_mensagem(texto)
 
@@ -745,7 +905,8 @@ def _tratar_texto(registro, telefone, texto, membros, comunidade_ids, prefixo=""
         registro.acao = "informacao"
         registro.lida = True
         registro.save()
-        responder(texto_do_menu(membros), acao="menu")
+        corpo, lista = menu_interativo(membros)
+        responder(corpo, acao="menu", lista=lista, texto_simples=texto_do_menu(membros))
         return registro
 
     # Perguntas: so leitura. Sem dado cadastrado (endereco/horarios), cai na
@@ -766,7 +927,8 @@ def _tratar_texto(registro, telefone, texto, membros, comunidade_ids, prefixo=""
         registro.acao = "consulta" if intencao in (CONSULTA_ESCALA, REPERTORIO) else "informacao"
         registro.lida = True  # respondida sozinha
         registro.save()
-        responder(resposta)
+        # "Minhas escalas" ja vem com os botoes pra responder a proxima.
+        responder(resposta, botoes=botoes_para_proxima(membros) if intencao == CONSULTA_ESCALA else None)
         return registro
 
     if intencao not in MUDAM_ESCALA:
@@ -776,8 +938,9 @@ def _tratar_texto(registro, telefone, texto, membros, comunidade_ids, prefixo=""
             # transcricao pode ter errado ("Sul da igreja") e a pessoa
             # precisa saber pra repetir ou escrever. Continua nao lida.
             current_app.logger.info("Audio de %s transcrito mas nao reconhecido.", _mascarar(telefone))
-            introducao = "Não reconheci um pedido nisso. Se for uma destas, responda com o número:"
-            responder(texto_do_menu(membros, introducao), acao="menu")
+            corpo, lista = menu_interativo(membros, "Não reconheci um pedido nisso. Se for uma destas, toque em *Ver opções* 👇")
+            responder(corpo, acao="menu", lista=lista, texto_simples=texto_do_menu(
+                membros, "Não reconheci um pedido nisso. Se for uma destas, responda com o número:"))
             return registro
         return _nao_reconhecida(registro, telefone, membros, comunidade_ids, prefixo)
 
