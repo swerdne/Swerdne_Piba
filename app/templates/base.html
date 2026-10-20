@@ -69,7 +69,15 @@
         #abertura .abertura-halo{position:absolute;inset:-8%;opacity:0;pointer-events:none;
             background:radial-gradient(closest-side,rgba(5,221,240,.17),rgba(3,103,235,.08) 55%,transparent 78%)}
         #abertura img{display:none;position:absolute;left:20.8%;top:21.3%;width:58.3%}
-        #abertura.abertura-estatica img{display:block}
+        #abertura.abertura-estatica img{display:block;animation:abertura-surge .7s ease-out both}
+        @keyframes abertura-surge{from{opacity:0}to{opacity:1}}
+        /* "Preparando": anel girando enquanto o logo/particulas carregam -- antes
+           era so o fundo escuro vazio (ou o logo parado). Some quando a
+           animacao comeca (.abertura-iniciada, abertura.js). */
+        #abertura .abertura-preparando{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;transition:opacity .3s ease}
+        #abertura .abertura-preparando span{width:34px;height:34px;border-radius:50%;border:2.5px solid rgba(110,226,220,.16);border-top-color:#6EE2DC;animation:abertura-gira .8s linear infinite}
+        #abertura.abertura-iniciada .abertura-preparando{opacity:0}
+        @keyframes abertura-gira{to{transform:rotate(360deg)}}
         #abertura.abertura-estatica canvas{display:none}
         /* Depois do laser: logo sobe e encolhe, o nome entra letra a letra embaixo */
         #abertura canvas,#abertura .abertura-halo,#abertura img{transform-origin:50% 50%;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
@@ -166,6 +174,7 @@
     </div>
     <div id="abertura" role="status" aria-label="Carregando o TyBenson"
          data-logo="{{ url_for('static', filename='img/logo-abertura.webp') }}">
+        <div class="abertura-preparando" aria-hidden="true"><span></span></div>
         <div class="abertura-quadro">
             <div id="abertura-halo" class="abertura-halo"></div>
             <canvas id="abertura-canvas" aria-hidden="true"></canvas>

@@ -21,14 +21,19 @@
     // quadros) continua com particulas. Aparelho claramente fraco (2 GB de
     // memoria ou 2 nucleos) nem tenta: logo parado + nome.
     var QUADROS_MEDIDOS = 10, LIMITE_DESENHO_MS = 9, LIMITE_INTERVALO_MS = 100;
-    var aparelhoFraco = (navigator.deviceMemory && navigator.deviceMemory <= 2) ||
-                        (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2);
+    // So deviceMemory (Chrome/Android): o numero de nucleos que o Safari
+    // informa nao e confiavel e jogava iPhone bom no modo parado. Os demais
+    // aparelhos fracos caem na medicao dos primeiros quadros.
+    var aparelhoFraco = navigator.deviceMemory && navigator.deviceMemory <= 2;
     var LOGO = { x: 150, y: 128, w: 420, h: 420 * 689 / 840 };
     var MB = LOGO.y + LOGO.h + 20;
     var T = { laser0: 2.1, laser1: 3.4 };
     var NOME_APOS_LASER = 0.6;  // sem pressa: espera isso depois do laser pra mostrar o nome
     var SEGURA_NOME_MS = 1000;  // tempo do nome entrar letra a letra antes de sumir
-    var ACELERA_EM = 0.45;  // pronta a pagina, chega no logo pronto nesse tempo
+    // Pronta a pagina, as particulas terminam de se juntar nesse tempo. Antes
+    // (0,45 s e, com a pagina ja pronta, pulo direto pro logo formado) o logo
+    // aparecia PARADO antes do nome -- parecia uma imagem estatica.
+    var ACELERA_EM = 0.9;
     var LIMITE_MS = 8000;   // trava de seguranca: some de qualquer jeito
     var reduzir = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -144,10 +149,21 @@
 
     var ctx = cv.getContext && cv.getContext("2d");
     if (!ctx || reduzir || aparelhoFraco) {
-        // Sem canvas, "reduzir movimento" ou aparelho fraco: logo e nome parados, some quando a pagina fica pronta.
-        cena.classList.add("abertura-estatica", "abertura-nomeada");
-        som.brilho();
-        var esperar = function () { paginaPronta ? setTimeout(encerrar, 600) : setTimeout(esperar, 50); };
+        // Sem canvas, "reduzir movimento" ou aparelho fraco: sem particulas -- o
+        // anel "preparando" ate o logo carregar, o logo entra com fade e o nome
+        // junto; some quando a pagina fica pronta (e o logo ja apareceu).
+        var pronto = false;
+        var mostrarParado = function () {
+            if (pronto) return;
+            pronto = true;
+            cena.classList.add("abertura-iniciada", "abertura-estatica", "abertura-nomeada");
+            som.brilho();
+        };
+        var previa = new Image();
+        previa.onload = previa.onerror = mostrarParado;
+        previa.src = cena.getAttribute("data-logo");
+        setTimeout(mostrarParado, 1500);  // logo demorando: entra assim mesmo
+        var esperar = function () { paginaPronta && pronto ? setTimeout(encerrar, 900) : setTimeout(esperar, 50); };
         esperar();
         return;
     }
@@ -410,8 +426,11 @@
     logo.onload = function () {
         if (encerrada) return;
         ajustar();
-        if (paginaPronta) t = T.laser1;  // pagina ja pronta: pula direto pro logo formado
-        else som.sopro(1.8);  // particulas vao se juntar: sopro ate o logo formar
+        // Pagina ja pronta: as particulas se juntam rapido (ACELERA_EM, o
+        // quadro() acelera); senao no ritmo normal. Nos dois casos ha formacao
+        // -- nunca mais o logo pronto parado de cara.
+        som.sopro(paginaPronta ? ACELERA_EM + 0.1 : 1.8);
+        cena.classList.add("abertura-iniciada");
         montarParticulas();
         window.addEventListener("resize", ajustar);
         rodando = true;
