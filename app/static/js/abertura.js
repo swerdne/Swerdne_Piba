@@ -32,12 +32,100 @@
     var LIMITE_MS = 8000;   // trava de seguranca: some de qualquer jeito
     var reduzir = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    // Som da abertura (Web Audio, gerado aqui -- sem arquivo): um "sopro"
+    // baixinho enquanto as particulas se juntam e um "brilho" curto (arpejo
+    // de Mi maior, 4 notas) quando o logo forma e o nome entra. Navegador
+    // bloqueia som sem toque na tela: toca onde e permitido (Chrome com o app
+    // instalado na tela inicial) e, onde nao e (iPhone, aba comum), fica em
+    // silencio -- nunca toca atrasado depois (tentar() so vale nos primeiros
+    // 400 ms de cada chamada).
+    var som = (function () {
+        var audio = null, ar = null;
+        try {
+            var Classe = window.AudioContext || window.webkitAudioContext;
+            if (Classe) {
+                audio = new Classe();
+                if (audio.state === "suspended" && audio.resume) audio.resume().catch(function () {});
+            }
+        } catch (e) { audio = null; }
+
+        function tentar(tocar) {
+            if (!audio) return;
+            if (audio.state === "running") { tocar(); return; }
+            var prazo = performance.now() + 400;
+            if (audio.resume) audio.resume().then(function () {
+                if (audio.state === "running" && performance.now() < prazo) tocar();
+            }).catch(function () {});
+        }
+
+        function sopro(duracao) {
+            tentar(function () {
+                try {
+                    var t = audio.currentTime + 0.02, n = Math.floor(audio.sampleRate * duracao);
+                    var ruido = audio.createBuffer(1, n, audio.sampleRate), dados = ruido.getChannelData(0);
+                    for (var i = 0; i < n; i++) dados[i] = Math.random() * 2 - 1;
+                    var fonte = audio.createBufferSource(), filtro = audio.createBiquadFilter(), volume = audio.createGain();
+                    fonte.buffer = ruido;
+                    filtro.type = "bandpass";
+                    filtro.Q.value = 0.9;
+                    filtro.frequency.setValueAtTime(250, t);
+                    filtro.frequency.exponentialRampToValueAtTime(1800, t + duracao * 0.85);
+                    volume.gain.setValueAtTime(0.0001, t);
+                    volume.gain.exponentialRampToValueAtTime(0.045, t + duracao * 0.6);
+                    volume.gain.exponentialRampToValueAtTime(0.0001, t + duracao);
+                    fonte.connect(filtro);
+                    filtro.connect(volume);
+                    volume.connect(audio.destination);
+                    fonte.start(t);
+                    fonte.stop(t + duracao);
+                    ar = volume;
+                } catch (e) { /* sem som, segue a animacao */ }
+            });
+        }
+
+        function brilho() {
+            tentar(function () {
+                try {
+                    var t = audio.currentTime + 0.02;
+                    if (ar) {  // o sopro sai de cena quando o logo forma
+                        ar.gain.cancelScheduledValues(t);
+                        ar.gain.setValueAtTime(Math.max(ar.gain.value, 0.0001), t);
+                        ar.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+                    }
+                    [[659.25, 0, 0.07], [830.61, 0.09, 0.065], [987.77, 0.18, 0.06], [1318.51, 0.3, 0.04]]
+                        .forEach(function (nota) {
+                            var inicio = t + nota[1];
+                            ["sine", "triangle"].forEach(function (forma, k) {
+                                var osc = audio.createOscillator(), vol = audio.createGain();
+                                osc.type = forma;
+                                osc.frequency.value = nota[0];
+                                var pico = k ? nota[2] * 0.25 : nota[2];  // triangle = um brilho leve por cima
+                                vol.gain.setValueAtTime(0.0001, inicio);
+                                vol.gain.exponentialRampToValueAtTime(pico, inicio + 0.012);
+                                vol.gain.exponentialRampToValueAtTime(0.0001, inicio + 1.1);
+                                osc.connect(vol);
+                                vol.connect(audio.destination);
+                                osc.start(inicio);
+                                osc.stop(inicio + 1.15);
+                            });
+                        });
+                } catch (e) { /* sem som */ }
+            });
+        }
+
+        function liberar() {  // devolve o audio do aparelho quando a abertura acaba
+            if (audio && audio.close) setTimeout(function () { try { audio.close(); } catch (e) { /* ja fechado */ } }, 2500);
+        }
+        return { sopro: sopro, brilho: brilho, liberar: liberar };
+    })();
+
     var encerrada = false;
     function encerrar() {
         if (encerrada) return;
         encerrada = true;
         rodando = false;
         cena.classList.add("abertura-saindo");
+        som.liberar();
         setTimeout(function () {
             cena.remove();
             document.documentElement.classList.remove("com-abertura");
@@ -58,6 +146,7 @@
     if (!ctx || reduzir || aparelhoFraco) {
         // Sem canvas, "reduzir movimento" ou aparelho fraco: logo e nome parados, some quando a pagina fica pronta.
         cena.classList.add("abertura-estatica", "abertura-nomeada");
+        som.brilho();
         var esperar = function () { paginaPronta ? setTimeout(encerrar, 600) : setTimeout(esperar, 50); };
         esperar();
         return;
@@ -307,6 +396,7 @@
         if (!nomeadaEm && t >= T.laser1 && (paginaPronta || t >= T.laser1 + NOME_APOS_LASER)) {
             cena.classList.add("abertura-nomeada");
             nomeadaEm = agora;
+            som.brilho();
         }
         if (nomeadaEm) {
             if (paginaPronta && agora - nomeadaEm >= SEGURA_NOME_MS) {
@@ -321,6 +411,7 @@
         if (encerrada) return;
         ajustar();
         if (paginaPronta) t = T.laser1;  // pagina ja pronta: pula direto pro logo formado
+        else som.sopro(1.8);  // particulas vao se juntar: sopro ate o logo formar
         montarParticulas();
         window.addEventListener("resize", ajustar);
         rodando = true;
