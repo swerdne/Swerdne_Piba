@@ -52,6 +52,40 @@ def test_escalar_alguem_avisa_so_essa_pessoa(logged_in_client, whatsapps, app, d
         assert "Aviso pra pessoa" in resposta.data.decode()
 
 
+def test_atribuicao_em_lote_responde_json_curto_sem_montar_a_tela(logged_in_client, whatsapps, app, db):
+    """O lote da tela da escala manda X-Requested-With: fetch -- a resposta e
+    um JSON curto (antes seguia o redirect e montava a escala inteira a cada
+    pessoa). O aviso sai igual e os flashes ficam pro recarregar do fim."""
+    with app.app_context():
+        _, _, escala, funcao, membro = _cenario(logged_in_client)
+        resposta = logged_in_client.post(f"/escala/funcao/{funcao.id}/adicionar", data={"membro_id": membro.id},
+                                         headers={"X-Requested-With": "fetch"})
+        assert resposta.status_code == 200 and resposta.get_json() == {"ok": True}
+        assert Funcao.objects(id=funcao.id).first().membro_id == membro.id
+        assert [w[1] for w in whatsapps] == ["pibachurch_escalado"]
+        assert "Aviso pra pessoa" in logged_in_client.get(f"/escala/{escala.id}").data.decode()
+
+        invalido = logged_in_client.post(f"/escala/funcao/{funcao.id}/adicionar", data={"membro_id": 999999},
+                                         headers={"X-Requested-With": "fetch"})
+        assert invalido.status_code == 400 and invalido.get_json()["ok"] is False
+
+
+def test_aviso_que_nao_sai_vira_alerta_no_sino_de_quem_escalou(logged_in_client, app, db, monkeypatch):
+    """O aviso roda em segundo plano (a tela nao espera WhatsApp/e-mail/SMS);
+    se nenhum canal funcionar, quem escalou fica sabendo pelo sino."""
+    from app.whatsapp import WhatsappNaoEnviadoError
+
+    def falha(*args, **kwargs):
+        raise WhatsappNaoEnviadoError("recusado")
+    monkeypatch.setattr("app.escala.routes.enviar_whatsapp_template", falha)
+    with app.app_context():
+        _, _, escala, funcao, _ = _cenario(logged_in_client)
+        sem_conta = Membro(comunidade_id=escala.ministerio.comunidade_id, nome="Davi", telefone="11 91234-5678").save()
+        logged_in_client.post(f"/escala/funcao/{funcao.id}/adicionar", data={"membro_id": sem_conta.id})
+        alerta = Notificacao.objects(escala_id=escala.id, tipo="nao_notificado").first()
+        assert alerta is not None and "Davi" in alerta.mensagem and "nao saiu" in alerta.mensagem
+
+
 def test_escala_passada_ou_cancelada_nao_avisa(logged_in_client, whatsapps, app, db):
     with app.app_context():
         _, louvor, _, funcao, membro = _cenario(logged_in_client, dias=-2)

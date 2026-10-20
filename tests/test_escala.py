@@ -1417,7 +1417,8 @@ def test_lider_alterar_status_de_outra_pessoa_nao_notifica_ninguem(logged_in_cli
         logged_in_client.post(
             f"/escala/funcao/{baixo.id}/status", data={"status": "confirmado"}, follow_redirects=True
         )
-        assert Notificacao.objects.count() == 0
+        # (o alerta "aviso de escala nao enviado" do escalar -- sem e-mail/SMS em teste -- nao conta aqui)
+        assert Notificacao.objects(tipo__ne="nao_notificado").count() == 0
 
 
 def test_lider_aprova_troca_reatribui_funcao_e_notifica_solicitante(logged_in_client, outro_logged_in_client, app, db):

@@ -919,7 +919,7 @@
             </span>
             <button type="button" id="atribuicao-confirmar"
                     class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-full transition shrink-0">
-                <i class="fa-solid fa-check mr-1"></i><span id="atribuicao-confirmar-texto">Confirmar atribuicoes</span>
+                <i id="atribuicao-confirmar-icone" class="fa-solid fa-check mr-1"></i><span id="atribuicao-confirmar-texto">Confirmar atribuicoes</span>
             </button>
         </div>
         {% endif %}
@@ -1055,7 +1055,8 @@
             return fetch(url, {
                 method: 'POST',
                 credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                // X-Requested-With: o servidor responde JSON curto (sem montar a tela).
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' },
                 body: 'csrf_token=' + encodeURIComponent(csrf) + '&membro_id=' + encodeURIComponent(membroId),
             }).then(function (resposta) { return resposta.ok; }).catch(function () { return false; });
         }
@@ -1076,6 +1077,12 @@
                 var total = selecionados.length;
                 var falhas = 0;
                 botaoConfirmar.disabled = true;
+                botaoConfirmar.setAttribute('aria-busy', 'true');
+                // Indicador de carregamento: spinner no botao e escolhas travadas
+                // ate terminar (sem clique duplo nem trocar pessoa no meio).
+                var icone = document.getElementById('atribuicao-confirmar-icone');
+                if (icone) icone.className = 'fa-solid fa-spinner fa-spin mr-1';
+                itens.forEach(function (select) { select.disabled = true; });
 
                 function processar(indice) {
                     if (indice >= total) {
@@ -1085,6 +1092,7 @@
                                 'O que deu certo ja foi salvo -- confira a lista e tente de novo com o restante.'
                             );
                         }
+                        if (textoConfirmar) textoConfirmar.textContent = 'Atualizando a escala...';
                         window.location.reload();
                         return;
                     }

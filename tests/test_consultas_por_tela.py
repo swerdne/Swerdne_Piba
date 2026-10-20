@@ -152,3 +152,19 @@ def test_consultas_ao_confirmar_presenca(logged_in_client, app, igreja):
         logged_in_client.post(f"/escala/funcao/{igreja['funcao'].id}/status", data={"status": "confirmado"})
     print(f"\n[consultas] confirmar presenca (POST): {contagem['n']}")
     assert contagem["n"] <= 40
+
+
+def test_consultas_ao_escalar_em_lote(logged_in_client, app, igreja):
+    """Escalar 1 pessoa pelo lote da tela da escala: resposta JSON curta e o
+    aviso (WhatsApp/e-mail/SMS) em segundo plano. Antes o fetch seguia o
+    redirect e montava a tela da escala inteira a cada pessoa."""
+    funcao = Funcao.objects(escala_id=igreja["escala"].id, membro_id__ne=igreja["funcao"].membro_id).first()
+    url = f"/escala/funcao/{funcao.id}/adicionar"
+    with sessao_isolada(app), contar_consultas() as antes:
+        logged_in_client.post(url, data={"membro_id": igreja["pessoa"].id}, follow_redirects=True)
+    with sessao_isolada(app), contar_consultas() as agora:
+        resposta = logged_in_client.post(url, data={"membro_id": igreja["pessoa"].id},
+                                         headers={"X-Requested-With": "fetch"})
+    print(f"\nescalar 1 pessoa: {antes['n']} consultas com o redirect (jeito antigo), {agora['n']} so o JSON (lote)")
+    assert resposta.get_json() == {"ok": True}
+    assert agora["n"] <= 25 and agora["n"] < antes["n"]

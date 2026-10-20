@@ -116,30 +116,11 @@ def baixar_audio(mensagem):
 
 
 def _em_segundo_plano(funcao, *args):
-    """Roda `funcao(*args)` sem atrasar a resposta do webhook (a Meta
-    reenvia se demorar). Em teste roda na hora.
+    """Sem atrasar a resposta do webhook (a Meta reenvia se demorar) -- ver
+    app/segundo_plano.py."""
+    from app.segundo_plano import em_segundo_plano
 
-    Com um request de mentira apontando pro URL_PUBLICA (nao so app
-    context): as respostas montam links com url_for (ex: folhas de cifra do
-    repertorio), que fora de um request quebrava -- o audio era transcrito
-    e ficava sem resposta. Mesmo contexto na hora e em thread, pra o teste
-    pegar isso."""
-    import threading
-
-    app = current_app._get_current_object()
-    base = app.config.get("URL_PUBLICA") or "http://localhost"
-
-    def trabalho():
-        with app.test_request_context("/", base_url=base):
-            try:
-                funcao(*args)
-            except Exception:
-                app.logger.exception("Tarefa do WhatsApp em segundo plano falhou")
-
-    if app.testing:
-        trabalho()
-    else:
-        threading.Thread(target=trabalho, daemon=True).start()
+    em_segundo_plano(funcao, *args, rotulo="Tarefa do WhatsApp em segundo plano")
 
 
 def _baixar_audio_por_id(mensagem_id):

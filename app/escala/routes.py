@@ -615,28 +615,37 @@ def excluir_item_repertorio(item_id):
 @login_required
 def adicionar_membro(funcao_id):
     funcao = _funcao_do_usuario_ou_404(funcao_id)
+    # Atribuicao em lote da tela da escala (fetch, X-Requested-With: fetch):
+    # responde JSON curto em vez de redirecionar -- o fetch seguia o redirect
+    # e montava a tela inteira da escala a cada pessoa, so pra descartar. Os
+    # flashes ficam guardados e aparecem no recarregar do fim do lote.
+    via_fetch = request.headers.get("X-Requested-With") == "fetch"
+
+    def falhou(mensagem, destino):
+        flash(mensagem, "danger")
+        if via_fetch:
+            return jsonify(ok=False, erro=mensagem), 400
+        return redirect(destino)
+
     comunidade_id = funcao.escala.ministerio.comunidade_id
     diretorio = list(diretorio_da_comunidade(comunidade_id))
 
     if not diretorio:
-        flash(
-            "O diretorio da comunidade ainda nao tem ninguem cadastrado.",
-            "danger",
-        )
-        return redirect(url_for("comunidade.membros", comunidade_id=comunidade_id))
+        return falhou("O diretorio da comunidade ainda nao tem ninguem cadastrado.",
+                      url_for("comunidade.membros", comunidade_id=comunidade_id))
 
     form = SelecionarMembroForm()
     form.membro_id.choices = [(m.id, m.nome) for m in diretorio]
 
     if not form.validate_on_submit():
         erros = [erro for lista in form.errors.values() for erro in lista]
-        flash(erros[0] if erros else "Nao foi possivel adicionar o membro.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
+        return falhou(erros[0] if erros else "Nao foi possivel adicionar o membro.",
+                      url_for("escala.detalhe", escala_id=funcao.escala_id))
 
     membro = Membro.objects(id=form.membro_id.data, comunidade_id=comunidade_id).first()
     if membro is None:
-        flash("Pessoa invalida para esta comunidade.", "danger")
-        return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
+        return falhou("Pessoa invalida para esta comunidade.",
+                      url_for("escala.detalhe", escala_id=funcao.escala_id))
 
     avisos_conflito = _avisos_conflito_horario(membro, funcao.escala, funcao_atual_id=funcao.id)
 
@@ -652,6 +661,8 @@ def adicionar_membro(funcao_id):
     for aviso in avisos_conflito:
         flash(aviso, "warning")
     _avisar_recem_escalado(funcao)
+    if via_fetch:
+        return jsonify(ok=True)
     return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
 
@@ -1587,9 +1598,37 @@ def _avisar_recem_escalado(funcao):
     hoje = (datetime.now(timezone.utc) - timedelta(hours=3)).date()
     if escala.cancelada or (escala.data and escala.data < hoje):
         return
+    # Envio em segundo plano: WhatsApp/e-mail/SMS levavam ~1-2 s por pessoa
+    # esperando cada servico responder, e escalar varias pessoas em lote
+    # ficava travado "Escalando 1 de 5..." por muito tempo. A tela responde
+    # na hora; se nenhum canal funcionar, quem escalou recebe um alerta no
+    # sino (antes era um flash, que agora nao da pra mostrar).
+    from app.segundo_plano import em_segundo_plano
+
+    em_segundo_plano(_enviar_aviso_recem_escalado, funcao.id, current_user.id,
+                     rotulo="Aviso ao escalar")
+    flash("Aviso pra pessoa sendo enviado (WhatsApp, e-mail e SMS). Se nao der certo, "
+          "voce recebe um alerta no sino.", "info")
+
+
+def _enviar_aviso_recem_escalado(funcao_id, usuario_id):
+    """Parte lenta de _avisar_recem_escalado (roda em segundo plano). Busca
+    tudo de novo pelo id: a pessoa pode ter sido trocada nesse meio tempo."""
+    funcao = Funcao.objects(id=funcao_id).first()
+    if funcao is None or funcao.membro_id is None:
+        return
+    escala = funcao.escala
     texto, houve_sucesso = _resumo_do_envio(enviar_notificacoes_da_escala(escala, funcoes=[funcao]))
-    flash(("Aviso pra pessoa: " if houve_sucesso else "Aviso pra pessoa nao enviado: ") + texto,
-          "success" if houve_sucesso else "warning")
+    nome = funcao.membro.nome if funcao.membro else "a pessoa"
+    current_app.logger.info("Aviso ao escalar %s (%s, escala %s): %s", nome, funcao.nome, escala.id, texto)
+    if not houve_sucesso:
+        Notificacao(
+            usuario_id=usuario_id,
+            titulo="Aviso de escala nao enviado",
+            mensagem=f"{nome} foi escalado(a) em {funcao.nome} ({escala.nome}), mas o aviso nao saiu: {texto}",
+            escala_id=escala.id,
+            tipo="nao_notificado",
+        ).save()
 
 
 @bp.route("/<int:escala_id>/excluir", methods=["POST"])
