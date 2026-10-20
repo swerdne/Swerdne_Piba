@@ -161,6 +161,8 @@ def create_app(config_name="default"):
 
     from .escala.checkin import hora_local
     app.add_template_filter(hora_local, "hora_local")
+    from .whatsapp_recebidas import texto_whatsapp_em_html
+    app.add_template_filter(texto_whatsapp_em_html, "whatsapp")
 
     @app.context_processor
     def injetar_tema():

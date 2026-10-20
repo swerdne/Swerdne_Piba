@@ -58,10 +58,13 @@ class MensagemWhatsapp(SequentialIdDocument):
     # "confirmado" / "troca_solicitada" quando a mensagem mudou status de escala.
     acao = mongoengine.StringField(max_length=20)
     escala_id = mongoengine.IntField()
-    # Audio recebido (msg.type == "audio", inclusive mensagem de voz): o id da
-    # midia na Meta -- o arquivo fica em AudioWhatsapp (ver baixar_audio).
+    # Midia recebida (audio, foto, figurinha, video, documento): o id na Meta
+    # -- o arquivo fica em MidiaWhatsapp (ver baixar_midia_da_mensagem).
+    # media_tipo vazio em mensagem antiga = audio (era o unico tipo guardado).
     media_id = mongoengine.StringField(max_length=200)
     media_mime = mongoengine.StringField(max_length=100)
+    media_tipo = mongoengine.StringField(max_length=20)
+    media_nome = mongoengine.StringField(max_length=240)  # nome do documento enviado
     # O que o audio dizia (app/transcricao.py), quando a transcricao esta ligada.
     transcricao = mongoengine.StringField()
     # O que aconteceu na transcricao (diagnostico, lido pelo banco/caixa de
@@ -70,18 +73,28 @@ class MensagemWhatsapp(SequentialIdDocument):
     status_transcricao = mongoengine.StringField(max_length=400)
 
     @property
+    def tipo_midia(self):
+        """"audio"/"image"/"sticker"/"video"/"document" ou None (sem midia)."""
+        if not self.media_id:
+            return None
+        return self.media_tipo or "audio"
+
+    @property
     def eh_audio(self):
-        return bool(self.media_id)
+        return self.tipo_midia == "audio"
     enviada_por_usuario_id = mongoengine.IntField()  # resposta escrita na caixa de entrada
     lida = mongoengine.BooleanField(default=False)
     criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
 
 
-class AudioWhatsapp(SequentialIdDocument):
-    """O arquivo de um audio recebido, separado da mensagem pra lista da
-    caixa de entrada nao carregar os bytes. Baixado da Meta logo que chega
-    (em segundo plano, ver baixar_audio) ou na hora de tocar, se ainda nao."""
+class MidiaWhatsapp(SequentialIdDocument):
+    """O arquivo de uma midia recebida (audio, foto, figurinha, video,
+    documento), separado da mensagem pra lista da caixa de entrada nao
+    carregar os bytes. Baixado da Meta logo que chega (em segundo plano --
+    a URL da Meta vale poucos minutos) ou na hora de abrir, se ainda nao.
+    A collection continua "audios_whatsapp": comecou so com audio, e os
+    arquivos ja guardados seguem valendo."""
     meta = {"collection": "audios_whatsapp", "indexes": [{"fields": ["mensagem_id"], "unique": True}]}
     _nome_sequencia = "audios_whatsapp"
 
@@ -91,28 +104,34 @@ class AudioWhatsapp(SequentialIdDocument):
     baixado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
 
-def baixar_audio(mensagem):
-    """AudioWhatsapp da mensagem: o guardado ou, sem ele, baixado da Meta
-    agora (e guardado). None se nao der (sem config, midia expirada...) --
-    o motivo vai pro log."""
+AudioWhatsapp = MidiaWhatsapp  # nome antigo (so tinha audio)
+
+
+def baixar_midia_da_mensagem(mensagem):
+    """MidiaWhatsapp da mensagem: a guardada ou, sem ela, baixada da Meta
+    agora (e guardada). None se nao der (sem config, midia expirada, maior
+    que o limite...) -- o motivo vai pro log."""
     from app.whatsapp import WhatsappNaoEnviadoError, baixar_midia
 
     if not mensagem.media_id:
         return None
-    guardado = AudioWhatsapp.objects(mensagem_id=mensagem.id).first()
+    guardado = MidiaWhatsapp.objects(mensagem_id=mensagem.id).first()
     if guardado is not None:
         return guardado
     try:
         conteudo, mime = baixar_midia(mensagem.media_id)
     except WhatsappNaoEnviadoError as erro:
-        current_app.logger.warning("Audio do WhatsApp %s nao baixado: %s", mensagem.id, erro)
+        current_app.logger.warning("Midia do WhatsApp %s nao baixada: %s", mensagem.id, erro)
         return None
-    audio = AudioWhatsapp(mensagem_id=mensagem.id, mime=mime or mensagem.media_mime, conteudo=conteudo)
+    midia = MidiaWhatsapp(mensagem_id=mensagem.id, mime=mime or mensagem.media_mime, conteudo=conteudo)
     try:
-        audio.save()
+        midia.save()
     except mongoengine.NotUniqueError:  # dois downloads ao mesmo tempo: vale o primeiro
-        return AudioWhatsapp.objects(mensagem_id=mensagem.id).first()
-    return audio
+        return MidiaWhatsapp.objects(mensagem_id=mensagem.id).first()
+    return midia
+
+
+baixar_audio = baixar_midia_da_mensagem  # nome antigo
 
 
 def _em_segundo_plano(funcao, *args):
@@ -126,7 +145,7 @@ def _em_segundo_plano(funcao, *args):
 def _baixar_audio_por_id(mensagem_id):
     registro = MensagemWhatsapp.objects(id=mensagem_id).first()
     if registro is not None:
-        baixar_audio(registro)
+        baixar_midia_da_mensagem(registro)
 
 
 # --- Telefone ----------------------------------------------------------------
@@ -639,7 +658,59 @@ def _texto_da_mensagem(msg):
         return (msg.get("reaction") or {}).get("emoji", "")
     if tipo == "audio":
         return "🎤 Mensagem de voz" if (msg.get("audio") or {}).get("voice") else "🎤 Áudio"
+    if tipo in ("image", "video", "document", "sticker"):
+        dados = msg.get(tipo) or {}
+        rotulo = {"image": "📷 Foto", "video": "🎬 Vídeo", "sticker": "😀 Figurinha",
+                  "document": "📄 " + (dados.get("filename") or "Documento")}[tipo]
+        legenda = (dados.get("caption") or "").strip()
+        return f"{rotulo} · {legenda}" if legenda else rotulo
+    if tipo == "location":
+        lugar = msg.get("location") or {}
+        nome = " — ".join(p for p in (lugar.get("name"), lugar.get("address")) if p)
+        link = ""
+        if lugar.get("latitude") is not None and lugar.get("longitude") is not None:
+            link = f"\nhttps://maps.google.com/?q={lugar['latitude']},{lugar['longitude']}"
+        return f"📍 Localização{': ' + nome if nome else ''}{link}"
+    if tipo == "contacts":
+        partes = []
+        for contato in msg.get("contacts") or []:
+            nome = (contato.get("name") or {}).get("formatted_name") or "Contato"
+            fones = ", ".join(f.get("phone", "") for f in contato.get("phones") or [] if f.get("phone"))
+            partes.append(f"{nome}{' — ' + fones if fones else ''}")
+        return "👤 Contato: " + ("; ".join(partes) or "sem dados")
     return f"[{tipo or 'mensagem'} -- abra no WhatsApp pra ver]"
+
+
+_LINK = re.compile(r"https?://[^\s<]+")
+# Formatacao do WhatsApp: *negrito*, _italico_, ~riscado~ (o marcador tem que
+# encostar no texto, como no app).
+_FORMATOS = (
+    (re.compile(r"(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])"), r"<strong>\1</strong>"),
+    (re.compile(r"(?<![\w_])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w_])"), r"<em>\1</em>"),
+    (re.compile(r"(?<![\w~])~(?!\s)([^~\n]+?)(?<!\s)~(?![\w~])"), r"<s>\1</s>"),
+)
+
+
+def texto_whatsapp_em_html(texto):
+    """Mensagem do WhatsApp pra mostrar na caixa de entrada: escapa tudo e
+    so entao aplica a formatacao do WhatsApp e deixa os links clicaveis --
+    sem isso aparecia "*Presenca confirmada!*" cru nos baloes. Links saem
+    antes (viram marcador) pra um "_" dentro de URL nao virar italico."""
+    from markupsafe import Markup, escape
+
+    links = []
+
+    def guardar(achado):
+        links.append(achado.group(0))
+        return f"\x00{len(links) - 1}\x00"
+
+    seguro = _LINK.sub(guardar, str(escape(texto or "")))
+    for padrao, troca in _FORMATOS:
+        seguro = padrao.sub(troca, seguro)
+    seguro = re.sub(r"\x00(\d+)\x00", lambda a: (
+        f'<a href="{links[int(a.group(1))]}" target="_blank" rel="noopener" class="underline break-all">'
+        f'{links[int(a.group(1))]}</a>'), seguro)
+    return Markup(seguro)
 
 
 def registrar_enviada(telefone, texto, comunidade_ids, membro_ids=(), usuario_id=None, acao=None):
@@ -776,6 +847,10 @@ def _tratar_botao(registro, telefone, id_botao, texto, membros, comunidade_ids):
     return registro
 
 
+# Tipos de mensagem com arquivo (o id vem em msg[tipo]["id"]).
+TIPOS_MIDIA = ("audio", "image", "video", "document", "sticker")
+
+
 def processar_mensagem(msg, nomes_perfil):
     telefone = (msg.get("from") or "").lstrip("+")
     wamid = msg.get("id")
@@ -792,11 +867,14 @@ def processar_mensagem(msg, nomes_perfil):
         "WhatsApp recebido de %s (tipo %s): %d membro(s) com esse telefone, comunidade(s) %s.",
         _mascarar(telefone), msg.get("type"), len(membros), comunidade_ids or "nenhuma",
     )
-    audio = (msg.get("audio") or {}) if msg.get("type") == "audio" else {}
+    tipo_msg = msg.get("type")
+    midia = (msg.get(tipo_msg) or {}) if tipo_msg in TIPOS_MIDIA else {}
     registro = MensagemWhatsapp(
         wamid=wamid, direcao=RECEBIDA, telefone=telefone, nome_perfil=nomes_perfil.get(telefone),
         texto=texto, membro_ids=[m.id for m in membros], comunidade_ids=comunidade_ids,
-        media_id=str(audio.get("id") or "")[:200] or None, media_mime=str(audio.get("mime_type") or "")[:100] or None,
+        media_id=str(midia.get("id") or "")[:200] or None, media_mime=str(midia.get("mime_type") or "")[:100] or None,
+        media_tipo=tipo_msg if midia.get("id") else None,
+        media_nome=str(midia.get("filename") or "")[:240] or None,
     )
     try:
         registro.save()
@@ -816,6 +894,19 @@ def processar_mensagem(msg, nomes_perfil):
         tratado = _tratar_botao(registro, telefone, id_botao, texto, membros, comunidade_ids)
         if tratado is not None:
             return tratado
+
+    if registro.media_id and not registro.eh_audio:
+        # Foto/figurinha/video/documento: guarda o arquivo ja (a URL da Meta
+        # expira) pra lideranca ver na caixa de entrada. Com legenda, a legenda
+        # passa pelo roteador como texto (foto + "nao posso" vale); sem
+        # legenda nao ha resposta automatica -- fica nao lida pra lideranca.
+        _em_segundo_plano(_baixar_audio_por_id, registro.id)
+        legenda = (midia.get("caption") or "").strip()
+        if legenda:
+            return _tratar_texto(registro, telefone, legenda, membros, comunidade_ids)
+        current_app.logger.info("WhatsApp de %s: %s sem legenda, foi pra caixa de entrada.",
+                                _mascarar(telefone), registro.media_tipo)
+        return registro
 
     if registro.media_id:
         from app.transcricao import transcricao_ligada

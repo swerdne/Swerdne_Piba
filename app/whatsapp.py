@@ -167,7 +167,9 @@ def enviar_whatsapp_interativo(destinatario, corpo, botoes=None, lista=None, rod
     })
 
 
-MAX_MIDIA_BYTES = 16 * 1024 * 1024  # limite de audio do proprio WhatsApp
+# 15 MB: o arquivo vai inteiro num documento do Mongo (limite 16 MB). Video
+# maior que isso fica so no WhatsApp (a caixa de entrada avisa).
+MAX_MIDIA_BYTES = 15 * 1024 * 1024
 
 
 def baixar_midia(media_id):

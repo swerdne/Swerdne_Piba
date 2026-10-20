@@ -277,9 +277,18 @@ def whatsapp(comunidade_id, telefone=None):
             MensagemWhatsapp.objects(comunidade_ids=comunidade.id, telefone=telefone).order_by("criada_em")
         )
         conversa["pode_responder"] = pode_responder_livre(conversa["mensagens"])
+        # Nome de quem respondeu pelo site (balao "enviada por Fulano").
+        from app.auth.models import User
+
+        ids_autores = {m.enviada_por_usuario_id for m in conversa["mensagens"] if m.enviada_por_usuario_id}
+        conversa["autores"] = {u.id: (u.name or u.username or u.email).split()[0]
+                               for u in User.objects(id__in=list(ids_autores)).only("id", "name", "username", "email")}
+
+    from app.fuso import hoje_brasilia
 
     return render_template(
         "comunidade/whatsapp.html",
+        hoje=hoje_brasilia(),
         comunidade=comunidade,
         conversas=conversas,
         conversa=conversa,
@@ -291,28 +300,42 @@ def whatsapp(comunidade_id, telefone=None):
     )
 
 
-@bp.route("/<int:comunidade_id>/whatsapp/audio/<int:mensagem_id>")
-@login_required
-def whatsapp_audio(comunidade_id, mensagem_id):
-    """Toca o audio recebido na caixa de entrada (so admin da comunidade da
-    conversa): o arquivo guardado ou, se ainda nao baixou, direto da Meta."""
-    import io
-
-    from flask import send_file
-
-    from app.whatsapp_recebidas import RECEBIDA, MensagemWhatsapp, baixar_audio
+def _entregar_midia_whatsapp(comunidade_id, mensagem_id):
+    """Midia recebida na caixa de entrada (so admin da comunidade da
+    conversa): o arquivo guardado ou, se ainda nao baixou, direto da Meta.
+    ?baixar=1 = download. Com Range (app/arquivos.py), pro iPhone tocar."""
+    from app.arquivos import resposta_de_arquivo
+    from app.whatsapp_recebidas import RECEBIDA, MensagemWhatsapp, baixar_midia_da_mensagem
 
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
     mensagem = primeiro_ou_404(MensagemWhatsapp.objects(
         id=mensagem_id, comunidade_ids=comunidade.id, direcao=RECEBIDA, media_id__ne=None,
     ))
-    audio = baixar_audio(mensagem)
-    if audio is None:
-        return "Áudio indisponível (a Meta não entregou o arquivo). Ouça direto no WhatsApp.", 404
-    resposta = send_file(io.BytesIO(audio.conteudo), mimetype=audio.mime or "audio/ogg",
-                         download_name=f"audio-whatsapp-{mensagem.id}.ogg", conditional=True)
+    midia = baixar_midia_da_mensagem(mensagem)
+    if midia is None:
+        verbo = "Ouça" if mensagem.eh_audio else "Veja"
+        return (f"Arquivo indisponível (a Meta não entregou, ou passou de 15 MB). {verbo} direto no WhatsApp.", 404)
+    mime = midia.mime or mensagem.media_mime or ("audio/ogg" if mensagem.eh_audio else "application/octet-stream")
+    extensao = {"audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "image/jpeg": "jpg", "image/png": "png",
+                "image/webp": "webp", "video/mp4": "mp4", "video/3gpp": "3gp", "application/pdf": "pdf"}.get(mime, "bin")
+    nome = mensagem.media_nome or f"whatsapp-{mensagem.tipo_midia}-{mensagem.id}.{extensao}"
+    resposta = resposta_de_arquivo(midia.conteudo, mime, nome, baixar=bool(request.args.get("baixar")))
     resposta.headers["Cache-Control"] = "private, max-age=86400"
     return resposta
+
+
+@bp.route("/<int:comunidade_id>/whatsapp/audio/<int:mensagem_id>")
+@login_required
+def whatsapp_audio(comunidade_id, mensagem_id):
+    """Audio da caixa de entrada (endereco antigo, continua valendo)."""
+    return _entregar_midia_whatsapp(comunidade_id, mensagem_id)
+
+
+@bp.route("/<int:comunidade_id>/whatsapp/midia/<int:mensagem_id>")
+@login_required
+def whatsapp_midia(comunidade_id, mensagem_id):
+    """Foto, figurinha, video ou documento da caixa de entrada."""
+    return _entregar_midia_whatsapp(comunidade_id, mensagem_id)
 
 
 @bp.route("/<int:comunidade_id>/estatisticas")

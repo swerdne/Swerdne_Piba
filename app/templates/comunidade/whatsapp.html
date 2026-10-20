@@ -1,18 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Mensagens do WhatsApp{% endblock %}
+{% block title %}{{ conversa.nome ~ ' · ' if conversa else '' }}Mensagens do WhatsApp{% endblock %}
 
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
     #whatsapp-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-    .balao { max-width: 85%; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .wa-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+    /* Campo de resposta cresce com o texto (ate ~5 linhas). */
+    .wa-campo { field-sizing: content; min-height: 2.75rem; max-height: 9rem; }
 </style>
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior with context %}
-{% set CAMPO = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
-{% macro hora(momento) %}{{ (momento - timedelta_brasilia).strftime('%d/%m %H:%M') if momento else '' }}{% endmacro %}
+{# Hora/dia em Brasilia (o Mongo devolve UTC sem fuso). #}
+{% macro hora(momento) %}{{ (momento - timedelta_brasilia).strftime('%H:%M') if momento else '' }}{% endmacro %}
+{% macro dia_rotulo(dia) %}{% if dia == hoje %}Hoje{% elif (hoje - dia).days == 1 %}Ontem{% elif (hoje - dia).days < 7 %}{{ ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'][dia.weekday()] }}{% else %}{{ dia.strftime('%d/%m/%Y') }}{% endif %}{% endmacro %}
+{% macro quando_lista(momento) %}{% if momento %}{% set local = momento - timedelta_brasilia %}{{ local.strftime('%H:%M') if local.date() == hoje else ('Ontem' if (hoje - local.date()).days == 1 else local.strftime('%d/%m')) }}{% endif %}{% endmacro %}
+{% macro iniciais(nome) %}{% set partes = (nome or '?').replace('+', '').split() %}{{ (partes[0][:1] ~ (partes[-1][:1] if partes|length > 1 else '')).upper() }}{% endmacro %}
+
 {% block content %}
 <div id="whatsapp-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -22,125 +28,258 @@
     <div class="relative z-10">
     <div class="h-1 {{ tema.accent_bg }}"></div>
 
-    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3 min-w-0">
-            <a href="{{ url_for('comunidade.whatsapp', comunidade_id=comunidade.id) if conversa else url_for('comunidade.detalhe', comunidade_id=comunidade.id) }}"
-               class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
-                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
-            </a>
-            <div class="min-w-0">
-                <p class="text-xs {{ tema.text_secondary }} truncate">{{ comunidade.nome }}</p>
-                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">
-                    {{ conversa.nome if conversa else 'Mensagens do WhatsApp' }}
-                </h1>
-            </div>
+    {% if conversa %}
+    {# ================= Uma conversa ================= #}
+    <header class="sticky top-0 z-20 {{ tema.page_bg }} border-b {{ tema.card_border }} px-4 sm:px-6 py-2.5 flex items-center gap-3">
+        <a href="{{ url_for('comunidade.whatsapp', comunidade_id=comunidade.id) }}"
+           class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar para as conversas">
+            <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+        </a>
+        <div class="w-10 h-10 rounded-full {{ tema.accent_bg }} text-white flex items-center justify-center text-sm font-bold shrink-0" aria-hidden="true">
+            {{ iniciais(conversa.nome) }}
         </div>
-        {{ logo_inicio(tema) }}
+        <div class="flex-1 min-w-0">
+            <h1 class="font-bold text-base {{ tema.text_primary }} leading-tight truncate">{{ conversa.nome }}</h1>
+            <p class="text-xs {{ tema.text_secondary }} truncate">
+                +{{ conversa.telefone }}{% if conversa.nome_perfil and conversa.nome_perfil != conversa.nome %} · {{ conversa.nome_perfil }}{% endif %}
+            </p>
+        </div>
+        <a href="https://wa.me/{{ conversa.telefone }}" target="_blank" rel="noopener"
+           class="w-9 h-9 rounded-full flex items-center justify-center bg-emerald-500/15 text-emerald-500 shrink-0" title="Abrir no WhatsApp" aria-label="Abrir conversa no WhatsApp">
+            <i class="fa-brands fa-whatsapp text-lg"></i>
+        </a>
     </header>
 
-    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-4">
-        {% if conversa %}
-        <!-- ===== Uma conversa ===== -->
-        <p class="text-xs {{ tema.text_secondary }}">
-            +{{ conversa.telefone }}{% if conversa.nome_perfil and conversa.nome_perfil != conversa.nome %} · no WhatsApp: {{ conversa.nome_perfil }}{% endif %}
-        </p>
-        <div class="space-y-2">
+    <main class="px-3 sm:px-6 pt-4 pb-6 max-w-2xl mx-auto">
+        <div id="wa-mensagens" class="flex flex-col">
+            {% set ns = namespace(dia=None, anterior=None) %}
             {% for m in conversa.mensagens %}
-            {% if m.direcao == 'enviada' %}
-            <div class="flex justify-end">
-                <div class="balao {{ tema.accent_bg }} text-white rounded-2xl px-3.5 py-2 text-sm shadow-sm">
-                    {{ m.texto }}
-                    <p class="text-[10px] opacity-75 mt-1 text-right">
-                        {{ 'Resposta automática' if not m.enviada_por_usuario_id else 'Enviada pelo site' }} · {{ hora(m.criada_em) }}
-                    </p>
-                </div>
+            {% set local = m.criada_em - timedelta_brasilia %}
+            {% if local.date() != ns.dia %}
+            {% set ns.dia = local.date() %}{% set ns.anterior = None %}
+            <div class="flex justify-center my-3">
+                <span class="text-[11px] font-semibold {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-full px-3 py-1 shadow-sm">{{ dia_rotulo(ns.dia) }}</span>
             </div>
-            {% else %}
-            <div class="flex justify-start">
-                <div class="balao {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-3.5 py-2 text-sm shadow-sm">
-                    {% if m.eh_audio %}
-                    {% set url_audio = url_for('comunidade.whatsapp_audio', comunidade_id=comunidade.id, mensagem_id=m.id) %}
-                    <p class="text-xs font-semibold {{ tema.text_secondary }} mb-1.5">{{ m.texto }}</p>
-                    <audio controls preload="none" src="{{ url_audio }}" class="w-64 h-10" style="max-width: 100%"></audio>
-                    <a href="{{ url_audio }}" download class="block text-[11px] font-semibold {{ tema.accent_text }} hover:underline mt-1">
-                        <i class="fa-solid fa-download mr-1"></i>Baixar áudio (se não tocar aqui)
+            {% endif %}
+            {# Mensagens seguidas do mesmo lado (ate 5 min) ficam juntinhas. #}
+            {% set seguida = ns.anterior and ns.anterior.direcao == m.direcao and (m.criada_em - ns.anterior.criada_em).total_seconds() < 300 %}
+            {% set ns.anterior = m %}
+            {% set enviada = m.direcao == 'enviada' %}
+            {% set tipo = m.tipo_midia %}
+            {% set legenda = m.texto.split(' · ', 1)[1] if tipo in ('image', 'video', 'document', 'sticker') and m.texto and ' · ' in m.texto else '' %}
+            {% set url_midia = (url_for('comunidade.whatsapp_audio', comunidade_id=comunidade.id, mensagem_id=m.id) if tipo == 'audio' else url_for('comunidade.whatsapp_midia', comunidade_id=comunidade.id, mensagem_id=m.id)) if tipo else '' %}
+
+            <div class="flex {{ 'justify-end' if enviada else 'justify-start' }} {{ 'mt-0.5' if seguida else 'mt-2.5' }}">
+            {% if tipo == 'sticker' %}
+                {# Figurinha: sem balao, como no WhatsApp. #}
+                <div class="flex flex-col items-start">
+                    <a href="{{ url_midia }}" target="_blank" rel="noopener" aria-label="Abrir figurinha">
+                        <img src="{{ url_midia }}" alt="Figurinha" loading="lazy" decoding="async" class="w-32 h-32 object-contain drop-shadow">
                     </a>
+                    <span class="text-[10px] {{ tema.text_secondary }} mt-0.5 ml-1">{{ hora(m.criada_em) }}</span>
+                </div>
+            {% else %}
+                <div class="max-w-[82%] sm:max-w-[70%] shadow-sm px-3 py-2 text-sm
+                            {% if enviada %}{{ tema.accent_bg }} text-white rounded-2xl {{ 'rounded-tr-md' if seguida else 'rounded-br-md' }}
+                            {% else %}{{ tema.card_bg }} border {{ tema.card_border }} {{ tema.text_primary }} rounded-2xl {{ 'rounded-tl-md' if seguida else 'rounded-bl-md' }}{% endif %}">
+
+                    {% if enviada and not seguida %}
+                    <p class="text-[10px] font-semibold uppercase tracking-wide opacity-80 mb-0.5">
+                        {% if m.enviada_por_usuario_id %}<i class="fa-solid fa-user mr-1"></i>{{ conversa.autores.get(m.enviada_por_usuario_id, 'Liderança') }}{% else %}<i class="fa-solid fa-robot mr-1"></i>Resposta automática{% endif %}
+                    </p>
+                    {% endif %}
+
+                    {% if tipo == 'image' %}
+                    <a href="{{ url_midia }}" target="_blank" rel="noopener" class="block -mx-1.5 -mt-0.5 mb-1" aria-label="Abrir foto em tamanho cheio">
+                        <img src="{{ url_midia }}" alt="Foto enviada" loading="lazy" decoding="async"
+                             class="rounded-xl max-h-80 w-full object-cover {{ tema.secondary_bg }}">
+                    </a>
+                    {% if legenda %}<p class="wa-texto">{{ legenda | whatsapp }}</p>{% endif %}
+
+                    {% elif tipo == 'video' %}
+                    <video controls playsinline preload="metadata" src="{{ url_midia }}"
+                           class="rounded-xl max-h-80 w-full -mx-0.5 mb-1 bg-black"></video>
+                    {% if legenda %}<p class="wa-texto">{{ legenda | whatsapp }}</p>{% endif %}
+
+                    {% elif tipo == 'document' %}
+                    {% set eh_pdf = (m.media_mime or '').endswith('pdf') or (m.media_nome or '').lower().endswith('.pdf') %}
+                    <a href="{{ url_midia }}" target="_blank" rel="noopener"
+                       class="flex items-center gap-3 rounded-xl {{ tema.secondary_bg }} px-3 py-2.5 -mx-0.5 mb-1">
+                        <span class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 {{ 'bg-red-500/15 text-red-500' if eh_pdf else tema.accent_soft_bg ~ ' ' ~ tema.accent_text }}">
+                            <i class="fa-solid {{ 'fa-file-pdf' if eh_pdf else 'fa-file-lines' }} text-lg"></i>
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block text-sm font-semibold {{ tema.text_primary }} truncate">{{ m.media_nome or 'Documento' }}</span>
+                            <span class="block text-[11px] {{ tema.text_secondary }}">{{ 'Abrir' if eh_pdf else 'Baixar' }}</span>
+                        </span>
+                    </a>
+                    {% if legenda %}<p class="wa-texto">{{ legenda | whatsapp }}</p>{% endif %}
+
+                    {% elif tipo == 'audio' %}
+                    <p class="text-xs font-semibold {{ tema.text_secondary }} mb-1.5">{{ m.texto }}</p>
+                    <audio controls preload="none" src="{{ url_midia }}" class="w-64 h-10" style="max-width: 100%"></audio>
                     {% if m.transcricao %}
-                    <p class="mt-1.5 text-sm {{ tema.text_primary }}"><span class="text-[11px] font-semibold {{ tema.text_secondary }}">Transcrição:</span> “{{ m.transcricao }}”</p>
+                    <p class="mt-1.5 text-sm"><span class="text-[11px] font-semibold {{ tema.text_secondary }}">Transcrição:</span> “{{ m.transcricao }}”</p>
                     {% elif m.status_transcricao and m.status_transcricao != 'ok' %}
-                    <!-- Por que nao transcreveu (diagnostico pro admin) -->
                     <p class="mt-1.5 text-[11px] {{ tema.text_secondary }}">
                         <i class="fa-solid fa-circle-info mr-1"></i>{{ {'desligada': 'Transcrição desligada (falta AZURE_SPEECH_KEY/REGION no App Service).', 'sem_fala': 'Sem fala que desse para entender.', 'sem_arquivo': 'Não deu para baixar o áudio da Meta.'}.get(m.status_transcricao, 'Transcrição falhou: ' ~ m.status_transcricao[6:]) }}
                     </p>
                     {% endif %}
+
                     {% else %}
-                    {{ m.texto }}
+                    <p class="wa-texto">{{ m.texto | whatsapp }}</p>
                     {% endif %}
-                    {% if m.acao %}
+
+                    {% if tipo %}
+                    <a href="{{ url_midia }}?baixar=1" download
+                       class="inline-flex items-center gap-1 text-[11px] font-semibold mt-1 {{ 'text-white/80' if enviada else tema.accent_text }} hover:underline">
+                        <i class="fa-solid fa-download"></i>Baixar
+                    </a>
+                    {% endif %}
+
+                    {% if m.acao and not enviada %}
                     {% set cor_acao = {'confirmado': 'text-emerald-500', 'troca_solicitada': 'text-red-500'} %}
                     {% set icone_acao = {'confirmado': 'fa-circle-check', 'troca_solicitada': 'fa-rotate'} %}
                     <p class="mt-1.5 text-xs font-semibold {{ cor_acao.get(m.acao, tema.text_secondary) }}">
                         <i class="fa-solid {{ icone_acao.get(m.acao, 'fa-robot') }} mr-1"></i>{{ rotulos_acao.get(m.acao, m.acao) }}
                     </p>
                     {% endif %}
-                    <p class="text-[10px] {{ tema.text_secondary }} mt-1">{{ hora(m.criada_em) }}</p>
+
+                    <p class="text-[10px] mt-1 text-right {{ 'text-white/75' if enviada else tema.text_secondary }}">{{ hora(m.criada_em) }}{% if enviada %} <i class="fa-solid fa-check-double ml-0.5"></i>{% endif %}</p>
                 </div>
-            </div>
             {% endif %}
+            </div>
             {% endfor %}
         </div>
 
+        {# Resposta: fixa embaixo, acima da barra de navegacao. #}
+        <div class="sticky bottom-24 lg:bottom-4 mt-5">
         {% if conversa.pode_responder %}
-        <form method="POST" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl p-3 space-y-2.5">
+        <form method="POST" class="flex items-end gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-lg p-2">
             {{ acao_form.hidden_tag() }}
-            <textarea name="texto" rows="3" required maxlength="4000" placeholder="Escreva a resposta..." class="{{ CAMPO }}"></textarea>
-            <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
-                <i class="fa-solid fa-paper-plane mr-1"></i>Enviar pelo WhatsApp
+            <textarea name="texto" rows="1" required maxlength="4000" placeholder="Escreva a resposta..." aria-label="Resposta"
+                      class="wa-campo flex-1 resize-none bg-transparent px-3 py-2.5 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none"></textarea>
+            <button type="submit" aria-label="Enviar pelo WhatsApp"
+                    class="w-11 h-11 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white flex items-center justify-center shrink-0 transition">
+                <i class="fa-solid fa-paper-plane"></i>
             </button>
         </form>
         {% else %}
-        <p class="text-xs {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3">
+        <p class="text-xs {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 shadow-lg">
             <i class="fa-solid fa-clock mr-1"></i>Já passaram 24h desde a última mensagem dessa pessoa. Pela regra do WhatsApp, só dá para responder em texto livre até 24h depois que ela escreve.
         </p>
         {% endif %}
+        </div>
+    </main>
+    <script>
+        // Abre a conversa ja na mensagem mais recente (como um chat).
+        window.addEventListener('load', function () { window.scrollTo(0, document.body.scrollHeight); });
+    </script>
 
-        {% else %}
-        <!-- ===== Lista de conversas ===== -->
+    {% else %}
+    {# ================= Lista de conversas ================= #}
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) }}"
+               class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0" aria-label="Voltar">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }}"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-xs {{ tema.text_secondary }} truncate">{{ comunidade.nome }}</p>
+                <h1 class="font-extrabold text-lg {{ tema.text_primary }} leading-tight truncate">Mensagens do WhatsApp</h1>
+            </div>
+        </div>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-4 pb-16 max-w-2xl mx-auto space-y-4">
         <p class="text-sm {{ tema.text_secondary }}">
-            Mensagens que chegaram no WhatsApp do projeto de pessoas com o telefone no diretório desta comunidade.
-            Quem responde a um aviso de escala com <span class="font-semibold {{ tema.text_primary }}">"confirmo"</span> ou
-            <span class="font-semibold {{ tema.text_primary }}">"não posso"</span> tem a escala atualizada sozinha.
+            Mensagens de quem tem o telefone no diretório desta comunidade. Quem responde a um aviso com
+            <span class="font-semibold {{ tema.text_primary }}">"confirmo"</span> ou <span class="font-semibold {{ tema.text_primary }}">"não posso"</span>
+            (ou toca nos botões) tem a escala atualizada sozinha — aqui ficam o resto, fotos, áudios e documentos.
         </p>
+
         {% if conversas %}
+        {% set total_nao_lidas = conversas | sum(attribute='nao_lidas') %}
+        <div class="flex items-center gap-2">
+            <label class="flex-1 relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-xs {{ tema.text_secondary }}"></i>
+                <input type="search" data-wa-busca placeholder="Buscar por nome ou número" aria-label="Buscar conversa"
+                       class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-full pl-9 pr-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+            </label>
+            <button type="button" data-wa-filtro aria-pressed="false"
+                    class="shrink-0 text-xs font-semibold rounded-full px-3 py-2 border {{ tema.card_border }} {{ tema.card_bg }} {{ tema.text_secondary }}">
+                Não lidas{% if total_nao_lidas %} ({{ total_nao_lidas }}){% endif %}
+            </button>
+        </div>
+
         <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} overflow-hidden">
             {% for c in conversas %}
+            {% set ultima = c.ultima %}
             <a href="{{ url_for('comunidade.whatsapp', comunidade_id=comunidade.id, telefone=c.telefone) }}"
+               data-wa-conversa data-busca="{{ (c.nome ~ ' ' ~ c.telefone ~ ' ' ~ (c.nome_perfil or ''))|lower }}" data-nao-lida="{{ 1 if c.nao_lidas else 0 }}"
                class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
-                <div class="w-10 h-10 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
-                    <i class="fa-brands fa-whatsapp"></i>
+                <div class="relative w-11 h-11 rounded-full {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center text-sm font-bold shrink-0" aria-hidden="true">
+                    {{ iniciais(c.nome) }}
+                    <span class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2 ring-white/10">
+                        <i class="fa-brands fa-whatsapp text-[9px]"></i>
+                    </span>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ c.nome }}</p>
-                    <p class="text-xs {{ tema.text_secondary }} truncate">
-                        {% if c.ultima.direcao == 'enviada' %}Você: {% endif %}{{ c.ultima.texto }}
-                    </p>
-                </div>
-                <div class="flex flex-col items-end gap-1 shrink-0">
-                    <span class="text-[10px] {{ tema.text_secondary }}">{{ hora(c.ultima.criada_em) }}</span>
-                    {% if c.nao_lidas %}
-                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">{{ c.nao_lidas }}</span>
-                    {% endif %}
+                    <div class="flex items-baseline justify-between gap-2">
+                        <p class="text-sm {{ 'font-bold' if c.nao_lidas else 'font-semibold' }} {{ tema.text_primary }} truncate">{{ c.nome }}</p>
+                        <span class="text-[11px] shrink-0 {{ tema.accent_text ~ ' font-semibold' if c.nao_lidas else tema.text_secondary }}">{{ quando_lista(ultima.criada_em) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 mt-0.5">
+                        <p class="text-xs {{ tema.text_primary if c.nao_lidas else tema.text_secondary }} truncate">
+                            {% if ultima.direcao == 'enviada' %}<i class="fa-solid {{ 'fa-robot' if not ultima.enviada_por_usuario_id else 'fa-reply' }} mr-1 opacity-70"></i>{% endif %}{{ (ultima.texto or '').split('\n')[0] }}
+                        </p>
+                        {% if c.nao_lidas %}
+                        <span class="min-w-5 h-5 px-1.5 rounded-full {{ tema.accent_bg }} text-white text-[11px] font-bold flex items-center justify-center shrink-0">{{ c.nao_lidas }}</span>
+                        {% endif %}
+                    </div>
                 </div>
             </a>
             {% endfor %}
         </div>
+        <p data-wa-vazio hidden class="text-sm text-center {{ tema.text_secondary }}">Nenhuma conversa encontrada.</p>
+        <script>
+            // Busca e filtro "Nao lidas" na propria tela (sem recarregar).
+            (function () {
+                var busca = document.querySelector('[data-wa-busca]');
+                var filtro = document.querySelector('[data-wa-filtro]');
+                var itens = document.querySelectorAll('[data-wa-conversa]');
+                var vazio = document.querySelector('[data-wa-vazio]');
+                var soNaoLidas = false;
+                function aplicar() {
+                    var termo = (busca.value || '').trim().toLowerCase();
+                    var visiveis = 0;
+                    itens.forEach(function (item) {
+                        var ok = (!termo || item.getAttribute('data-busca').indexOf(termo) >= 0)
+                            && (!soNaoLidas || item.getAttribute('data-nao-lida') === '1');
+                        item.hidden = !ok;
+                        if (ok) visiveis++;
+                    });
+                    vazio.hidden = visiveis > 0;
+                }
+                busca.addEventListener('input', aplicar);
+                filtro.addEventListener('click', function () {
+                    soNaoLidas = !soNaoLidas;
+                    filtro.setAttribute('aria-pressed', soNaoLidas ? 'true' : 'false');
+                    filtro.classList.toggle('{{ tema.accent_bg }}', soNaoLidas);
+                    filtro.classList.toggle('text-white', soNaoLidas);
+                    aplicar();
+                });
+            })();
+        </script>
         {% else %}
-        <p class="text-sm {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-4">
-            Nenhuma mensagem ainda.
-        </p>
-        {% endif %}
+        <div class="text-center {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-10">
+            <i class="fa-brands fa-whatsapp text-4xl text-emerald-500"></i>
+            <p class="mt-3 text-sm {{ tema.text_secondary }}">Nenhuma mensagem ainda.</p>
+        </div>
         {% endif %}
     </main>
+    {% endif %}
 
     {{ nav_inferior(tema, 'comunidades') }}
     </div>
