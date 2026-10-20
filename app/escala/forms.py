@@ -169,10 +169,13 @@ class AnexoForm(FlaskForm):
         "Arquivo",
         validators=[
             FileRequired(message="Escolha um arquivo."),
-            FileAllowed(list(TIPOS_ANEXO), "Formatos aceitos: PDF, imagem (JPG/PNG), Word ou texto."),
-            FileSize(max_size=TAMANHO_MAXIMO_ANEXO, message="O arquivo deve ter no maximo 10 MB."),
+            FileAllowed(list(TIPOS_ANEXO), "Formatos aceitos: PDF, imagem (JPG/PNG), Word, texto ou audio "
+                                            "(MP3, M4A, WAV, OGG, WEBM)."),
+            FileSize(max_size=TAMANHO_MAXIMO_ANEXO, message="O arquivo deve ter no maximo 15 MB."),
         ],
     )
+    # Nome pra mostrar (ex: "Guia - Grande e o Senhor"); vazio = nome do arquivo.
+    nome = StringField("Nome (opcional)", validators=[Optional(), Length(max=120)])
     # 0 = toda a equipe; senao, o id da Funcao (choices montadas na rota).
     funcao_id = SelectField("Para quem", coerce=int, validators=[Optional()])
     submit = SubmitField("Anexar")

@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <!-- Verificacao de dominio do Meta Business (WhatsApp Cloud API, ver
     app/whatsapp.py) -- confirma que somos donos de pibaswerdne.me. -->
     <meta name="facebook-domain-verification" content="gtbhl8kn8it0k8sgl1npq55rfib2p6" />
@@ -117,6 +117,10 @@
         @keyframes mini-varre{from{transform:translateX(0)}to{transform:translateX(267%)}}
         @keyframes mini-respira{0%,100%{transform:scale(.96)}50%{transform:scale(1)}}
         @supports not ((-webkit-mask-image:url(x)) or (mask-image:url(x))){ #mini-carregando .mini-brilho{display:none} }
+        .aviso-flutuante{animation:aviso-entra .25s ease-out both;transition:opacity .25s ease,transform .25s ease}
+        .aviso-flutuante.aviso-saindo{opacity:0;transform:translateY(-8px)}
+        @keyframes aviso-entra{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+        @media (prefers-reduced-motion:reduce){ .aviso-flutuante{animation:none} }
         @media (prefers-reduced-motion:reduce){ #mini-carregando.ligado .mini-logo,#mini-carregando.ligado .mini-brilho::before{animation:none} #mini-carregando .mini-brilho{display:none} }
     </style>
     <script>
@@ -144,7 +148,8 @@
     {% block head %}{% endblock %}
 </head>
 {% set eh_pagina_auth = request.endpoint in ('auth.login', 'auth.register', 'auth.esqueci_senha', 'auth.redefinir_senha') %}
-<body class="{% if eh_pagina_auth %}bg-gray-950{% else %}bg-gray-50{% endif %} min-h-screen flex flex-col"
+{% set fundo_pagina = "bg-gray-950" if eh_pagina_auth else (tema.page_bg if tema else "bg-gray-50") %}
+<body class="{{ fundo_pagina }} min-h-screen flex flex-col" style="padding-top: env(safe-area-inset-top, 0px)"
       {% if current_user.is_authenticated %}data-user-id="{{ current_user.id }}"{% endif %}>
     <!-- Barra fina de progresso no topo, tipo YouTube/GitHub -- da feedback
     visual imediato em QUALQUER navegacao (link ou form), suaviza a
@@ -171,23 +176,34 @@
             </div>
         </div>
     </div>
+    {# iPhone (app instalado): a barra do relogio/bateria fica por cima da pagina
+       (status bar black-translucent + viewport-fit=cover). Esta faixa fixa na cor
+       do tema cobre essa area -- antes ficava branca e o conteudo passava por
+       baixo do relogio ao rolar. O body ja empurra a pagina pra baixo dela. #}
+    <div aria-hidden="true" class="fixed top-0 inset-x-0 z-[9995] {{ fundo_pagina }}"
+         style="height: env(safe-area-inset-top, 0px)"></div>
+
+    {# Avisos (flash) flutuando por cima da tela, na cor do tipo -- antes eram uma
+       faixa clara empurrando a pagina pra baixo (ficava um bloco branco em cima
+       das telas escuras). Somem sozinhos (main.js, [data-aviso]) ou no x. #}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="max-w-5xl mx-auto w-full px-4 mt-4 space-y-2 {% if eh_pagina_auth %}relative z-10{% endif %}">
+        <div data-avisos role="status" aria-live="polite"
+             class="fixed inset-x-0 z-[9996] flex flex-col items-center gap-2 px-4 pointer-events-none"
+             style="top: calc(env(safe-area-inset-top, 0px) + 12px)">
           {% for category, message in messages %}
-            <div class="rounded-md px-4 py-3 text-sm border
-                {% if eh_pagina_auth %}
-                    {% if category == 'danger' %}bg-red-950/60 text-red-300 border-red-800
-                    {% elif category == 'success' %}bg-green-950/60 text-green-300 border-green-800
-                    {% elif category == 'warning' %}bg-amber-950/60 text-amber-300 border-amber-800
-                    {% else %}bg-blue-950/60 text-blue-300 border-blue-800{% endif %}
-                {% else %}
-                    {% if category == 'danger' %}bg-red-50 text-red-700 border-red-200
-                    {% elif category == 'success' %}bg-green-50 text-green-700 border-green-200
-                    {% elif category == 'warning' %}bg-amber-50 text-amber-700 border-amber-200
-                    {% else %}bg-blue-50 text-blue-700 border-blue-200{% endif %}
-                {% endif %}">
-                {{ message }}
+            {% set estilo = {
+                'success': ('bg-emerald-600 text-white', 'fa-circle-check'),
+                'danger': ('bg-red-600 text-white', 'fa-circle-exclamation'),
+                'warning': ('bg-amber-400 text-gray-950', 'fa-triangle-exclamation'),
+              }.get(category, ('bg-indigo-600 text-white', 'fa-circle-info')) %}
+            <div data-aviso class="aviso-flutuante pointer-events-auto w-full max-w-md flex items-start gap-3 rounded-2xl px-4 py-3 text-sm font-medium shadow-lg {{ estilo[0] }}">
+                <i class="fa-solid {{ estilo[1] }} mt-0.5 shrink-0" aria-hidden="true"></i>
+                <span class="flex-1 min-w-0 leading-snug">{{ message }}</span>
+                <button type="button" data-aviso-fechar aria-label="Fechar aviso"
+                        class="shrink-0 -mr-1 -mt-0.5 w-6 h-6 flex items-center justify-center rounded-full opacity-80 hover:opacity-100">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
             </div>
           {% endfor %}
         </div>

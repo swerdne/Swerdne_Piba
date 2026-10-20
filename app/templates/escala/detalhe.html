@@ -9,7 +9,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial, avatar_membro, cartao_paleta with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial, avatar_membro, cartao_paleta, audio_material with context %}
 {% from "ministerio/_envio.html" import campos_envio_tardio %}
 {% block content %}
 <div id="escala-rapida" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
@@ -285,8 +285,40 @@
             <div data-retratil-corpo id="materiais-corpo"><div class="border-t {{ tema.card_border }}">
 
             {% if anexos %}
+            {# Organizado em dois grupos: audios (tocam aqui e baixam) e arquivos. #}
+            {% set audios = anexos | selectattr('eh_audio') | list %}
+            {% set arquivos = anexos | rejectattr('eh_audio') | list %}
+            {% if audios %}
+            <p class="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide {{ tema.text_secondary }}">
+                <i class="fa-solid fa-headphones mr-1" aria-hidden="true"></i>Audios ({{ audios|length }})
+            </p>
+            <div class="divide-y {{ tema.divide }}">
+                {% for anexo in audios %}
+                {% set legenda = ('Para: ' ~ (anexo.funcao.nome if anexo.funcao else 'funcao removida')) if anexo.funcao_id else 'Toda a equipe' %}
+                {% if eh_dono %}
+                {% call audio_material(tema, anexo, legenda) %}
+                <form method="POST" action="{{ url_for('escala.excluir_anexo', anexo_id=anexo.id) }}"
+                      data-confirm-excluir="Remover o audio {{ anexo.nome_arquivo }}?">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" title="Remover audio" aria-label="Remover audio" class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                        <i class="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </form>
+                {% endcall %}
+                {% else %}
+                {{ audio_material(tema, anexo, legenda) }}
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if arquivos %}
+            {% if audios %}
+            <p class="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide {{ tema.text_secondary }} border-t {{ tema.card_border }}">
+                <i class="fa-solid fa-file-lines mr-1" aria-hidden="true"></i>Arquivos ({{ arquivos|length }})
+            </p>
+            {% endif %}
             <ul class="divide-y {{ tema.divide }}">
-                {% for anexo in anexos %}
+                {% for anexo in arquivos %}
                 <li class="flex items-center gap-3 px-4 py-3">
                     <a href="{{ url_for('escala.baixar_anexo', anexo_id=anexo.id) }}" target="_blank" rel="noopener"
                        class="flex items-center gap-3 flex-1 min-w-0">
@@ -313,9 +345,10 @@
                 </li>
                 {% endfor %}
             </ul>
+            {% endif %}
             {% else %}
             <p class="px-4 py-4 text-sm {{ tema.text_secondary }}">
-                Nenhum material{% if eh_dono %}. Anexe cifras, partituras, letras ou roteiros abaixo -- pra equipe toda ou so pra uma funcao.{% else %} pra voce nessa escala.{% endif %}
+                Nenhum material{% if eh_dono %}. Anexe cifras, partituras, letras, roteiros ou audios (ou grave um aqui) -- pra equipe toda ou so pra uma funcao.{% else %} pra voce nessa escala.{% endif %}
             </p>
             {% endif %}
 
@@ -324,12 +357,43 @@
             <form method="POST" action="{{ url_for('escala.adicionar_anexo', escala_id=escala.id) }}" enctype="multipart/form-data"
                   class="border-t {{ tema.card_border }} px-4 py-3 space-y-2.5">
                 {{ fa.hidden_tag() }}
-                {{ fa.arquivo(accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx", class_="block w-full text-sm " ~ tema.text_secondary ~ " file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:bg-gray-700 file:text-gray-200") }}
+                {{ fa.arquivo(accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx,.mp3,.m4a,.aac,.wav,.ogg,.opus,.webm,audio/*", class_="block w-full text-sm " ~ tema.text_secondary ~ " file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:bg-gray-700 file:text-gray-200") }}
+                {# Gravar audio direto pelo celular (main.js, [data-gravador]): manda pela
+                   mesma rota do upload, com o "Para quem" e o nome deste formulario. #}
+                <div data-gravador hidden class="rounded-xl border {{ tema.card_border }} px-3 py-2.5 space-y-2">
+                    <button type="button" data-gravar-iniciar
+                            class="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold {{ tema.accent_text }} py-1">
+                        <i class="fa-solid fa-microphone" aria-hidden="true"></i>Gravar audio
+                    </button>
+                    <div data-gravar-painel hidden class="flex items-center justify-between gap-3">
+                        <span class="inline-flex items-center gap-2 text-sm font-semibold text-red-500">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true"></span>
+                            Gravando <span data-gravar-tempo>00:00</span>
+                        </span>
+                        <button type="button" data-gravar-parar class="text-sm font-semibold text-white bg-red-500 rounded-full px-4 py-1.5">
+                            <i class="fa-solid fa-stop mr-1" aria-hidden="true"></i>Parar
+                        </button>
+                    </div>
+                    <div data-gravar-previa hidden class="space-y-2">
+                        <audio data-gravar-audio controls class="w-full h-10"></audio>
+                        <div class="flex gap-2">
+                            <button type="button" data-gravar-enviar class="flex-1 {{ tema.accent_bg }} text-white text-sm font-semibold rounded-full py-2">
+                                <i class="fa-solid fa-paper-plane mr-1" aria-hidden="true"></i>Enviar audio
+                            </button>
+                            <button type="button" data-gravar-descartar class="text-sm font-semibold {{ tema.text_secondary }} px-3">Descartar</button>
+                        </div>
+                    </div>
+                    <p data-gravar-erro hidden class="text-xs text-red-500"></p>
+                </div>
+                <div>
+                    {{ fa.nome.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                    {{ fa.nome(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="Ex: Guia - Grande e o Senhor") }}
+                </div>
                 <div>
                     {{ fa.funcao_id.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
                     {{ fa.funcao_id(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
                 </div>
-                <p class="text-xs {{ tema.text_secondary }}">PDF, imagem, Word ou texto, ate 10 MB. Arquivo de uma funcao so aparece pra quem esta nela.</p>
+                <p class="text-xs {{ tema.text_secondary }}">PDF, imagem, Word, texto ou audio (MP3, M4A, WAV...), ate 15 MB. Arquivo de uma funcao so aparece pra quem esta nela.</p>
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
                     <i class="fa-solid fa-paperclip mr-1"></i>Anexar arquivo
                 </button>

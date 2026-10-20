@@ -354,6 +354,131 @@ document.querySelectorAll("[data-excluir-item]").forEach(function (botao) {
     });
 });
 
+// Gravar audio nos Materiais da escala ([data-gravador], escala/detalhe.html).
+// Grava pelo microfone (MediaRecorder: webm/opus no Chrome/Android, m4a no
+// iPhone), mostra pra ouvir antes e envia pela MESMA rota do upload de
+// arquivo, junto com os campos do formulario ("Para quem", nome). Navegador
+// sem gravacao: o botao nem aparece (continua dando pra escolher um arquivo).
+(function () {
+    var caixa = document.querySelector("[data-gravador]");
+    if (!caixa || !window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    caixa.hidden = false;
+    var form = caixa.closest("form");
+    var el = function (nome) { return caixa.querySelector("[data-gravar-" + nome + "]"); };
+    var iniciar = el("iniciar"), painel = el("painel"), tempo = el("tempo"), parar = el("parar");
+    var previa = el("previa"), ouvir = el("audio"), enviar = el("enviar"), descartar = el("descartar"), erro = el("erro");
+    var gravador = null, pedacos = [], arquivo = null, relogio = 0, comeco = 0;
+
+    function tipoSuportado() {
+        var opcoes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+        for (var i = 0; i < opcoes.length; i++) {
+            if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(opcoes[i])) return opcoes[i];
+        }
+        return "";
+    }
+    function extensao(tipo) {
+        if (/mp4|aac/.test(tipo)) return "m4a";
+        if (/ogg/.test(tipo)) return "ogg";
+        return "webm";
+    }
+    function mostrarErro(texto) { erro.textContent = texto; erro.hidden = !texto; }
+    function estado(qual) {
+        iniciar.hidden = qual !== "parado";
+        painel.hidden = qual !== "gravando";
+        previa.hidden = qual !== "previa";
+    }
+
+    iniciar.addEventListener("click", function () {
+        mostrarErro("");
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (fluxo) {
+            var tipo = tipoSuportado();
+            gravador = tipo ? new MediaRecorder(fluxo, { mimeType: tipo }) : new MediaRecorder(fluxo);
+            pedacos = [];
+            gravador.ondataavailable = function (e) { if (e.data && e.data.size) pedacos.push(e.data); };
+            gravador.onstop = function () {
+                fluxo.getTracks().forEach(function (t) { t.stop(); });
+                clearInterval(relogio);
+                var tipoFinal = gravador.mimeType || tipo || "audio/webm";
+                var agora = new Date();
+                var nome = "Audio gravado " + String(agora.getDate()).padStart(2, "0") + "-" +
+                    String(agora.getMonth() + 1).padStart(2, "0") + " " + String(agora.getHours()).padStart(2, "0") +
+                    "h" + String(agora.getMinutes()).padStart(2, "0") + "." + extensao(tipoFinal);
+                arquivo = new File(pedacos, nome, { type: tipoFinal.split(";")[0] });
+                ouvir.src = URL.createObjectURL(arquivo);
+                estado("previa");
+            };
+            gravador.start();
+            comeco = Date.now();
+            tempo.textContent = "00:00";
+            relogio = setInterval(function () {
+                var s = Math.floor((Date.now() - comeco) / 1000);
+                tempo.textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+            }, 500);
+            estado("gravando");
+        }).catch(function () {
+            mostrarErro("Nao deu pra usar o microfone. Libere o acesso ao microfone pra este site e tente de novo.");
+        });
+    });
+
+    parar.addEventListener("click", function () { if (gravador && gravador.state !== "inactive") gravador.stop(); });
+
+    descartar.addEventListener("click", function () {
+        arquivo = null;
+        ouvir.removeAttribute("src");
+        estado("parado");
+    });
+
+    enviar.addEventListener("click", function () {
+        if (!arquivo) return;
+        var dados = new FormData(form);
+        var campo = form.querySelector('input[type="file"]');
+        dados.set(campo ? campo.name : "anexo-arquivo", arquivo, arquivo.name);
+        enviar.disabled = true;
+        enviar.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Enviando...';
+        fetch(form.action, { method: "POST", body: dados, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+            .then(function (r) {
+                if (!r.ok) throw new Error();
+                window.location.hash = "materiais";
+                window.location.reload();
+            })
+            .catch(function () {
+                enviar.disabled = false;
+                enviar.innerHTML = '<i class="fa-solid fa-paper-plane mr-1"></i>Enviar audio';
+                mostrarErro("Nao foi possivel enviar o audio (confira a internet; limite de 15 MB).");
+            });
+    });
+})();
+
+// Avisos flutuantes ([data-aviso] em base.html): fecham no x ou num toque,
+// e somem sozinhos -- erro/alerta fica mais tempo que sucesso, e cada aviso
+// a mais na pilha ganha um pouco de tempo pra dar pra ler todos.
+(function () {
+    var avisos = Array.prototype.slice.call(document.querySelectorAll("[data-aviso]"));
+    if (!avisos.length) return;
+    var MAXIMO_NA_TELA = 3;  // o resto espera na fila e entra quando um sai
+    var fila = avisos.slice(MAXIMO_NA_TELA);
+    fila.forEach(function (aviso) { aviso.hidden = true; });
+
+    function mostrar(aviso, i) {
+        aviso.hidden = false;
+        var importante = /bg-red-|bg-amber-/.test(aviso.className);
+        setTimeout(function () { fechar(aviso); }, (importante ? 9000 : 5000) + i * 1200);
+    }
+    function fechar(aviso) {
+        if (!aviso.isConnected || aviso.classList.contains("aviso-saindo")) return;
+        aviso.classList.add("aviso-saindo");
+        setTimeout(function () {
+            aviso.remove();
+            var proximo = fila.shift();
+            if (proximo) mostrar(proximo, 0);
+        }, 260);
+    }
+    avisos.forEach(function (aviso) {
+        aviso.addEventListener("click", function () { fechar(aviso); });
+    });
+    avisos.slice(0, MAXIMO_NA_TELA).forEach(mostrar);
+})();
+
 // Registra o service worker (PWA instalavel) -- so assets estaticos entram
 // em cache, ver app/static/js/service-worker.js. Progressive enhancement:
 // navegadores sem suporte (ou http local sem TLS) simplesmente ignoram.

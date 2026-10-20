@@ -6,7 +6,7 @@ import io
 from datetime import datetime, time, timedelta, timezone
 
 from markupsafe import Markup
-from flask import render_template, redirect, url_for, flash, abort, request, jsonify, current_app, send_file
+from flask import Response, render_template, redirect, url_for, flash, abort, request, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from mongoengine.queryset.visitor import Q as MongoQ
 
@@ -1877,6 +1877,11 @@ def adicionar_anexo(escala_id):
     arquivo = form.arquivo.data
     nome = os.path.basename((arquivo.filename or "arquivo").replace("\\", "/"))[:200]
     extensao = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
+    # Nome escolhido na tela (ex: "Guia - Grande e o Senhor") vira o nome do
+    # arquivo, mantendo a extensao -- e o que aparece na lista e no download.
+    apelido = (form.nome.data or "").strip().replace("/", "-").replace("\\", "-")
+    if apelido:
+        nome = f"{apelido[:180]}.{extensao}" if extensao else apelido[:200]
     conteudo = arquivo.read()
     Anexo(
         escala_id=escala.id,
@@ -1888,6 +1893,8 @@ def adicionar_anexo(escala_id):
         enviado_por_id=current_user.id,
     ).save()
     flash(f'"{nome}" anexado.', "success")
+    if request.headers.get("X-Requested-With") == "fetch":  # audio gravado na tela
+        return jsonify(ok=True)
     return _voltar_pros_materiais(escala)
 
 
@@ -1897,12 +1904,46 @@ def baixar_anexo(anexo_id):
     """Quem pode ver a escala, ou quem esta escalado nela, abre o arquivo."""
     anexo = primeiro_ou_404(Anexo.objects(id=anexo_id))
     _escala_da_equipe_ou_404(anexo.escala_id)
+    if anexo.eh_audio and not request.args.get("baixar"):
+        return _audio_com_intervalo(anexo)
     resposta = send_file(
         io.BytesIO(anexo.conteudo),
         mimetype=anexo.tipo,
         as_attachment=not anexo.abre_no_navegador,
         download_name=anexo.nome_arquivo,
     )
+    resposta.headers["X-Content-Type-Options"] = "nosniff"
+    return resposta
+
+
+def _audio_com_intervalo(anexo):
+    """Audio pro player da tela: inline e com Range (pedaco do arquivo) --
+    o Safari do iPhone so toca <audio> se o servidor responder 206 aos
+    pedidos de "bytes=..." (e e o que deixa avancar/voltar no audio)."""
+    conteudo = anexo.conteudo
+    total = len(conteudo)
+    inicio, fim, status = 0, total - 1, 200
+    pedido = request.headers.get("Range", "")
+    if pedido.startswith("bytes=") and total:
+        ini_txt, _, fim_txt = pedido[6:].split(",")[0].strip().partition("-")
+        try:
+            if ini_txt:
+                inicio = int(ini_txt)
+                fim = min(int(fim_txt), total - 1) if fim_txt else total - 1
+            else:  # "bytes=-500" = os ultimos 500
+                inicio = max(0, total - int(fim_txt))
+        except ValueError:
+            inicio, fim = 0, total - 1
+        if inicio > fim or inicio >= total:
+            resposta = Response(status=416)
+            resposta.headers["Content-Range"] = f"bytes */{total}"
+            return resposta
+        status = 206
+    resposta = Response(conteudo[inicio:fim + 1], status=status, mimetype=anexo.tipo)
+    resposta.headers["Accept-Ranges"] = "bytes"
+    if status == 206:
+        resposta.headers["Content-Range"] = f"bytes {inicio}-{fim}/{total}"
+    resposta.headers["Cache-Control"] = "private, max-age=3600"
     resposta.headers["X-Content-Type-Options"] = "nosniff"
     return resposta
 

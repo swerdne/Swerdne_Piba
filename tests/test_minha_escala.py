@@ -61,10 +61,10 @@ def test_formato_nao_aceito_e_recusado(logged_in_client, app, db):
         assert Anexo.objects(escala_id=escala.id).count() == 0
 
 
-def test_arquivo_acima_de_10mb_volta_com_aviso(logged_in_client, app, db):
+def test_arquivo_acima_de_15mb_volta_com_aviso(logged_in_client, app, db):
     with app.app_context():
         _, _, escala = _montar(logged_in_client)
-        grande = b"%PDF" + b"0" * (11 * 1024 * 1024)
+        grande = b"%PDF" + b"0" * (16 * 1024 * 1024)
         resposta = logged_in_client.post(
             f"/escala/{escala.id}/anexos",
             data={"anexo-arquivo": (io.BytesIO(grande), "grande.pdf"), "anexo-funcao_id": "0"},
@@ -73,7 +73,7 @@ def test_arquivo_acima_de_10mb_volta_com_aviso(logged_in_client, app, db):
         )
         assert resposta.status_code == 302
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "O arquivo deve ter no maximo 10 MB." in html
+        assert "O arquivo deve ter no maximo 15 MB." in html
         assert Anexo.objects(escala_id=escala.id).count() == 0
 
 

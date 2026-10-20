@@ -8,7 +8,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior, cartao_paleta with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, cartao_paleta, audio_material with context %}
 {% set DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'] %}
 {% set DIAS_LONGOS = ['Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'] %}
 
@@ -156,8 +156,17 @@
                     <i class="fa-solid fa-paperclip {{ tema.text_secondary }}"></i>Materiais
                 </p>
                 {% if anexos %}
+                {# Audios primeiro (tocam aqui e baixam), depois os arquivos. #}
+                {% set audios = anexos | selectattr('eh_audio') | list %}
+                {% if audios %}
                 <div class="divide-y {{ tema.divide }}">
-                    {% for anexo in anexos %}
+                    {% for anexo in audios %}
+                    {{ audio_material(tema, anexo, ('Pra voce · ' ~ nomes_funcao[anexo.funcao_id]) if anexo.funcao_id else 'Toda a equipe') }}
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="divide-y {{ tema.divide }} {{ 'border-t ' ~ tema.card_border if audios else '' }}">
+                    {% for anexo in anexos | rejectattr('eh_audio') %}
                     <a href="{{ url_for('escala.baixar_anexo', anexo_id=anexo.id) }}" target="_blank" rel="noopener"
                        class="flex items-center gap-3 px-4 py-3 {{ tema.card_bg_hover }} transition">
                         <div class="w-10 h-10 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">

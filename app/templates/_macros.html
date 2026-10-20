@@ -72,7 +72,8 @@ data-nav-pill marca o elemento que recebe o fundo de "ativo".
 <div class="h-24 lg:hidden" aria-hidden="true"></div>
 
 <nav class="lg:hidden fixed bottom-0 inset-x-0 z-30 {{ tema.card_bg }} border-t {{ tema.card_border }}">
-    <div class="max-w-xl mx-auto flex items-center justify-around px-3 pt-2.5 pb-4">
+    <div class="max-w-xl mx-auto flex items-center justify-around px-3 pt-2.5 pb-4"
+         style="padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px))">
         {% for chave, rotulo, href in itens %}
         {% set eh_ativo = chave == ativo %}
         <a href="{{ href }}" data-nav-item="{{ chave }}"
@@ -227,4 +228,33 @@ Precisa de import "with context" (dados_tutorial vem do context processor). #}
     {% endif %}
 </div>
 {% endif %}
+{% endmacro %}
+
+
+{#
+Audio dos Materiais da escala: player na propria tela (o servidor responde
+com Range, ver escala.routes._audio_com_intervalo -- o iPhone exige) e botao
+Baixar (?baixar=1 = download). preload="none": nada e baixado ate tocar.
+Chamado com {% call %} pra por o botao de excluir ao lado (so pro lider).
+#}
+{% macro audio_material(tema, anexo, legenda) %}
+<div class="px-4 py-3 space-y-2.5">
+    <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl {{ tema.accent_soft_bg }} {{ tema.accent_text }} flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-headphones" aria-hidden="true"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold {{ tema.text_primary }} line-clamp-2 break-words">{{ anexo.nome_arquivo.rsplit('.', 1)[0] }}</p>
+            <p class="text-xs {{ tema.text_secondary }} truncate">{{ legenda }} &middot; {{ anexo.tamanho_legivel }}</p>
+        </div>
+        <a href="{{ url_for('escala.baixar_anexo', anexo_id=anexo.id, baixar=1) }}" download="{{ anexo.nome_arquivo }}"
+           class="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold {{ tema.accent_text }} border {{ tema.card_border }} rounded-full px-3 py-1.5 transition hover:opacity-80">
+            <i class="fa-solid fa-download" aria-hidden="true"></i>Baixar
+        </a>
+        {% if caller %}{{ caller() }}{% endif %}
+    </div>
+    <audio controls preload="none" class="w-full h-10" src="{{ url_for('escala.baixar_anexo', anexo_id=anexo.id) }}">
+        Seu navegador nao toca este audio -- use o botao Baixar.
+    </audio>
+</div>
 {% endmacro %}

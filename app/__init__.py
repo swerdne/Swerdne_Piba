@@ -95,7 +95,8 @@ def create_app(config_name="default"):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         # geolocation=(self): o check-in por localizacao (app/escala/checkin.py)
         # precisa do GPS; so nesta origem, nunca em iframe de terceiros.
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
+        # microphone=(self): gravar audio nos Materiais da escala.
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=(self)"
         if app.config.get("SESSION_COOKIE_SECURE"):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response

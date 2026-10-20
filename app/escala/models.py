@@ -905,7 +905,22 @@ TIPOS_ANEXO = {
     "doc": "application/msword",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
-TAMANHO_MAXIMO_ANEXO = 10 * 1024 * 1024
+# Audios (guia da musica, ensaio gravado...): tocam na propria tela (player)
+# e baixam. webm/m4a sao o que a gravacao pelo navegador gera (Chrome/Android
+# e iPhone, respectivamente).
+TIPOS_AUDIO = {
+    "mp3": "audio/mpeg",
+    "m4a": "audio/mp4",
+    "aac": "audio/aac",
+    "wav": "audio/wav",
+    "ogg": "audio/ogg",
+    "opus": "audio/ogg",
+    "webm": "audio/webm",
+}
+TIPOS_ANEXO.update(TIPOS_AUDIO)
+# 15 MB: cabe com folga no documento do Mongo (limite 16 MB) e da pra audio
+# longo (gravacao do navegador em opus: ~0,4 MB por minuto).
+TAMANHO_MAXIMO_ANEXO = 15 * 1024 * 1024
 
 
 class Anexo(SequentialIdDocument):
@@ -939,7 +954,11 @@ class Anexo(SequentialIdDocument):
         return {
             "pdf": "fa-file-pdf", "png": "fa-file-image", "jpg": "fa-file-image", "jpeg": "fa-file-image",
             "txt": "fa-file-lines", "doc": "fa-file-word", "docx": "fa-file-word",
-        }.get(self.extensao, "fa-file")
+        }.get(self.extensao, "fa-file-audio" if self.eh_audio else "fa-file")
+
+    @property
+    def eh_audio(self):
+        return self.extensao in TIPOS_AUDIO
 
     @property
     def tamanho_legivel(self):

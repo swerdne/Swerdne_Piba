@@ -98,4 +98,16 @@
    a toa. 100dvh e a altura visivel de verdade (100vh fica de reserva pra
    iOS antigo). Fora das camadas do Tailwind, entao vale sobre o utilitario. */
 .min-h-screen { min-height: 100vh; min-height: 100dvh; }
+
+/* iPhone: campo de data/hora tem largura minima propria e vazava do cartao
+   (e do grid de 2 colunas "Inicio/Fim"), e vazio ficava achatado. */
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.5rem;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value { text-align: left; }
 .h-screen { height: 100vh; height: 100dvh; }
