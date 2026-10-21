@@ -1,6 +1,8 @@
 """Caixa de entrada do WhatsApp com midia: foto, figurinha, video, documento,
 localizacao e contato chegam pelo webhook, o arquivo e guardado (a URL da
 Meta expira) e aparece na conversa."""
+from datetime import timedelta
+
 import pytest
 
 from app.escala.models import Funcao
@@ -64,6 +66,10 @@ def test_conversa_mostra_foto_video_documento_e_figurinha(logged_in_client, envi
                                                     "filename": "escala-novembro.pdf"}, wamid="c"))
         _postar(logged_in_client, _msg("sticker", {"id": "FIG1", "mime_type": "image/webp"}, wamid="d"))
         ids = {m.media_tipo: m.id for m in MensagemWhatsapp.objects(direcao="recebida")}
+        # Mesmo milissegundo = ordem aleatoria; a figurinha tem de ser a ultima
+        # (e a previa da lista).
+        figurinha = MensagemWhatsapp.objects(id=ids["sticker"]).first()
+        figurinha.update(set__criada_em=figurinha.criada_em + timedelta(seconds=1))
 
         html = logged_in_client.get(f"/comunidade/{comunidade.id}/whatsapp/5511987654321").data.decode()
         base = f"/comunidade/{comunidade.id}/whatsapp/midia/"

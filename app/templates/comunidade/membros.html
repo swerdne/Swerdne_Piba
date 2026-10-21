@@ -13,7 +13,7 @@
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior, avatar_membro with context %}
+{% from "_macros.html" import logo_inicio, nav_inferior, avatar_membro, campo_busca_pessoas with context %}
 {% block content %}
 <div id="comunidade-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -113,7 +113,9 @@
             </form>
         </div>
 
-        <details open data-lista-retratil="diretorio">
+        {% if diretorio or contas_vinculadas %}{{ campo_busca_pessoas(tema) }}{% endif %}
+
+        <details open data-lista-retratil="diretorio" data-busca-lista>
             <summary class="flex items-center justify-between gap-3 cursor-pointer select-none mb-3">
                 <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Diretório ({{ diretorio|length }})</h2>
                 <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-retratil"></i>
@@ -128,7 +130,7 @@
 
             <div class="space-y-2">
                 {% for membro in diretorio %}
-                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
+                <div data-busca-item="{{ membro.nome }} {{ membro.email or '' }}" class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
                     <a href="{{ url_for('comunidade.perfil_membro', comunidade_id=comunidade.id, membro_id=membro.id) }}"
                        class="flex flex-1 min-w-0 items-center gap-3" title="Abrir perfil">
                         {{ avatar_membro(tema, membro, "w-10 h-10 text-xs") }}
@@ -154,9 +156,10 @@
                 </div>
                 {% endfor %}
             </div>
+            <p data-busca-vazio hidden class="text-sm {{ tema.text_secondary }} text-center py-4">Ninguém com esse nome.</p>
         </details>
 
-        <details open data-lista-retratil="contas">
+        <details open data-lista-retratil="contas" data-busca-lista>
             <summary class="flex items-center justify-between gap-3 cursor-pointer select-none mb-3">
                 <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Contas vinculadas ({{ contas_vinculadas|length }})</h2>
                 <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-retratil"></i>
@@ -175,7 +178,7 @@
 
             <div class="space-y-2">
                 {% for conta in contas_vinculadas %}
-                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
+                <div data-busca-item="{{ conta.usuario.name or '' }} {{ conta.usuario.username or '' }} {{ conta.usuario.email or '' }}" class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
                     <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
                         {{ (conta.usuario.name or conta.usuario.username or conta.usuario.email)[:2].upper() }}
                     </div>
@@ -195,6 +198,7 @@
                 </div>
                 {% endfor %}
             </div>
+            <p data-busca-vazio hidden class="text-sm {{ tema.text_secondary }} text-center py-4">Ninguém com esse nome.</p>
         </details>
 
     </main>

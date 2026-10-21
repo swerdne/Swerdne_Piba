@@ -1231,3 +1231,43 @@ window.salvarStatus = function (select) {
         });
     });
 })();
+
+// Busca de pessoas pelo nome (macro campo_busca_pessoas em _macros.html):
+// filtra na hora, sem ir ao servidor, todo [data-busca-item] da tela pelo
+// texto de data-busca-item (nome + e-mail), sem acento e sem maiuscula.
+// Cada [data-busca-lista] mostra seu [data-busca-vazio] quando nada sobra
+// e abre o <details> em volta, se estiver fechado.
+(function () {
+    function normalizar(texto) {
+        return (texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    }
+    document.querySelectorAll("input[data-busca-pessoas]").forEach(function (campo) {
+        var raiz = campo.closest("main") || document;
+        var contador = raiz.querySelector("[data-busca-contador]");
+        function filtrar() {
+            var termos = normalizar(campo.value).split(/\s+/).filter(Boolean);
+            var achados = 0;
+            raiz.querySelectorAll("[data-busca-lista]").forEach(function (lista) {
+                var visiveis = 0;
+                lista.querySelectorAll("[data-busca-item]").forEach(function (item) {
+                    var texto = normalizar(item.getAttribute("data-busca-item"));
+                    var ok = termos.every(function (t) { return texto.indexOf(t) !== -1; });
+                    item.hidden = !ok;
+                    if (ok) visiveis++;
+                });
+                achados += visiveis;
+                var vazio = lista.querySelector("[data-busca-vazio]");
+                if (vazio) vazio.hidden = !(termos.length && !visiveis);
+                var detalhes = lista.closest("details");
+                if (termos.length && detalhes && !detalhes.open) detalhes.open = true;
+            });
+            if (contador) {
+                contador.hidden = !termos.length;
+                contador.textContent = achados === 1 ? "1 pessoa encontrada" : achados + " pessoas encontradas";
+            }
+        }
+        campo.addEventListener("input", filtrar);
+        campo.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+        if (campo.value) filtrar();
+    });
+})();

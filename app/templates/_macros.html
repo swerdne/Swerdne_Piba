@@ -258,3 +258,18 @@ Chamado com {% call %} pra por o botao de excluir ao lado (so pro lider).
     </audio>
 </div>
 {% endmacro %}
+
+{# Campo "Buscar pelo nome" das listas de pessoas (Membros, Papeis). Filtra
+   na hora pelo JS de main.js ([data-busca-pessoas]); cada item da lista
+   precisa de data-busca-item="nome email" e a lista de data-busca-lista
+   (com um <p data-busca-vazio hidden> pra quando nada bate). #}
+{% macro campo_busca_pessoas(tema, rotulo="Buscar pelo nome") %}
+<div>
+<div class="relative">
+    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-sm {{ tema.text_secondary }} pointer-events-none" aria-hidden="true"></i>
+    <input type="search" data-busca-pessoas placeholder="{{ rotulo }}" aria-label="{{ rotulo }}" autocomplete="off" enterkeyhint="search"
+           class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm pl-10 pr-4 py-2.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+</div>
+    <p data-busca-contador hidden class="text-xs {{ tema.text_secondary }} mt-1.5 px-1" aria-live="polite"></p>
+</div>
+{% endmacro %}
