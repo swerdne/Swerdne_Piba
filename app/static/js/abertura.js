@@ -37,15 +37,17 @@
     var LIMITE_MS = 8000;   // trava de seguranca: some de qualquer jeito
     var reduzir = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // Som da abertura (Web Audio, gerado aqui -- sem arquivo): um "sopro"
-    // baixinho enquanto as particulas se juntam e um "brilho" curto (arpejo
-    // de Mi maior, 4 notas) quando o logo forma e o nome entra. Navegador
+    // Som da abertura (Web Audio, gerado aqui -- sem arquivo): o "pad de
+    // louvor" escolhido pelo usuario -- acorde de Sol maior (Sol-Si-Re-Sol)
+    // num timbre de teclado suave (dente-de-serra levemente desafinado,
+    // filtrado), que cresce em 0,7 s e se desfaz ate 2,2 s. Entra quando o
+    // logo termina de formar, pra crescer junto com o nome. Navegador
     // bloqueia som sem toque na tela: toca onde e permitido (Chrome com o app
     // instalado na tela inicial) e, onde nao e (iPhone, aba comum), fica em
     // silencio -- nunca toca atrasado depois (tentar() so vale nos primeiros
     // 400 ms de cada chamada).
     var som = (function () {
-        var audio = null, ar = null;
+        var audio = null, tocou = false;
         try {
             var Classe = window.AudioContext || window.webkitAudioContext;
             if (Classe) {
@@ -63,65 +65,38 @@
             }).catch(function () {});
         }
 
-        function sopro(duracao) {
+        function pad() {
+            if (tocou) return;
+            tocou = true;
             tentar(function () {
                 try {
-                    var t = audio.currentTime + 0.02, n = Math.floor(audio.sampleRate * duracao);
-                    var ruido = audio.createBuffer(1, n, audio.sampleRate), dados = ruido.getChannelData(0);
-                    for (var i = 0; i < n; i++) dados[i] = Math.random() * 2 - 1;
-                    var fonte = audio.createBufferSource(), filtro = audio.createBiquadFilter(), volume = audio.createGain();
-                    fonte.buffer = ruido;
-                    filtro.type = "bandpass";
-                    filtro.Q.value = 0.9;
-                    filtro.frequency.setValueAtTime(250, t);
-                    filtro.frequency.exponentialRampToValueAtTime(1800, t + duracao * 0.85);
-                    volume.gain.setValueAtTime(0.0001, t);
-                    volume.gain.exponentialRampToValueAtTime(0.045, t + duracao * 0.6);
-                    volume.gain.exponentialRampToValueAtTime(0.0001, t + duracao);
-                    fonte.connect(filtro);
-                    filtro.connect(volume);
-                    volume.connect(audio.destination);
-                    fonte.start(t);
-                    fonte.stop(t + duracao);
-                    ar = volume;
+                    var t = audio.currentTime + 0.02;
+                    [196, 246.94, 293.66, 392].forEach(function (freq) {
+                        [0, 3].forEach(function (desafino) {  // 2 vozes por nota: o "coro" do teclado
+                            var osc = audio.createOscillator(), filtro = audio.createBiquadFilter(), vol = audio.createGain();
+                            osc.type = "sawtooth";
+                            osc.frequency.value = freq;
+                            osc.detune.value = desafino;
+                            filtro.type = "lowpass";
+                            filtro.frequency.value = 900;
+                            vol.gain.setValueAtTime(0.0001, t);
+                            vol.gain.exponentialRampToValueAtTime(0.012, t + 0.7);
+                            vol.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+                            osc.connect(filtro);
+                            filtro.connect(vol);
+                            vol.connect(audio.destination);
+                            osc.start(t);
+                            osc.stop(t + 2.3);
+                        });
+                    });
                 } catch (e) { /* sem som, segue a animacao */ }
             });
         }
 
-        function brilho() {
-            tentar(function () {
-                try {
-                    var t = audio.currentTime + 0.02;
-                    if (ar) {  // o sopro sai de cena quando o logo forma
-                        ar.gain.cancelScheduledValues(t);
-                        ar.gain.setValueAtTime(Math.max(ar.gain.value, 0.0001), t);
-                        ar.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-                    }
-                    [[659.25, 0, 0.07], [830.61, 0.09, 0.065], [987.77, 0.18, 0.06], [1318.51, 0.3, 0.04]]
-                        .forEach(function (nota) {
-                            var inicio = t + nota[1];
-                            ["sine", "triangle"].forEach(function (forma, k) {
-                                var osc = audio.createOscillator(), vol = audio.createGain();
-                                osc.type = forma;
-                                osc.frequency.value = nota[0];
-                                var pico = k ? nota[2] * 0.25 : nota[2];  // triangle = um brilho leve por cima
-                                vol.gain.setValueAtTime(0.0001, inicio);
-                                vol.gain.exponentialRampToValueAtTime(pico, inicio + 0.012);
-                                vol.gain.exponentialRampToValueAtTime(0.0001, inicio + 1.1);
-                                osc.connect(vol);
-                                vol.connect(audio.destination);
-                                osc.start(inicio);
-                                osc.stop(inicio + 1.15);
-                            });
-                        });
-                } catch (e) { /* sem som */ }
-            });
-        }
-
         function liberar() {  // devolve o audio do aparelho quando a abertura acaba
-            if (audio && audio.close) setTimeout(function () { try { audio.close(); } catch (e) { /* ja fechado */ } }, 2500);
+            if (audio && audio.close) setTimeout(function () { try { audio.close(); } catch (e) { /* ja fechado */ } }, 3000);
         }
-        return { sopro: sopro, brilho: brilho, liberar: liberar };
+        return { pad: pad, liberar: liberar };
     })();
 
     var encerrada = false;
@@ -157,7 +132,7 @@
             if (pronto) return;
             pronto = true;
             cena.classList.add("abertura-iniciada", "abertura-estatica", "abertura-nomeada");
-            som.brilho();
+            som.pad();
         };
         var previa = new Image();
         previa.onload = previa.onerror = mostrarParado;
@@ -395,6 +370,7 @@
         } else {
             t += dt;
         }
+        if (t >= T.laser1) som.pad();  // logo formado: o pad cresce junto com o nome
         var inicioDesenho = performance.now();
         desenhar(t, dt);
         if (medidos < QUADROS_MEDIDOS && t < T.laser1) {
@@ -412,7 +388,6 @@
         if (!nomeadaEm && t >= T.laser1 && (paginaPronta || t >= T.laser1 + NOME_APOS_LASER)) {
             cena.classList.add("abertura-nomeada");
             nomeadaEm = agora;
-            som.brilho();
         }
         if (nomeadaEm) {
             if (paginaPronta && agora - nomeadaEm >= SEGURA_NOME_MS) {
@@ -429,7 +404,6 @@
         // Pagina ja pronta: as particulas se juntam rapido (ACELERA_EM, o
         // quadro() acelera); senao no ritmo normal. Nos dois casos ha formacao
         // -- nunca mais o logo pronto parado de cara.
-        som.sopro(paginaPronta ? ACELERA_EM + 0.1 : 1.8);
         cena.classList.add("abertura-iniciada");
         montarParticulas();
         window.addEventListener("resize", ajustar);
