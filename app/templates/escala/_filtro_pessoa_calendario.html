@@ -1,0 +1,84 @@
+{#
+"Ver dias de..." dos calendarios (ministerio e comunidade) -- ver
+app/escala/calendario_pessoa.py. Espera: tema, ano, mes, url_filtro (action do
+form, a propria tela) e as variaveis filtro_*. parte="seletor" vai acima da
+grade; parte="resumo" embaixo.
+#}
+{% if parte == 'seletor' %}
+<form method="GET" action="{{ url_filtro }}" data-filtro-pessoa
+      class="flex flex-wrap items-center gap-2 mb-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-3 py-2.5">
+    <input type="hidden" name="ano" value="{{ ano }}">
+    <input type="hidden" name="mes" value="{{ mes }}">
+    <label for="filtro-pessoa" class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }} shrink-0">
+        <i class="fa-solid fa-user-check {{ tema.accent_text }}" aria-hidden="true"></i>Ver dias de
+    </label>
+    <select id="filtro-pessoa" name="pessoa" onchange="this.form.submit()"
+            class="flex-1 min-w-[10rem] {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+        <option value="">Todas as pessoas</option>
+        {% if filtro_opcoes_mes %}
+        <optgroup label="Escaladas neste mês">
+            {% for m in filtro_opcoes_mes %}<option value="{{ m.id }}" {{ 'selected' if filtro_pessoa and filtro_pessoa.id == m.id }}>{{ m.nome }}</option>{% endfor %}
+        </optgroup>
+        {% endif %}
+        {% if filtro_opcoes_outras %}
+        <optgroup label="Outras pessoas">
+            {% for m in filtro_opcoes_outras %}<option value="{{ m.id }}" {{ 'selected' if filtro_pessoa and filtro_pessoa.id == m.id }}>{{ m.nome }}</option>{% endfor %}
+        </optgroup>
+        {% endif %}
+    </select>
+    {% if filtro_eu_id and not (filtro_pessoa and filtro_pessoa.id == filtro_eu_id) %}
+    <button type="submit" name="pessoa" value="{{ filtro_eu_id }}"
+            class="text-xs font-semibold {{ tema.accent_text }} border {{ tema.card_border }} rounded-full px-3 py-1.5 shrink-0">
+        Eu
+    </button>
+    {% endif %}
+    {% if filtro_pessoa %}
+    <a href="{{ url_filtro }}?ano={{ ano }}&mes={{ mes }}" aria-label="Limpar filtro"
+       class="w-8 h-8 flex items-center justify-center rounded-full {{ tema.secondary_bg }} {{ tema.text_secondary }} shrink-0">
+        <i class="fa-solid fa-xmark text-xs"></i>
+    </a>
+    {% endif %}
+    <noscript><button type="submit" class="text-xs font-semibold {{ tema.accent_text }}">Ver</button></noscript>
+</form>
+
+{% elif parte == 'resumo' and filtro_pessoa %}
+{% set qtd = filtro_resumo | map(attribute='escala.data') | unique | list | length %}
+<div class="mt-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden" data-filtro-resumo>
+    <div class="flex items-center gap-2 px-4 py-3 border-b {{ tema.card_border }}">
+        <span class="w-3 h-3 rounded-sm ring-2 ring-inset ring-indigo-500 {{ tema.accent_soft_bg }} shrink-0" aria-hidden="true"></span>
+        <p class="text-sm {{ tema.text_primary }}">
+            {% if qtd %}<span class="font-semibold">{{ filtro_pessoa.nome }}</span> tem escala em <span class="font-semibold">{{ qtd }} dia{{ 's' if qtd != 1 }}</span> neste mês
+            {% else %}<span class="font-semibold">{{ filtro_pessoa.nome }}</span> não tem escala em nenhum dia deste mês{% endif %}
+        </p>
+    </div>
+    {% if filtro_resumo %}
+    <ul class="divide-y {{ tema.divide }}">
+        {% set cor_status = {'confirmado': 'bg-emerald-500/15 text-emerald-600', 'presente': 'bg-blue-500/15 text-blue-600', 'troca_solicitada': 'bg-red-500/15 text-red-500', 'nao_notificado': 'bg-amber-500/15 text-amber-600'} %}
+        {% for item in filtro_resumo %}
+        {% set e = item.escala %}
+        <li>
+            <button type="button" data-abrir-preview="{{ e.id }}" class="w-full flex items-center gap-3 px-4 py-2.5 text-left {{ tema.card_bg_hover }} transition">
+                <span class="w-11 shrink-0 text-center leading-tight">
+                    <span class="block text-[10px] uppercase {{ tema.text_secondary }}">{{ ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'][e.data.weekday()] }}</span>
+                    <span class="block text-base font-bold {{ tema.text_primary }}">{{ e.data.day }}</span>
+                </span>
+                <span class="w-1.5 self-stretch rounded-full {{ e.cor }} shrink-0" aria-hidden="true"></span>
+                <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-semibold {{ tema.text_primary }} truncate">{{ e.nome }}{% if e.cancelada %} <span class="text-red-500 font-normal">(cancelada)</span>{% endif %}</span>
+                    <span class="block text-xs {{ tema.text_secondary }} truncate">{{ item.funcoes }}{% if e.horario %} · {{ e.horario.strftime('%H:%M') }}{% endif %}</span>
+                </span>
+                {% if item.status %}
+                <span class="text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 {{ cor_status.get(item.status_chave, tema.secondary_bg ~ ' ' ~ tema.text_secondary) }}">{{ item.status }}</span>
+                {% endif %}
+            </button>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% if filtro_dias_ensaio %}
+    <p class="px-4 py-2.5 text-xs {{ tema.text_secondary }} border-t {{ tema.card_border }}">
+        <i class="fa-solid fa-music mr-1" aria-hidden="true"></i>Dias com borda tracejada: ensaio de uma escala dela.
+    </p>
+    {% endif %}
+</div>
+{% endif %}

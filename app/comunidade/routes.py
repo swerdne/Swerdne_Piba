@@ -861,8 +861,15 @@ def calendario(comunidade_id):
 
     (ano_anterior, mes_anterior), (ano_proximo, mes_proximo) = _navegacao_calendario_comunidade(ano, mes)
 
+    # "Ver dias de..." (?pessoa=<membro_id>): destaca os dias da pessoa.
+    from app.escala.calendario_pessoa import filtro_pessoa_do_calendario
+
+    filtro = filtro_pessoa_do_calendario(comunidade.id, escalas_do_mes, ensaios_por_dia)
+
     return render_template(
         "comunidade/calendario.html",
+        url_filtro=url_for("comunidade.calendario", comunidade_id=comunidade.id),
+        **filtro,
         comunidade=comunidade,
         semanas=semanas,
         mes=mes,

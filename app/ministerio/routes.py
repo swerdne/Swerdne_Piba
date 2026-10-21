@@ -506,15 +506,23 @@ def cultos_de_hoje(usuario, hoje):
 @bp.route("/<int:ministerio_id>/calendario")
 @login_required
 def calendario(ministerio_id):
+    from app.escala.calendario_pessoa import filtro_pessoa_do_calendario
+
     ministerio, pode_gerenciar = _ministerio_visivel_ou_404(ministerio_id)
     hoje = date.today()
     dados_calendario = _dados_calendario(ministerio, hoje)
+    # "Ver dias de..." (?pessoa=<membro_id>): destaca os dias da pessoa.
+    filtro = filtro_pessoa_do_calendario(
+        ministerio.comunidade_id, [e for e, _ in dados_calendario["legenda"]], dados_calendario["ensaios_por_dia"]
+    )
 
     return render_template(
         "ministerio/calendario.html",
         ministerio=ministerio,
         pode_gerenciar=pode_gerenciar,
+        url_filtro=url_for("ministerio.calendario", ministerio_id=ministerio.id),
         **dados_calendario,
+        **filtro,
     )
 
 

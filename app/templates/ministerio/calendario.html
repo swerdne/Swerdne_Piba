@@ -34,18 +34,20 @@
 
         <!-- Navegacao do mes -->
         <div class="flex items-center justify-center gap-4 mb-4">
-            <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_anterior, mes=mes_anterior) }}"
+            <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_anterior, mes=mes_anterior, pessoa=filtro_pessoa.id if filtro_pessoa else None) }}"
                class="w-9 h-9 flex items-center justify-center {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-xl {{ tema.text_secondary }} {{ tema.text_hover }} transition"
                aria-label="Mes anterior">
                 <i class="fa-solid fa-chevron-left text-xs"></i>
             </a>
             <span class="text-lg font-bold {{ tema.text_primary }} capitalize w-48 text-center">{{ mes_ano_texto }}</span>
-            <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_proximo, mes=mes_proximo) }}"
+            <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_proximo, mes=mes_proximo, pessoa=filtro_pessoa.id if filtro_pessoa else None) }}"
                class="w-9 h-9 flex items-center justify-center {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-xl {{ tema.text_secondary }} {{ tema.text_hover }} transition"
                aria-label="Proximo mes">
                 <i class="fa-solid fa-chevron-right text-xs"></i>
             </a>
         </div>
+
+        {% set parte = 'seletor' %}{% include "escala/_filtro_pessoa_calendario.html" %}
 
         <!-- Grade: linhas = semanas, colunas = dias da semana -->
         <div class="grid grid-cols-7 border-l border-t {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden">
@@ -58,11 +60,13 @@
             {% for semana in semanas %}
                 {% for dia in semana %}
                 {% set eventos = escalas_por_dia.get(dia, []) %}
-                <div class="min-h-14 sm:min-h-28 p-1 sm:p-1.5 border-r border-b {{ tema.card_border }}">
+                {% set dia_dela = filtro_pessoa and dia in filtro_dias %}
+                {% set ensaio_dela = filtro_pessoa and not dia_dela and dia in filtro_dias_ensaio %}
+                <div class="min-h-14 sm:min-h-28 p-1 sm:p-1.5 border-r border-b {{ tema.card_border }}{% if dia_dela %} {{ tema.accent_soft_bg }} ring-2 ring-inset ring-indigo-500{% elif ensaio_dela %} outline-dashed outline-1 outline-indigo-400 -outline-offset-4{% endif %}"{% if dia_dela %} data-dia-da-pessoa{% endif %}>
                     {% if dia == hoje %}
                     <span class="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full bg-blue-500 text-white text-[11px] sm:text-xs font-semibold">{{ dia.day }}</span>
                     {% else %}
-                    <span class="text-[11px] sm:text-xs {{ tema.text_secondary if dia.month != mes else tema.text_primary }}">{{ dia.day }}</span>
+                    <span class="text-[11px] sm:text-xs {{ tema.text_secondary if dia.month != mes else tema.text_primary }}{{ ' font-bold ' ~ tema.accent_text if dia_dela }}">{{ dia.day }}</span>
                     {% endif %}
 
                     {% if eventos %}
@@ -72,14 +76,14 @@
                     <div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
                         {% for escala, cor in eventos[:4] %}
                         <button type="button" data-abrir-preview="{{ escala.id }}"
-                           class="w-1.5 h-1.5 rounded-full {{ cor }}"
+                           class="w-1.5 h-1.5 rounded-full {{ cor }}{{ ' opacity-25' if filtro_pessoa and escala.id not in filtro_escalas }}"
                            title="{{ escala.nome }}{% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}"></button>
                         {% endfor %}
                     </div>
                     <div class="mt-1 space-y-1 hidden sm:block">
                         {% for escala, cor in eventos[:3] %}
                         <button type="button" data-abrir-preview="{{ escala.id }}"
-                           class="flex items-center gap-1 w-full text-left {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} rounded px-1 py-0.5 transition"
+                           class="flex items-center gap-1 w-full text-left {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} rounded px-1 py-0.5 transition{{ ' opacity-30' if filtro_pessoa and escala.id not in filtro_escalas }}"
                            title="{{ escala.nome }}{% if escala.horario %} - {{ escala.horario.strftime('%H:%M') }}{% endif %}">
                             <span class="w-1.5 h-1.5 rounded-full {{ cor }} shrink-0"></span>
                             <span class="text-[10px] {{ tema.secondary_text }} truncate">{{ escala.nome }}</span>
@@ -114,6 +118,8 @@
                 {% endfor %}
             {% endfor %}
         </div>
+
+        {% set parte = 'resumo' %}{% include "escala/_filtro_pessoa_calendario.html" %}
 
         {% if not legenda %}
         <p class="text-sm {{ tema.text_secondary }} mt-4 text-center">Nenhuma escala com data neste mes.</p>
