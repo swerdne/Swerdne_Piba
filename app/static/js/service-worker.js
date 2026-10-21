@@ -12,10 +12,20 @@
 // Excecao: arquivo com ?v=<hash> no endereco (app/desempenho.py) nunca muda
 // -- deploy novo gera endereco novo --, entao vem direto do cache, sem rede:
 // e o que deixa a troca de pagina rapida no celular.
-const CACHE_NAME = "piba-swerdne-estaticos-v3";
+const CACHE_NAME = "piba-swerdne-estaticos-v4";
+
+// Tela "sem internet" (static/offline.html): guardada na instalacao e
+// mostrada quando uma PAGINA (navegacao) falha por falta de rede -- no app
+// instalado, no lugar do erro do navegador. As paginas em si continuam indo
+// sempre pra rede (nunca cache de HTML com dado de conta).
+const PAGINA_OFFLINE = "/static/offline.html";
+const ARQUIVOS_OFFLINE = [PAGINA_OFFLINE, "/static/img/logo-mini.webp"];
 
 self.addEventListener("install", function (evento) {
     self.skipWaiting();
+    evento.waitUntil(
+        caches.open(CACHE_NAME).then(function (cache) { return cache.addAll(ARQUIVOS_OFFLINE); }).catch(function () {})
+    );
 });
 
 self.addEventListener("activate", function (evento) {
@@ -31,6 +41,18 @@ self.addEventListener("activate", function (evento) {
 
 self.addEventListener("fetch", function (evento) {
     var url = new URL(evento.request.url);
+
+    // Pagina (navegacao GET): sempre da rede; sem rede, a tela "sem internet".
+    if (evento.request.mode === "navigate" && evento.request.method === "GET") {
+        evento.respondWith(
+            fetch(evento.request).catch(function () {
+                return caches.match(PAGINA_OFFLINE).then(function (pagina) {
+                    return pagina || Response.error();
+                });
+            })
+        );
+        return;
+    }
 
     // So GET de /static/* -- nunca POST, nunca paginas/rotas dinamicas.
     if (evento.request.method !== "GET" || url.pathname.indexOf("/static/") !== 0) {
@@ -67,7 +89,7 @@ self.addEventListener("fetch", function (evento) {
             return resposta;
         }).catch(function () {
             // Sem rede (offline de verdade) -- ai sim usa o que tiver em cache.
-            return caches.match(evento.request);
+            return caches.match(evento.request, { ignoreSearch: ARQUIVOS_OFFLINE.indexOf(url.pathname) !== -1 });
         })
     );
 });
