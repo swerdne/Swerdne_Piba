@@ -31,9 +31,9 @@ def test_quem_entrou_pelo_link_aparece_aguardando(logged_in_client, app, db):
     comunidade_id = _comunidade_com_entradas(app, logged_in_client, ("raony", "raony@example.com"))
     with sessao_isolada(app):
         html = logged_in_client.get(f"/comunidade/{comunidade_id}/membros").data.decode("utf-8")
-        assert "Aguardando entrar no diretorio (1)" in html and "raony@example.com" in html
+        assert "Aguardando (1)" in html and "raony@example.com" in html
         # a propria admin (ana) nao aparece como pedido
-        secao_pedidos = html.split("Aguardando entrar no diretorio")[1].split("Adicionar ao diretorio")[0]
+        secao_pedidos = html.split('id="pedidos"')[1].split("</section>")[0]
         assert "ana@example.com" not in secao_pedidos
         detalhe = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
         assert "1 aguardando" in detalhe
@@ -47,7 +47,7 @@ def test_aceitar_coloca_no_diretorio_com_nome_e_email(logged_in_client, app, db)
         membro = Membro.objects(comunidade_id=comunidade_id, email="raony@example.com").first()
         assert membro is not None and membro.nome == "raony"
         html = logged_in_client.get(f"/comunidade/{comunidade_id}/membros").data.decode("utf-8")
-        assert "Aguardando entrar no diretorio" not in html
+        assert 'id="pedidos"' not in html
         # aceitar de novo nao duplica
         logged_in_client.post(f"/comunidade/{comunidade_id}/membros/pedidos/{conta.id}/aceitar")
         assert Membro.objects(comunidade_id=comunidade_id, email="raony@example.com").count() == 1
@@ -62,7 +62,7 @@ def test_recusar_tira_da_lista_mas_mantem_na_comunidade(logged_in_client, app, d
         conta.reload()
         assert conta.diretorio_recusado and conta.papel == "membro"
         html = logged_in_client.get(f"/comunidade/{comunidade_id}/membros").data.decode("utf-8")
-        assert "Aguardando entrar no diretorio" not in html
+        assert 'id="pedidos"' not in html
         # da pra colocar depois pela lista de contas
         assert f"/membros/pedidos/{conta.id}/aceitar" in html
 
@@ -79,7 +79,7 @@ def test_quem_ja_esta_no_diretorio_nao_vira_pedido(logged_in_client, app, db):
         cliente.get(f"/comunidade/entrar/{token}", headers=NAVEGAR)
     with sessao_isolada(app):
         html = logged_in_client.get(f"/comunidade/{comunidade.id}/membros").data.decode("utf-8")
-        assert "Aguardando entrar no diretorio" not in html
+        assert 'id="pedidos"' not in html
 
 
 def test_aceitar_todos(logged_in_client, app, db):

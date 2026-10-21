@@ -494,6 +494,12 @@ def aceitar_todos_pedidos_diretorio(comunidade_id):
 @bp.route("/<int:comunidade_id>/membros", methods=["GET", "POST"])
 @login_required
 def membros(comunidade_id):
+    """Tela "Pessoas": diretorio de escalacao + contas com papel + convites,
+    numa lista so (ver app/comunidade/pessoas.py). Antes eram duas telas,
+    Membros e "Papeis e convites" (essa agora so redireciona pra ca)."""
+    from app.comunidade.pessoas import contar_categorias, lista_de_pessoas, pre_carregar_usuarios
+    from app.convites.adicao import MODO_CONVITE, decidir_modo
+
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
     form = MembroDiretorioForm()
 
@@ -509,36 +515,55 @@ def membros(comunidade_id):
         proximo = None
 
     if form.validate_on_submit():
-        membro = Membro(
-            comunidade_id=comunidade.id,
-            nome=form.nome.data.strip(),
-            telefone=(form.telefone.data or "").strip() or None,
-            email=(form.email.data or "").strip() or None,
-        )
-        membro.save()
-        flash(f"{membro.nome} adicionado(a) ao diretorio.", "success")
+        email = (form.email.data or "").strip() or None
+        existente = Membro.objects(comunidade_id=comunidade.id, email__iexact=email).first() if email else None
+        if existente is not None:
+            flash(f"{existente.nome} ja esta no diretorio com esse e-mail.", "info")
+        else:
+            membro = Membro(
+                comunidade_id=comunidade.id,
+                nome=form.nome.data.strip(),
+                telefone=(form.telefone.data or "").strip() or None,
+                email=email,
+            )
+            membro.save()
+            flash(f"{membro.nome} adicionado(a) ao diretorio.", "success")
+
+        # "Dar acesso ao app" (caixa da tela Pessoas): com e-mail, a conta
+        # entra na comunidade na hora ou recebe convite (app/convites/adicao.py).
+        # Sem a caixa (ex: vindo da Escala), so diretorio, como sempre foi.
+        eh_admin = request.form.get("admin") == "sim"
+        if email and (eh_admin or request.form.get("acesso") == "sim"):
+            papel = "admin" if eh_admin else "membro"
+            modo, _usuario, motivo = decidir_modo("comunidade", comunidade, email, papel)
+            # Ja e admin e foi adicionado sem a caixa: nao vira convite de "rebaixar".
+            if not (modo == MODO_CONVITE and motivo == "muda_papel" and papel == "membro"):
+                mensagem, categoria = adicionar_ou_convidar("comunidade", comunidade, papel, email, current_user)
+                flash(mensagem, categoria)
         return redirect(proximo or url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     diretorio = list(Membro.objects(comunidade_id=comunidade.id).order_by("nome"))
-
-    # Diretorio (Membro, acima) e contas vinculadas (UsuarioComunidade) sao
-    # coisas diferentes -- ver models.py -- mas quem entra em "Membros"
-    # esperando ver quem de fato entrou pela comunidade (convite/link)
-    # precisa ver as duas listas, senao a contagem em comunidade.detalhe nao
-    # bate com ninguem aparecendo aqui.
-    contas_vinculadas = sorted(
-        UsuarioComunidade.objects(comunidade_id=comunidade.id),
-        key=lambda uc: (uc.papel, (uc.usuario.name or uc.usuario.username or uc.usuario.email).lower()),
+    contas = pre_carregar_usuarios(list(UsuarioComunidade.objects(comunidade_id=comunidade.id)))
+    convites_pendentes = list(
+        Convite.objects(escopo_tipo="comunidade", escopo_id=comunidade.id, status="pendente").order_by("-criado_em")
     )
-
     emails_diretorio = {m.email.strip().lower() for m in diretorio if m.email}
+    pedidos = _pedidos_diretorio(comunidade, contas, emails_diretorio)
+    pessoas = lista_de_pessoas(diretorio, contas, convites_pendentes, ignorar_contas={c.id for c in pedidos})
+
+    link_convite = (
+        url_for("comunidade.entrar_via_link", token=comunidade.token_convite_publico, _external=True)
+        if comunidade.token_convite_publico else None
+    )
     return render_template(
         "comunidade/membros.html",
         comunidade=comunidade,
-        diretorio=diretorio,
-        contas_vinculadas=contas_vinculadas,
-        pedidos=_pedidos_diretorio(comunidade, contas_vinculadas, emails_diretorio),
-        emails_diretorio=emails_diretorio,
+        pessoas=pessoas,
+        contagens=contar_categorias(pessoas),
+        total_admins=sum(1 for c in contas if c.papel == "admin"),
+        pedidos=pedidos,
+        convites_pendentes=convites_pendentes,
+        link_convite=link_convite,
         form=form,
         acao_form=AcaoForm(),
         proximo=proximo,
@@ -1081,10 +1106,16 @@ def escalados(comunidade_id):
 @bp.route("/<int:comunidade_id>/papeis", methods=["GET", "POST"])
 @login_required
 def papeis(comunidade_id):
+    """Endereco antigo de "Papeis e convites": a tela virou parte de "Pessoas"
+    (comunidade.membros). GET redireciona (links/e-mails antigos); POST
+    (adicionar por e-mail com papel) continua aceito."""
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    destino = url_for("comunidade.membros", comunidade_id=comunidade.id)
+    if request.method == "GET":
+        return redirect(destino)
+
     form = ConvidarForm()
     form.papel.choices = [(p, p.capitalize()) for p in PAPEIS_COMUNIDADE]
-
     if form.validate_on_submit():
         # Direto ou por convite, conforme a preferencia de privacidade da
         # pessoa -- ver app/convites/adicao.py.
@@ -1092,30 +1123,9 @@ def papeis(comunidade_id):
             "comunidade", comunidade, form.papel.data, form.email.data, current_user
         )
         flash(mensagem, categoria)
-        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
-
-    papeis_atuais = list(
-        UsuarioComunidade.objects(comunidade_id=comunidade.id).order_by("papel")
-    )
-    convites_pendentes = list(
-        Convite.objects(escopo_tipo="comunidade", escopo_id=comunidade.id, status="pendente")
-        .order_by("-criado_em")
-    )
-
-    link_convite = (
-        url_for("comunidade.entrar_via_link", token=comunidade.token_convite_publico, _external=True)
-        if comunidade.token_convite_publico else None
-    )
-
-    return render_template(
-        "comunidade/papeis.html",
-        comunidade=comunidade,
-        form=form,
-        papeis_atuais=papeis_atuais,
-        convites_pendentes=convites_pendentes,
-        link_convite=link_convite,
-        acao_form=AcaoForm(),
-    )
+    else:
+        flash("Informe um e-mail valido.", "danger")
+    return redirect(destino)
 
 
 @bp.route("/<int:comunidade_id>/papeis/link/gerar", methods=["POST"])
@@ -1131,12 +1141,12 @@ def gerar_link_convite(comunidade_id):
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
-        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+        return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     comunidade.gerar_novo_link_convite()
     comunidade.save()
     flash("Novo link de convite gerado! O link anterior (se existia) parou de funcionar.", "success")
-    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+    return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
 
 @bp.route("/entrar/<token>", methods=["GET", "POST"])
@@ -1185,12 +1195,12 @@ def remover_papel(comunidade_id, usuario_comunidade_id):
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
-        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+        return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
     papel.delete()
     flash(f"{nome} removido(a) dos administradores/membros da comunidade.", "success")
-    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+    return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
 
 @bp.route("/<int:comunidade_id>/papeis/<int:usuario_comunidade_id>/alterar-papel", methods=["POST"])
@@ -1207,7 +1217,7 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
-        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+        return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
 
@@ -1215,7 +1225,7 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
         total_admins = UsuarioComunidade.objects(comunidade_id=comunidade.id, papel="admin").count()
         if total_admins <= 1:
             flash("Nao e possivel rebaixar o ultimo administrador. Promova outra pessoa antes.", "danger")
-            return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+            return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
         papel.papel = "membro"
         papel.save()
         flash(f"{nome} agora e membro (nao e mais administrador).", "success")
@@ -1224,7 +1234,7 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
         papel.save()
         flash(f"{nome} agora e administrador(a) da comunidade.", "success")
 
-    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+    return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
 
 @bp.route("/<int:comunidade_id>/papeis/convite/<int:convite_id>/cancelar", methods=["POST"])
@@ -1238,10 +1248,10 @@ def cancelar_convite(comunidade_id, convite_id):
 
     if not form.validate_on_submit():
         flash("Acao invalida.", "danger")
-        return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+        return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     convite.delete()
     flash("Convite cancelado.", "success")
-    return redirect(url_for("comunidade.papeis", comunidade_id=comunidade.id))
+    return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
 

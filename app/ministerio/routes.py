@@ -674,10 +674,21 @@ def papeis(ministerio_id):
     # Na tela o papel virou uma caixa "Lider" (sim/nao): todo mundo entra
     # como membro e so a caixa marcada da lider. O POST chega com
     # "lider=sim" em vez do campo "papel" -- traduz antes de validar.
+    # Tambem da pra escolher alguem do diretorio da comunidade (membro_id)
+    # em vez de digitar o e-mail: usa o e-mail cadastrado da pessoa.
+    from app.comunidade.pessoas import (
+        contar_categorias, garantir_no_diretorio, lista_de_pessoas, pre_carregar_usuarios,
+    )
+    from app.escala.models import diretorio_da_comunidade
+
+    diretorio = diretorio_da_comunidade(ministerio.comunidade_id)
     dados = None
     if request.method == "POST" and "papel" not in request.form:
         dados = request.form.copy()
         dados["papel"] = "lider" if request.form.get("lider") == "sim" else "membro"
+        escolhido = next((m for m in diretorio if str(m.id) == request.form.get("membro_id")), None)
+        if escolhido is not None and escolhido.email and not (dados.get("email") or "").strip():
+            dados["email"] = escolhido.email
     form = ConvidarForm(formdata=dados) if dados is not None else ConvidarForm()
     form.papel.choices = [(p, p.capitalize()) for p in papeis_permitidos]
 
@@ -695,6 +706,11 @@ def papeis(ministerio_id):
             "ministerio", ministerio, form.papel.data, form.email.data, current_user
         )
         flash(mensagem, categoria)
+        # Quem entra no ministerio tambem entra no diretorio da comunidade
+        # (senao teria papel mas nao apareceria pra ser escalado).
+        membro, criado = garantir_no_diretorio(ministerio.comunidade_id, form.email.data)
+        if criado:
+            flash(f"{membro.nome} tambem entrou no diretorio da comunidade (ja pode ser escalado).", "info")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     # Quem ja estava escalado antes da inclusao automatica entra uma vez so
@@ -706,12 +722,26 @@ def papeis(ministerio_id):
     if incluidos:
         flash(f"{incluidos} pessoa(s) que ja estavam escaladas entraram como membro.", "info")
 
-    papeis_atuais = list(
+    papeis_atuais = pre_carregar_usuarios(list(
         UsuarioMinisterio.objects(ministerio_id=ministerio.id).order_by("papel")
-    )
+    ))
     convites_pendentes = list(
         Convite.objects(escopo_tipo="ministerio", escopo_id=ministerio.id, status="pendente")
         .order_by("-criado_em")
+    )
+
+    # Lista da tela Pessoas do ministerio: cada conta com a pessoa do
+    # diretorio de mesmo e-mail (foto, perfil). E, pro "Adicionar pessoa",
+    # quem do diretorio tem e-mail e ainda nao esta no ministerio.
+    emails_no_ministerio = {
+        u.usuario.email.strip().lower() for u in papeis_atuais if u.usuario is not None and u.usuario.email
+    }
+    pessoas = lista_de_pessoas(
+        [m for m in diretorio if m.email and m.email.strip().lower() in emails_no_ministerio], papeis_atuais
+    )
+    escolher_do_diretorio = sorted(
+        (m for m in diretorio if m.email and m.email.strip().lower() not in emails_no_ministerio),
+        key=lambda m: m.nome.lower(),
     )
 
     link_convite = (
@@ -727,6 +757,9 @@ def papeis(ministerio_id):
         pode_convidar=bool(papeis_permitidos),
         pode_dar_lider="lider" in papeis_permitidos,
         papeis_atuais=papeis_atuais,
+        pessoas=pessoas,
+        contagens=contar_categorias(pessoas),
+        escolher_do_diretorio=escolher_do_diretorio,
         convites_pendentes=convites_pendentes,
         acao_form=AcaoForm(),
     )

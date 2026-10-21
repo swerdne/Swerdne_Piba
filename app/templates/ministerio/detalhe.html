@@ -44,7 +44,7 @@
                     {% if ministerio.eh_kids %}
                     {{ item_menu(tema, url_for('ministerio.checkin', ministerio_id=ministerio.id), 'fa-child-reaching', 'Check-in de crianças') }}
                     {% endif %}
-                    {{ item_menu(tema, url_for('ministerio.papeis', ministerio_id=ministerio.id), 'fa-user-group', 'Papéis e convites') }}
+                    {{ item_menu(tema, url_for('ministerio.papeis', ministerio_id=ministerio.id), 'fa-user-group', 'Pessoas do ministério') }}
                     {{ item_menu(tema, url_for('ministerio.detalhe', ministerio_id=ministerio.id, checkin='1') ~ '#checkin', 'fa-location-dot', 'Check-in') }}
                     {{ item_menu(tema, url_for('ministerio.estatisticas', ministerio_id=ministerio.id), 'fa-chart-line', 'Estatísticas de comparecimento') }}
                     {{ item_menu(tema, url_for('ministerio.lembrete', ministerio_id=ministerio.id), 'fa-bell', 'Lembrete automático') }}

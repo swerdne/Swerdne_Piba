@@ -15,7 +15,7 @@ def test_membros_tem_busca_e_cada_pessoa_e_pesquisavel(logged_in_client, app, db
         assert "data-busca-pessoas" in html and 'placeholder="Buscar pelo nome"' in html
         assert 'data-busca-item="João Ávila joao@ex.com"' in html
         assert 'data-busca-item="Bia "' in html
-        assert html.count("data-busca-lista") == 2 and html.count("data-busca-vazio") == 2
+        assert html.count("data-busca-lista") == 1 and html.count("data-busca-vazio") == 1
         # conta vinculada (quem criou a comunidade) tambem entra na busca
         assert html.count("data-busca-item=") >= 3
 

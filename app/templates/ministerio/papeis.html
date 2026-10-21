@@ -1,15 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Papeis - {{ ministerio.nome }}{% endblock %}
+{% block title %}Pessoas - {{ ministerio.nome }}{% endblock %}
 
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
     #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    [data-cartao-link][open] summary .fa-chevron-down, #adicionar[open] > summary .fa-chevron-down { transform: rotate(180deg); }
 </style>
 {% endblock %}
 
-{% from "_macros.html" import logo_inicio, nav_inferior, campo_busca_pessoas with context %}
+{#
+Tela "Pessoas do ministerio" (ministerio.papeis -- nome da rota ficou do
+1o desenho, "Papeis e convites"): adicionar (do diretorio ou por e-mail,
+caixa Lider), convites pendentes, lista com Lider sim/nao e o link.
+Mesmas pecas da tela Pessoas da comunidade (_pessoas.html).
+#}
+{% from "_macros.html" import logo_inicio, nav_inferior, avatar_membro, campo_busca_pessoas, classe_item_menu with context %}
+{% from "_pessoas.html" import filtros_pessoas, menu_pessoa, linha_convite, cartao_link with context %}
 {% block content %}
 <div id="ministerio-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -25,157 +33,154 @@
             <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
             </span>
-            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Papeis - {{ ministerio.nome }}</span>
+            <span class="min-w-0">
+                <span class="block font-extrabold text-lg {{ tema.text_primary }} truncate">Pessoas do ministério</span>
+                <span class="block text-xs {{ tema.text_secondary }} truncate -mt-0.5">{{ ministerio.nome }}</span>
+            </span>
         </a>
         {{ logo_inicio(tema) }}
     </header>
 
-    <main class="px-4 sm:px-6 py-6 pb-16 max-w-2xl mx-auto space-y-6">
+    <main class="px-4 sm:px-6 py-4 pb-24 max-w-2xl mx-auto space-y-6">
 
+        {# ---------- Adicionar pessoa ---------- #}
         {% if pode_convidar %}
-        <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Link de acesso direto</h2>
-            <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
-                <p class="text-xs {{ tema.text_secondary }}">
-                    Pra divulgar (ex: grupo de WhatsApp): quem abrir entra direto como <strong>membro</strong> deste ministerio -- sem convite individual nem aceite.
-                    Quem ainda nao tem conta se cadastra e ja entra. Os lideres recebem um aviso a cada entrada.
-                    Pra dar papel de <strong>lider</strong>, use o convite por e-mail abaixo.
-                </p>
-                {% if link_convite %}
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <input type="text" readonly value="{{ link_convite }}" id="input-link-convite"
-                           class="flex-1 min-w-0 {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2 text-xs {{ tema.text_secondary }} truncate">
-                    <button type="button" data-copiar-link="input-link-convite"
-                            class="border {{ tema.card_border }} {{ tema.text_primary }} text-xs font-semibold px-3 py-2 rounded-full transition hover:bg-black/5 shrink-0">
-                        <i class="fa-solid fa-copy mr-1"></i>Copiar
-                    </button>
-                </div>
-                {% endif %}
-                <form method="POST" action="{{ url_for('ministerio.gerar_link_convite', ministerio_id=ministerio.id) }}"
-                      {% if link_convite %}onsubmit="return confirm('Gerar um novo link? O link atual vai parar de funcionar.');"{% endif %}>
-                    {{ acao_form.hidden_tag() }}
-                    <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
-                        {{ "Gerar novo link (invalida o atual)" if link_convite else "Gerar link de acesso" }}
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Adicionar pessoa</h2>
-            <form method="POST" data-verificar-adicao-url="{{ url_for('convites.verificar_adicao', escopo_tipo='ministerio', escopo_id=ministerio.id) }}" class="space-y-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
+        <details id="adicionar" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm" {% if form.errors or not pessoas %}open{% endif %}>
+            <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3.5">
+                <span class="w-9 h-9 rounded-xl {{ tema.accent_bg }} flex items-center justify-center text-white shrink-0"><i class="fa-solid fa-user-plus text-sm"></i></span>
+                <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Adicionar pessoa</span>
+                <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition"></i>
+            </summary>
+            <form method="POST" data-verificar-adicao-url="{{ url_for('convites.verificar_adicao', escopo_tipo='ministerio', escopo_id=ministerio.id) }}" class="px-4 pb-4 space-y-3">
                 {{ form.hidden_tag() }}
+                {% set campo = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+                {% if escolher_do_diretorio %}
                 <div>
-                    {{ form.email(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring, placeholder="E-mail da pessoa") }}
-                    {% for erro in form.email.errors %}
-                        <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
-                    {% endfor %}
+                    <label for="membro-diretorio" class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Do diretório da comunidade</label>
+                    <select id="membro-diretorio" name="membro_id" data-escolher-diretorio class="{{ campo }}">
+                        <option value="">Escolha uma pessoa…</option>
+                        {% for m in escolher_do_diretorio %}<option value="{{ m.id }}" data-email="{{ m.email }}">{{ m.nome }}</option>{% endfor %}
+                    </select>
+                </div>
+                <p class="text-xs {{ tema.text_secondary }} text-center">ou</p>
+                {% endif %}
+                <div>
+                    {{ form.email(class_=campo, placeholder="E-mail da pessoa", autocomplete="off") }}
+                    {% for erro in form.email.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
                 </div>
                 {# Papel: todo mundo entra como membro; a caixa so diz se e lider
                    (a rota traduz lider=sim -> papel). Lider comum nao da lider. #}
                 {% if pode_dar_lider %}
                 <label class="flex items-center gap-2 text-sm font-medium {{ tema.text_primary }} cursor-pointer w-fit">
-                    <input type="checkbox" name="lider" value="sim" data-papel-lider
-                           class="w-4 h-4 rounded {{ tema.card_border }}">
-                    Lider deste ministerio
+                    <input type="checkbox" name="lider" value="sim" data-papel-lider class="w-4 h-4 rounded">
+                    Líder deste ministério
                 </label>
                 {% endif %}
-                <p class="text-xs {{ tema.text_secondary }}">
-                    Quem e escalado numa escala deste ministerio ja entra aqui sozinho como membro --
-                    adicione por e-mail so quem ainda nao foi escalado.
-                </p>
-                <p class="text-xs {{ tema.text_secondary }}">
-                    Quem ja tem conta entra na hora. Se a pessoa ainda nao tem conta, ou ativou
-                    "exigir minha aprovacao" nas configuracoes dela, vai um convite por e-mail e ela so entra depois de aceitar.
-                </p>
+                <p class="text-xs {{ tema.text_secondary }}">Quem já tem conta entra na hora; quem não tem recebe um convite. A pessoa também entra no diretório da comunidade. Quem é escalado aqui entra sozinho.</p>
                 <p data-aviso-adicao class="hidden text-xs font-semibold"></p>
-                {{ form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " text-white text-sm font-semibold px-4 py-2 rounded-full transition") }}
+                <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">Adicionar</button>
             </form>
-        </div>
+        </details>
         {% endif %}
 
+        {# ---------- Aguardando ---------- #}
         {% if convites_pendentes %}
-        <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Convites pendentes ({{ convites_pendentes|length }})</h2>
-            <div class="space-y-2">
-                {% for convite in convites_pendentes %}
-                <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
-                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center {{ tema.secondary_text }} shrink-0">
-                        <i class="fa-solid fa-envelope text-xs"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ convite.email }}</p>
-                        <p class="text-xs {{ tema.text_secondary }}">papel: {{ convite.papel }} &middot; enviado {{ convite.criado_em.strftime('%d/%m/%Y') }}</p>
-                    </div>
-                    <form method="POST" action="{{ url_for('ministerio.cancelar_convite', ministerio_id=ministerio.id, convite_id=convite.id) }}"
-                          onsubmit="return confirm('Cancelar o convite pra {{ convite.email }}?');">
-                        {{ acao_form.hidden_tag() }}
-                        <button type="submit" aria-label="Cancelar convite" class="text-red-500 hover:text-red-400 transition shrink-0">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </form>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
+        <section class="space-y-2">
+            <h2 class="text-xs font-bold text-amber-600 uppercase tracking-wide">Aguardando ({{ convites_pendentes|length }})</h2>
+            {% for convite in convites_pendentes %}
+            {{ linha_convite(tema, convite, url_for('ministerio.cancelar_convite', ministerio_id=ministerio.id, convite_id=convite.id), acao_form) }}
+            {% endfor %}
+        </section>
         {% endif %}
 
-        <div data-busca-lista>
-            {% if papeis_atuais|length > 5 %}<div class="mb-4">{{ campo_busca_pessoas(tema) }}</div>{% endif %}
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">Lideres e membros ({{ papeis_atuais|length }})</h2>
-
-            {% if not papeis_atuais %}
-            <div class="text-center py-12">
-                <i class="fa-solid fa-user-group text-4xl {{ tema.text_secondary }}"></i>
-                <p class="mt-4 {{ tema.text_secondary }}">Ninguem com papel formal ainda neste ministerio.</p>
-            </div>
+        {# ---------- Lista ---------- #}
+        {% if pessoas %}
+        <section class="space-y-3">
+            {% if pessoas|length > 5 %}
+            {{ campo_busca_pessoas(tema) }}
+            {{ filtros_pessoas(tema, pessoas|length, [('admin', 'Líderes', contagens.admin), ('fora-diretorio', 'Fora do diretório', contagens['fora-diretorio'])]) }}
             {% endif %}
-
-            <div class="space-y-2">
-                {% for papel in papeis_atuais %}
-                <div data-busca-item="{{ papel.usuario.name or '' }} {{ papel.usuario.username or '' }} {{ papel.usuario.email or '' }}" class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
-                    <div class="w-8 h-8 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">
-                        {{ (papel.usuario.name or papel.usuario.username or papel.usuario.email)[:2].upper() }}
-                    </div>
+            <div data-busca-lista class="space-y-2">
+                {% for p in pessoas %}
+                {% set m, papel = p.membro, p.conta %}
+                {% set eh_lider = papel.papel == 'lider' %}
+                <div data-busca-item="{{ p.nome }} {{ papel.usuario.username or '' }} {{ p.email }}" data-busca-categorias="{{ p.categorias }}"
+                     class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3">
+                    {% if m %}
+                    {{ avatar_membro(tema, m, "w-10 h-10 text-xs") }}
+                    {% elif papel.usuario.foto_perfil %}
+                    <img decoding="async" loading="lazy" src="{{ papel.usuario.foto_perfil }}" alt="" class="w-10 h-10 rounded-full object-cover shrink-0">
+                    {% else %}
+                    <div class="w-10 h-10 rounded-full {{ tema.secondary_bg }} flex items-center justify-center text-xs font-semibold {{ tema.secondary_text }} shrink-0">{{ p.nome[:2].upper() }}</div>
+                    {% endif %}
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ papel.usuario.name or papel.usuario.username or papel.usuario.email }}</p>
-                        <p class="text-xs {{ tema.text_secondary }} truncate">{{ papel.usuario.email }}</p>
+                        <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ p.nome }}</p>
+                        <p class="text-xs {{ tema.text_secondary }} truncate">{{ p.email }}</p>
+                        {% if not pode_dar_lider and eh_lider %}<span class="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wide {{ tema.accent_soft_bg }} {{ tema.accent_text }} rounded-full px-2 py-0.5">Líder</span>{% endif %}
                     </div>
                     {% if pode_dar_lider %}
                     {# Lider: sim/nao -- um toque troca (admin da comunidade). #}
-                    {% set eh_lider = papel.papel == 'lider' %}
                     <form method="POST" action="{{ url_for('ministerio.alternar_lider', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}" class="shrink-0">
                         {{ acao_form.hidden_tag() }}
                         <input type="hidden" name="lider" value="{{ 'nao' if eh_lider else 'sim' }}">
                         <button type="submit" role="switch" aria-checked="{{ 'true' if eh_lider else 'false' }}"
                                 aria-label="Lider: {{ 'sim' if eh_lider else 'nao' }}"
                                 class="flex items-center gap-1.5 text-[11px] font-semibold {{ tema.text_secondary }}">
-                            Lider
+                            Líder
                             <span class="relative inline-block w-9 h-5 rounded-full transition {{ tema.accent_bg if eh_lider else tema.secondary_bg }}">
                                 <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all" style="left: {{ '18px' if eh_lider else '2px' }}"></span>
                             </span>
                         </button>
                     </form>
-                    {% else %}
-                    <span class="text-[11px] font-semibold uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded-full px-2.5 py-1 shrink-0">{{ papel.papel }}</span>
                     {% endif %}
-                    {% if pode_convidar %}
-                    <form method="POST" action="{{ url_for('ministerio.remover_papel', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}"
-                          onsubmit="return confirm('Remover {{ papel.usuario.name or papel.usuario.email }} deste ministerio?');">
-                        {{ acao_form.hidden_tag() }}
-                        <button type="submit" aria-label="Remover" class="text-red-500 hover:text-red-400 transition shrink-0">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </form>
+                    {% if pode_convidar and (m or pode_dar_lider or not eh_lider) %}
+                    {% call menu_pessoa(tema, p.nome, para_cima=(loop.revindex <= 2 and loop.length > 3)) %}
+                        {% if m %}
+                        <a href="{{ url_for('comunidade.perfil_membro', comunidade_id=ministerio.comunidade_id, membro_id=m.id) }}" role="menuitem" class="{{ classe_item_menu(tema) }}"><i class="fa-solid fa-id-card w-4 text-center {{ tema.text_secondary }}"></i>Ver perfil</a>
+                        {% endif %}
+                        {% if pode_dar_lider or not eh_lider %}
+                        <form method="POST" action="{{ url_for('ministerio.remover_papel', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}"
+                              data-confirm-excluir="Remover {{ p.nome }} deste ministério?">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" role="menuitem" aria-label="Remover" class="{{ classe_item_menu(tema, perigo=True) }}"><i class="fa-solid fa-user-minus w-4 text-center"></i>Remover do ministério</button>
+                        </form>
+                        {% endif %}
+                    {% endcall %}
                     {% endif %}
                 </div>
                 {% endfor %}
+                <p data-busca-vazio hidden class="text-sm {{ tema.text_secondary }} text-center py-4">Ninguém com esse nome.</p>
             </div>
-            <p data-busca-vazio hidden class="text-sm {{ tema.text_secondary }} text-center py-4">Ninguém com esse nome.</p>
+        </section>
+        {% else %}
+        <div class="text-center py-10">
+            <i class="fa-solid fa-user-group text-4xl {{ tema.text_secondary }}"></i>
+            <p class="mt-4 {{ tema.text_secondary }}">Ninguém neste ministério ainda.</p>
         </div>
+        {% endif %}
+
+        {% if pode_convidar %}
+        {{ cartao_link(tema, link_convite, url_for('ministerio.gerar_link_convite', ministerio_id=ministerio.id), acao_form, ministerio.nome, 'líder') }}
+        {% endif %}
 
     </main>
     {{ nav_inferior(tema, 'comunidades') }}
     </div>
 </div>
+<script>
+// Escolher alguem do diretorio limpa o e-mail digitado (e vice-versa) -- vale um dos dois.
+(function () {
+    var escolha = document.querySelector('[data-escolher-diretorio]');
+    if (!escolha) return;
+    var email = escolha.form.querySelector('input[name="email"]');
+    escolha.addEventListener('change', function () {
+        var opcao = escolha.selectedOptions[0];
+        email.value = opcao && opcao.value ? opcao.getAttribute('data-email') : '';
+        email.dispatchEvent(new Event('input'));
+    });
+    email.addEventListener('input', function (e) {
+        if (e.isTrusted) escolha.value = '';
+    });
+})();
+</script>
 {% endblock %}

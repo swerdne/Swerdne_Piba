@@ -1,0 +1,93 @@
+{#
+Pecas da tela "Pessoas" (comunidade/membros.html e ministerio/papeis.html):
+filtros da lista, menu ⋯ de cada pessoa, convite pendente e o cartao
+"Convidar por link". Importe com:
+{% from "_pessoas.html" import filtros_pessoas, menu_pessoa, linha_convite, cartao_link with context %}
+#}
+
+{# Chips Todas/Admins/... -- o filtro roda no main.js ([data-busca-filtro]),
+   junto com a busca por nome. `opcoes` = [(chave, rotulo, quantidade)]. #}
+{% macro filtros_pessoas(tema, total, opcoes) %}
+<div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar pessoas">
+    <button type="button" data-busca-filtro="" aria-pressed="true"
+            class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_primary }} aria-pressed:bg-indigo-600 aria-pressed:text-white aria-pressed:border-transparent transition">
+        Todas <span class="opacity-70">{{ total }}</span>
+    </button>
+    {% for chave, rotulo, qtd in opcoes if qtd %}
+    <button type="button" data-busca-filtro="{{ chave }}" aria-pressed="false"
+            class="text-xs font-semibold rounded-full px-3 py-1.5 border {{ tema.card_border }} {{ tema.text_primary }} aria-pressed:bg-indigo-600 aria-pressed:text-white aria-pressed:border-transparent transition">
+        {{ rotulo }} <span class="opacity-70">{{ qtd }}</span>
+    </button>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Menu ⋯ de uma linha (fecha ao tocar fora: [data-menu-acoes] em main.js).
+   Itens via {% call %}, com as classes de _macros.classe_item_menu. #}
+{% macro menu_pessoa(tema, nome, para_cima=False) %}
+<details class="relative shrink-0" data-menu-acoes>
+    <summary aria-label="Opções de {{ nome }}" title="Opções"
+             class="list-none [&::-webkit-details-marker]:hidden cursor-pointer w-8 h-8 rounded-full flex items-center justify-center {{ tema.text_secondary }} {{ tema.card_bg_hover }} transition">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
+    </summary>
+    <div class="absolute right-0 {{ 'bottom-9' if para_cima else 'top-9' }} z-40 w-60 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl py-1.5 overflow-hidden" role="menu">
+        {{ caller() }}
+    </div>
+</details>
+{% endmacro %}
+
+{% macro linha_convite(tema, convite, url_cancelar, acao_form) %}
+<div data-busca-item="{{ convite.email }}" class="flex items-center gap-3 {{ tema.card_bg }} border border-amber-500/40 rounded-2xl shadow-sm px-4 py-3">
+    <div class="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-600 shrink-0">
+        <i class="fa-solid fa-envelope text-xs"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ convite.email }}</p>
+        <p class="text-xs {{ tema.text_secondary }}">Convite enviado {{ convite.criado_em.strftime('%d/%m') }} &middot; {{ convite.papel }}</p>
+    </div>
+    <form method="POST" action="{{ url_cancelar }}" data-confirm-excluir="Cancelar o convite pra {{ convite.email }}?">
+        {{ acao_form.hidden_tag() }}
+        <button type="submit" class="text-xs font-semibold text-red-500 hover:underline shrink-0">Cancelar</button>
+    </form>
+</div>
+{% endmacro %}
+
+{# Link generico de entrada (qualquer um com o link entra como membro). #}
+{% macro cartao_link(tema, link_convite, url_gerar, acao_form, nome_escopo, papel_maior) %}
+<details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm" data-cartao-link>
+    <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3.5">
+        <span class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0"><i class="fa-solid fa-link text-sm"></i></span>
+        <span class="flex-1 min-w-0">
+            <span class="block text-sm font-semibold {{ tema.text_primary }}">Convidar por link</span>
+            <span class="block text-xs {{ tema.text_secondary }} truncate">Pra grupo de WhatsApp: quem abrir entra como membro</span>
+        </span>
+        <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }}"></i>
+    </summary>
+    <div class="px-4 pb-4 space-y-3">
+        <p class="text-xs {{ tema.text_secondary }}">Quem abrir entra direto como <strong>membro</strong>, sem aceite (quem não tem conta se cadastra antes). Pra dar papel de {{ papel_maior }}, use "Adicionar pessoa".</p>
+        {% if link_convite %}
+        <div class="flex flex-col sm:flex-row gap-2">
+            <input type="text" readonly value="{{ link_convite }}" id="input-link-convite" aria-label="Link de convite"
+                   class="flex-1 min-w-0 {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2 text-xs {{ tema.text_secondary }} truncate">
+            <div class="flex gap-2 shrink-0">
+                <button type="button" data-copiar-link="input-link-convite"
+                        class="flex-1 border {{ tema.card_border }} {{ tema.text_primary }} text-xs font-semibold px-3 py-2 rounded-full transition hover:bg-black/5">
+                    <i class="fa-solid fa-copy mr-1"></i>Copiar
+                </button>
+                <a href="https://wa.me/?text={{ ('Entre em ' ~ nome_escopo ~ ' no app: ' ~ link_convite) | urlencode }}" target="_blank" rel="noopener"
+                   class="flex-1 text-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-full transition">
+                    <i class="fa-brands fa-whatsapp mr-1"></i>WhatsApp
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        <form method="POST" action="{{ url_gerar }}"
+              {% if link_convite %}data-confirm-excluir="Gerar um novo link? O link atual vai parar de funcionar."{% endif %}>
+            {{ acao_form.hidden_tag() }}
+            <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                {{ "Gerar novo link (o atual para de funcionar)" if link_convite else "Gerar link de convite" }}
+            </button>
+        </form>
+    </div>
+</details>
+{% endmacro %}

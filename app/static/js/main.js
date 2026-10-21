@@ -897,7 +897,7 @@ if ("serviceWorker" in navigator) {
 })();
 
 // Botao "Copiar" generico -- usado pelo link de convite da comunidade
-// (comunidade/papeis.html), mas escrito sem nada especifico dele: qualquer
+// (cartao "Convidar por link" da tela Pessoas, _pessoas.html), mas escrito sem nada especifico dele: qualquer
 // botao com data-copiar-link="<id-do-input>" copia o value desse input.
 document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
     var input = document.getElementById(botao.getAttribute("data-copiar-link"));
@@ -1024,7 +1024,8 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
 
         function limpar() {
             aviso.classList.add('hidden');
-            if (botao) botao.value = 'Adicionar';
+            if (botao && botao.tagName === 'INPUT') botao.value = 'Adicionar';
+            else if (botao) botao.textContent = 'Adicionar';
         }
 
         function verificar() {
@@ -1033,7 +1034,7 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
             var consulta = ++ultimaConsulta;
             var url = form.getAttribute('data-verificar-adicao-url') +
                 '&email=' + encodeURIComponent(valor) +
-                '&papel=' + encodeURIComponent(papel ? papel.value : (caixaLider && caixaLider.checked ? 'lider' : 'membro'));
+                '&papel=' + encodeURIComponent(papel ? papel.value : (caixaLider && caixaLider.checked ? (caixaLider.getAttribute('data-papel-lider') || 'lider') : 'membro'));
             fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (dados) {
@@ -1044,7 +1045,8 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
                     aviso.textContent = info[0];
                     aviso.classList.remove('hidden', 'text-green-500', 'text-amber-500');
                     aviso.classList.add(info[1]);
-                    if (botao) botao.value = info[2];
+                    if (botao && botao.tagName === 'INPUT') botao.value = info[2];
+                    else if (botao) botao.textContent = info[2];
                 })
                 .catch(limpar);
         }
@@ -1236,7 +1238,9 @@ window.salvarStatus = function (select) {
 // filtra na hora, sem ir ao servidor, todo [data-busca-item] da tela pelo
 // texto de data-busca-item (nome + e-mail), sem acento e sem maiuscula.
 // Cada [data-busca-lista] mostra seu [data-busca-vazio] quando nada sobra
-// e abre o <details> em volta, se estiver fechado.
+// e abre o <details> em volta, se estiver fechado. Chips [data-busca-filtro]
+// (tela Pessoas, _pessoas.html) somam um filtro por categoria: o item fica
+// se data-busca-categorias tiver a chave do chip ligado ("" = todas).
 (function () {
     function normalizar(texto) {
         return (texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -1244,6 +1248,15 @@ window.salvarStatus = function (select) {
     document.querySelectorAll("input[data-busca-pessoas]").forEach(function (campo) {
         var raiz = campo.closest("main") || document;
         var contador = raiz.querySelector("[data-busca-contador]");
+        var chips = raiz.querySelectorAll("[data-busca-filtro]");
+        var categoria = "";
+        chips.forEach(function (chip) {
+            chip.addEventListener("click", function () {
+                categoria = chip.getAttribute("data-busca-filtro");
+                chips.forEach(function (c) { c.setAttribute("aria-pressed", c === chip ? "true" : "false"); });
+                filtrar();
+            });
+        });
         function filtrar() {
             var termos = normalizar(campo.value).split(/\s+/).filter(Boolean);
             var achados = 0;
@@ -1251,13 +1264,17 @@ window.salvarStatus = function (select) {
                 var visiveis = 0;
                 lista.querySelectorAll("[data-busca-item]").forEach(function (item) {
                     var texto = normalizar(item.getAttribute("data-busca-item"));
-                    var ok = termos.every(function (t) { return texto.indexOf(t) !== -1; });
+                    var ok = termos.every(function (t) { return texto.indexOf(t) !== -1; }) &&
+                        (!categoria || (" " + (item.getAttribute("data-busca-categorias") || "") + " ").indexOf(" " + categoria + " ") !== -1);
                     item.hidden = !ok;
                     if (ok) visiveis++;
                 });
                 achados += visiveis;
                 var vazio = lista.querySelector("[data-busca-vazio]");
-                if (vazio) vazio.hidden = !(termos.length && !visiveis);
+                if (vazio) {
+                    vazio.hidden = !((termos.length || categoria) && !visiveis);
+                    vazio.textContent = termos.length ? "Ninguém com esse nome." : "Ninguém nesse filtro.";
+                }
                 var detalhes = lista.closest("details");
                 if (termos.length && detalhes && !detalhes.open) detalhes.open = true;
             });

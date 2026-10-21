@@ -107,7 +107,7 @@ def test_lider_gera_e_revoga_link_do_ministerio(logged_in_client, app, db):
         _, ministerio_id, token = _link_ministerio(logged_in_client)
         assert token and len(token) <= 15
         html = logged_in_client.get(f"/ministerio/{ministerio_id}/papeis").data.decode("utf-8")
-        assert f"/ministerio/entrar/{token}" in html and "Link de acesso direto" in html
+        assert f"/ministerio/entrar/{token}" in html and "Convidar por link" in html
 
         logged_in_client.post(f"/ministerio/{ministerio_id}/papeis/link/gerar")
         novo = Ministerio.objects(id=ministerio_id).first().token_convite_publico

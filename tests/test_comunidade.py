@@ -698,7 +698,7 @@ def test_contagem_de_membros_inclui_quem_entrou_via_link(logged_in_client, app, 
 
         # Quem criou a comunidade ja conta como 1 (vira admin automaticamente).
         html_antes = logged_in_client.get(f"/comunidade/{comunidade_id}").data.decode("utf-8")
-        assert "Membros" in html_antes and ">1</span>" in html_antes
+        assert "Pessoas" in html_antes and ">1</span>" in html_antes
 
     with sessao_isolada(app):
         bruno_client = app.test_client()

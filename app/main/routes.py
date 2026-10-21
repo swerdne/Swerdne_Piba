@@ -658,7 +658,7 @@ _REGRAS_CHAT = [
     # --- Disponibilidade (antes do tutorial, que pegaria "como funciona") -
     (re.compile(r"disponibilidade|ciclo de (trabalho|folga)|indispon[ií]vel|turno externo", re.I),
      "Da pra cadastrar um ciclo de disponibilidade pra cada membro (ex.: 4 dias trabalhando / 4 de folga) "
-     "no Diretorio de Membros da Comunidade. E so um aviso na hora de montar a escala -- nunca bloqueia, "
+     "na tela Pessoas da Comunidade (menu ⋯ da pessoa > Disponibilidade). E so um aviso na hora de montar a escala -- nunca bloqueia, "
      "quem decide continua sendo voce."),
 
     # --- Tutorial guiado -----------------------------------------------
@@ -696,11 +696,11 @@ _REGRAS_CHAT = [
      "Uma Escala e um evento com pessoas atribuidas a funcoes especificas -- pode ser criada "
      "manualmente (\"Escala Rapida\") ou gerada automaticamente por um Rodizio."),
     (re.compile(r"membro|diret[oó]rio", re.I),
-     "O Diretorio de Membros (dentro da Comunidade) e a lista de todo mundo que pode ser "
-     "escalado -- nome, telefone e e-mail, sem precisar ter conta no sistema."),
+     "A tela Pessoas (dentro da Comunidade) e a lista de todo mundo que pode ser "
+     "escalado -- nome, telefone e e-mail, sem precisar ter conta no sistema -- e tambem de quem tem acesso ao app."),
     (re.compile(r"convit|convidar|papel de admin|quem [eé] admin", re.I),
-     "Voce convida outras pessoas por e-mail na tela \"Papeis e convites\" da Comunidade -- "
-     "da pra definir se a pessoa entra como admin ou so como membro."),
+     "Voce convida pessoas na tela Pessoas da Comunidade (\"Adicionar pessoa\" com o e-mail, ou o link "
+     "\"Convidar por link\") -- da pra marcar se a pessoa entra como admin ou so como membro."),
     (re.compile(r"minist[eé]rio", re.I),
      "Um Ministerio e uma area da sua Comunidade (Louvor, Midia, Kids...) -- e dentro dele que "
      "as escalas de verdade sao criadas e organizadas."),
