@@ -86,10 +86,12 @@ def _escala_do_usuario_ou_404(escala_id):
 
 
 def _funcao_do_usuario_ou_404(funcao_id):
-    from app.ministerio.routes import _eh_lider_do_ministerio
+    """Funcao que a conta pode gerenciar: lider do ministerio/admin (qualquer
+    funcao) ou lider da AREA da funcao (ver app/ministerio/areas.py)."""
+    from app.ministerio.areas import pode_gerenciar_funcao
 
     funcao = primeiro_ou_404(Funcao.objects(id=funcao_id))
-    if not _eh_lider_do_ministerio(funcao.escala.ministerio, current_user):
+    if not pode_gerenciar_funcao(funcao, funcao.escala.ministerio, current_user):
         abort(404)
     return funcao
 
@@ -192,7 +194,7 @@ def _fixar_se_gerada_por_rodizio(escala):
         escala.save()
 
 
-def _notificar_lideres_do_ministerio(escala, titulo, mensagem, tipo):
+def _notificar_lideres_do_ministerio(escala, titulo, mensagem, tipo, funcao=None):
     """Notifica (sino in-app) todo lider/admin com autoridade sobre o
     Ministerio dessa Escala (ver ministerio.routes._lideres_do_ministerio).
 
@@ -200,9 +202,14 @@ def _notificar_lideres_do_ministerio(escala, titulo, mensagem, tipo):
     atualizar_status) -- se quem mudou o status e o lider/admin, a mudanca ja
     e obra dele mesmo, notifica-lo seria ruido.
     """
+    from app.ministerio.areas import lideres_da_area
     from app.ministerio.routes import _lideres_do_ministerio
 
-    for lider in _lideres_do_ministerio(escala.ministerio):
+    lideres = {u.id: u for u in _lideres_do_ministerio(escala.ministerio)}
+    # Funcao de uma area: o lider da area tambem fica sabendo.
+    if funcao is not None and funcao.area_id:
+        lideres.update({u.id: u for u in lideres_da_area(funcao.area_id)})
+    for lider in lideres.values():
         Notificacao(
             usuario_id=lider.id,
             titulo=titulo,
@@ -224,8 +231,11 @@ def index():
 def nova(ministerio_id):
     from app.ministerio.routes import _ministerio_gerenciavel_ou_404
 
+    from app.ministerio.areas import areas_do_ministerio
+
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
     form = EscalaForm()
+    areas = areas_do_ministerio(ministerio.id)
 
     if request.method == "GET":
         # Predefine horario/horario_fim com o ultimo usado nesse Ministerio --
@@ -250,12 +260,14 @@ def nova(ministerio_id):
             horario=form.horario.data,
             horario_fim=form.horario_fim.data,
             cor_selecionada=form.cor.data or None,
+            # Ministerio com areas: as funcoes vem das areas marcadas.
+            areas=[a for a in areas if str(a.id) in request.form.getlist("areas")] or None,
             **_paleta_do_form(form),
         )
         flash(f'Escala "{escala.nome}" criada!', "success")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
-    return render_template("escala/nova.html", form=form, ministerio=ministerio)
+    return render_template("escala/nova.html", form=form, ministerio=ministerio, areas=areas)
 
 
 def _paleta_do_form(form):
@@ -340,9 +352,30 @@ def editar(escala_id):
     return render_template("escala/editar.html", form=form, escala=escala)
 
 
+def _membros_por_area(escala, areas, diretorio):
+    """{area_id: {membro_id, ...}} -- pessoas do diretorio cuja conta (mesmo
+    e-mail) consta na area (UsuarioMinisterio.areas). 2 consultas."""
+    from app.ministerio.models import UsuarioMinisterio
+
+    linhas = [l for l in UsuarioMinisterio.objects(ministerio_id=escala.ministerio_id, areas__ne=[]).only("usuario_id", "areas")]
+    if not linhas:
+        return {}
+    emails = {u.id: (u.email or "").strip().lower() for u in User.objects(id__in=[l.usuario_id for l in linhas]).only("email")}
+    membro_por_email = {(m.email or "").strip().lower(): m.id for m in diretorio if m.email}
+    por_area = {}
+    for linha in linhas:
+        membro_id = membro_por_email.get(emails.get(linha.usuario_id, ""))
+        if membro_id:
+            for area_id in linha.areas:
+                por_area.setdefault(area_id, set()).add(membro_id)
+    return por_area
+
+
 @bp.route("/<int:escala_id>")
 @login_required
 def detalhe(escala_id):
+    from app.ministerio.areas import areas_do_ministerio, areas_lideradas, ordenar_por_area
+
     escala, eh_dono = _escala_visivel_ou_404(escala_id)
 
     formularios_membro = {}
@@ -360,6 +393,15 @@ def detalhe(escala_id):
     # a chamar isso dentro do loop da grade.
     funcoes = escala.funcoes
     _pre_carregar_membros(funcoes, diretorio_geral)
+    # Areas do ministerio (Criativo -> Projecao, Midia, Live): a grade sai
+    # agrupada por area e o lider de uma area gerencia as funcoes dela.
+    areas = areas_do_ministerio(escala.ministerio_id)
+    funcoes = ordenar_por_area(funcoes, areas)
+    areas_que_gerencio = set() if eh_dono or not areas else areas_lideradas(escala.ministerio_id, current_user)
+    gerencia_alguma = eh_dono or any(f.area_id in areas_que_gerencio for f in funcoes)
+    # Quem atua em cada area (contas com UsuarioMinisterio.areas) vira o
+    # topo da lista ao escalar uma funcao daquela area.
+    membros_por_area = _membros_por_area(escala, areas, diretorio_geral) if gerencia_alguma and areas else {}
     # Placeholder em 0 -- "nao sugerir ninguem", nunca um Membro.id real (ver
     # StatusForm.troca_sugestao_membro_id).
     _choices_sugestao = [(0, "Ninguem em especial")] + [(m.id, m.nome) for m in diretorio_geral]
@@ -376,15 +418,31 @@ def detalhe(escala_id):
             return membro.nome
         return f"{membro.nome} (indisponivel: {', '.join(avisos)})"
 
-    if eh_dono:
+    email_logado = (current_user.email or "").lower()
+    if gerencia_alguma:
         # Convidado so le a grade (ver template) -- monta os forms de escrita
         # so pra quem pode escrever, poupa consultas desnecessarias pro convidado.
+        # Lider de area: so pras funcoes da area dele (as outras ele so ve,
+        # e marca o proprio status se estiver escalado nelas).
         diretorio = diretorio_geral
         diretorio_vazio = not diretorio
-        destinos_possiveis = [f for f in funcoes if not f.eh_subcabecalho]
+        destinos_possiveis = [
+            f for f in funcoes if not f.eh_subcabecalho and (eh_dono or f.area_id in areas_que_gerencio)
+        ]
 
         for funcao in funcoes:
-            formularios_editar_funcao[funcao.id] = FuncaoForm(nome=funcao.nome)
+            if not eh_dono and funcao.area_id not in areas_que_gerencio:
+                if (
+                    not funcao.eh_subcabecalho and funcao.membro_id and funcao.membro.email
+                    and funcao.membro.email.lower() == email_logado
+                ):
+                    status_form = status_sem_presente(StatusForm(status=funcao.status or STATUS_PADRAO), funcao.status, escala)
+                    status_form.troca_sugestao_membro_id.choices = _choices_sugestao
+                    formularios_status[funcao.id] = status_form
+                continue
+
+            if eh_dono:
+                formularios_editar_funcao[funcao.id] = FuncaoForm(nome=funcao.nome)
 
             if funcao.eh_subcabecalho:
                 continue
@@ -395,9 +453,16 @@ def detalhe(escala_id):
                 # tem opcao em branco e o navegador mostra a primeira pessoa
                 # da lista como se ja estivesse escolhida (DataRequired
                 # barra o 0 como valor invalido se a pessoa nao trocar).
-                form_membro.membro_id.choices = [(0, "Selecione a pessoa")] + [
-                    (m.id, _rotulo_com_aviso(m)) for m in diretorio
-                ]
+                da_area = membros_por_area.get(funcao.area_id, set())
+                if da_area:
+                    # Quem atua na area primeiro (marcado), depois o resto.
+                    nome_area = next((a.nome for a in areas if a.id == funcao.area_id), "")
+                    ordenados = [m for m in diretorio if m.id in da_area] + [m for m in diretorio if m.id not in da_area]
+                    rotulos = [(m.id, f"{_rotulo_com_aviso(m)} · {nome_area}" if m.id in da_area else _rotulo_com_aviso(m))
+                               for m in ordenados]
+                else:
+                    rotulos = [(m.id, _rotulo_com_aviso(m)) for m in diretorio]
+                form_membro.membro_id.choices = [(0, "Selecione a pessoa")] + rotulos
                 formularios_membro[funcao.id] = form_membro
             else:
                 if funcao.membro_id in avisos_por_membro:
@@ -424,7 +489,6 @@ def detalhe(escala_id):
         # Nao gerencia a escala, mas pode marcar o PROPRIO status (ver
         # escala.routes.atualizar_status) -- so monta o form pra funcao(oes)
         # cujo Membro bate por e-mail com a conta logada.
-        email_logado = (current_user.email or "").lower()
         for funcao in funcoes:
             if (
                 not funcao.eh_subcabecalho and funcao.membro_id and funcao.membro.email
@@ -448,6 +512,8 @@ def detalhe(escala_id):
         funcoes=funcoes,
         comunidade_id=comunidade_id,
         eh_dono=eh_dono,
+        areas=areas,
+        areas_que_gerencio=areas_que_gerencio,
         diretorio_vazio=diretorio_vazio,
         formularios_membro=formularios_membro,
         formularios_mover=formularios_mover,
@@ -495,8 +561,13 @@ def adicionar_funcao(escala_id):
         flash(erros[0] if erros else "Nao foi possivel adicionar a funcao.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
+    from app.ministerio.areas import areas_do_ministerio
+
     maior_ordem = max([f.ordem for f in escala.funcoes], default=-1)
-    nova_funcao = Funcao(escala_id=escala.id, nome=form.nome.data.strip(), ordem=maior_ordem + 1)
+    area_id = request.form.get("area_id", type=int)
+    if area_id not in {a.id for a in areas_do_ministerio(escala.ministerio_id)}:
+        area_id = None
+    nova_funcao = Funcao(escala_id=escala.id, nome=form.nome.data.strip(), ordem=maior_ordem + 1, area_id=area_id)
     nova_funcao.save()
 
     flash(f'Funcao "{nova_funcao.nome}" adicionada em {escala.nome}.', "success")
@@ -658,7 +729,7 @@ def adicionar_membro(funcao_id):
     funcao.save()
 
     flash(f"{membro.nome} adicionado(a) em {funcao.nome}.", "success")
-    _incluir_nos_papeis(membro, funcao.escala.ministerio)
+    _incluir_nos_papeis(membro, funcao.escala.ministerio, funcao.area_id)
     for aviso in avisos_conflito:
         flash(aviso, "warning")
     _avisar_recem_escalado(funcao)
@@ -887,7 +958,7 @@ def atualizar_status(funcao_id):
     # outra pessoa, a mudanca ja e obra dele mesmo.
     if eh_proprio_escalado and status_novo != status_anterior:
         rotulo = STATUS_LABELS.get(status_novo, status_novo)
-        titulo = f"{funcao.membro.nome}: {rotulo} em {funcao.nome}"
+        titulo = f"{funcao.membro.nome}: {rotulo} em {funcao.nome_exibido}"
         mensagem = f"{titulo} ({funcao.escala.nome})."
         if status_novo == "troca_solicitada":
             if funcao.troca_sugestao_membro_id:
@@ -896,7 +967,7 @@ def atualizar_status(funcao_id):
                     mensagem += f" Sugestao de substituto: {sugestao.nome}."
             if funcao.troca_motivo:
                 mensagem += f" Motivo: {funcao.troca_motivo}"
-        _notificar_lideres_do_ministerio(funcao.escala, titulo, mensagem, tipo=status_novo)
+        _notificar_lideres_do_ministerio(funcao.escala, titulo, mensagem, tipo=status_novo, funcao=funcao)
 
     return responder(True)
 
@@ -1074,7 +1145,7 @@ def aprovar_troca(funcao_id):
     funcao.troca_sugestao_membro_id = None
     _fixar_se_gerada_por_rodizio(funcao.escala)
     funcao.save()
-    _incluir_nos_papeis(novo_membro, funcao.escala.ministerio)
+    _incluir_nos_papeis(novo_membro, funcao.escala.ministerio, funcao.area_id)
 
     if membro_antigo_email:
         usuario_antigo = User.objects(email=membro_antigo_email).first()
@@ -1233,9 +1304,9 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
             "email": funcao.membro.email,
             "telefone": funcao.membro.telefone if canais_pagos else None,
             "mensagem": mensagem_para(escala, funcao, funcao.membro),
-            "assunto": f"Voce foi escalado(a): {funcao.nome} - {escala.nome}",
+            "assunto": f"Voce foi escalado(a): {funcao.nome_exibido} - {escala.nome}",
             "wa_template": current_app.config.get("WHATSAPP_TEMPLATE_ESCALADO") or "pibachurch_escalado",
-            "wa_parametros": [funcao.membro.nome, funcao.nome, escala_no_whatsapp, data_texto],
+            "wa_parametros": [funcao.membro.nome, funcao.nome_exibido, escala_no_whatsapp, data_texto],
             # Botoes "Confirmo"/"Nao posso" do template (se cadastrado com eles):
             # o toque volta no webhook com o id da escala (whatsapp_recebidas).
             "wa_botoes": ([f"confirmar:{escala.id}", f"recusar:{escala.id}"]
@@ -1263,8 +1334,8 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
             if usuario_vinculado:
                 Notificacao(
                     usuario_id=usuario_vinculado.id,
-                    titulo=f"Voce foi escalado(a) para {funcao.nome}",
-                    mensagem=f"{escala.nome} ({escala.departamento}) - {funcao.nome}.",
+                    titulo=f"Voce foi escalado(a) para {funcao.nome_exibido}",
+                    mensagem=f"{escala.nome} ({escala.departamento}) - {funcao.nome_exibido}.",
                     escala_id=escala.id,
                     tipo="escalado",
                 ).save()
@@ -1595,13 +1666,19 @@ def _resumo_do_envio(resultado):
     return (", ".join(partes) + "." if partes else "Nada foi enviado."), houve_sucesso
 
 
-def _incluir_nos_papeis(membro, ministerio):
+def _incluir_nos_papeis(membro, ministerio, area_id=None):
     """Quem e escalado entra nos Papeis do ministerio como membro (ver
-    app/ministerio/papeis_auto.py). Convidado pontual nao passa por aqui."""
+    app/ministerio/papeis_auto.py) e, se a funcao e de uma area, passa a
+    constar nela (app/ministerio/areas.py). Convidado pontual nao passa por aqui."""
+    from app.ministerio.areas import incluir_na_area
     from app.ministerio.papeis_auto import incluir_escalado_no_ministerio
 
     if incluir_escalado_no_ministerio(membro, ministerio):
         flash(f"{membro.nome} tambem entrou nos Papeis do ministerio como membro.", "info")
+    if area_id and membro.email:
+        conta = User.objects(email__iexact=membro.email.strip()).only("id").first()
+        if conta is not None:
+            incluir_na_area(ministerio.id, conta.id, area_id)
 
 
 def _avisar_recem_escalado(funcao):

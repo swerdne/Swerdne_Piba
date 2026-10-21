@@ -96,9 +96,12 @@ Mesmas pecas da tela Pessoas da comunidade (_pessoas.html).
         {# ---------- Lista ---------- #}
         {% if pessoas %}
         <section class="space-y-3">
-            {% if pessoas|length > 5 %}
-            {{ campo_busca_pessoas(tema) }}
-            {{ filtros_pessoas(tema, pessoas|length, [('admin', 'Líderes', contagens.admin), ('fora-diretorio', 'Fora do diretório', contagens['fora-diretorio'])]) }}
+            {% if pessoas|length > 5 %}{{ campo_busca_pessoas(tema) }}{% endif %}
+            {% if pessoas|length > 5 or areas %}
+            {% set opcoes_filtro = [('admin', 'Líderes', contagens.admin)] %}
+            {% for area in areas %}{% set _ = opcoes_filtro.append(('area-' ~ area.id, area.nome, contagens.get('area-' ~ area.id, 0))) %}{% endfor %}
+            {% set _ = opcoes_filtro.append(('fora-diretorio', 'Fora do diretório', contagens['fora-diretorio'])) %}
+            {{ filtros_pessoas(tema, pessoas|length, opcoes_filtro) }}
             {% endif %}
             <div data-busca-lista class="space-y-2">
                 {% for p in pessoas %}
@@ -116,7 +119,16 @@ Mesmas pecas da tela Pessoas da comunidade (_pessoas.html).
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ p.nome }}</p>
                         <p class="text-xs {{ tema.text_secondary }} truncate">{{ p.email }}</p>
-                        {% if not pode_dar_lider and eh_lider %}<span class="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wide {{ tema.accent_soft_bg }} {{ tema.accent_text }} rounded-full px-2 py-0.5">Líder</span>{% endif %}
+                        {% if (not pode_dar_lider and eh_lider) or p.areas %}
+                        <p class="flex flex-wrap gap-1 mt-1">
+                            {% if not pode_dar_lider and eh_lider %}<span class="text-[10px] font-semibold uppercase tracking-wide {{ tema.accent_soft_bg }} {{ tema.accent_text }} rounded-full px-2 py-0.5">Líder</span>{% endif %}
+                            {% for area in p.areas %}
+                            <span class="inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 {{ tema.secondary_bg }} {{ tema.text_secondary }}" data-area-selo="{{ area.id }}">
+                                <span class="w-1.5 h-1.5 rounded-full {{ area.classe_cor }}" aria-hidden="true"></span>{{ area.nome }}{% if area.id in p.areas_lider %} · líder{% endif %}
+                            </span>
+                            {% endfor %}
+                        </p>
+                        {% endif %}
                     </div>
                     {% if pode_dar_lider %}
                     {# Lider: sim/nao -- um toque troca (admin da comunidade). #}
@@ -133,10 +145,27 @@ Mesmas pecas da tela Pessoas da comunidade (_pessoas.html).
                         </button>
                     </form>
                     {% endif %}
-                    {% if pode_convidar and (m or pode_dar_lider or not eh_lider) %}
+                    {% if pode_convidar and (m or areas or pode_dar_lider or not eh_lider) %}
                     {% call menu_pessoa(tema, p.nome, para_cima=(loop.revindex <= 2 and loop.length > 3)) %}
                         {% if m %}
                         <a href="{{ url_for('comunidade.perfil_membro', comunidade_id=ministerio.comunidade_id, membro_id=m.id) }}" role="menuitem" class="{{ classe_item_menu(tema) }}"><i class="fa-solid fa-id-card w-4 text-center {{ tema.text_secondary }}"></i>Ver perfil</a>
+                        {% endif %}
+                        {% if areas %}
+                        {# Areas da pessoa: atua / lidera (liderar ja conta como atuar). #}
+                        <form method="POST" action="{{ url_for('ministerio.areas_da_pessoa', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}"
+                              class="px-4 py-2.5 border-y {{ tema.card_border }} space-y-1.5" data-areas-pessoa>
+                            {{ acao_form.hidden_tag() }}
+                            <p class="text-[11px] font-bold uppercase tracking-wide {{ tema.text_secondary }}">Áreas</p>
+                            <div class="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1.5 items-center text-xs {{ tema.text_primary }}">
+                                <span></span><span class="text-[10px] {{ tema.text_secondary }}">Atua</span><span class="text-[10px] {{ tema.text_secondary }}">Líder</span>
+                                {% for area in areas %}
+                                <span class="flex items-center gap-1.5 min-w-0"><span class="w-2 h-2 rounded-full {{ area.classe_cor }} shrink-0" aria-hidden="true"></span><span class="truncate">{{ area.nome }}</span></span>
+                                <input type="checkbox" name="areas" value="{{ area.id }}" aria-label="Atua em {{ area.nome }}" {{ 'checked' if area in p.areas }} class="w-4 h-4 rounded justify-self-center">
+                                <input type="checkbox" name="areas_lider" value="{{ area.id }}" aria-label="Lidera {{ area.nome }}" {{ 'checked' if area.id in p.areas_lider }} class="w-4 h-4 rounded justify-self-center">
+                                {% endfor %}
+                            </div>
+                            <button type="submit" class="w-full mt-1 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-full transition">Salvar áreas</button>
+                        </form>
                         {% endif %}
                         {% if pode_dar_lider or not eh_lider %}
                         <form method="POST" action="{{ url_for('ministerio.remover_papel', ministerio_id=ministerio.id, usuario_ministerio_id=papel.id) }}"

@@ -542,6 +542,10 @@ class Funcao(SequentialIdDocument):
     nome = mongoengine.StringField(required=True, max_length=80)
     ordem = mongoengine.IntField(default=0)
     tipo = mongoengine.StringField(default=TIPO_FUNCAO, max_length=20)
+    # Area do ministerio (ministerio.models.AreaMinisterio) a que a funcao
+    # pertence -- agrupa a grade da escala e define quem, alem do lider do
+    # ministerio, pode gerenciar a funcao (lider da area). Vazio = sem area.
+    area_id = mongoengine.IntField()
 
     membro_id = mongoengine.IntField()
     status = mongoengine.StringField(max_length=20)
@@ -573,6 +577,21 @@ class Funcao(SequentialIdDocument):
     checkin_em = mongoengine.DateTimeField()
     checkin_distancia_m = mongoengine.IntField()
     checkin_precisao_m = mongoengine.IntField()
+
+    @property
+    def area(self):
+        if not self.area_id:
+            return None
+        from app.ministerio.areas import area_por_id
+
+        return area_por_id(self.area_id)
+
+    @property
+    def nome_exibido(self):
+        """Nome da funcao com a area junto ("Camera 1 · Live") -- o que vai
+        nos avisos (e-mail, SMS, WhatsApp, sino). Sem area, so o nome."""
+        area = self.area
+        return f"{self.nome} · {area.nome}" if area else self.nome
 
     def limpar_checkin(self):
         self.checkin_em = None
@@ -745,15 +764,27 @@ class PresencaEnsaio(SequentialIdDocument):
 
 def criar_escala_com_funcoes_padrao(
     ministerio_id, nome, departamento, data=None, horario=None, horario_fim=None, cor_selecionada=None,
-    paleta_roupa=None, paleta_roupa_texto=None,
+    paleta_roupa=None, paleta_roupa_texto=None, areas=None,
 ):
-    """Cria uma escala nova ja com as funcoes padrao do departamento escolhido."""
+    """Cria uma escala nova ja com as funcoes padrao do departamento escolhido.
+    Com `areas` (AreaMinisterio marcadas na criacao), as funcoes vem das
+    areas -- as de cada uma, na ordem das areas, com `area_id` -- no lugar
+    das do departamento. Area sem funcoes padrao ganha 1 funcao com o nome
+    dela."""
     escala = Escala(
         ministerio_id=ministerio_id, nome=nome, departamento=departamento, data=data, horario=horario,
         horario_fim=horario_fim, cor_selecionada=cor_selecionada,
         paleta_roupa=paleta_roupa, paleta_roupa_texto=paleta_roupa_texto,
     )
     escala.save()
+
+    if areas:
+        ordem = 0
+        for area in areas:
+            for nome_funcao in (area.funcoes_padrao or [area.nome]):
+                Funcao(escala_id=escala.id, nome=nome_funcao, ordem=ordem, area_id=area.id).save()
+                ordem += 1
+        return escala
 
     funcoes_padrao = DEPARTAMENTOS.get(departamento, [])
     for ordem, nome_funcao in enumerate(funcoes_padrao):
@@ -814,7 +845,7 @@ def trocar_atribuicao(funcao_a, funcao_b):
 def mensagem_para(escala, funcao, membro):
     modelo = MENSAGENS_POR_DEPARTAMENTO.get(escala.departamento, MENSAGENS_POR_DEPARTAMENTO["_padrao"])
     data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
-    mensagem = modelo.format(membro=membro.nome, funcao=funcao.nome, escala=escala.nome, data=data_texto)
+    mensagem = modelo.format(membro=membro.nome, funcao=funcao.nome_exibido, escala=escala.nome, data=data_texto)
     if escala.paleta_do_dia:
         mensagem += f"\nRoupa do dia: {escala.paleta_do_dia}."
     return mensagem

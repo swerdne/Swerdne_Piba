@@ -176,6 +176,12 @@ class UsuarioMinisterio(SequentialIdDocument):
     ministerio_id = mongoengine.IntField(required=True)
     papel = mongoengine.StringField(required=True, max_length=10)
     criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    # Areas (AreaMinisterio) em que a pessoa atua e as que ela lidera -- ver
+    # app/ministerio/areas.py. Lider de area gerencia so as funcoes da area
+    # dele nas escalas (escalar, trocar, status), sem virar lider do
+    # ministerio (papel continua "membro").
+    areas = mongoengine.ListField(mongoengine.IntField())
+    areas_lider = mongoengine.ListField(mongoengine.IntField())
 
     @property
     def usuario(self):
@@ -272,3 +278,26 @@ def criar_ministerio(comunidade_id, nome, descricao=None, imagem=None):
     ministerio = Ministerio(comunidade_id=comunidade_id, nome=nome, descricao=descricao, imagem=imagem)
     ministerio.save()
     return ministerio
+
+
+class AreaMinisterio(SequentialIdDocument):
+    """Subdivisao interna de um Ministerio (ex: Criativo -> Projecao, Midia,
+    Live). Uma escala do ministerio continua sendo UMA so, com as funcoes
+    agrupadas por area (Funcao.area_id). Cada area tem as proprias funcoes
+    padrao (usadas ao criar a escala) e pode ter lideres proprios
+    (UsuarioMinisterio.areas_lider). Ver app/ministerio/areas.py."""
+
+    meta = {"collection": "areas_ministerio", "indexes": ["ministerio_id"]}
+    _nome_sequencia = "areas_ministerio"
+
+    ministerio_id = mongoengine.IntField(required=True)
+    nome = mongoengine.StringField(required=True, max_length=60)
+    ordem = mongoengine.IntField(default=0)
+    cor = mongoengine.StringField(max_length=20)  # chave de escala.models.CORES_DISPONIVEIS
+    funcoes_padrao = mongoengine.ListField(mongoengine.StringField(max_length=80))
+
+    @property
+    def classe_cor(self):
+        from app.escala.models import CORES_DISPONIVEIS
+
+        return CORES_DISPONIVEIS.get(self.cor or "", "bg-indigo-500")

@@ -459,7 +459,21 @@
         <div data-tutorial="funcoes" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
             <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr]">
 
+                {% set area_ns = namespace(atual=0) %}
                 {% for funcao in funcoes %}
+                {% set gerencia_f = eh_dono or (funcao.area_id and funcao.area_id in areas_que_gerencio) %}
+                {% if areas and (funcao.area_id or 0) != area_ns.atual %}
+                {# Cabecalho da area (app/ministerio/areas.py): a grade vem agrupada. #}
+                {% set area_ns.atual = funcao.area_id or 0 %}
+                {% set area_f = funcao.area %}
+                {% if area_f %}
+                <div class="sm:col-span-2 {{ tema.card_bg }} px-3 sm:px-4 py-2 border-t {{ tema.card_border }} {{ 'border-t-0' if loop.first else '' }} flex items-center gap-2" data-area-cabecalho="{{ area_f.id }}">
+                    <span class="w-2.5 h-2.5 rounded-full {{ area_f.classe_cor }}" aria-hidden="true"></span>
+                    <span class="text-xs font-bold uppercase tracking-wide {{ tema.text_primary }}">{{ area_f.nome }}</span>
+                    {% if not eh_dono and area_f.id in areas_que_gerencio %}<span class="text-[10px] font-semibold rounded-full px-2 py-0.5 {{ tema.accent_soft_bg }} {{ tema.accent_text }}">Você lidera</span>{% endif %}
+                </div>
+                {% endif %}
+                {% endif %}
                 {% if funcao.eh_subcabecalho %}
                 <div class="sm:col-span-2 bg-gray-800/80 px-3 sm:px-4 py-2 border-t border-gray-700 {{ 'border-t-0' if loop.first else '' }} flex items-center justify-between gap-2">
                     <span class="text-xs font-semibold text-gray-300 uppercase tracking-wide truncate" data-funcao-nome="{{ funcao.id }}">
@@ -529,7 +543,7 @@
                         {% set pessoa = funcao.membro %}
                         <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full">
                             {{ avatar_membro(tema, pessoa) }}
-                            {% if eh_dono %}
+                            {% if gerencia_f %}
                             <a href="{{ url_for('comunidade.perfil_membro', comunidade_id=pessoa.comunidade_id, membro_id=pessoa.id) }}"
                                title="Abrir perfil" class="text-sm {{ tema.text_primary }} hover:underline truncate max-w-[9rem] sm:max-w-none">{{ pessoa.nome }}</a>
                             {% else %}
@@ -561,7 +575,7 @@
                             </span>
                             {% endif %}
 
-                            {% if eh_dono %}
+                            {% if gerencia_f %}
                             <form method="POST" action="{{ url_for('escala.atualizar_status', funcao_id=funcao.id) }}" class="shrink-0">
                                 {{ formularios_status[funcao.id].hidden_tag() }}
                                 {{ formularios_status[funcao.id].status(
@@ -661,7 +675,7 @@
                             </form>
                             {% endif %}
                         </div>
-                    {% elif not eh_dono %}
+                    {% elif not gerencia_f %}
                         <p class="text-xs {{ tema.text_secondary }} w-full">Vaga em aberto.</p>
                     {% else %}
                         {# Um dropdown so: abre com busca + lista do diretorio; as acoes
@@ -735,6 +749,13 @@
                             class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
                             placeholder="Nome da nova funcao"
                         ) }}
+                        {% if areas %}
+                        <select name="area_id" aria-label="Área da nova função"
+                                class="{{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
+                            <option value="">Sem área</option>
+                            {% for area in areas %}<option value="{{ area.id }}">{{ area.nome }}</option>{% endfor %}
+                        </select>
+                        {% endif %}
                         <button type="submit"
                                 class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
                             <i class="fa-solid fa-plus mr-1"></i>Adicionar funcao
@@ -976,7 +997,7 @@
         </details>
         {% endif %}
 
-        {% if eh_dono %}
+        {% if eh_dono or areas_que_gerencio %}
         <div id="atribuicao-barra" class="hidden sticky bottom-24 lg:bottom-6 flex items-center justify-between gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 shadow-lg">
             <span class="text-sm {{ tema.text_primary }}">
                 <span id="atribuicao-contagem">0</span> pessoa(s) selecionada(s) pra escalar

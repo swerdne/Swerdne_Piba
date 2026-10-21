@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Áreas - {{ ministerio.nome }}{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+    #ministerio-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    [data-area-cartao][open] summary .fa-chevron-down, #nova-area[open] > summary .fa-chevron-down { transform: rotate(180deg); }
+</style>
+{% endblock %}
+
+{#
+Tela "Áreas" do ministerio (ministerio.areas): subdivisoes internas (ex:
+Criativo -> Projecao, Midia, Live). Cada area tem nome, cor e funcoes padrao
+(vem prontas na escala); quem atua/lidera cada area se define na tela Pessoas
+do ministerio. Ver app/ministerio/areas.py.
+#}
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% macro campos_area(area=None) %}
+{% set campo = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+{{ acao_form.hidden_tag() }}
+<div class="grid grid-cols-[1fr_auto] gap-2">
+    <input type="text" name="nome" required maxlength="60" value="{{ area.nome if area else '' }}" placeholder="Nome da área (ex: Projeção)" aria-label="Nome da área" class="{{ campo }}">
+    <select name="cor" aria-label="Cor da área" class="{{ campo }} w-auto">
+        <option value="">Cor</option>
+        {% for chave, classe in cores.items() %}<option value="{{ chave }}" {{ 'selected' if area and area.cor == chave }}>{{ chave | capitalize }}</option>{% endfor %}
+    </select>
+</div>
+<div>
+    <label class="block text-xs font-semibold {{ tema.text_secondary }} mb-1">Funções desta área (uma por linha)</label>
+    <textarea name="funcoes" rows="3" placeholder="Ex: Câmera 1&#10;Câmera 2&#10;Corte" class="{{ campo }}">{{ (area.funcoes_padrao | join('\n')) if area else '' }}</textarea>
+    <p class="text-xs {{ tema.text_secondary }} mt-1">Vêm prontas ao criar uma escala com esta área. Sem nenhuma, a área ganha uma função com o nome dela.</p>
+</div>
+{% endmacro %}
+{% block content %}
+<div id="ministerio-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+
+    <div class="pointer-events-none absolute -top-32 -left-24 w-96 h-96 rounded-full {{ tema.blob_1 }} fundo-blob -z-0"></div>
+    <div class="pointer-events-none absolute top-1/3 -right-24 w-96 h-96 rounded-full {{ tema.blob_2 }} fundo-blob -z-0"></div>
+
+    <div class="relative z-10">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
+            <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+            </span>
+            <span class="min-w-0">
+                <span class="block font-extrabold text-lg {{ tema.text_primary }} truncate">Áreas</span>
+                <span class="block text-xs {{ tema.text_secondary }} truncate -mt-0.5">{{ ministerio.nome }}</span>
+            </span>
+        </a>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-4 pb-24 max-w-2xl mx-auto space-y-5">
+
+        <p class="text-sm {{ tema.text_secondary }}">
+            Divida o ministério em áreas (ex: Projeção, Mídia, Live). A escala continua uma só, com as funções agrupadas por área.
+            Quem atua e quem lidera cada área você escolhe em
+            <a href="{{ url_for('ministerio.papeis', ministerio_id=ministerio.id) }}" class="{{ tema.accent_text }} font-semibold hover:underline">Pessoas do ministério</a>.
+            O líder de uma área escala e cuida só das funções dela.
+        </p>
+
+        <details id="nova-area" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm" {{ 'open' if not areas }}>
+            <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3.5">
+                <span class="w-9 h-9 rounded-xl {{ tema.accent_bg }} flex items-center justify-center text-white shrink-0"><i class="fa-solid fa-plus text-sm"></i></span>
+                <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Nova área</span>
+                <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition"></i>
+            </summary>
+            <form method="POST" action="{{ url_for('ministerio.areas', ministerio_id=ministerio.id) }}" class="px-4 pb-4 space-y-3">
+                {{ campos_area() }}
+                <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">Criar área</button>
+            </form>
+        </details>
+
+        {% if areas %}
+        <section class="space-y-2" data-lista-areas>
+            {% for area in areas %}
+            {% set r = resumo[area.id] %}
+            <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm" data-area-cartao>
+                <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3">
+                    <span class="w-3 h-3 rounded-full {{ area.classe_cor }} shrink-0" aria-hidden="true"></span>
+                    <span class="flex-1 min-w-0">
+                        <span class="block text-sm font-semibold {{ tema.text_primary }} truncate">{{ area.nome }}</span>
+                        <span class="block text-xs {{ tema.text_secondary }} truncate">
+                            {{ area.funcoes_padrao | length }} função(ões) · {{ r.atuam }} pessoa(s){% if r.lideres %} · líder: {{ r.lideres | join(', ') }}{% endif %}
+                        </span>
+                    </span>
+                    <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition"></i>
+                </summary>
+                <div class="px-4 pb-4 space-y-3">
+                    <form method="POST" action="{{ url_for('ministerio.editar_area', ministerio_id=ministerio.id, area_id=area.id) }}" class="space-y-3">
+                        {{ campos_area(area) }}
+                        <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">Salvar</button>
+                    </form>
+                    <div class="flex items-center gap-2 pt-1 border-t {{ tema.card_border }}">
+                        {% if not loop.first %}
+                        <form method="POST" action="{{ url_for('ministerio.mover_area', ministerio_id=ministerio.id, area_id=area.id, direcao='cima') }}">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" class="text-xs font-semibold {{ tema.text_secondary }} hover:underline"><i class="fa-solid fa-arrow-up mr-1"></i>Subir</button>
+                        </form>
+                        {% endif %}
+                        {% if not loop.last %}
+                        <form method="POST" action="{{ url_for('ministerio.mover_area', ministerio_id=ministerio.id, area_id=area.id, direcao='baixo') }}">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" class="text-xs font-semibold {{ tema.text_secondary }} hover:underline"><i class="fa-solid fa-arrow-down mr-1"></i>Descer</button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('ministerio.excluir_area', ministerio_id=ministerio.id, area_id=area.id) }}" class="ml-auto"
+                              data-confirm-excluir="Excluir a área {{ area.nome }}? As escalas não são apagadas: as funções dela só ficam sem área.">
+                            {{ acao_form.hidden_tag() }}
+                            <button type="submit" class="text-xs font-semibold text-red-500 hover:underline"><i class="fa-solid fa-trash mr-1"></i>Excluir área</button>
+                        </form>
+                    </div>
+                </div>
+            </details>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+    </main>
+    {{ nav_inferior(tema, 'comunidades') }}
+    </div>
+</div>
+{% endblock %}

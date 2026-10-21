@@ -30,6 +30,10 @@ Além de escolher um `Membro` do diretório, o dono pode buscar uma conta já ca
 
 `detalhe()` calcula `avisos_por_membro`/`avisos_por_funcao` só quando `Escala.data` está definida (`avisos_disponibilidade(membro, data)`, `models.py`) — decora o rótulo de cada opção do `<select>` "Selecione a pessoa" pra funções vazias (`nome (indisponivel: Trabalho)`) e mostra um badge "Possível conflito" perto de quem já está escalado. É só um AVISO, nunca bloqueia — quem cadastra o `CicloDisponibilidade` (recorrência de indisponibilidade, ex. turno de trabalho externo 4x4) e as telas ficam em `app/comunidade` (ver [app/comunidade/CLAUDE.md](../comunidade/CLAUDE.md)), o model fica aqui (`escala/models.py`) junto de `Membro`, só a exibição do aviso é responsabilidade deste módulo.
 
+## Áreas do ministério
+
+`Funcao.area_id` (opcional) liga a função a uma `ministerio.models.AreaMinisterio` — ver a seção "Áreas do ministério" do [CLAUDE.md raiz](../../CLAUDE.md) e `app/ministerio/areas.py`. Em `detalhe()`, `gerencia_f` (no template) = `eh_dono` OU área da função liderada pela conta (`areas_que_gerencio`); os forms de escrita só são montados pras funções que a conta gerencia. Renomear/excluir função e criar função/categoria continuam só pro líder do ministério (`eh_dono`). Use `funcao.nome_exibido` (com a área) em todo texto de aviso, nunca `funcao.nome` puro.
+
 ## Geração da escala
 
 `criar_escala_com_funcoes_padrao(ministerio_id, nome, departamento, data, horario)` cria a `Escala` e semeia as `Funcao` do departamento, todas com `membro_id=None`. Atribuir alguém é uma ação manual separada (`SelecionarMembroForm`) — **não existe fila/rotação aqui**. Só é usada para escalas manuais; escalas geradas por rodízio são criadas por `app/plantao/sincronizacao.py::_materializar_periodo` (sempre 1 única `Funcao`, nunca esta função).

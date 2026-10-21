@@ -51,11 +51,28 @@
             <div>
                 {{ form.departamento.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
                 {{ form.departamento(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
-                <p class="text-xs {{ tema.text_secondary }} mt-1">Define as funcoes sugeridas na proxima tela (voce pode ajustar depois).</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">{{ 'Usado no aviso e na cor; as funções vêm das áreas marcadas abaixo.' if areas else 'Define as funcoes sugeridas na proxima tela (voce pode ajustar depois).' }}</p>
                 {% for erro in form.departamento.errors %}
                     <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
                 {% endfor %}
             </div>
+
+            {% if areas %}
+            {# Areas do ministerio (app/ministerio/areas.py): cada uma marcada traz
+               as funcoes padrao dela, agrupadas na escala. #}
+            <fieldset>
+                <legend class="{{ tema.text_secondary }} block text-sm font-medium mb-1.5">Áreas desta escala</legend>
+                <div class="flex flex-wrap gap-2">
+                    {% for area in areas %}
+                    <label class="inline-flex items-center gap-2 border {{ tema.card_border }} rounded-full px-3 py-1.5 text-sm {{ tema.text_primary }} cursor-pointer has-[:checked]:border-indigo-500">
+                        <input type="checkbox" name="areas" value="{{ area.id }}" checked class="w-4 h-4 rounded">
+                        <span class="w-2.5 h-2.5 rounded-full {{ area.classe_cor }}" aria-hidden="true"></span>{{ area.nome }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Desmarque as áreas que não servem nesse dia. Sem nenhuma marcada, valem as funções do departamento.</p>
+            </fieldset>
+            {% endif %}
 
             <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">

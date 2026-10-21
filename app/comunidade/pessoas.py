@@ -93,5 +93,5 @@ def contar_categorias(itens):
     contagem = {"admin": 0, "sem-acesso": 0, "fora-diretorio": 0}
     for item in itens:
         for categoria in item["categorias"].split():
-            contagem[categoria] += 1
+            contagem[categoria] = contagem.get(categoria, 0) + 1
     return contagem

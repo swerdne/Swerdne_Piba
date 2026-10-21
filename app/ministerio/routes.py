@@ -628,6 +628,9 @@ def excluir_ministerio_em_cascata(ministerio):
     for turno in TurnoPlantao.objects(ministerio_id=ministerio.id):
         delete_cascade(turno)
 
+    from app.ministerio.models import AreaMinisterio
+
+    AreaMinisterio.objects(ministerio_id=ministerio.id).delete()
     delete_cascade(ministerio)
 
 
@@ -739,6 +742,15 @@ def papeis(ministerio_id):
     pessoas = lista_de_pessoas(
         [m for m in diretorio if m.email and m.email.strip().lower() in emails_no_ministerio], papeis_atuais
     )
+    # Areas (Criativo -> Projecao, Midia, Live): selos por pessoa e filtro.
+    from app.ministerio.areas import areas_do_ministerio
+
+    areas = areas_do_ministerio(ministerio.id)
+    for item in pessoas:
+        linha = item["conta"]
+        item["areas"] = [a for a in areas if a.id in (linha.areas or [])]
+        item["areas_lider"] = set(linha.areas_lider or [])
+        item["categorias"] += "".join(f" area-{a.id}" for a in item["areas"])
     escolher_do_diretorio = sorted(
         (m for m in diretorio if m.email and m.email.strip().lower() not in emails_no_ministerio),
         key=lambda m: m.nome.lower(),
@@ -759,6 +771,7 @@ def papeis(ministerio_id):
         papeis_atuais=papeis_atuais,
         pessoas=pessoas,
         contagens=contar_categorias(pessoas),
+        areas=areas,
         escolher_do_diretorio=escolher_do_diretorio,
         convites_pendentes=convites_pendentes,
         acao_form=AcaoForm(),
@@ -2388,3 +2401,171 @@ def folha_pasta(pasta_id, tipo):
         observacoes=None,
         vazio="Nenhuma musica nesta pasta.",
     )
+
+
+# --- Areas do ministerio -------------------------------------------------------
+#
+# Subdivisoes internas (ex: Criativo -> Projecao, Midia, Live) -- ver
+# app/ministerio/areas.py. So o lider do ministerio (ou admin da comunidade)
+# cria/edita/ordena/exclui areas e define quem atua e quem lidera cada uma.
+
+_MAX_FUNCOES_AREA = 30
+
+
+def _dados_da_area(form):
+    """(nome, cor, funcoes_padrao, erro) lidos do formulario da area."""
+    from app.escala.models import CORES_DISPONIVEIS
+
+    nome = (form.get("nome") or "").strip()[:60]
+    cor = form.get("cor") or ""
+    if cor not in CORES_DISPONIVEIS:
+        cor = None
+    funcoes = []
+    for linha in (form.get("funcoes") or "").splitlines():
+        linha = linha.strip()[:80]
+        if linha and linha.lower() not in {f.lower() for f in funcoes}:
+            funcoes.append(linha)
+    erro = None
+    if not nome:
+        erro = "Dê um nome para a área."
+    elif len(funcoes) > _MAX_FUNCOES_AREA:
+        erro = f"No máximo {_MAX_FUNCOES_AREA} funções por área."
+    return nome, cor, funcoes, erro
+
+
+def _area_do_ministerio_ou_404(ministerio, area_id):
+    from app.ministerio.models import AreaMinisterio
+
+    return primeiro_ou_404(AreaMinisterio.objects(id=area_id, ministerio_id=ministerio.id))
+
+
+@bp.route("/<int:ministerio_id>/areas", methods=["GET", "POST"])
+@login_required
+def areas(ministerio_id):
+    """Tela "Áreas": lista as areas (com quantas pessoas atuam e quem lidera)
+    e cria uma nova (POST)."""
+    from app.escala.models import CORES_DISPONIVEIS
+    from app.ministerio.areas import areas_do_ministerio
+    from app.ministerio.models import AreaMinisterio
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    destino = url_for("ministerio.areas", ministerio_id=ministerio.id)
+
+    if request.method == "POST":
+        if not AcaoForm().validate_on_submit():
+            flash("Acao invalida.", "danger")
+            return redirect(destino)
+        nome, cor, funcoes, erro = _dados_da_area(request.form)
+        existentes = areas_do_ministerio(ministerio.id)
+        if not erro and any(a.nome.lower() == nome.lower() for a in existentes):
+            erro = f'Já existe a área "{nome}".'
+        if erro:
+            flash(erro, "danger")
+            return redirect(destino)
+        AreaMinisterio(
+            ministerio_id=ministerio.id, nome=nome, cor=cor, funcoes_padrao=funcoes,
+            ordem=max([a.ordem for a in existentes], default=-1) + 1,
+        ).save()
+        flash(f'Área "{nome}" criada. Nas próximas escalas, as funções dela já vêm prontas.', "success")
+        return redirect(destino)
+
+    lista = areas_do_ministerio(ministerio.id)
+    linhas = list(UsuarioMinisterio.objects(ministerio_id=ministerio.id))
+    from app.comunidade.pessoas import nome_da_conta, pre_carregar_usuarios
+
+    pre_carregar_usuarios(linhas)
+    resumo = {
+        a.id: {
+            "atuam": sum(1 for l in linhas if a.id in (l.areas or [])),
+            "lideres": [nome_da_conta(l.usuario) for l in linhas if a.id in (l.areas_lider or []) and l.usuario],
+        }
+        for a in lista
+    }
+    return render_template(
+        "ministerio/areas.html", ministerio=ministerio, areas=lista, resumo=resumo,
+        cores=CORES_DISPONIVEIS, acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/<int:ministerio_id>/areas/<int:area_id>/editar", methods=["POST"])
+@login_required
+def editar_area(ministerio_id, area_id):
+    from app.ministerio.areas import areas_do_ministerio
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    area = _area_do_ministerio_ou_404(ministerio, area_id)
+    destino = url_for("ministerio.areas", ministerio_id=ministerio.id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(destino)
+    nome, cor, funcoes, erro = _dados_da_area(request.form)
+    if not erro and any(a.id != area.id and a.nome.lower() == nome.lower() for a in areas_do_ministerio(ministerio.id)):
+        erro = f'Já existe a área "{nome}".'
+    if erro:
+        flash(erro, "danger")
+        return redirect(destino)
+    area.nome, area.cor, area.funcoes_padrao = nome, cor, funcoes
+    area.save()
+    flash(f'Área "{nome}" salva. As escalas já criadas não mudam.', "success")
+    return redirect(destino)
+
+
+@bp.route("/<int:ministerio_id>/areas/<int:area_id>/mover/<any(cima, baixo):direcao>", methods=["POST"])
+@login_required
+def mover_area(ministerio_id, area_id, direcao):
+    from app.ministerio.areas import areas_do_ministerio
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    area = _area_do_ministerio_ou_404(ministerio, area_id)
+    destino = url_for("ministerio.areas", ministerio_id=ministerio.id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(destino)
+    lista = list(areas_do_ministerio(ministerio.id))
+    i = next(i for i, a in enumerate(lista) if a.id == area.id)
+    j = i - 1 if direcao == "cima" else i + 1
+    if 0 <= j < len(lista):
+        lista[i], lista[j] = lista[j], lista[i]
+        for ordem, a in enumerate(lista):
+            if a.ordem != ordem:
+                a.update(set__ordem=ordem)
+    return redirect(destino)
+
+
+@bp.route("/<int:ministerio_id>/areas/<int:area_id>/excluir", methods=["POST"])
+@login_required
+def excluir_area(ministerio_id, area_id):
+    from app.ministerio.areas import excluir_area as apagar
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    area = _area_do_ministerio_ou_404(ministerio, area_id)
+    destino = url_for("ministerio.areas", ministerio_id=ministerio.id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(destino)
+    nome = area.nome
+    apagar(area)
+    flash(f'Área "{nome}" excluída. As funções dela nas escalas continuam, só sem área.', "success")
+    return redirect(destino)
+
+
+@bp.route("/<int:ministerio_id>/papeis/<int:usuario_ministerio_id>/areas", methods=["POST"])
+@login_required
+def areas_da_pessoa(ministerio_id, usuario_ministerio_id):
+    """Em quais areas a pessoa atua e quais ela lidera (menu ⋯ da pessoa na
+    tela Pessoas do ministerio). Liderar implica atuar."""
+    from app.ministerio.areas import areas_do_ministerio
+
+    ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
+    linha = primeiro_ou_404(UsuarioMinisterio.objects(id=usuario_ministerio_id, ministerio_id=ministerio.id))
+    destino = url_for("ministerio.papeis", ministerio_id=ministerio.id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(destino)
+    validas = {a.id for a in areas_do_ministerio(ministerio.id)}
+    lider = sorted({int(x) for x in request.form.getlist("areas_lider") if x.isdigit() and int(x) in validas})
+    atua = sorted(set(lider) | {int(x) for x in request.form.getlist("areas") if x.isdigit() and int(x) in validas})
+    linha.update(set__areas=atua, set__areas_lider=lider)
+    nome = linha.usuario.name or linha.usuario.username or linha.usuario.email if linha.usuario else "Pessoa"
+    flash(f"Áreas de {nome} salvas.", "success")
+    return redirect(destino)
