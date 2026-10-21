@@ -213,6 +213,35 @@ def index():
     return redirect(url_for("main.dashboard"))
 
 
+@bp.route("/.well-known/assetlinks.json")
+def assetlinks():
+    """Prova pro Android que o app TyBenson.apk (pacote com.tybenson.app) e
+    deste site: com isso o app abre em tela cheia, sem barra de endereco
+    (Trusted Web Activity). Tem a impressao digital PUBLICA da chave de
+    assinatura -- a chave em si nunca vem pro repositorio (ver .gitignore).
+    Gerado pelo PWABuilder junto com o APK; trocar a chave = trocar este
+    arquivo e gerar outro APK."""
+    resposta = current_app.send_static_file("android/assetlinks.json")
+    resposta.mimetype = "application/json"
+    return resposta
+
+
+@bp.route("/app/TyBenson.apk")
+def baixar_apk():
+    """APK do Android pra instalar direto, sem Play Store (botao "Baixar o app
+    para Android" em main.js, so aparece no Android). O app abre o proprio
+    site, entao mudanca no site nao exige APK novo -- so nome/icone/cores/
+    dominio. Publico de proposito (link na tela de login)."""
+    import os
+    from flask import send_from_directory
+
+    return send_from_directory(
+        os.path.join(current_app.static_folder, "android"), "TyBenson.apk",
+        mimetype="application/vnd.android.package-archive",
+        as_attachment=True, download_name="TyBenson.apk", max_age=3600,
+    )
+
+
 @bp.route("/service-worker.js")
 def service_worker():
     """Serve o arquivo de static/js/ na raiz do site -- o escopo padrao de um

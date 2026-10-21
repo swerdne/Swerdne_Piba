@@ -114,6 +114,12 @@
                 Instalar o app no celular
             </button>
         </p>
+        <p class="text-center mt-3" data-instalar-apk hidden>
+            <a href="{{ url_for('main.baixar_apk') }}" class="inline-flex items-center gap-1.5 text-sm text-emerald-400 font-medium hover:text-emerald-300 hover:underline">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"></path><path d="M5 19h14"></path></svg>
+                Baixar o app para Android (.apk)
+            </a>
+        </p>
         <p class="text-center text-xs text-gray-500 mt-4">
             <a href="{{ url_for('main.privacidade') }}" class="hover:text-gray-300 hover:underline">Privacidade</a>
             &middot; <a href="{{ url_for('main.termos') }}" class="hover:text-gray-300 hover:underline">Termos</a>

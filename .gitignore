@@ -14,3 +14,8 @@ dist/
 build/
 app/static/uploads/avatars/*
 !app/static/uploads/avatars/.gitkeep
+
+# Chave de assinatura do app Android (TyBenson.apk) -- NUNCA no repositorio
+*.keystore
+*.jks
+signing-key-info.txt

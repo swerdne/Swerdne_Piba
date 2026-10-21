@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.tybenson.app",
+        "sha256_cert_fingerprints": ["07:77:7F:9C:B1:A0:04:21:74:C0:29:23:4F:F3:BB:FC:81:BB:72:53:68:A1:19:70:5D:F4:0A:A1:AA:07:BD:C9"]
+      }
+    }]

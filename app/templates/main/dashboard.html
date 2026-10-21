@@ -71,6 +71,10 @@
                                 class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-bold px-4 py-2 rounded-full transition">
                             Instalar app
                         </button>
+                        <a href="{{ url_for('main.baixar_apk') }}" data-instalar-apk hidden
+                           class="inline-flex items-center gap-1 text-xs font-semibold {{ tema.accent_text }} hover:underline">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"></path><path d="M5 19h14"></path></svg>Baixar .apk
+                        </a>
                         <button type="button" data-instalar-dispensar class="text-xs font-semibold {{ tema.text_secondary }} hover:underline">
                             Agora não
                         </button>
@@ -328,6 +332,16 @@
                 </span>
                 {{ chevron("w-4 h-4 shrink-0 " ~ tema.text_secondary) }}
             </button>
+            <!-- APK do Android (so aparece no Android; ver "Instalar o app" em main.js) -->
+            <a href="{{ url_for('main.baixar_apk') }}" data-instalar-apk hidden
+               class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center gap-3 text-left {{ tema.card_bg_hover }} transition">
+                <span class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-emerald-500/15 text-emerald-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"></path><path d="M5 19h14"></path></svg></span>
+                <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-bold {{ tema.text_primary }}">Baixar o app para Android (.apk)</span>
+                    <span class="block text-xs {{ tema.text_secondary }}">Instala direto, sem passar pelo navegador · 1,5 MB</span>
+                </span>
+                {{ chevron("w-4 h-4 shrink-0 " ~ tema.text_secondary) }}
+            </a>
 
             <!-- Informacoes pessoais -->
             <div>

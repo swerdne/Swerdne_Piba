@@ -498,8 +498,12 @@ if ("serviceWorker" in navigator) {
 // sem o pedido (Firefox etc.): passo a passo pelo menu do navegador. Ja
 // instalado (aberto como app) ou computador sem suporte: nada aparece.
 // [data-instalar-dispensavel] some por 30 dias com "Agora nao".
+// [data-instalar-apk] = link pro APK (/app/TyBenson.apk), so no Android; depois
+// do toque abre o passo a passo de "instalar app de fonte desconhecida". No
+// Chrome do Android sem o pedido (PWA ja instalado) o botao "Instalar app"
+// some e fica so o APK. Dentro do proprio app (TWA/PWA) nada aparece.
 (function () {
-    var alvos = document.querySelectorAll("[data-instalar]");
+    var alvos = document.querySelectorAll("[data-instalar], [data-instalar-apk]");
     if (!alvos.length) return;
     var instalado = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
     if (instalado) return;
@@ -509,7 +513,8 @@ if ("serviceWorker" in navigator) {
     // Chrome do Android (e Samsung, que tambem tem "Chrome/" no nome) manda o
     // pedido quando da pra instalar; sem pedido = ja instalado. So os outros
     // (Firefox...) precisam do passo a passo pelo menu.
-    var androidSemPedido = /Android/.test(ua) && !/Chrome\//.test(ua);
+    var android = /Android/.test(ua);
+    var androidSemPedido = android && !/Chrome\//.test(ua);
     var CHAVE_DISPENSA = "instalar-app-dispensado-ate";
 
     function dispensado() {
@@ -518,15 +523,25 @@ if ("serviceWorker" in navigator) {
     function mostrar() {
         alvos.forEach(function (el) {
             if (el.hasAttribute("data-instalar-dispensavel") && dispensado()) return;
+            if (el.hasAttribute("data-instalar-apk") && !android) return;
             el.hidden = false;
         });
+        // Chrome do Android sem o pedido: o PWA ja esta instalado -- o botao
+        // so abriria o passo a passo a toa; fica o APK.
+        var semBotao = android && !androidSemPedido && !window.pedidoInstalarApp;
+        document.querySelectorAll("[data-instalar-botao]").forEach(function (botao) { botao.hidden = semBotao; });
     }
     function esconder() {
         alvos.forEach(function (el) { el.hidden = true; });
     }
 
-    function passoAPasso() {
-        var passos = ios
+    function passoAPasso(apk) {
+        var passos = apk
+            ? ["Espere o download do <b>TyBenson.apk</b> terminar e toque na notificação (ou abra em <b>Arquivos › Downloads</b>).",
+               "Se o Android pedir, toque em <b>Configurações</b> e ative <b>Permitir desta fonte</b>. Depois volte.",
+               "Toque em <b>Instalar</b>. Se aparecer aviso do Play Protect, toque em <b>Instalar mesmo assim</b>.",
+               "Pronto: o TyBenson aparece na lista de apps. Entre com sua conta uma vez."]
+            : ios
             ? ["Toque em <b>Compartilhar</b> " + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>' +
                " (no Safari fica na barra de baixo; no Chrome, na barra de endereço).",
                "Role a lista e toque em <b>Adicionar à Tela de Início</b>.",
@@ -549,7 +564,7 @@ if ("serviceWorker" in navigator) {
         dialogo.innerHTML =
             '<div style="padding:22px 22px 18px;font-family:inherit">' +
             '<p style="margin:0 0 4px;font-size:18px;font-weight:800">Instalar o TyBenson</p>' +
-            '<p style="margin:0 0 16px;font-size:13px;color:#6b7280">' + (ios ? "No iPhone é assim (leva 10 segundos):" : "Pelo navegador é assim:") + "</p>" +
+            '<p style="margin:0 0 16px;font-size:13px;color:#6b7280">' + (apk ? "O download começou. Para instalar:" : ios ? "No iPhone é assim (leva 10 segundos):" : "Pelo navegador é assim:") + "</p>" +
             '<ol style="margin:0;padding:0;list-style:none;display:grid;gap:12px">' +
             passos.map(function (texto, i) {
                 return '<li style="display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.45">' +
@@ -573,6 +588,11 @@ if ("serviceWorker" in navigator) {
             document.querySelectorAll("[data-instalar-dispensavel]").forEach(function (el) { el.hidden = true; });
             return;
         }
+        if (e.target.closest("[data-instalar-apk]")) {
+            // o download segue pelo link; o passo a passo entra logo depois
+            setTimeout(function () { passoAPasso(true); }, 600);
+            return;
+        }
         if (!e.target.closest("[data-instalar-botao]")) return;
         var pedido = window.pedidoInstalarApp;
         if (pedido) {
@@ -587,7 +607,7 @@ if ("serviceWorker" in navigator) {
     });
 
     window.addEventListener("appinstalled", esconder);
-    if (window.pedidoInstalarApp || ios || androidSemPedido) mostrar();
+    if (window.pedidoInstalarApp || ios || android) mostrar();
     document.addEventListener("pode-instalar-app", mostrar);
 })();
 
