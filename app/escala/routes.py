@@ -397,6 +397,21 @@ def detalhe(escala_id):
     # agrupada por area e o lider de uma area gerencia as funcoes dela.
     areas = areas_do_ministerio(escala.ministerio_id)
     funcoes = ordenar_por_area(funcoes, areas)
+    # Quem escolheu areas ("Minhas areas") ve so as funcoes delas -- mais as
+    # sem area e as em que a propria pessoa esta escalada. Lider do
+    # ministerio/admin e quem nao tem area veem tudo.
+    filtro_areas = None
+    if areas and not eh_dono:
+        from app.ministerio.areas import areas_visiveis
+
+        filtro_areas = areas_visiveis(escala.ministerio, current_user)
+    if filtro_areas:
+        meu_email = (current_user.email or "").strip().lower()
+        funcoes = [
+            f for f in funcoes
+            if not f.area_id or f.area_id in filtro_areas
+            or (f.membro_id and f.membro and (f.membro.email or "").strip().lower() == meu_email)
+        ]
     areas_que_gerencio = set() if eh_dono or not areas else areas_lideradas(escala.ministerio_id, current_user)
     gerencia_alguma = eh_dono or any(f.area_id in areas_que_gerencio for f in funcoes)
     # Quem atua em cada area (contas com UsuarioMinisterio.areas) vira o
@@ -514,6 +529,7 @@ def detalhe(escala_id):
         eh_dono=eh_dono,
         areas=areas,
         areas_que_gerencio=areas_que_gerencio,
+        filtro_areas=[a for a in areas if a.id in filtro_areas] if filtro_areas else [],
         diretorio_vazio=diretorio_vazio,
         formularios_membro=formularios_membro,
         formularios_mover=formularios_mover,

@@ -343,10 +343,20 @@ def detalhe(ministerio_id):
 
     data_extenso = f"{DIAS_SEMANA_PT[hoje.weekday()]}, {hoje.day} de {MESES_PT[hoje.month].lower()}"
 
+    # "Minhas areas": quem participa (nao lider) escolhe em quais areas serve
+    # -- e passa a ver na escala so as funcoes delas (app/ministerio/areas.py).
+    from app.ministerio.areas import areas_do_ministerio, papel_no_ministerio, precisa_escolher_areas
+
+    areas_ministerio = areas_do_ministerio(ministerio.id)
+    minha_linha = papel_no_ministerio(ministerio.id, current_user) if areas_ministerio and not pode_gerenciar else None
+
     return render_template(
         "ministerio/detalhe.html",
         ministerio=ministerio,
         pode_gerenciar=pode_gerenciar,
+        areas_ministerio=areas_ministerio,
+        minha_linha=minha_linha,
+        escolher_areas=precisa_escolher_areas(minha_linha, areas_ministerio),
         config_checkin=_config_checkin(ministerio) if pode_gerenciar else None,
         abrir_checkin=request.args.get("checkin") == "1",
         eh_admin=eh_admin,
@@ -2568,4 +2578,32 @@ def areas_da_pessoa(ministerio_id, usuario_ministerio_id):
     linha.update(set__areas=atua, set__areas_lider=lider)
     nome = linha.usuario.name or linha.usuario.username or linha.usuario.email if linha.usuario else "Pessoa"
     flash(f"Áreas de {nome} salvas.", "success")
+    return redirect(destino)
+
+
+@bp.route("/<int:ministerio_id>/minhas-areas", methods=["POST"])
+@login_required
+def minhas_areas(ministerio_id):
+    """A propria pessoa escolhe em quais areas do ministerio serve (cartao
+    "Minhas áreas" da tela do ministerio). So quem tem papel no ministerio
+    (404 pros demais). Nenhuma marcada = todas (ve a escala inteira). As
+    areas que ela lidera ficam sempre (quem tira lideranca e o lider)."""
+    from app.fuso import agora_brasilia
+    from app.ministerio.areas import areas_do_ministerio
+
+    ministerio = primeiro_ou_404(Ministerio.objects(id=ministerio_id))
+    linha = primeiro_ou_404(UsuarioMinisterio.objects(ministerio_id=ministerio.id, usuario_id=current_user.id))
+    destino = url_for("ministerio.detalhe", ministerio_id=ministerio.id)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(destino)
+    validas = {a.id: a for a in areas_do_ministerio(ministerio.id)}
+    escolhidas = {int(x) for x in request.form.getlist("areas") if x.isdigit() and int(x) in validas}
+    escolhidas |= set(linha.areas_lider or [])
+    linha.update(set__areas=sorted(escolhidas), set__areas_escolhidas_em=agora_brasilia())
+    if escolhidas:
+        nomes = ", ".join(validas[i].nome for i in sorted(escolhidas, key=lambda i: validas[i].ordem) if i in validas)
+        flash(f"Pronto! Nas escalas você vê as funções de: {nomes}.", "success")
+    else:
+        flash("Pronto! Você vê a escala inteira, de todas as áreas.", "success")
     return redirect(destino)

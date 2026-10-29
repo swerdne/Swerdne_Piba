@@ -75,6 +75,44 @@
         <p class="text-sm {{ tema.text_secondary }} mb-4">{{ ministerio.descricao }}</p>
         {% endif %}
 
+        {% if minha_linha and areas_ministerio %}
+        {# "Minhas áreas" (ministerio.minhas_areas): quem participa escolhe em quais
+           areas serve e passa a ver so as funcoes delas na escala. Na 1a visita
+           vem aberto, como pergunta. #}
+        {% set minhas = minha_linha.areas or [] %}
+        <details id="minhas-areas" class="mb-5 {{ tema.card_bg }} border {{ 'border-indigo-500/60' if escolher_areas else tema.card_border }} rounded-3xl shadow-sm" {{ 'open' if escolher_areas }} data-minhas-areas>
+            <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3.5">
+                <span class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0"><i class="fa-solid fa-layer-group text-sm"></i></span>
+                <span class="flex-1 min-w-0">
+                    {% if escolher_areas %}
+                    <span class="block text-sm font-bold {{ tema.text_primary }}">Em quais áreas você serve?</span>
+                    <span class="block text-xs {{ tema.text_secondary }}">Escolha para ver nas escalas só as funções das suas áreas.</span>
+                    {% else %}
+                    <span class="block text-sm font-semibold {{ tema.text_primary }}">Minhas áreas</span>
+                    <span class="block text-xs {{ tema.text_secondary }} truncate">
+                        {% if minhas %}{% for area in areas_ministerio if area.id in minhas %}{{ area.nome }}{{ ', ' if not loop.last }}{% endfor %}{% else %}Todas as áreas{% endif %}
+                    </span>
+                    {% endif %}
+                </span>
+                <span class="text-xs font-semibold {{ tema.accent_text }} shrink-0">{{ '' if escolher_areas else 'Trocar' }}</span>
+            </summary>
+            <form method="POST" action="{{ url_for('ministerio.minhas_areas', ministerio_id=ministerio.id) }}" class="px-4 pb-4 space-y-3">
+                {{ acao_form.hidden_tag() }}
+                <div class="flex flex-wrap gap-2">
+                    {% for area in areas_ministerio %}
+                    {% set lidera = area.id in (minha_linha.areas_lider or []) %}
+                    <label class="inline-flex items-center gap-2 border {{ tema.card_border }} rounded-full px-3 py-1.5 text-sm {{ tema.text_primary }} cursor-pointer has-[:checked]:border-indigo-500">
+                        <input type="checkbox" name="areas" value="{{ area.id }}" {{ 'checked' if area.id in minhas or lidera }} {{ 'disabled' if lidera }} class="w-4 h-4 rounded">
+                        <span class="w-2.5 h-2.5 rounded-full {{ area.classe_cor }}" aria-hidden="true"></span>{{ area.nome }}{% if lidera %} <span class="text-[10px] {{ tema.text_secondary }}">(você lidera)</span>{% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="text-xs {{ tema.text_secondary }}">Sem nenhuma marcada, você vê a escala inteira. Dá para trocar quando quiser.</p>
+                <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">Salvar</button>
+            </form>
+        </details>
+        {% endif %}
+
         <div class="grid lg:grid-cols-[1fr_280px] gap-6 items-start">
 
             <!-- Coluna das escalas -->

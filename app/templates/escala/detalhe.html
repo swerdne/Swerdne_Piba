@@ -455,6 +455,13 @@
         {% endif %}
         {% endif %}
 
+        {% if filtro_areas %}
+        <p class="flex items-center gap-2 text-xs {{ tema.text_secondary }} -mb-2" data-filtro-areas>
+            <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+            <span>Mostrando suas áreas: <span class="font-semibold {{ tema.text_primary }}">{% for a in filtro_areas %}{{ a.nome }}{{ ', ' if not loop.last }}{% endfor %}</span>.</span>
+            <a href="{{ url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}#minhas-areas" class="{{ tema.accent_text }} font-semibold hover:underline shrink-0">Trocar</a>
+        </p>
+        {% endif %}
         <!-- Grid da escala -->
         <div data-tutorial="funcoes" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
             <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr]">

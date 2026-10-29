@@ -182,6 +182,9 @@ class UsuarioMinisterio(SequentialIdDocument):
     # ministerio (papel continua "membro").
     areas = mongoengine.ListField(mongoengine.IntField())
     areas_lider = mongoengine.ListField(mongoengine.IntField())
+    # Quando a propria pessoa escolheu as areas ("Minhas areas" na tela do
+    # ministerio). Vazio + sem areas = ainda nao escolheu -> aparece o convite.
+    areas_escolhidas_em = mongoengine.DateTimeField()
 
     @property
     def usuario(self):

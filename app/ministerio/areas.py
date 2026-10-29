@@ -51,6 +51,27 @@ def areas_lideradas(ministerio_id, usuario):
     return set(linha.areas_lider or []) if linha else set()
 
 
+def areas_visiveis(ministerio, usuario):
+    """Ids das areas que a conta enxerga na escala, ou None = todas.
+    Lider do ministerio/admin e quem nao tem area nenhuma veem tudo; quem
+    escolheu (ou foi colocado em) areas ve so as funcoes delas -- mais as
+    sem area e as em que a propria pessoa esta escalada (filtro na escala)."""
+    from app.ministerio.routes import _eh_lider_do_ministerio
+
+    if _eh_lider_do_ministerio(ministerio, usuario):
+        return None
+    linha = papel_no_ministerio(ministerio.id, usuario)
+    escolhidas = set(linha.areas or []) | set(linha.areas_lider or []) if linha else set()
+    return escolhidas or None
+
+
+def precisa_escolher_areas(linha, areas):
+    """Mostra "Em quais areas voce serve?" na 1a visita ao ministerio (ou
+    logo depois de entrar pelo link): ministerio com areas, pessoa com papel
+    nele, que nunca escolheu e nao foi colocada em area nenhuma."""
+    return bool(areas) and linha is not None and not linha.areas_escolhidas_em and not linha.areas
+
+
 def pode_gerenciar_funcao(funcao, ministerio, usuario):
     """Lider do ministerio/admin: qualquer funcao. Lider de area: so funcao da
     area dele."""

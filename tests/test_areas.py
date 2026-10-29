@@ -150,3 +150,50 @@ def test_escalado_na_area_entra_na_area(logged_in_client, outro_logged_in_client
         outra = _escala_do_criativo(logged_in_client, criativo, [areas["Live"]])
         html = logged_in_client.get(f"/escala/{outra.id}").data.decode()
         assert "Bruno · Live" in html
+
+
+def test_pessoa_escolhe_suas_areas_e_ve_so_elas_na_escala(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade, criativo, areas = _criativo(logged_in_client)
+        escala = _escala_do_criativo(logged_in_client, criativo, [areas["Projeção"], areas["Live"]])
+        bruno = User.objects(email="bruno@example.com").first()
+        UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=criativo.id, papel="membro").save()
+
+    with sessao_isolada(app):
+        # 1a visita: a pergunta aparece aberta; antes de escolher, ve a escala inteira
+        tela = outro_logged_in_client.get(f"/ministerio/{criativo.id}").data.decode()
+        assert "Em quais áreas você serve?" in tela
+        html = outro_logged_in_client.get(f"/escala/{escala.id}").data.decode()
+        assert "Operador" in html and "Câmera 1" in html and "data-filtro-areas" not in html
+
+        outro_logged_in_client.post(f"/ministerio/{criativo.id}/minhas-areas", data={"areas": [str(areas["Live"].id)]})
+        linha = UsuarioMinisterio.objects(usuario_id=bruno.id, ministerio_id=criativo.id).first()
+        assert linha.areas == [areas["Live"].id] and linha.areas_escolhidas_em is not None
+        tela = outro_logged_in_client.get(f"/ministerio/{criativo.id}").data.decode()
+        assert "Em quais áreas você serve?" not in tela and "Minhas áreas" in tela
+
+        html = outro_logged_in_client.get(f"/escala/{escala.id}").data.decode()
+        assert "Câmera 1" in html and "Operador" not in html and "data-filtro-areas" in html
+        assert f'data-area-cabecalho="{areas["Projeção"].id}"' not in html
+
+        # nenhuma marcada = volta a ver tudo
+        outro_logged_in_client.post(f"/ministerio/{criativo.id}/minhas-areas", data={})
+        assert "Operador" in outro_logged_in_client.get(f"/escala/{escala.id}").data.decode()
+
+    with sessao_isolada(app):
+        # o admin (lider) ve tudo e nao recebe a pergunta
+        assert "Operador" in logged_in_client.get(f"/escala/{escala.id}").data.decode()
+        assert "Em quais áreas você serve?" not in logged_in_client.get(f"/ministerio/{criativo.id}").data.decode()
+
+
+def test_minhas_areas_so_pra_quem_esta_no_ministerio_e_mantem_lideranca(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        _, criativo, areas = _criativo(logged_in_client)
+    with sessao_isolada(app):
+        assert outro_logged_in_client.post(f"/ministerio/{criativo.id}/minhas-areas", data={}).status_code == 404
+        bruno = User.objects(email="bruno@example.com").first()
+        UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=criativo.id, papel="membro",
+                          areas=[areas["Live"].id], areas_lider=[areas["Live"].id]).save()
+        outro_logged_in_client.post(f"/ministerio/{criativo.id}/minhas-areas", data={"areas": [str(areas["Mídia"].id)]})
+        linha = UsuarioMinisterio.objects(usuario_id=bruno.id, ministerio_id=criativo.id).first()
+        assert sorted(linha.areas) == sorted([areas["Live"].id, areas["Mídia"].id])  # a que lidera fica
