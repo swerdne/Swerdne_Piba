@@ -458,8 +458,13 @@
         {% if filtro_areas %}
         <p class="flex items-center gap-2 text-xs {{ tema.text_secondary }} -mb-2" data-filtro-areas>
             <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+            {% if area_pedida %}
+            <span>Mostrando só a área <span class="font-semibold {{ tema.text_primary }}">{{ filtro_areas[0].nome }}</span>.</span>
+            <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}" class="{{ tema.accent_text }} font-semibold hover:underline shrink-0">Ver escala inteira</a>
+            {% else %}
             <span>Mostrando suas áreas: <span class="font-semibold {{ tema.text_primary }}">{% for a in filtro_areas %}{{ a.nome }}{{ ', ' if not loop.last }}{% endfor %}</span>.</span>
             <a href="{{ url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}#minhas-areas" class="{{ tema.accent_text }} font-semibold hover:underline shrink-0">Trocar</a>
+            {% endif %}
         </p>
         {% endif %}
         <!-- Grid da escala -->

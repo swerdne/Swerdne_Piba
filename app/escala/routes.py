@@ -405,6 +405,13 @@ def detalhe(escala_id):
         from app.ministerio.areas import areas_visiveis
 
         filtro_areas = areas_visiveis(escala.ministerio, current_user)
+    # ?area=<id> (cartao da area na tela do ministerio): so aquela area,
+    # sempre dentro do que a pessoa pode ver.
+    area_pedida = request.args.get("area", type=int)
+    if area_pedida and any(a.id == area_pedida for a in areas) and (not filtro_areas or area_pedida in filtro_areas):
+        filtro_areas = {area_pedida}
+    else:
+        area_pedida = None
     if filtro_areas:
         meu_email = (current_user.email or "").strip().lower()
         funcoes = [
@@ -530,6 +537,7 @@ def detalhe(escala_id):
         areas=areas,
         areas_que_gerencio=areas_que_gerencio,
         filtro_areas=[a for a in areas if a.id in filtro_areas] if filtro_areas else [],
+        area_pedida=area_pedida,
         diretorio_vazio=diretorio_vazio,
         formularios_membro=formularios_membro,
         formularios_mover=formularios_mover,

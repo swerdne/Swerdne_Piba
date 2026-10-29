@@ -197,3 +197,32 @@ def test_minhas_areas_so_pra_quem_esta_no_ministerio_e_mantem_lideranca(logged_i
         outro_logged_in_client.post(f"/ministerio/{criativo.id}/minhas-areas", data={"areas": [str(areas["Mídia"].id)]})
         linha = UsuarioMinisterio.objects(usuario_id=bruno.id, ministerio_id=criativo.id).first()
         assert sorted(linha.areas) == sorted([areas["Live"].id, areas["Mídia"].id])  # a que lidera fica
+
+
+def test_tela_do_ministerio_mostra_areas_com_as_escalas_dentro(logged_in_client, outro_logged_in_client, app, db):
+    with sessao_isolada(app):
+        comunidade, criativo, areas = _criativo(logged_in_client)
+        escala = _escala_do_criativo(logged_in_client, criativo, [areas["Projeção"], areas["Live"]])
+        antiga = _escala_do_criativo(logged_in_client, criativo, [])  # sem area
+        tela = logged_in_client.get(f"/ministerio/{criativo.id}").data.decode()
+        assert ">Áreas<" in tela and "data-lista-areas-ministerio" in tela
+        # areas na ordem, cada uma com a escala dentro (link ja filtrado pela area)
+        assert tela.index(f'data-area-ministerio="{areas["Projeção"].id}"') < tela.index(f'data-area-ministerio="{areas["Live"].id}"')
+        assert f'/escala/{escala.id}?area={areas["Live"].id}' in tela
+        assert f'/escala/{escala.id}?area={areas["Mídia"].id}' not in tela  # escala sem Mídia
+        assert "0/3" in tela  # Live: 3 funcoes, nenhuma preenchida
+        assert 'data-area-ministerio="0"' in tela and f'/escala/{antiga.id}"' in tela  # "Outras escalas"
+
+        # escala aberta pela area: so as funcoes dela
+        html = logged_in_client.get(f"/escala/{escala.id}?area={areas['Live'].id}").data.decode()
+        assert "Câmera 1" in html and "Operador" not in html and "Ver escala inteira" in html
+
+        bruno = User.objects(email="bruno@example.com").first()
+        UsuarioMinisterio(usuario_id=bruno.id, ministerio_id=criativo.id, papel="membro", areas=[areas["Live"].id]).save()
+    with sessao_isolada(app):
+        tela = outro_logged_in_client.get(f"/ministerio/{criativo.id}").data.decode()
+        assert f'data-area-ministerio="{areas["Live"].id}"' in tela
+        assert f'data-area-ministerio="{areas["Projeção"].id}"' not in tela  # so as areas dele
+        # pedir outra area pela URL nao fura o filtro
+        html = outro_logged_in_client.get(f"/escala/{escala.id}?area={areas['Projeção'].id}").data.decode()
+        assert "Operador" not in html and "Câmera 1" in html

@@ -122,3 +122,30 @@ def ordenar_por_area(funcoes, areas):
         return funcoes
     posicao = {a.id: i for i, a in enumerate(areas)}
     return sorted(funcoes, key=lambda f: (posicao.get(f.area_id, -1) if f.area_id else -1, f.ordem or 0, f.id))
+
+
+def escalas_por_area(escalas, areas, visiveis=None):
+    """Tela do ministerio com areas: [(area, [(escala, preenchidas, total)])]
+    na ordem das areas -- cada escala entra em toda area em que tem funcao --,
+    mais as escalas sem funcao de area nenhuma (as de rodizio, as antigas).
+    `visiveis` (ids, ou None = todas) esconde as areas de fora (quem escolheu
+    "Minhas areas"). 1 consulta."""
+    from app.escala.models import Funcao, TIPO_FUNCAO
+
+    ids = [e.id for e in escalas]
+    contagem = {}  # (escala_id, area_id) -> [preenchidas, total]
+    if ids and areas:
+        for f in Funcao.objects(escala_id__in=ids, area_id__ne=None, tipo=TIPO_FUNCAO).only("escala_id", "area_id", "membro_id"):
+            c = contagem.setdefault((f.escala_id, f.area_id), [0, 0])
+            c[1] += 1
+            if f.membro_id:
+                c[0] += 1
+    com_area = {escala_id for escala_id, _ in contagem}
+    grupos = []
+    for area in areas:
+        if visiveis is not None and area.id not in visiveis:
+            continue
+        itens = [(e, *contagem[(e.id, area.id)]) for e in escalas if (e.id, area.id) in contagem]
+        grupos.append((area, itens))
+    sem_area = [e for e in escalas if e.id not in com_area]
+    return grupos, sem_area

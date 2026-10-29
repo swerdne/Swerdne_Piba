@@ -349,12 +349,23 @@ def detalhe(ministerio_id):
 
     areas_ministerio = areas_do_ministerio(ministerio.id)
     minha_linha = papel_no_ministerio(ministerio.id, current_user) if areas_ministerio and not pode_gerenciar else None
+    # Com areas, a lista vira "Areas" (cada uma com as escalas dela) no lugar
+    # da lista corrida de escalas.
+    grupos_area, escalas_sem_area = [], []
+    if areas_ministerio:
+        from app.ministerio.areas import areas_visiveis, escalas_por_area
+
+        grupos_area, escalas_sem_area = escalas_por_area(
+            escalas, areas_ministerio, None if pode_gerenciar else areas_visiveis(ministerio, current_user)
+        )
 
     return render_template(
         "ministerio/detalhe.html",
         ministerio=ministerio,
         pode_gerenciar=pode_gerenciar,
         areas_ministerio=areas_ministerio,
+        grupos_area=grupos_area,
+        escalas_sem_area=escalas_sem_area,
         minha_linha=minha_linha,
         escolher_areas=precisa_escolher_areas(minha_linha, areas_ministerio),
         config_checkin=_config_checkin(ministerio) if pode_gerenciar else None,

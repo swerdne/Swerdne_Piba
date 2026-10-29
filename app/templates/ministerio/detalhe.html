@@ -10,10 +10,34 @@
     [data-secao-checkin] > summary::-webkit-details-marker { display: none; }
     [data-secao-checkin] .seta-retratil { transition: transform .2s; }
     [data-secao-checkin][open] .seta-retratil { transform: rotate(180deg); }
+    [data-area-ministerio] .seta-area { transition: transform .2s; }
+    [data-area-ministerio][open] .seta-area { transform: rotate(180deg); }
 </style>
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior, menu_acoes, item_menu, item_menu_tutorial, classe_item_menu, tutorial with context %}
+{% macro linha_escala(escala, area=None, preenchidas=None, total=None) %}
+{% set qtd = qtd_ocorrencias_por_turno.get(escala.plantao_turno_id) if escala.plantao_turno_id else None %}
+<a href="{{ url_for('plantao.detalhe', turno_id=escala.plantao_turno_id) if escala.plantao_turno_id else url_for('escala.detalhe', escala_id=escala.id, area=area.id if area else None) }}"
+   class="flex items-center gap-3 {{ tema.page_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-xl px-3 py-2.5 transition" data-escala-da-area="{{ area.id if area else 0 }}">
+    <span class="w-2 h-2 rounded-full {{ escala.cor }} shrink-0"></span>
+    <span class="flex-1 min-w-0">
+        <span class="flex items-center gap-2 min-w-0">
+            <span class="text-sm font-medium {{ tema.text_primary }} truncate {{ 'opacity-60' if escala.cancelada }}">{{ escala.nome }}</span>
+            {% if escala.cancelada %}<span class="text-[10px] font-semibold uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelada</span>{% endif %}
+        </span>
+        <span class="block text-xs {{ tema.text_secondary }}">
+            {% if escala.data %}{{ escala.data.strftime('%d/%m/%Y') }}{% if escala.horario %} &middot; {{ escala.horario.strftime('%H:%M') }}{% endif %}{% else %}sem data definida{% endif %}
+            {% set prox_ensaio = proximo_ensaio_por_escala.get(escala.id) %}{% if prox_ensaio and not escala.cancelada %} &middot; <span class="{{ tema.accent_text }}">ensaio {{ prox_ensaio.descricao_data }}</span>{% endif %}
+        </span>
+    </span>
+    {% if total %}
+    <span class="text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 {{ 'bg-emerald-500/15 text-emerald-600' if preenchidas == total else 'bg-amber-500/15 text-amber-600' }}" title="Funções preenchidas nesta área">{{ preenchidas }}/{{ total }}</span>
+    {% endif %}
+    {% if qtd and qtd > 1 %}<span class="flex items-center gap-1 text-[11px] {{ tema.text_secondary }} shrink-0" title="Gerado por rodizio"><i class="fa-solid fa-arrows-rotate"></i>{{ qtd }}</span>{% endif %}
+    <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }}"></i>
+</a>
+{% endmacro %}
 {% block content %}
 <div id="ministerio-app" class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
 
@@ -119,9 +143,9 @@
             {% set escalas_manuais = escalas | rejectattr('plantao_turno_id') | list %}
             <div class="space-y-4">
                 <div class="flex items-center justify-between gap-3">
-                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Escalas</h2>
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">{{ 'Áreas' if areas_ministerio else 'Escalas' }}</h2>
                     <div class="flex items-center gap-3 shrink-0">
-                        {% if pode_gerenciar and escalas_manuais|length > 1 %}
+                        {% if pode_gerenciar and escalas_manuais|length > 1 and not areas_ministerio %}
                         <button type="button" data-selecao-alternar
                                 class="flex items-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-3 py-2 rounded-full transition shrink-0">
                             <i class="fa-solid fa-square-check" data-selecao-alternar-icone></i><span data-selecao-alternar-texto>Selecionar</span>
@@ -136,6 +160,50 @@
                     </div>
                 </div>
 
+                {% if areas_ministerio %}
+                {# Ministerio com areas (app/ministerio/areas.py): as areas vem
+                   primeiro, cada uma com as escalas em que tem funcao (a escala
+                   abre ja mostrando so aquela area). Escalas sem area no fim. #}
+                <div class="space-y-3" data-lista-areas-ministerio data-tutorial="escalas">
+                    {% for area, itens in grupos_area %}
+                    <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm" data-area-ministerio="{{ area.id }}" {{ 'open' if loop.first or grupos_area|length <= 2 }}>
+                        <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3.5">
+                            <span class="w-9 h-9 rounded-xl {{ area.classe_cor }} flex items-center justify-center text-white shrink-0"><i class="fa-solid fa-layer-group text-sm"></i></span>
+                            <span class="flex-1 min-w-0">
+                                <span class="block text-sm font-bold {{ tema.text_primary }} truncate">{{ area.nome }}</span>
+                                <span class="block text-xs {{ tema.text_secondary }}">{{ itens|length }} escala{{ 's' if itens|length != 1 }}</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-area"></i>
+                        </summary>
+                        <div class="px-3 pb-3 space-y-2">
+                            {% for escala, preenchidas, total in itens %}
+                            {{ linha_escala(escala, area, preenchidas, total) }}
+                            {% else %}
+                            <p class="text-xs {{ tema.text_secondary }} px-1 py-2">Nenhuma escala com esta área ainda.{% if pode_gerenciar %} Crie uma em "Nova escala".{% endif %}</p>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endfor %}
+                    {% if escalas_sem_area %}
+                    <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm" data-area-ministerio="0">
+                        <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3.5">
+                            <span class="w-9 h-9 rounded-xl {{ tema.secondary_bg }} flex items-center justify-center {{ tema.text_secondary }} shrink-0"><i class="fa-solid fa-calendar-days text-sm"></i></span>
+                            <span class="flex-1 min-w-0">
+                                <span class="block text-sm font-bold {{ tema.text_primary }}">Outras escalas</span>
+                                <span class="block text-xs {{ tema.text_secondary }}">{{ escalas_sem_area|length }} sem área (rodízios e escalas antigas)</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} seta-area"></i>
+                        </summary>
+                        <div class="px-3 pb-3 space-y-2">
+                            {% for escala in escalas_sem_area %}{{ linha_escala(escala) }}{% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
+                    {% if not grupos_area and not escalas_sem_area %}
+                    <p class="text-sm {{ tema.text_secondary }} text-center py-8">Nenhuma escala ainda.</p>
+                    {% endif %}
+                </div>
+                {% else %}
                 {% if not escalas %}
                 <div class="text-center py-16">
                     <i class="fa-solid fa-calendar-days text-4xl {{ tema.text_secondary }}"></i>
@@ -202,6 +270,8 @@
                     </div>
                     {% endif %}
                 </form>
+
+                {% endif %}
 
                 <div class="pt-2" data-tutorial="rodizios">
                     <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodizio</h2>
