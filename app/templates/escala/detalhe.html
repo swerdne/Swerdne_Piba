@@ -456,16 +456,22 @@
         {% endif %}
 
         {% if filtro_areas %}
-        <p class="flex items-center gap-2 text-xs {{ tema.text_secondary }} -mb-2" data-filtro-areas>
-            <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+        {# Aviso do filtro de area: cartao proprio acima da grade (antes era uma
+           linha com margem negativa que ficava por baixo da grade). #}
+        <div class="flex items-center gap-3 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3" data-filtro-areas>
+            <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 {{ filtro_areas[0].classe_cor if filtro_areas|length == 1 else tema.accent_soft_bg }} {{ 'text-white' if filtro_areas|length == 1 else tema.accent_text }}">
+                <i class="fa-solid fa-layer-group text-sm" aria-hidden="true"></i>
+            </span>
+            <p class="flex-1 min-w-0 text-sm {{ tema.text_secondary }}">
+                {% if area_pedida %}Mostrando só a área <span class="font-semibold {{ tema.text_primary }}">{{ filtro_areas[0].nome }}</span>
+                {% else %}Mostrando suas áreas: <span class="font-semibold {{ tema.text_primary }}">{% for a in filtro_areas %}{{ a.nome }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}
+            </p>
             {% if area_pedida %}
-            <span>Mostrando só a área <span class="font-semibold {{ tema.text_primary }}">{{ filtro_areas[0].nome }}</span>.</span>
-            <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}" class="{{ tema.accent_text }} font-semibold hover:underline shrink-0">Ver escala inteira</a>
+            <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}" class="text-xs font-semibold {{ tema.accent_text }} border {{ tema.card_border }} rounded-full px-3 py-1.5 hover:underline shrink-0">Ver escala inteira</a>
             {% else %}
-            <span>Mostrando suas áreas: <span class="font-semibold {{ tema.text_primary }}">{% for a in filtro_areas %}{{ a.nome }}{{ ', ' if not loop.last }}{% endfor %}</span>.</span>
-            <a href="{{ url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}#minhas-areas" class="{{ tema.accent_text }} font-semibold hover:underline shrink-0">Trocar</a>
+            <a href="{{ url_for('ministerio.detalhe', ministerio_id=escala.ministerio_id) }}#minhas-areas" class="text-xs font-semibold {{ tema.accent_text }} border {{ tema.card_border }} rounded-full px-3 py-1.5 hover:underline shrink-0">Trocar</a>
             {% endif %}
-        </p>
+        </div>
         {% endif %}
         <!-- Grid da escala -->
         <div data-tutorial="funcoes" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden">
@@ -765,7 +771,7 @@
                         <select name="area_id" aria-label="Área da nova função"
                                 class="{{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
                             <option value="">Sem área</option>
-                            {% for area in areas %}<option value="{{ area.id }}">{{ area.nome }}</option>{% endfor %}
+                            {% for area in areas %}<option value="{{ area.id }}" {{ 'selected' if area_pedida == area.id }}>{{ area.nome }}</option>{% endfor %}
                         </select>
                         {% endif %}
                         <button type="submit"

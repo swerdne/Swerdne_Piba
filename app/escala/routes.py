@@ -595,7 +595,8 @@ def adicionar_funcao(escala_id):
     nova_funcao.save()
 
     flash(f'Funcao "{nova_funcao.nome}" adicionada em {escala.nome}.', "success")
-    return redirect(url_for("escala.detalhe", escala_id=escala.id))
+    # Quem estava vendo uma area so (?area=) volta pra ela.
+    return redirect(url_for("escala.detalhe", escala_id=escala.id, area=area_id) if area_id else url_for("escala.detalhe", escala_id=escala.id))
 
 
 @bp.route("/<int:escala_id>/subcabecalho/adicionar", methods=["POST"])
