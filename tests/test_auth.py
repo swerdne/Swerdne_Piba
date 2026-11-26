@@ -245,3 +245,31 @@ def test_redefinir_senha_token_nao_reutilizavel(client, app, db):
         follow_redirects=True,
     )
     assert "invalido ou ja expirou".encode() in response.data
+
+
+def test_limite_de_pedidos_e_por_visitante_e_nao_do_site_inteiro(app):
+    from app.extensions import endereco_do_visitante
+
+    def ip(cabecalho):
+        with app.test_request_context("/", headers={"X-Forwarded-For": cabecalho} if cabecalho else {}):
+            return endereco_do_visitante()
+
+    assert ip("200.1.2.3:51234") == ip("200.1.2.3:9999") == "200.1.2.3"  # a porta nao conta
+    assert ip("1.1.1.1, 200.1.2.3:51234") == "200.1.2.3"  # inventar o comeco nao fura o limite
+    assert ip("[2804:14c::1]:443") == ip("2804:14c::1") == "2804:14c::1"
+    assert ip(None) == "127.0.0.1"
+
+
+def test_testar_email_so_pra_admin_e_mostra_o_motivo_da_falha(logged_in_client, app, db, monkeypatch):
+    assert logged_in_client.post("/perfil/testar-email").status_code == 404
+    assert "Testar envio de e-mail" not in logged_in_client.get("/dashboard").data.decode()
+    logged_in_client.post("/comunidade/nova", data={"nome": "Igreja", "descricao": ""})
+    assert "Testar envio de e-mail" in logged_in_client.get("/dashboard").data.decode()
+
+    html = logged_in_client.post("/perfil/testar-email", follow_redirects=True).data.decode()
+    assert "nao conseguiu enviar" in html and "RESEND_API_KEY" in html  # sem chave nos testes
+
+    enviados = []
+    monkeypatch.setattr("app.emailing.enviar_email", lambda para, *_: enviados.append(para))
+    html = logged_in_client.post("/perfil/testar-email", follow_redirects=True).data.decode()
+    assert enviados == ["ana@example.com"] and "Teste aceito" in html

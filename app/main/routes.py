@@ -197,6 +197,7 @@ def _comunidades_do_usuario(usuario):
         itens.append({
             "comunidade": c,
             "subtitulo": f"{qtd} ministerio{'s' if qtd != 1 else ''}",
+            "admin": True,
             "url": url_for("comunidade.detalhe", comunidade_id=c.id),
         })
     for c in participa:
@@ -408,6 +409,7 @@ def dashboard():
             "proximo_ensaio": proximo_ensaio,
         }
 
+    comunidades = _comunidades_do_usuario(current_user)
     return render_template(
         "main/dashboard.html",
         repertorios_compartilhados=_repertorios_compartilhados(current_user),
@@ -415,7 +417,7 @@ def dashboard():
         proxima_escala=proxima_escala_info,
         agenda=_agenda_do_usuario(current_user, agora.date()),
         cultos_hoje=_cultos_de_hoje(current_user, agora.date()),
-        comunidades=_comunidades_do_usuario(current_user),
+        comunidades=comunidades,
         primeiro_nome=primeiro_nome,
         nome_completo=nome_completo,
         email=current_user.email,
@@ -432,6 +434,7 @@ def dashboard():
         privacidade_form=privacidade_form,
         telefone_form=telefone_form,
         acao_form=acao_form,
+        administra_comunidade=any(i.get("admin") for i in comunidades),
         notificacoes=notificacoes,
         notificacoes_nao_lidas=notificacoes_nao_lidas,
         grupos_notificacoes=grupos_notificacoes,
@@ -594,6 +597,38 @@ def salvar_senha():
     _notificar_senha_alterada(current_user)
     flash("Senha atualizada!" if tinha_senha else "Senha definida! Agora voce tambem pode entrar com e-mail e senha.", "success")
     return redirect(url_for("main.dashboard") + "#config")
+
+
+@bp.route("/perfil/testar-email", methods=["POST"])
+@login_required
+@limiter.limit("5 per hour", methods=["POST"])
+def testar_email():
+    """Manda um e-mail de teste pro proprio e-mail da conta e mostra o motivo
+    quando falha -- a redefinicao de senha e os avisos engolem o erro de
+    proposito, entao sem isto so o log do servidor dizia o que houve. So pra
+    quem administra alguma comunidade (o motivo cita a configuracao)."""
+    from app.emailing import enviar_email, EmailNaoEnviadoError
+
+    if not _administra_alguma_comunidade(current_user):
+        abort(404)
+    if not AcaoForm().validate_on_submit():
+        flash("Acao invalida.", "danger")
+        return redirect(url_for("main.dashboard") + "#config")
+    try:
+        enviar_email(current_user.email, "Teste de e-mail", "Se voce recebeu esta mensagem, o envio de e-mails do TyBenson esta funcionando.")
+    except EmailNaoEnviadoError as erro:
+        current_app.logger.warning("Teste de e-mail: %s", erro)
+        flash(f"O servidor nao conseguiu enviar: {erro}", "danger")
+    else:
+        flash(f"Teste aceito pelo servico de envio. Confira {current_user.email} (e o spam).", "success")
+    return redirect(url_for("main.dashboard") + "#config")
+
+
+def _administra_alguma_comunidade(usuario):
+    return bool(
+        usuario.eh_super_admin
+        or UsuarioComunidade.objects(usuario_id=usuario.id, papel="admin").only("id").first()
+    )
 
 
 @bp.route("/perfil/nome", methods=["POST"])
