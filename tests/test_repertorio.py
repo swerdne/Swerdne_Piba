@@ -137,7 +137,7 @@ def test_adicionar_do_banco_copia_nome_e_tom(logged_in_client, app, db):
             ("Santo", "E", None, outra.id),
         ]
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Folha de projecao" in html and "Abertura" in html
+        assert "Folha de projeção" in html and "Abertura" in html
 
 
 def test_escala_usa_banco_oficial_e_o_local_do_proprio_ministerio(logged_in_client, app, db):
@@ -170,7 +170,7 @@ def test_folhas_de_projecao_e_cifras(logged_in_client, app, db):
         logged_in_client.post(f"/escala/{escala.id}/repertorio/banco",
                               data={"banco-musica_id": musica.id, "banco-momento": "Abertura", "banco-tom": "A"})
         logged_in_client.post(f"/escala/{escala.id}/repertorio/observacoes",
-                              data={"observacoes_repertorio": "Ministracao livre no fim"})
+                              data={"observacoes_repertorio": "Ministração livre no fim"})
 
         projecao = logged_in_client.get(f"/escala/{escala.id}/repertorio/projecao").data.decode("utf-8")
         data_curta = Escala.objects(id=escala.id).first().data.strftime("%d.%m.%y")
@@ -183,7 +183,7 @@ def test_folhas_de_projecao_e_cifras(logged_in_client, app, db):
         assert "TOM A" in projecao
         assert "[VERSO 1]" in projecao and "DIGNO DE LOUVOR" in projecao
         assert "G        D" not in projecao  # projecao nao leva cifra
-        assert "OBSERVACOES GERAIS" in projecao and "Ministracao livre no fim" in projecao
+        assert "OBSERVAÇÕES GERAIS" in projecao and "Ministração livre no fim" in projecao
 
         cifras = logged_in_client.get(f"/escala/{escala.id}/repertorio/cifras").data.decode("utf-8")
         # Tom do dia A, acordes destacados (cor forte) na folha.
@@ -202,9 +202,9 @@ def test_repertorio_avulso_continua_funcionando(logged_in_client, app, db):
     with app.app_context():
         _, _, escala = _montar(logged_in_client)
         logged_in_client.post(f"/escala/{escala.id}/repertorio/adicionar",
-                              data={"nome_musica": "Musica Livre", "tom": "C", "link": ""})
+                              data={"nome_musica": "Música Livre", "tom": "C", "link": ""})
         cifras = logged_in_client.get(f"/escala/{escala.id}/repertorio/cifras").data.decode("utf-8")
-        assert "Musica Livre" in cifras and "fora do banco" in cifras
+        assert "Música Livre" in cifras and "fora do banco" in cifras
 
 
 # --- Minha escala: cada funcao recebe a sua versao ---------------------------
@@ -297,7 +297,7 @@ def test_salva_cifra_em_varios_tons_sem_mexer_na_original(logged_in_client, app,
 
         # alternar entre os tons salvos na aba Louvor
         html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}?tom=A").data.decode("utf-8")
-        assert "Versao no tom A" in html and "A        E" in html
+        assert "Versão no tom A" in html and "A        E" in html
         assert 'data-tom-salvo="G"' in html and 'data-tom-salvo="D"' in html
         html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
         assert "Cifra original" in html and "G        D" in html
@@ -418,21 +418,21 @@ def test_projecao_se_monta_da_cifra_e_acompanha_ate_ser_editada(logged_in_client
         assert _projecao_espelhando(logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8"))
 
         # 1a cifra: projecao vazia se monta sozinha (sem acordes, maiusculas, slides de 4).
-        cifra = "C Em D G\nDe um coracao cantando\nG\nEm resposta a Ti\nEm\nHa uma cancao\nD\nMe render a Ti\nC\nEm adoracao"
+        cifra = "C Em D G\nDe um coracao cantando\nG\nEm resposta a Ti\nEm\nHa uma cancao\nD\nMe render a Ti\nC\nEm adoração"
         logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": cifra, "tom": ""})
         projecao = Musica.objects(id=musica.id).first().letra_projecao
-        assert projecao == "[VERSO 1]\nDE UM CORACAO CANTANDO\nEM RESPOSTA A TI\nHA UMA CANCAO\nME RENDER A TI\n\nEM ADORACAO"
+        assert projecao == "[VERSO 1]\nDE UM CORACAO CANTANDO\nEM RESPOSTA A TI\nHA UMA CANCAO\nME RENDER A TI\n\nEM ADORAÇÃO"
 
         # Cifra muda e a projecao ainda era so o reflexo: acompanha.
         logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor",
                               data={"cifra_louvor": cifra + "\nG\nPra sempre", "tom": ""})
-        assert Musica.objects(id=musica.id).first().letra_projecao.endswith("EM ADORACAO\nPRA SEMPRE")
+        assert Musica.objects(id=musica.id).first().letra_projecao.endswith("EM ADORAÇÃO\nPRA SEMPRE")
 
         # Ajustada a mao: nunca mais e sobrescrita pela cifra.
-        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/projecao", data={"letra_projecao": "[VERSO 1]\nMINHA VERSAO"})
+        logged_in_client.post(f"/ministerio/repertorio/{musica.id}/projecao", data={"letra_projecao": "[VERSO 1]\nMINHA VERSÃO"})
         assert not _projecao_espelhando(logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8"))
         logged_in_client.post(f"/ministerio/repertorio/{musica.id}/louvor", data={"cifra_louvor": "G\nOutra letra", "tom": ""})
-        assert Musica.objects(id=musica.id).first().letra_projecao == "[VERSO 1]\nMINHA VERSAO"
+        assert Musica.objects(id=musica.id).first().letra_projecao == "[VERSO 1]\nMINHA VERSÃO"
 
 
 def test_previa_da_projecao_no_formato_da_folha(logged_in_client, app, db):
@@ -441,7 +441,7 @@ def test_previa_da_projecao_no_formato_da_folha(logged_in_client, app, db):
         musica = _nova_musica(logged_in_client, ministerio.id)
         logged_in_client.post(f"/ministerio/repertorio/{musica.id}/projecao", data={"letra_projecao": LETRA})
         html = logged_in_client.get(f"/ministerio/repertorio/{musica.id}").data.decode("utf-8")
-        assert "Como fica na folha de projecao" in html and "data-previa-projecao" in html
+        assert "Como fica na folha de projeção" in html and "data-previa-projecao" in html
         previa = html[html.index("data-previa-projecao"):]
         assert "[REFRAO]" in previa and 'font-extrabold">SANTO, SANTO' in previa  # refrao em negrito
 

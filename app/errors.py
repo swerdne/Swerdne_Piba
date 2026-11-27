@@ -134,9 +134,9 @@ def registrar_error_handlers(app):
         FileSize nunca chegava a aparecer -- caia na pagina de erro. Volta
         pra mesma tela com o aviso (so referrer do proprio site)."""
         if request.path.endswith("/anexos"):
-            flash("O arquivo deve ter no maximo 15 MB.", "danger")
+            flash("O arquivo deve ter no máximo 15 MB.", "danger")
         else:
-            flash("A imagem deve ter no maximo 2 MB.", "danger")
+            flash("A imagem deve ter no máximo 2 MB.", "danger")
         destino = url_for("main.dashboard")
         origem = urlsplit(request.referrer or "")
         if origem.path and origem.netloc in ("", request.host):

@@ -24,12 +24,12 @@
             <i class="fa-solid {{ 'fa-people-group' if tipo_escopo == 'ministerio' else 'fa-user-plus' }} {{ tema.accent_text }} text-xl"></i>
         </div>
         {% endif %}
-        {% set rotulo = ('o ministerio' if tipo_escopo == 'ministerio' else 'a comunidade') %}
+        {% set rotulo = ('o ministério' if tipo_escopo == 'ministerio' else 'a comunidade') %}
 
         {% if precisa_confirmar %}
         <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Entrar em {{ nome_escopo }}?</h1>
         <p class="text-sm {{ tema.text_secondary }}">
-            Voce vai entrar como membro n{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %}.
+            Você vai entrar como membro n{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %}.
         </p>
         <form method="POST" class="pt-2">
             {{ acao_form.hidden_tag() }}
@@ -38,17 +38,17 @@
             </button>
         </form>
         {% else %}
-        <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Voce foi convidado(a)!</h1>
+        <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Você foi convidado(a)!</h1>
         <p class="text-sm {{ tema.text_secondary }}">
             Entre ou crie sua conta pra fazer parte d{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %} como membro.
-            Assim que terminar, voce ja entra automaticamente.
+            Assim que terminar, você já entra automaticamente.
         </p>
         <div class="flex flex-col gap-2 pt-2">
             <a href="{{ url_for('auth.register') }}" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-full transition">
                 Criar conta
             </a>
             <a href="{{ url_for('auth.login') }}" class="border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
-                Ja tenho conta -- Entrar
+                Já tenho conta -- Entrar
             </a>
             <a href="{{ url_for('auth.google_login') }}" class="flex items-center justify-center gap-2 border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
                 <i class="fa-brands fa-google"></i>Continuar com Google

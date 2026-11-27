@@ -86,6 +86,10 @@
             <div data-mapa class="space-y-2">
                 <p class="text-sm font-semibold {{ tema.text_primary }}">2. Toque no mapa para marcar o local</p>
                 <div id="mapa-leaflet" class="rounded-2xl border {{ tema.card_border }} bg-gray-100"></div>
+                <p data-mapa-falhou class="hidden text-xs rounded-xl px-3 py-2 bg-amber-500/10 border border-amber-500/30 text-amber-700">
+                    O mapa não carregou agora (sem internet ou serviço de mapas fora do ar). Você ainda pode salvar o local:
+                    use "Buscar" com o endereço ou "Estou no local". <span data-mapa-ponto></span>
+                </p>
                 <p class="text-xs {{ tema.text_secondary }}">Aproxime até ver as ruas, toque no ponto exato da igreja e, se precisar, arraste o marcador. O círculo mostra até onde o check-in é aceito.</p>
             </div>
 
@@ -155,17 +159,40 @@
         }
     }
 
+    function mostrarFalhaDoMapa() {
+        var caixa = form.querySelector('[data-mapa-falhou]');
+        if (!caixa) return;
+        caixa.classList.remove('hidden');
+        var ponto = caixa.querySelector('[data-mapa-ponto]');
+        if (endereco.value) ponto.textContent = 'Local atual: ' + endereco.value + '.';
+        else if (lat.value && lng.value) ponto.textContent = 'Ponto atual: ' + lat.value + ', ' + lng.value + '.';
+    }
+
     function inicializarMapa() {
         if (mapaLeaflet) return;
+        if (!window.L) { mostrarFalhaDoMapa(); return; }
         var latVal = parseFloat(lat.value);
         var lngVal = parseFloat(lng.value);
         var temPonto = !isNaN(latVal) && !isNaN(lngVal);
 
-        mapaLeaflet = L.map(mapaDiv).setView(temPonto ? [latVal, lngVal] : [-14.235, -51.925], temPonto ? 18 : 4);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap',
-            maxZoom: 19
+        // Icones do marcador direto do mesmo pacote (nada de caminho adivinhado pelo CSS).
+        L.Icon.Default.imagePath = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/';
+        // Zoom limitado ao que o servidor de mapas tem: acima de 19 ele responde 400.
+        mapaLeaflet = L.map(mapaDiv, { minZoom: 3, maxZoom: 19, worldCopyJump: true })
+            .setView(temPonto ? [latVal, lngVal] : [-14.235, -51.925], temPonto ? 18 : 4);
+        var camada = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">colaboradores do OpenStreetMap</a>',
+            minZoom: 3,
+            maxZoom: 19,
+            maxNativeZoom: 19
         }).addTo(mapaLeaflet);
+        // Sem mapa (rede/servico fora): avisa e mostra o ponto em texto.
+        var tilesOk = 0, tilesErro = 0;
+        camada.on('tileload', function () { tilesOk++; });
+        camada.on('tileerror', function () {
+            tilesErro++;
+            if (tilesOk === 0 && tilesErro >= 3) mostrarFalhaDoMapa();
+        });
         mapaLeaflet.attributionControl.setPrefix(false);
 
         if (temPonto) {

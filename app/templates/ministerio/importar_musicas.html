@@ -72,8 +72,8 @@
 
         <p class="text-sm {{ tema.text_secondary }}">
             No site da cifra (Cifra Club, Cifras, Letras...), use <span class="font-semibold {{ tema.text_primary }}">Imprimir &rarr; Salvar como PDF</span>.
-            Tambem aceita documentos do <span class="font-semibold {{ tema.text_primary }}">Word (.docx)</span>.
-            Escolha aqui quantos arquivos quiser: cada um vira uma musica, e voce confere tudo antes de salvar.
+            Também aceita documentos do <span class="font-semibold {{ tema.text_primary }}">Word (.docx)</span>.
+            Escolha aqui quantos arquivos quiser: cada um vira uma música, e você confere tudo antes de salvar.
         </p>
 
         <!-- Escolha dos arquivos: clique, arraste ou pasta inteira -->
@@ -81,7 +81,7 @@
                class="flex flex-col items-center justify-center gap-2 text-center {{ tema.card_bg }} border-2 border-dashed {{ tema.card_border }} rounded-3xl px-4 py-10 cursor-pointer transition">
             <span class="flex items-center gap-2 text-3xl {{ tema.accent_text }}"><i class="fa-solid fa-file-pdf"></i><i class="fa-solid fa-file-word"></i></span>
             <span class="text-sm font-semibold {{ tema.text_primary }}">Clique para escolher os arquivos ou arraste aqui</span>
-            <span class="text-xs {{ tema.text_secondary }}">PDF ou Word (.docx) &middot; varios de uma vez &middot; ate 2 MB cada</span>
+            <span class="text-xs {{ tema.text_secondary }}">PDF ou Word (.docx) &middot; vários de uma vez &middot; até 2 MB cada</span>
             <input type="file" accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple class="hidden" data-entrada-arquivos>
         </label>
         <p class="text-center text-xs {{ tema.text_secondary }} -mt-2">
@@ -106,7 +106,7 @@
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Revise antes de salvar</h2>
             <div class="flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
                 <label data-rotulo-atualizar-todas class="hidden flex items-center gap-2 text-xs font-semibold text-amber-500 cursor-pointer">
-                    <input type="checkbox" data-atualizar-todas class="w-4 h-4"> Atualizar todas as que ja existem
+                    <input type="checkbox" data-atualizar-todas class="w-4 h-4"> Atualizar todas as que já existem
                 </label>
                 <label class="flex items-center gap-2 text-xs font-semibold {{ tema.text_secondary }} cursor-pointer">
                     <input type="checkbox" data-marcar-todas checked class="w-4 h-4"> Marcar todas
@@ -136,12 +136,12 @@
 <template id="modelo-musica">
     <div data-card class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm p-4 space-y-2.5">
         <div class="flex items-start gap-3">
-            <input type="checkbox" data-incluir checked class="mt-2.5 w-4 h-4 shrink-0" aria-label="Importar esta musica">
+            <input type="checkbox" data-incluir checked class="mt-2.5 w-4 h-4 shrink-0" aria-label="Importar esta música">
             <div class="flex-1 min-w-0 space-y-2">
                 <p data-arquivo class="text-[11px] {{ tema.text_secondary }} truncate"></p>
-                <input type="text" data-campo="nome" maxlength="150" placeholder="Nome da musica" class="w-full font-semibold {{ CAMPO }}">
+                <input type="text" data-campo="nome" maxlength="150" placeholder="Nome da música" class="w-full font-semibold {{ CAMPO }}">
                 <div class="grid grid-cols-[1fr_9rem] gap-2">
-                    <input type="text" data-campo="artista" maxlength="120" placeholder="Artista / ministerio" class="w-full min-w-0 {{ CAMPO }}">
+                    <input type="text" data-campo="artista" maxlength="120" placeholder="Artista / ministério" class="w-full min-w-0 {{ CAMPO }}">
                     <select data-campo="tom" aria-label="Tom" class="w-full {{ CAMPO }}">
                         <option value="">Tom</option>
                         <optgroup label="Maiores">
@@ -155,15 +155,15 @@
                 <input type="text" data-campo="tags" maxlength="300" placeholder="Palavras-chave (ex: amor, cruz, graça)"
                        aria-label="Palavras-chave" class="w-full {{ CAMPO }}">
                 <p data-ja-existe class="hidden text-xs font-semibold text-amber-500">
-                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>Ja existe uma musica com esse nome no repertorio -- desmarcada pra nao duplicar.
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>Já existe uma música com esse nome no repertório -- desmarcada pra não duplicar.
                 </p>
                 <!-- Reimportar pra corrigir: troca a cifra da musica que ja existe (nao duplica) -->
                 <label data-opcao-atualizar class="hidden flex items-center gap-2 text-xs font-semibold {{ tema.text_primary }} cursor-pointer">
                     <input type="checkbox" data-atualizar class="w-4 h-4">
-                    Atualizar a musica que ja existe com esta cifra (mantem letra de projecao, tags e escalas)
+                    Atualizar a música que já existe com esta cifra (mantem letra de projeção, tags e escalas)
                 </label>
                 <p data-repetida-no-lote class="hidden text-xs font-semibold text-amber-500">
-                    <i class="fa-solid fa-clone mr-1"></i>Mesmo nome de outro arquivo desta importacao -- desmarcada pra nao duplicar.
+                    <i class="fa-solid fa-clone mr-1"></i>Mesmo nome de outro arquivo desta importação -- desmarcada pra não duplicar.
                 </p>
                 <ul data-avisos class="text-xs text-amber-500 space-y-0.5"></ul>
                 <details>
@@ -338,9 +338,9 @@
             .then(function (r) { return r.json().catch(function () { return { erro: 'Erro ao ler o arquivo (' + r.status + ').' }; }); })
             .then(function (resposta) {
                 if (resposta.musica) mostrarMusica(vaga, arquivo.name, resposta.musica);
-                else mostrarErro(vaga, arquivo.name, resposta.erro || 'Nao foi possivel ler este arquivo.');
+                else mostrarErro(vaga, arquivo.name, resposta.erro || 'Não foi possível ler este arquivo.');
             })
-            .catch(function () { mostrarErro(vaga, arquivo.name, 'Falha de conexao -- tente de novo.'); })
+            .catch(function () { mostrarErro(vaga, arquivo.name, 'Falha de conexão -- tente de novo.'); })
             .then(concluir);
     }
 
@@ -376,10 +376,10 @@
                     colarLink.value = '';
                 } else {
                     vaga.remove();
-                    avisoColar(resposta.erro || 'Nao foi possivel ler o texto.');
+                    avisoColar(resposta.erro || 'Não foi possível ler o texto.');
                 }
             })
-            .catch(function () { vaga.remove(); avisoColar('Falha de conexao -- tente de novo.'); })
+            .catch(function () { vaga.remove(); avisoColar('Falha de conexão -- tente de novo.'); })
             .then(function () { colarBotao.disabled = false; atualizarResumo(); });
     });
 
@@ -499,7 +499,7 @@
             musicas.push(item);
         });
         if (musicas.some(function (m) { return !m.nome.trim(); })) {
-            alert('Preencha o nome de todas as musicas marcadas.');
+            alert('Preencha o nome de todas as músicas marcadas.');
             return;
         }
         botaoSalvar.disabled = true;
@@ -512,7 +512,7 @@
         var salvas = 0;
 
         function falhar(mensagem) {
-            alert((salvas ? salvas + ' musica(s) ja foram salvas. ' : 'Nada foi salvo. ') + mensagem);
+            alert((salvas ? salvas + ' música(s) já foram salvas. ' : 'Nada foi salvo. ') + mensagem);
             if (salvas) { window.location.reload(); return; }
             botaoSalvar.disabled = false;
         }
@@ -527,13 +527,13 @@
             fetch(URL_SALVAR, { method: 'POST', body: dados, credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (resposta) {
-                    if (!resposta.destino) { falhar(resposta.erro || 'Nao foi possivel importar.'); return; }
+                    if (!resposta.destino) { falhar(resposta.erro || 'Não foi possível importar.'); return; }
                     salvas += resposta.criadas;
                     resumo.textContent = 'Salvando... ' + salvas + ' de ' + musicas.length;
                     if (ultima) window.location = resposta.destino;
                     else salvarParte(indice + 1);
                 })
-                .catch(function () { falhar('Falha de conexao -- tente de novo.'); });
+                .catch(function () { falhar('Falha de conexão -- tente de novo.'); });
         })(0);
     });
 })();

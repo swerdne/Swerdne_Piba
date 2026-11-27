@@ -43,8 +43,8 @@
                 <i class="fa-solid fa-music text-sm"></i>
             </div>
             <span class="flex-1 min-w-0">
-                <span class="block text-sm font-semibold {{ tema.text_primary }}">Banco de musicas</span>
-                <span class="block text-xs {{ tema.text_secondary }}">Letras e cifras de todas as musicas da comunidade</span>
+                <span class="block text-sm font-semibold {{ tema.text_primary }}">Banco de músicas</span>
+                <span class="block text-xs {{ tema.text_secondary }}">Letras e cifras de todas as músicas da comunidade</span>
             </span>
             <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
         </a>
@@ -86,7 +86,7 @@
                        class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
             </div>
             <div>
-                <label class="block text-xs {{ tema.text_secondary }} mb-1">Ate</label>
+                <label class="block text-xs {{ tema.text_secondary }} mb-1">Até</label>
                 <input type="date" name="data_ate" value="{{ filtros.data_ate }}"
                        class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
             </div>
@@ -100,7 +100,7 @@
                 </select>
             </div>
             <div>
-                <label class="block text-xs {{ tema.text_secondary }} mb-1">Funcao</label>
+                <label class="block text-xs {{ tema.text_secondary }} mb-1">Função</label>
                 <input type="text" name="funcao" value="{{ filtros.funcao }}" placeholder="Ex: Baixo"
                        class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
             </div>
@@ -112,7 +112,7 @@
         {% if not funcoes %}
         <div class="text-center py-16">
             <i class="fa-solid fa-calendar-xmark text-4xl {{ tema.text_secondary }}"></i>
-            <p class="mt-4 {{ tema.text_secondary }}">Ninguem escalado com esses filtros.</p>
+            <p class="mt-4 {{ tema.text_secondary }}">Ninguém escalado com esses filtros.</p>
         </div>
         {% endif %}
 
@@ -163,7 +163,7 @@
                     </div>
                     <span class="flex items-center gap-1.5 text-xs {{ tema.text_secondary }} shrink-0">
                         <span class="w-2 h-2 rounded-full {{ status_cores.get(funcao.status, 'bg-gray-500') }}"></span>
-                        {{ status_labels.get(funcao.status, 'Nao notificado') }}
+                        {{ status_labels.get(funcao.status, 'Não notificado') }}
                     </span>
                 </div>
             {% endfor %}

@@ -48,6 +48,29 @@ window.somDeConfirmacao = (function () {
     return { preparar: preparar, tocar: tocar };
 })();
 
+// Depois do check-in: rotulo, ponto colorido e <select> de cada funcao
+// passam a mostrar o status salvo no servidor (escala.routes.checkin).
+function atualizarStatusNaTela(funcoes) {
+    funcoes.forEach(function (f) {
+        document.querySelectorAll('[data-status-rotulo="' + f.id + '"]').forEach(function (el) { el.textContent = f.rotulo; });
+        document.querySelectorAll('[data-status-ponto="' + f.id + '"]').forEach(function (el) {
+            el.className = el.className.replace(/\bbg-\S+/g, '').trim() + ' ' + f.cor;
+        });
+        document.querySelectorAll('select[data-status-select="' + f.id + '"]').forEach(function (select) {
+            var existe = false;
+            for (var i = 0; i < select.options.length; i++) if (select.options[i].value === f.status) existe = true;
+            if (!existe) {
+                var opcao = document.createElement('option');
+                opcao.value = f.status;
+                opcao.textContent = f.rotulo;
+                select.appendChild(opcao);
+            }
+            select.value = f.status;
+            select.setAttribute('data-status-atual', f.status);
+        });
+    });
+}
+
 (function () {
     // Check-in por localizacao: pega a melhor posicao do GPS em ate ~12 s
     // (a 1a leitura costuma vir imprecisa e melhora em segundos) e manda pro
@@ -87,7 +110,12 @@ window.somDeConfirmacao = (function () {
                         mostrar(dados.mensagem, 'ok');
                         texto.textContent = 'Presença confirmada';
                         window.somDeConfirmacao.tocar();
-                        setTimeout(function () { window.location.reload(); }, 1500);
+                        if (dados.funcoes) {
+                            // Check-in da escala: o status vira "Presente" na hora, sem recarregar.
+                            atualizarStatusNaTela(dados.funcoes);
+                        } else {
+                            setTimeout(function () { window.location.reload(); }, 1500);
+                        }
                     } else {
                         mostrar(dados.mensagem, 'erro');
                         liberar();

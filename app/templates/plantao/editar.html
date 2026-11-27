@@ -24,7 +24,7 @@
             <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
             </span>
-            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Editar Turno de Rodizio</span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Editar Turno de Rodízio</span>
         </a>
         {{ logo_inicio(tema) }}
     </header>
@@ -32,9 +32,9 @@
     <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">
         <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }} mb-1">{{ turno.nome }}</h1>
         <p class="text-sm {{ tema.text_secondary }} mb-6">
-            Mudar a data de inicio ou a recorrencia recalcula as ocorrencias futuras dai pra
-            frente com a nova numeracao (as ja ocorridas e as com falta remanejada continuam
-            intocadas, como historico).
+            Mudar a data de início ou a recorrência recalcula as ocorrências futuras dai pra
+            frente com a nova numeração (as já ocorridas e as com falta remanejada continuam
+            intocadas, como histórico).
         </p>
 
         <form method="POST" id="form-turno" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5">
@@ -106,20 +106,20 @@
                     <label class="flex items-center gap-1.5 text-sm {{ tema.text_primary }}">
                         {{ subfield }} {{ subfield.label.text }}
                         {% if subfield.data in turno.ministerio.dias_culto_efetivos %}
-                        <i class="fa-solid fa-star text-amber-400 text-[10px]" title="Esse ministerio costuma ter culto nesse dia"></i>
+                        <i class="fa-solid fa-star text-amber-400 text-[10px]" title="Esse ministério costuma ter culto nesse dia"></i>
                         {% endif %}
                     </label>
                     {% endfor %}
                 </div>
-                <p class="text-xs {{ tema.text_secondary }} mt-1">Se nenhum dia for marcado, usa o dia da semana da data de inicio.
-                    {% if turno.ministerio.dias_culto_efetivos %}<i class="fa-solid fa-star text-amber-400 text-[10px]"></i> = dia que o ministerio costuma ter culto.{% endif %}
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Se nenhum dia for marcado, usa o dia da semana da data de início.
+                    {% if turno.ministerio.dias_culto_efetivos %}<i class="fa-solid fa-star text-amber-400 text-[10px]"></i> = dia que o ministério costuma ter culto.{% endif %}
                 </p>
             </div>
 
             <div data-secao-mes class="hidden">
                 <label class="{{ tema.text_secondary }} block text-sm font-medium mb-1">Repetir mensalmente</label>
                 <p class="text-xs {{ tema.text_secondary }} mb-1.5" data-modo-mensal-explicacao>
-                    Calculado a partir do dia da semana e da posicao no mes da data de inicio escolhida acima.
+                    Calculado a partir do dia da semana e da posição no mês da data de início escolhida acima.
                 </p>
                 <div class="space-y-1.5">
                     {% for subfield in form.modo_mensal %}
@@ -220,7 +220,7 @@
             var rotuloOrdinal = ORDINAIS[ordinal] || (ordinal + 'a');
 
             if (opcaoDiaFixo) opcaoDiaFixo.textContent = 'Mensalmente no dia ' + data.getDate();
-            if (textoUltimo) textoUltimo.textContent = 'Mensalmente na ultima ' + nomeDia;
+            if (textoUltimo) textoUltimo.textContent = 'Mensalmente na última ' + nomeDia;
 
             if (opcaoEnesimo && textoEnesimo) {
                 if (ordinal >= 5) {

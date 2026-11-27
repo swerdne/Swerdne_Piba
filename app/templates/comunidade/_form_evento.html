@@ -1,0 +1,40 @@
+{# Campos do evento: os mesmos na criacao (eventos.html) e na edicao
+   (evento_editar.html) -- mesmas validacoes (EventoForm). #}
+{% macro campos_evento(form, tema) %}
+                {{ form.hidden_tag() }}
+                <div>
+                    {{ form.nome(
+                        placeholder="Ex: Congresso de Louvor",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                    {% for erro in form.nome.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                        {{ form.data.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ form.data(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                        {% for erro in form.data.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        {{ form.data_fim.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ form.data_fim(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                        {% for erro in form.data_fim.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
+                    </div>
+                    <div>
+                        {{ form.horario.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                        {{ form.horario(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
+                    </div>
+                </div>
+                <div>
+                    {{ form.local(
+                        placeholder="Local (opcional)",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                </div>
+                <div>
+                    {{ form.descricao(
+                        rows="2", placeholder="Descrição (opcional)",
+                        class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
+                    ) }}
+                </div>
+{% endmacro %}

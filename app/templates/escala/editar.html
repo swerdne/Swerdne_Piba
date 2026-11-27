@@ -32,8 +32,8 @@
     <main class="px-4 sm:px-6 py-8 max-w-md mx-auto">
         <h1 class="text-2xl font-extrabold tracking-tight {{ tema.text_primary }} mb-1">{{ escala.nome }}</h1>
         <p class="text-sm {{ tema.text_secondary }} mb-6">
-            Mudar a data ou o horario recalcula as notificacoes automaticas (24h/16h antes)
-            e avisa quem ja estiver escalado sobre a mudanca.
+            Mudar a data ou o horário recalcula as notificações automáticas (24h/16h antes)
+            e avisa quem já estiver escalado sobre a mudanca.
         </p>
 
         <form method="POST" class="space-y-4 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5">
@@ -74,7 +74,7 @@
             <div>
                 {{ form.cor.label(class_=tema.text_secondary ~ " block text-sm font-medium mb-1") }}
                 {{ form.cor(class_=tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
-                <p class="text-xs {{ tema.text_secondary }} mt-1">Aparece na lista de escalas e no calendario do ministerio.</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-1">Aparece na lista de escalas e no calendário do ministério.</p>
                 {% for erro in form.cor.errors %}
                     <p class="text-xs text-red-400 mt-1">{{ erro }}</p>
                 {% endfor %}

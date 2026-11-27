@@ -79,7 +79,7 @@ def login():
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             return _redirecionar_apos_login()
-        flash("Credenciais invalidas.", "danger")
+        flash("Credenciais inválidas.", "danger")
     return render_template("auth/login.html", form=form)
 
 
@@ -147,7 +147,7 @@ def esqueci_senha():
         else:
             current_app.logger.info("Redefinicao de senha: nenhuma conta com esse e-mail")
 
-        flash("Se esse e-mail tiver uma conta, enviamos as instrucoes. Confira tambem o spam.", "success")
+        flash("Se esse e-mail tiver uma conta, enviamos as instruções. Confira também o spam.", "success")
         return redirect(url_for("auth.login"))
     return render_template("auth/esqueci_senha.html", form=form)
 
@@ -161,7 +161,7 @@ def redefinir_senha(token):
     )
 
     if not token_valido:
-        flash("Esse link de redefinicao e invalido ou ja expirou. Solicite um novo.", "danger")
+        flash("Esse link de redefinição e inválido ou já expirou. Solicite um novo.", "danger")
         return redirect(url_for("auth.esqueci_senha"))
 
     form = RedefinirSenhaForm()
@@ -174,7 +174,7 @@ def redefinir_senha(token):
         user.save()
 
         _notificar_senha_alterada(user)
-        flash("Senha redefinida! Faca login com a nova senha.", "success")
+        flash("Senha redefinida! Faça login com a nova senha.", "success")
         return redirect(url_for("auth.login"))
     return render_template("auth/redefinir_senha.html", form=form, token=token)
 
@@ -217,12 +217,12 @@ def google_callback():
 
         if cenario == "negado":
             # Simula o usuario cancelando/negando o consentimento no Google
-            flash("Nao foi possivel concluir o login com o Google. Tente novamente.", "danger")
+            flash("Não foi possível concluir o login com o Google. Tente novamente.", "danger")
             return redirect(url_for("auth.login"))
 
         if cenario == "timeout":
             # Simula timeout/token expirado/falha de rede com o Google
-            flash("Nao foi possivel obter os dados da sua conta Google. Tente novamente.", "danger")
+            flash("Não foi possível obter os dados da sua conta Google. Tente novamente.", "danger")
             return redirect(url_for("auth.login"))
 
         info = MOCK_GOOGLE_USER  # cenario == "sucesso"
@@ -231,12 +231,12 @@ def google_callback():
             token = oauth.google.authorize_access_token()
         except OAuthError:
             # Usuario cancelou o consentimento, ou a sessao expirou/o link foi reaproveitado
-            flash("Nao foi possivel concluir o login com o Google. Tente novamente.", "danger")
+            flash("Não foi possível concluir o login com o Google. Tente novamente.", "danger")
             return redirect(url_for("auth.login"))
 
         info = token.get("userinfo")
         if info is None:
-            flash("Nao foi possivel obter os dados da sua conta Google. Tente novamente.", "danger")
+            flash("Não foi possível obter os dados da sua conta Google. Tente novamente.", "danger")
             return redirect(url_for("auth.login"))
 
     google_id = info["sub"]

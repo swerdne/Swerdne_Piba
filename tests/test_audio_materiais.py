@@ -26,7 +26,7 @@ def test_audio_enviado_aparece_com_player_e_baixar(logged_in_client, app, db):
         assert anexo.nome_arquivo == "Guia - Grande e o Senhor.mp3" and anexo.tipo == "audio/mpeg" and anexo.eh_audio
 
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode()
-        assert "Audios (1)" in html and "<audio controls" in html
+        assert "Áudios (1)" in html and "<audio controls" in html
         assert f'/escala/anexo/{anexo.id}?baixar=1' in html and "data-gravador" in html
 
         minha = logged_in_client.get("/minha-escala").data.decode()
@@ -59,10 +59,10 @@ def test_audio_gravado_na_tela_vem_por_fetch(logged_in_client, app, db):
     """A gravacao (webm do Chrome / m4a do iPhone) usa a mesma rota, via fetch."""
     with app.app_context():
         _, _, escala = _montar(logged_in_client)
-        resposta = _enviar_audio(logged_in_client, escala.id, nome="Audio gravado 18-10 21h30.webm",
+        resposta = _enviar_audio(logged_in_client, escala.id, nome="Áudio gravado 18-10 21h30.webm",
                                  conteudo=b"\x1aE\xdf\xa3webm", headers={"X-Requested-With": "fetch"})
         assert resposta.get_json() == {"ok": True}
-        m4a = _enviar_audio(logged_in_client, escala.id, nome="Audio gravado.m4a", conteudo=b"....ftypM4A ",
+        m4a = _enviar_audio(logged_in_client, escala.id, nome="Áudio gravado.m4a", conteudo=b"....ftypM4A ",
                             headers={"X-Requested-With": "fetch"})
         assert m4a.get_json() == {"ok": True}
         assert sorted(a.tipo for a in Anexo.objects(escala_id=escala.id)) == ["audio/mp4", "audio/webm"]

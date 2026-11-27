@@ -34,7 +34,7 @@
     {% if total %}
     <span class="text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 {{ 'bg-emerald-500/15 text-emerald-600' if preenchidas == total else 'bg-amber-500/15 text-amber-600' }}" title="Funções preenchidas nesta área">{{ preenchidas }}/{{ total }}</span>
     {% endif %}
-    {% if qtd and qtd > 1 %}<span class="flex items-center gap-1 text-[11px] {{ tema.text_secondary }} shrink-0" title="Gerado por rodizio"><i class="fa-solid fa-arrows-rotate"></i>{{ qtd }}</span>{% endif %}
+    {% if qtd and qtd > 1 %}<span class="flex items-center gap-1 text-[11px] {{ tema.text_secondary }} shrink-0" title="Gerado por rodízio"><i class="fa-solid fa-arrows-rotate"></i>{{ qtd }}</span>{% endif %}
     <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }}"></i>
 </a>
 {% endmacro %}
@@ -207,7 +207,7 @@
                 {% if not escalas %}
                 <div class="text-center py-16">
                     <i class="fa-solid fa-calendar-days text-4xl {{ tema.text_secondary }}"></i>
-                    <p class="mt-4 {{ tema.text_secondary }}">Nenhuma escala criada ainda neste ministerio.</p>
+                    <p class="mt-4 {{ tema.text_secondary }}">Nenhuma escala criada ainda neste ministério.</p>
                 </div>
                 {% endif %}
 
@@ -243,12 +243,12 @@
                                 {% set prox_ensaio = proximo_ensaio_por_escala.get(escala.id) %}
                                 {% if prox_ensaio and not escala.cancelada %}
                                 <p class="text-[11px] font-medium {{ tema.accent_text }} mt-0.5 truncate">
-                                    <i class="fa-solid fa-music mr-1"></i>Proximo ensaio: {{ prox_ensaio.descricao_data }}
+                                    <i class="fa-solid fa-music mr-1"></i>Próximo ensaio: {{ prox_ensaio.descricao_data }}
                                 </p>
                                 {% endif %}
                             </div>
                             {% if qtd and qtd > 1 %}
-                            <span class="flex items-center gap-1 text-[11px] {{ tema.text_secondary }} shrink-0" title="Gerado por rodizio">
+                            <span class="flex items-center gap-1 text-[11px] {{ tema.text_secondary }} shrink-0" title="Gerado por rodízio">
                                 <i class="fa-solid fa-arrows-rotate"></i>{{ qtd }}
                             </span>
                             {% endif %}
@@ -274,18 +274,18 @@
                 {% endif %}
 
                 <div class="pt-2" data-tutorial="rodizios">
-                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodizio</h2>
+                    <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Turnos de Rodízio</h2>
                 </div>
                 <p class="text-xs {{ tema.text_secondary }} -mt-2">
-                    As ocorrencias geradas por rodizio ja aparecem na lista de Escalas e no calendario acima.
-                    Para criar um turno novo, abra uma escala com gente ja escalada e use "Criar turno de rodizio
-                    com esta equipe" -- a fila comeca com quem ja esta la, sem recadastrar ninguem.
+                    As ocorrências geradas por rodízio já aparecem na lista de Escalas e no calendário acima.
+                    Para criar um turno novo, abra uma escala com gente já escalada e use "Criar turno de rodízio
+                    com esta equipe" -- a fila comeca com quem já está la, sem recadastrar ninguém.
                 </p>
 
-                {% if not turnos_plantao %}
+                {% if not turnos_plantao and not turnos_vinculados %}
                 <div class="text-center py-10">
                     <i class="fa-solid fa-people-arrows text-3xl {{ tema.text_secondary }}"></i>
-                    <p class="mt-3 {{ tema.text_secondary }}">Nenhum turno de rodizio criado ainda neste ministerio.</p>
+                    <p class="mt-3 {{ tema.text_secondary }}">Nenhum turno de rodízio criado ainda neste ministério.</p>
                 </div>
                 {% endif %}
 
@@ -304,6 +304,20 @@
                         <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
                     </a>
                     {% endfor %}
+                    {# Rodizio criado a partir de uma escala: a entrada dele e a propria escala #}
+                    {% for turno, escala_origem in turnos_vinculados %}
+                    <a href="{{ url_for('escala.detalhe', escala_id=escala_origem.id) }}" data-turno-vinculado="{{ turno.id }}"
+                       class="flex items-center gap-3 {{ tema.card_bg }} {{ tema.card_bg_hover }} border {{ tema.card_border }} rounded-2xl shadow-sm px-4 py-3 transition">
+                        <i class="fa-solid fa-arrows-rotate {{ tema.text_secondary }}"></i>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ turno.nome }}</p>
+                            <p class="text-xs {{ tema.text_secondary }}">
+                                {{ turno.descricao_recorrencia }} &middot; rodízio da escala {{ escala_origem.nome }}
+                            </p>
+                        </div>
+                        <i class="fa-solid fa-chevron-right {{ tema.text_secondary }}"></i>
+                    </a>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -316,12 +330,12 @@
                     <div class="flex items-center gap-2 shrink-0">
                         <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id) }}"
                            class="w-9 h-9 flex items-center justify-center rounded-full border {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} transition"
-                           title="Ver calendario completo" aria-label="Ver calendario completo">
+                           title="Ver calendário completo" aria-label="Ver calendário completo">
                             <i class="fa-solid fa-expand text-xs"></i>
                         </a>
                         <button type="button" data-toggle-calendario
                                 class="w-9 h-9 flex items-center justify-center rounded-full border {{ tema.card_border }} {{ tema.text_secondary }} {{ tema.text_hover }} transition"
-                                aria-label="Recolher calendario">
+                                aria-label="Recolher calendário">
                             <i class="fa-solid fa-chevron-down text-xs transition-transform" data-toggle-calendario-icone></i>
                         </button>
                     </div>
@@ -330,14 +344,14 @@
                 <div data-calendario-corpo class="px-5 pb-5">
                     <!-- Cabecalho do mes -->
                     <div class="flex items-center justify-between mb-4">
-                        <span class="text-base font-bold {{ tema.text_primary }} capitalize">{{ mes_ano_texto }}</span>
+                        <span class="text-base font-bold {{ tema.text_primary }}">{{ mes_ano_texto[:1]|upper }}{{ mes_ano_texto[1:] }}</span>
                         <div class="flex flex-col items-center gap-1 leading-none">
                             <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id, ano=ano_anterior, mes=mes_anterior) }}"
-                               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Mes anterior">
+                               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Mês anterior">
                                 <i class="fa-solid fa-caret-up"></i>
                             </a>
                             <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id, ano=ano_proximo, mes=mes_proximo) }}"
-                               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Proximo mes">
+                               class="{{ tema.text_secondary }} {{ tema.text_hover }} transition" aria-label="Próximo mês">
                                 <i class="fa-solid fa-caret-down"></i>
                             </a>
                         </div>
@@ -362,7 +376,7 @@
                                 <span class="w-7 h-7 flex items-center justify-center text-sm {{ tema.text_secondary if dia.month != mes else tema.text_primary }}">{{ dia.day }}</span>
                                 {% endif %}
                                 {% set ensaios_dia = ensaios_por_dia.get(dia, []) %}
-                                {% if eventos or ensaios_dia %}
+                                {% if eventos or ensaios_dia or eventos_comunidade_por_dia.get(dia) %}
                                 <div class="flex items-center gap-0.5">
                                     {% for escala, cor in eventos[:3] %}
                                     <span class="w-1 h-1 rounded-full {{ cor }}" title="{{ escala.nome }}"></span>
@@ -371,6 +385,7 @@
                                     {% for ensaio, escala, cor in ensaios_dia[:2] %}
                                     <span class="w-1 h-1 rounded-full {{ cor }} opacity-40" title="Ensaio: {{ escala.nome }}"></span>
                                     {% endfor %}
+                                    {% set modo = 'mini' %}{% include "comunidade/_eventos_no_calendario.html" %}
                                 </div>
                                 {% endif %}
                             </div>
@@ -390,7 +405,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-[11px] {{ tema.text_secondary }} mt-3">Nenhuma escala com data neste mes.</p>
+                    <p class="text-[11px] {{ tema.text_secondary }} mt-3">Nenhuma escala com data neste mês.</p>
                     {% endif %}
                     {% if ensaios_por_dia %}
                     <div class="mt-3 pt-3 border-t {{ tema.card_border }} space-y-1.5">

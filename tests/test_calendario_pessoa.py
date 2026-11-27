@@ -41,7 +41,7 @@ def test_calendario_do_ministerio_destaca_os_dias_da_pessoa(logged_in_client, ap
         assert html.count("data-dia-da-pessoa") == 2  # dias 8 e 15 no Louvor (a Transmissao e da Midia)
         assert "tem escala em <span class=\"font-semibold\">2 dias</span>" in html
         assert "Culto Manha" in html and "Vocal" in html and "Confirmado" in html
-        assert f"pessoa={ana.id}" in html.split("Mes anterior")[0].rsplit("href", 1)[1]  # seta leva a pessoa junto
+        assert f"pessoa={ana.id}" in html.split("Mês anterior")[0].rsplit("href", 1)[1]  # seta leva a pessoa junto
 
         nada = logged_in_client.get(url + f"&pessoa={davi.id}").data.decode()
         assert "não tem escala em nenhum dia deste mês" in nada and "data-dia-da-pessoa" not in nada

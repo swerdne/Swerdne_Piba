@@ -174,7 +174,7 @@
                 var ehOriginal = cadastro && atual && cadastro.indice === atual.indice && cadastro.menor === atual.menor;
                 aviso.textContent = !atual ? 'Ao salvar, a cifra e substituida pela convertida.'
                     : ehOriginal ? 'Ao salvar, substitui a cifra original em ' + tomAtual + '.'
-                    : 'Ao salvar, vira uma versao em ' + tomAtual + ' -- a original nao muda.';
+                    : 'Ao salvar, vira uma versão em ' + tomAtual + ' -- a original não muda.';
             }
         }
 

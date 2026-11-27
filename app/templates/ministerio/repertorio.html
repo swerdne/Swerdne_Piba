@@ -36,7 +36,7 @@
 
     <main class="px-4 sm:px-6 pt-2 pb-28 max-w-xl lg:max-w-3xl mx-auto space-y-5">
         <!-- Qual banco: o oficial da comunidade e o local de cada ministerio (ver escala/banco_musicas.py) -->
-        <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="Bancos de musicas">
+        <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="Bancos de músicas">
             <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=comunidade.id) }}"
                class="{{ CHIP }} {{ tema.accent_bg ~ ' text-white border-transparent' if banco.oficial else tema.card_bg ~ ' ' ~ tema.card_border ~ ' ' ~ tema.text_secondary }}">
                 <i class="fa-solid fa-star mr-1"></i>Banco da comunidade
@@ -51,11 +51,11 @@
 
         <p class="text-sm {{ tema.text_secondary }}">
             {% if banco.oficial %}
-            Banco <span class="font-semibold {{ tema.text_primary }}">oficial</span> da comunidade: todos os ministerios usam estas musicas nas escalas.
-            {% if not pode_gerenciar %}So os admins alteram -- pra sugerir uma musica, cadastre no banco do seu ministerio e o admin pode aprovar.{% endif %}
+            Banco <span class="font-semibold {{ tema.text_primary }}">oficial</span> da comunidade: todos os ministérios usam estas músicas nas escalas.
+            {% if not pode_gerenciar %}Só os admins alteram -- pra sugerir uma música, cadastre no banco do seu ministério e o admin pode aprovar.{% endif %}
             {% else %}
-            Banco <span class="font-semibold {{ tema.text_primary }}">local</span> do {{ banco.ministerio.nome }}: as escalas dele usam estas musicas e as do banco da comunidade.
-            O admin da comunidade pode aprovar uma musica daqui pra virar oficial.
+            Banco <span class="font-semibold {{ tema.text_primary }}">local</span> do {{ banco.ministerio.nome }}: as escalas dele usam estas músicas e as do banco da comunidade.
+            O admin da comunidade pode aprovar uma música daqui pra virar oficial.
             {% endif %}
         </p>
 
@@ -63,25 +63,25 @@
         <div data-tutorial="adicionar" class="space-y-3">
         <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden" {% if not musicas %}open{% endif %}>
             <summary class="flex items-center gap-2 px-4 py-3.5 text-sm font-semibold {{ tema.accent_text }} cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-                <i class="fa-solid fa-plus"></i>Nova musica
+                <i class="fa-solid fa-plus"></i>Nova música
             </summary>
             <form method="POST" action="{{ url_for('ministerio.nova_musica', **banco.args) }}" class="px-4 pb-4 space-y-2.5">
                 {{ form.hidden_tag() }}
-                {{ form.nome(class_="w-full " ~ CAMPO, placeholder="Nome da musica") }}
+                {{ form.nome(class_="w-full " ~ CAMPO, placeholder="Nome da música") }}
                 <div class="grid grid-cols-[1fr_9rem] gap-2">
-                    {{ form.artista(class_="w-full min-w-0 " ~ CAMPO, placeholder="Artista / ministerio") }}
+                    {{ form.artista(class_="w-full min-w-0 " ~ CAMPO, placeholder="Artista / ministério") }}
                     {{ form.tom(class_="w-full " ~ CAMPO) }}
                 </div>
-                {{ form.tags(class_="w-full " ~ CAMPO, placeholder="Tags: adoracao, ceia, abertura...") }}
-                {{ form.link(class_="w-full " ~ CAMPO, placeholder="Link de referencia (opcional)") }}
+                {{ form.tags(class_="w-full " ~ CAMPO, placeholder="Tags: adoração, ceia, abertura...") }}
+                {{ form.link(class_="w-full " ~ CAMPO, placeholder="Link de referência (opcional)") }}
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
-                    Cadastrar e editar versoes
+                    Cadastrar e editar versões
                 </button>
             </form>
         </details>
         <a href="{{ url_for('ministerio.importar_musicas', **banco.args) }}"
            class="flex items-center gap-2 {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm px-4 py-3.5 text-sm font-semibold {{ tema.accent_text }} {{ tema.card_bg_hover }} transition">
-            <i class="fa-solid fa-file-import"></i>Importar varias cifras (PDF ou Word)
+            <i class="fa-solid fa-file-import"></i>Importar várias cifras (PDF ou Word)
             <i class="fa-solid fa-chevron-right text-xs ml-auto"></i>
         </a>
         </div>
@@ -91,8 +91,8 @@
         <!-- So admin, no banco oficial: musicas dos bancos locais que podem virar oficiais -->
         <section id="sugestoes" class="{{ tema.card_bg }} border border-amber-500/40 rounded-3xl shadow-sm overflow-hidden scroll-mt-4">
             <div class="px-4 py-3 border-b {{ tema.card_border }}">
-                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-inbox mr-1 text-amber-500"></i>Sugestoes dos ministerios ({{ sugestoes|length }})</p>
-                <p class="text-xs {{ tema.text_secondary }} mt-0.5">Musicas que os lideres cadastraram nos bancos locais. Aprove as que devem fazer parte do banco oficial.</p>
+                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-inbox mr-1 text-amber-500"></i>Sugestões dos ministérios ({{ sugestoes|length }})</p>
+                <p class="text-xs {{ tema.text_secondary }} mt-0.5">Músicas que os líderes cadastraram nos bancos locais. Aprove as que devem fazer parte do banco oficial.</p>
             </div>
             <div class="divide-y {{ tema.divide }}">
                 {% for s in sugestoes %}
@@ -103,7 +103,7 @@
                     </a>
                     <form method="POST" action="{{ url_for('ministerio.dispensar_sugestao', musica_id=s.musica.id) }}">
                         {{ acao_form.hidden_tag() }}
-                        <button type="submit" title="Ocultar das sugestoes (continua no banco do ministerio)" aria-label="Ocultar sugestao"
+                        <button type="submit" title="Ocultar das sugestões (continua no banco do ministério)" aria-label="Ocultar sugestão"
                                 class="{{ tema.text_secondary }} hover:text-red-400 transition text-sm px-2"><i class="fa-solid fa-eye-slash"></i></button>
                     </form>
                     <form method="POST" action="{{ url_for('ministerio.aprovar_musica', musica_id=s.musica.id) }}">
@@ -124,14 +124,14 @@
 
         <!-- Modo de exibicao: lista de musicas ou repertorios por ministerio (lembrado no navegador) -->
         <div class="flex items-center justify-between gap-3">
-            <div data-tutorial="modos" class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Modo de exibicao">
+            <div data-tutorial="modos" class="inline-flex {{ tema.card_bg }} border {{ tema.card_border }} rounded-full p-1" role="tablist" aria-label="Modo de exibição">
                 <button type="button" data-modo="lista" role="tab"
                         class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list mr-1"></i>Lista</button>
                 <button type="button" data-modo="repertorios" role="tab"
-                        class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list-ol mr-1"></i>Repertorios</button>
+                        class="text-xs font-semibold px-4 py-1.5 rounded-full transition"><i class="fa-solid fa-list-ol mr-1"></i>Repertórios</button>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-xs {{ tema.text_secondary }}">{{ musicas|length }} musica(s)</span>
+                <span class="text-xs {{ tema.text_secondary }}">{{ musicas|length }} música(s)</span>
                 {% if musicas %}
                 <a href="{{ url_for('ministerio.baixar_musicas', **banco.args) }}" download data-baixar data-tutorial="baixar"
                    data-url-base="{{ url_for('ministerio.baixar_musicas', **banco.args) }}"
@@ -141,7 +141,7 @@
                 </a>
                 {% endif %}
                 {% if pode_gerenciar and musicas %}
-                <button type="button" data-abrir-apagar title="Apagar todas as musicas deste banco" aria-label="Apagar todas as musicas"
+                <button type="button" data-abrir-apagar title="Apagar todas as músicas deste banco" aria-label="Apagar todas as músicas"
                         class="flex items-center gap-1 text-xs font-semibold text-red-500 border border-red-500/30 rounded-full px-2.5 py-1 hover:bg-red-500/10 transition">
                     <i class="fa-solid fa-trash"></i><span class="hidden sm:inline">Apagar todas</span>
                 </button>
@@ -212,7 +212,7 @@
                 {% endfor %}
             </div>
             <p data-lista-dica class="text-xs {{ tema.text_secondary }} hidden">
-                Pesquise ou toque num tema pra ver as musicas{% if ministerios_que_lidera %} -- e marque as que vao num repertorio (ex: manha, noite){% elif pode_marcar %} -- e marque as que quer excluir{% endif %}.
+                Pesquise ou toque num tema pra ver as músicas{% if ministerios_que_lidera %} -- e marque as que vao num repertório (ex: manha, noite){% elif pode_marcar %} -- e marque as que quer excluir{% endif %}.
             </p>
 
             {% if pode_marcar %}
@@ -232,16 +232,16 @@
                 </div>
                 {% if ministerios_que_lidera %}
                 <div class="grid grid-cols-1 sm:grid-cols-[11rem_1fr] gap-2">
-                    <select name="ministerio_id" aria-label="Ministerio do repertorio" class="w-full {{ CAMPO }}">
+                    <select name="ministerio_id" aria-label="Ministério do repertório" class="w-full {{ CAMPO }}">
                         {% for m in ministerios_que_lidera %}
                         <option value="{{ m.id }}" {{ 'selected' if banco.ministerio and banco.ministerio.id == m.id }}>{{ m.nome }}</option>
                         {% endfor %}
                     </select>
-                    <input type="text" name="nome" required maxlength="120" placeholder="Nome do repertorio (ex: Manha, Noite)"
+                    <input type="text" name="nome" required maxlength="120" placeholder="Nome do repertório (ex: Manha, Noite)"
                            class="w-full min-w-0 {{ CAMPO }}">
                 </div>
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition">
-                    <i class="fa-solid fa-plus mr-1"></i>Criar repertorio com as marcadas
+                    <i class="fa-solid fa-plus mr-1"></i>Criar repertório com as marcadas
                 </button>
                 {% endif %}
                 {% if pode_gerenciar %}
@@ -255,7 +255,7 @@
             {% if pode_gerenciar %}
             <form method="POST" id="form-excluir-marcadas" class="hidden"
                   action="{{ url_for('ministerio.excluir_musicas_marcadas', **banco.args) }}"
-                  data-form-excluir-marcadas data-confirm-excluir="Excluir as musicas marcadas?">
+                  data-form-excluir-marcadas data-confirm-excluir="Excluir as músicas marcadas?">
                 {{ acao_form.hidden_tag() }}
                 <div data-ids-excluir></div>
             </form>
@@ -278,12 +278,12 @@
                 {%- for m in musicas %}
 <div data-musica-item data-id="{{ m.id }}" data-nome="{{ m.nome }}" data-texto="{{ (m.nome ~ ' ' ~ (m.artista or '') ~ ' ' ~ (m.tom or '') ~ ' ' ~ (m.tags or [])|join(' '))|lower }}" class="{{ C_LINHA }}">
 {%- if pode_marcar %}<label class="self-stretch flex items-center pl-4 pr-3 cursor-pointer shrink-0"><input type="checkbox" data-selecionar value="{{ m.id }}" aria-label="Selecionar {{ m.nome }}" class="w-5 h-5 cursor-pointer"></label>{% endif -%}
-<a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="{{ C_LINK }}"><div class="{{ C_TOM }}">{{ m.tom or '-' }}</div><div class="flex-1 min-w-0"><p class="{{ C_NOME }}">{{ m.nome }}</p><p class="{{ C_ARTISTA }}">{{ m.artista or 'Artista nao informado' }}</p><p data-onde class="{{ C_ONDE }}"></p>
+<a href="{{ url_for('ministerio.musica', musica_id=m.id) }}" class="{{ C_LINK }}"><div class="{{ C_TOM }}">{{ m.tom or '-' }}</div><div class="flex-1 min-w-0"><p class="{{ C_NOME }}">{{ m.nome }}</p><p class="{{ C_ARTISTA }}">{{ m.artista or 'Artista não informado' }}</p><p data-onde class="{{ C_ONDE }}"></p>
 {%- if m.tags %}<div class="flex flex-wrap gap-1 mt-1">{% for tag in m.tags %}<span class="{{ C_TAG }}">{{ tag }}</span>{% endfor %}</div>{% endif -%}
-</div><div class="flex flex-col gap-1 shrink-0 text-[10px] font-semibold"><span class="{{ C_SIM if m.letra_projecao else C_NAO }}" title="Versao de projecao"><i class="fa-solid fa-display mr-0.5"></i>Projecao</span><span class="{{ C_SIM if m.cifra_louvor else C_NAO }}" title="Versao do louvor (cifra)"><i class="fa-solid fa-guitar mr-0.5"></i>Louvor</span></div></a></div>
+</div><div class="flex flex-col gap-1 shrink-0 text-[10px] font-semibold"><span class="{{ C_SIM if m.letra_projecao else C_NAO }}" title="Versão de projeção"><i class="fa-solid fa-display mr-0.5"></i>Projeção</span><span class="{{ C_SIM if m.cifra_louvor else C_NAO }}" title="Versão do louvor (cifra)"><i class="fa-solid fa-guitar mr-0.5"></i>Louvor</span></div></a></div>
                 {%- endfor %}
             </div>
-            <p data-busca-vazia class="hidden text-center text-sm {{ tema.text_secondary }} py-6">Nenhuma musica encontrada.</p>
+            <p data-busca-vazia class="hidden text-center text-sm {{ tema.text_secondary }} py-6">Nenhuma música encontrada.</p>
             <!-- Mostra a lista aos poucos (ver PAGINA no JS) -->
             <div data-paginacao class="hidden flex items-center justify-between gap-3">
                 <span data-paginacao-texto class="text-xs {{ tema.text_secondary }}"></span>
@@ -302,7 +302,7 @@
             {% else %}
             <div data-area-banco class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
                 <i class="fa-solid fa-music text-3xl {{ tema.text_secondary }}"></i>
-                <p class="text-sm {{ tema.text_secondary }} mt-3">Nenhuma musica neste banco ainda.</p>
+                <p class="text-sm {{ tema.text_secondary }} mt-3">Nenhuma música neste banco ainda.</p>
             </div>
             {% endif %}
         </section>
@@ -316,8 +316,8 @@
                   class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2.5">
                 {{ acao_form.hidden_tag() }}
                 <input type="hidden" name="voltar" value="{{ request.path }}#repertorios">
-                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-paper-plane mr-1 {{ tema.accent_text }}"></i>Enviar um repertorio</p>
-                <select data-repertorio-escolhido aria-label="Repertorio" class="w-full {{ CAMPO }}">
+                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-paper-plane mr-1 {{ tema.accent_text }}"></i>Enviar um repertório</p>
+                <select data-repertorio-escolhido aria-label="Repertório" class="w-full {{ CAMPO }}">
                     {% for ministerio, lista in repertorios if (ministerio and ministerio.id in lidera_ids) or (not ministerio and lidera_ids|length == ministerios|length) %}
                     <optgroup label="{{ ministerio.nome if ministerio else 'Sem ministerio' }}">
                         {% for r in lista %}
@@ -336,7 +336,7 @@
             {% for ministerio, lista in repertorios %}
             <div>
                 <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">
-                    {{ ministerio.nome if ministerio else 'Sem ministerio' }}
+                    {{ ministerio.nome if ministerio else 'Sem ministério' }}
                 </h2>
                 <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden divide-y {{ tema.divide }}">
                     {% for r in lista %}
@@ -347,7 +347,7 @@
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ r.nome }}</p>
                             <p class="text-xs {{ tema.text_secondary }} truncate">
-                                {{ r.itens|length }} musica(s){% if r.compartilhada_com %} &middot; enviado pra {{ r.compartilhada_com|length }}{% endif %}
+                                {{ r.itens|length }} música(s){% if r.compartilhada_com %} &middot; enviado pra {{ r.compartilhada_com|length }}{% endif %}
                             </p>
                         </div>
                         <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }}"></i>
@@ -357,13 +357,13 @@
             </div>
             {% else %}
             <p class="text-sm {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-4">
-                Nenhum repertorio ainda. Na aba <span class="font-semibold">Lista</span>, marque as musicas e use "Criar repertorio"
-                (ex: "Manha" e "Noite") -- ou, numa escala, "Compartilhar este repertorio".
+                Nenhum repertório ainda. Na aba <span class="font-semibold">Lista</span>, marque as músicas e use "Criar repertório"
+                (ex: "Manha" e "Noite") -- ou, numa escala, "Compartilhar este repertório".
             </p>
             {% endfor %}
 
             <div>
-                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Repertorios das escalas</h2>
+                <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Repertórios das escalas</h2>
                 {% if repertorios_escalas %}
                 <div class="space-y-2">
                     {% for g in repertorios_escalas %}
@@ -375,7 +375,7 @@
                             </div>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ g.escala.nome }}</p>
-                                <p class="text-xs {{ tema.text_secondary }} truncate">{{ g.escala.data.strftime('%d/%m/%Y') }} &middot; {{ g.itens|length }} musica(s)</p>
+                                <p class="text-xs {{ tema.text_secondary }} truncate">{{ g.escala.data.strftime('%d/%m/%Y') }} &middot; {{ g.itens|length }} música(s)</p>
                             </div>
                             <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition group-open:rotate-180"></i>
                         </summary>
@@ -393,14 +393,14 @@
                             <span class="{{ tema.text_secondary }}">&middot;</span>
                             <a href="{{ url_for('escala.folha_repertorio', escala_id=g.escala.id, tipo='cifras') }}" target="_blank" rel="noopener" class="{{ tema.accent_text }} hover:underline">Cifras</a>
                             <span class="{{ tema.text_secondary }}">&middot;</span>
-                            <a href="{{ url_for('escala.folha_repertorio', escala_id=g.escala.id, tipo='projecao') }}" target="_blank" rel="noopener" class="{{ tema.accent_text }} hover:underline">Projecao</a>
+                            <a href="{{ url_for('escala.folha_repertorio', escala_id=g.escala.id, tipo='projecao') }}" target="_blank" rel="noopener" class="{{ tema.accent_text }} hover:underline">Projeção</a>
                         </div>
                     </details>
                     {% endfor %}
                 </div>
                 {% else %}
                 <p class="text-sm {{ tema.text_secondary }} {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl px-4 py-4">
-                    Nenhum culto recente ou proximo com repertorio montado.
+                    Nenhum culto recente ou próximo com repertório montado.
                 </p>
                 {% endif %}
             </div>
@@ -414,10 +414,10 @@
             <form method="POST" action="{{ url_for('ministerio.apagar_todas_musicas', **banco.args) }}"
                   data-apagar-todas data-total="{{ musicas|length }}" class="p-5 space-y-3">
                 {{ acao_form.hidden_tag() }}
-                <p class="text-base font-bold text-red-500"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Apagar todas as musicas?</p>
+                <p class="text-base font-bold text-red-500"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Apagar todas as músicas?</p>
                 <p class="text-sm">
-                    Isso apaga <span class="font-bold">as {{ musicas|length }} musica(s)</span> do {{ banco.titulo|lower }} e nao da pra desfazer.
-                    Escalas e repertorios que usavam alguma ficam com ela como musica avulsa.
+                    Isso apaga <span class="font-bold">as {{ musicas|length }} música(s)</span> do {{ banco.titulo|lower }} e não da pra desfazer.
+                    Escalas e repertórios que usavam alguma ficam com ela como música avulsa.
                 </p>
                 <label class="block text-xs {{ tema.text_secondary }}">
                     Pra confirmar, digite <span class="font-bold text-red-500">{{ frase_apagar_todas }}</span>:
@@ -469,7 +469,7 @@
             });
         });
 
-        // ---- Selecao de musicas -> bloco "Criar repertorio". Guardada na aba do
+        // ---- Selecao de musicas -> bloco "Criar repertório". Guardada na aba do
         // navegador (sessionStorage) por banco: abrir uma musica e voltar nao perde.
         var barra = document.querySelector('[data-barra-pasta]');
         var caixaIds = document.querySelector('[data-ids-selecionados]');
@@ -511,10 +511,10 @@
                 campo.value = id;
                 caixaExcluir.appendChild(campo);
             });
-            var qtd = marcadas.length + (marcadas.length === 1 ? ' musica marcada' : ' musicas marcadas');
+            var qtd = marcadas.length + (marcadas.length === 1 ? ' música marcada' : ' músicas marcadas');
             textoExcluir.textContent = 'Excluir ' + (marcadas.length === 1 ? 'a marcada' : 'as ' + marcadas.length + ' marcadas');
             formExcluir.setAttribute('data-confirm-excluir',
-                'Excluir ' + qtd + '? Nao da pra desfazer. Escalas e repertorios que usavam alguma ficam com ela como musica avulsa.');
+                'Excluir ' + qtd + '? Não da pra desfazer. Escalas e repertórios que usavam alguma ficam com ela como música avulsa.');
         }
         function atualizarSelecao() {
             atualizarBaixar();
@@ -523,7 +523,7 @@
             if (!barra) return;
             var naLista = !document.querySelector('[data-modo-conteudo="lista"]').classList.contains('hidden');
             barra.classList.toggle('hidden', !marcadas.length || !naLista);
-            contagem.textContent = marcadas.length + (marcadas.length === 1 ? ' musica marcada' : ' musicas marcadas');
+            contagem.textContent = marcadas.length + (marcadas.length === 1 ? ' música marcada' : ' músicas marcadas');
             caixaIds.innerHTML = '';
             marcadas.forEach(function (id) {
                 var campo = document.createElement('input');
@@ -610,7 +610,7 @@
                     if (onde) { onde.textContent = ROTULO_ONDE[r.onde] || ''; onde.classList.toggle('hidden', !onde.textContent); }
                 });
             }
-            if (vazia) vazia.textContent = buscandoNoServidor ? 'Procurando também na letra...' : 'Nenhuma musica encontrada.';
+            if (vazia) vazia.textContent = buscandoNoServidor ? 'Procurando também na letra...' : 'Nenhuma música encontrada.';
             itens.forEach(function (item) { item.classList.add('hidden'); });
             if (mostrarLista) combinam.slice(0, limite).forEach(function (item) { item.classList.remove('hidden'); });
 
@@ -749,9 +749,9 @@
             fetch(URL_BUSCA_WEB + '?q=' + encodeURIComponent(termo), { credentials: 'same-origin' })
                 .then(function (r) {
                     if (r.status === 429) return { erro: 'Muitas buscas seguidas -- espere um minuto e tente de novo.' };
-                    return r.json().catch(function () { return { erro: 'A busca na web nao respondeu (' + r.status + ').' }; });
+                    return r.json().catch(function () { return { erro: 'A busca na web não respondeu (' + r.status + ').' }; });
                 })
-                .catch(function () { return { erro: 'Sem conexao -- tente de novo.' }; })
+                .catch(function () { return { erro: 'Sem conexão -- tente de novo.' }; })
                 .then(function (dados) {
                     botaoBuscarWeb.disabled = false;
                     if (dados.erro) { estadoDaWeb(dados.erro, true); return; }
@@ -812,7 +812,7 @@
             });
             formApagar.addEventListener('submit', function (e) {
                 var total = formApagar.getAttribute('data-total');
-                if (!confirm('Tem certeza? Isso apaga TODAS as ' + total + ' musica(s) deste banco e nao da pra desfazer.')) {
+                if (!confirm('Tem certeza? Isso apaga TODAS as ' + total + ' música(s) deste banco e não da pra desfazer.')) {
                     e.preventDefault();
                 }
             });

@@ -14,7 +14,7 @@ def _criar_comunidade(cliente, nome="Comunidade Teste"):
     return Comunidade.objects(nome=nome).order_by("-id").first()
 
 
-def _criar_ministerio(cliente, comunidade_id, nome="Ministerio Teste"):
+def _criar_ministerio(cliente, comunidade_id, nome="Ministério Teste"):
     cliente.post(
         f"/ministerio/comunidade/{comunidade_id}/nova",
         data={"nome": nome, "descricao": ""},
@@ -107,7 +107,7 @@ def test_detalhe_tem_logo_que_volta_direto_pro_inicio(logged_in_client, app, db)
         escala = _nova_escala_completa(logged_in_client, "Culto de Domingo")
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
 
-        assert 'title="Ir para o inicio"' in html
+        assert 'title="Ir para o início"' in html
         assert 'href="/dashboard"' in html
 
 
@@ -370,7 +370,7 @@ def test_notificar_varios_escalados_dispara_em_paralelo_nao_em_serie(logged_in_c
         for nome_funcao, nome_membro, email in [
             ("Baixo", "Pessoa Um", "pessoa1@example.com"),
             ("Bateria", "Pessoa Dois", "pessoa2@example.com"),
-            ("Guitarra", "Pessoa Tres", "pessoa3@example.com"),
+            ("Guitarra", "Pessoa Três", "pessoa3@example.com"),
             ("Teclado", "Pessoa Quatro", "pessoa4@example.com"),
         ]:
             funcao = _funcao_por_nome(escala, nome_funcao)
@@ -464,7 +464,7 @@ def test_notificar_membro_com_conta_gera_notificacao_no_app(logged_in_client, ou
         )
         html = response.data.decode("utf-8")
         assert response.status_code == 200
-        assert "notificacao(oes) no app" in html
+        assert "notificação(ões) no app" in html
         assert "e-mail(s) falharam" in html
 
         bruno = User.objects(email="bruno@example.com").first()
@@ -474,7 +474,7 @@ def test_notificar_membro_com_conta_gera_notificacao_no_app(logged_in_client, ou
 
     with sessao_isolada(app):
         html_bruno = outro_logged_in_client.get("/dashboard").data.decode("utf-8")
-        assert "Voce foi escalado" in html_bruno
+        assert "Você foi escalado" in html_bruno
 
 
 def test_marcar_notificacoes_como_lidas(logged_in_client, outro_logged_in_client, app, db):
@@ -522,14 +522,14 @@ def test_notificar_so_quem_nao_foi_avisado_e_reenvio_travado_por_6h(logged_in_cl
 
         # Todo mundo avisado: clicar de novo nao manda nada.
         html = logged_in_client.post(f"/escala/{escala.id}/notificar", data={}, follow_redirects=True).data.decode()
-        assert len(enviados) == 3 and "ja foram avisados" in html
+        assert len(enviados) == 3 and "já foram avisados" in html
 
         # Reenviar para todos: manda pros 2; um 2o reenvio logo depois e recusado.
         logged_in_client.post(f"/escala/{escala.id}/notificar", data={"reenviar": "1"})
         assert len(enviados) == 5
         html = logged_in_client.post(f"/escala/{escala.id}/notificar", data={"reenviar": "1"},
                                      follow_redirects=True).data.decode()
-        assert len(enviados) == 5 and "Outro reenvio para todos so a partir das" in html
+        assert len(enviados) == 5 and "Outro reenvio para todos só a partir das" in html
 
 
 def test_notificar_escala_vazia_mostra_aviso(logged_in_client, app, db):
@@ -539,7 +539,7 @@ def test_notificar_escala_vazia_mostra_aviso(logged_in_client, app, db):
             f"/escala/{escala.id}/notificar", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        assert "Ninguem escalado" in response.data.decode("utf-8")
+        assert "Ninguém escalado" in response.data.decode("utf-8")
 
 
 def test_adicionar_funcao_nova(logged_in_client, app, db):
@@ -658,13 +658,13 @@ def test_usuario_nao_consegue_mexer_no_repertorio_de_outra_conta(logged_in_clien
     with sessao_isolada(app):
         response = outro_logged_in_client.post(
             f"/escala/{escala_id}/repertorio/adicionar",
-            data={"nome_musica": "Musica Invasora"},
+            data={"nome_musica": "Música Invasora"},
             follow_redirects=True,
         )
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert ItemRepertorio.objects(escala_id=escala_id, nome_musica="Musica Invasora").first() is None
+        assert ItemRepertorio.objects(escala_id=escala_id, nome_musica="Música Invasora").first() is None
 
 
 # --- Subcabecalhos (categorias) ----------------------------------------------
@@ -764,7 +764,7 @@ def test_cancelar_escala_ja_cancelada_mostra_erro(logged_in_client, app, db):
         logged_in_client.post(f"/escala/{escala.id}/cancelar", data={}, follow_redirects=True)
 
         response = logged_in_client.post(f"/escala/{escala.id}/cancelar", data={}, follow_redirects=True)
-        assert "ja esta cancelada".encode() in response.data
+        assert "já está cancelada".encode() in response.data
 
 
 def test_reabrir_escala_desfaz_cancelamento(logged_in_client, app, db):
@@ -845,7 +845,7 @@ def test_lista_marca_checkbox_de_selecao_so_em_escala_manual(logged_in_client, a
 
         gerada = Escala(
             ministerio_id=ministerio.id,
-            nome="Gerada por rodizio",
+            nome="Gerada por rodízio",
             departamento="Louvor",
             data=date.today(),
             plantao_turno_id=999999,
@@ -1170,8 +1170,8 @@ def test_opcao_de_convidado_aparece_mesmo_com_diretorio_vazio(logged_in_client, 
         assert Membro.objects(comunidade_id=escala.ministerio.comunidade_id).count() == 0
 
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Diretorio da comunidade vazio" in html
-        assert "Convidar conta ja cadastrada" in html
+        assert "Diretório da comunidade vazio" in html
+        assert "Convidar conta já cadastrada" in html
         assert "data-toggle-busca-convidado" in html
 
 
@@ -1544,7 +1544,7 @@ def test_aprovar_troca_sem_solicitacao_pendente_mostra_erro(logged_in_client, ap
             f"/escala/funcao/{baixo.id}/troca/aprovar", data={"membro_id": membro.id}, follow_redirects=True
         )
         assert resposta.status_code == 200
-        assert "nao tem uma troca pendente" in resposta.data.decode("utf-8")
+        assert "não tem uma troca pendente" in resposta.data.decode("utf-8")
 
 
 # --- Horario de fim e aviso de conflito ------------------------------------
@@ -1611,7 +1611,7 @@ def test_escalar_em_horario_conflitante_mostra_aviso(logged_in_client, app, db):
         escala_b = _criar_escala(logged_in_client, ministerio.id, "Culto B", data="2026-10-04", horario="20:00")
         resposta = _escalar(logged_in_client, _funcao_por_nome(escala_b, "Baixo").id, membro.id)
 
-        assert "ja esta escalado em".encode() in resposta.data
+        assert "já está escalado em".encode() in resposta.data
         assert "Culto A".encode() in resposta.data
 
 
@@ -1632,4 +1632,4 @@ def test_escalar_em_horario_sem_conflito_nao_mostra_aviso(logged_in_client, app,
         escala_b = _criar_escala(logged_in_client, ministerio.id, "Culto B", data="2026-10-04", horario="19:00")
         resposta = _escalar(logged_in_client, _funcao_por_nome(escala_b, "Baixo").id, membro.id)
 
-        assert "ja esta escalado em".encode() not in resposta.data
+        assert "já está escalado em".encode() not in resposta.data

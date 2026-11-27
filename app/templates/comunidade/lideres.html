@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Lideres - {{ comunidade.nome }}{% endblock %}
+{% block title %}Líderes - {{ comunidade.nome }}{% endblock %}
 
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,7 +25,7 @@
             <a href="{{ url_for('comunidade.detalhe', comunidade_id=comunidade.id) if eh_dono else url_for('comunidade.escalados', comunidade_id=comunidade.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm group shrink-0" aria-label="Voltar">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
             </a>
-            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Lideres - {{ comunidade.nome }}</span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Líderes - {{ comunidade.nome }}</span>
         </div>
         {{ logo_inicio(tema) }}
     </header>
@@ -35,7 +35,7 @@
         {% if not lideres %}
         <div class="text-center py-12">
             <i class="fa-solid fa-user-tie text-4xl {{ tema.text_secondary }}"></i>
-            <p class="mt-4 {{ tema.text_secondary }}">Ninguem com papel de admin ou lider ainda.</p>
+            <p class="mt-4 {{ tema.text_secondary }}">Ninguém com papel de admin ou líder ainda.</p>
         </div>
         {% endif %}
 

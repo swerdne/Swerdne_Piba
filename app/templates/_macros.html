@@ -8,7 +8,7 @@ import "with context" (usa avisos_nao_lidos do context processor).
 {% set nao_lidas = avisos_nao_lidos() %}
 <a href="{{ url_for('main.dashboard') }}#avisos" data-ir-painel="avisos" aria-label="Avisos" title="Avisos"
    class="relative {{ tamanho }} rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_primary }} flex items-center justify-center shrink-0 transition hover:shadow-md">
-    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 4a4 4 0 0 0-4 4v3.5L6 15h12l-2-3.5V8a4 4 0 0 0-4-4z"></path><path d="M10 18a2 2 0 0 0 4 0"></path></svg>
+    <svg width="20" height="20" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 4a4 4 0 0 0-4 4v3.5L6 15h12l-2-3.5V8a4 4 0 0 0-4-4z"></path><path d="M10 18a2 2 0 0 0 4 0"></path></svg>
     {% if nao_lidas %}
     <span class="absolute -top-1.5 -right-1.5 min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
         {{ nao_lidas if nao_lidas < 10 else '9+' }}
@@ -27,7 +27,7 @@ import "with context" por causa do sino.
 #}
 <div class="flex items-center gap-3 shrink-0">
     {{ sino_avisos(tema) }}
-    <a href="{{ url_for('main.dashboard') }}" title="Ir para o inicio" aria-label="Ir para o inicio"
+    <a href="{{ url_for('main.dashboard') }}" title="Ir para o início" aria-label="Ir para o início"
        class="inline-flex w-8 h-8 opacity-90 hover:opacity-100 transition shrink-0">
         <img decoding="async" src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" class="w-full h-full object-contain">
     </a>
@@ -37,11 +37,11 @@ import "with context" por causa do sino.
 
 {% macro _icone_nav(tema, chave, tamanho="w-5 h-5") %}
 {% if chave == 'inicio' %}
-<svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
+<svg width="{{ tamanho|px }}" height="{{ tamanho|px }}" class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg>
 {% elif chave == 'minha' %}
-<svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M9 15l2 2 4-4"></path></svg>
+<svg width="{{ tamanho|px }}" height="{{ tamanho|px }}" class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M9 15l2 2 4-4"></path></svg>
 {% elif chave == 'comunidades' %}
-<svg class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path></svg>
+<svg width="{{ tamanho|px }}" height="{{ tamanho|px }}" class="{{ tamanho }} shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path></svg>
 {% elif current_user.foto_perfil %}
 <img decoding="async" src="{{ current_user.foto_perfil }}" alt="" class="{{ tamanho }} rounded-full object-cover shrink-0">
 {% else %}
@@ -119,7 +119,7 @@ data-nav-pill marca o elemento que recebe o fundo de "ativo".
         </div>
         <a href="{{ url_for('auth.logout') }}" title="Sair" aria-label="Sair"
            class="{{ tema.text_secondary }} hover:text-red-500 transition shrink-0">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"></path><path d="M10 17l5-5-5-5"></path><path d="M15 12H4"></path></svg>
+            <svg width="20" height="20" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"></path><path d="M10 17l5-5-5-5"></path><path d="M15 12H4"></path></svg>
         </a>
     </div>
 </aside>
@@ -164,7 +164,7 @@ devolvida por classe_item_menu().
 <details class="relative shrink-0" data-menu-acoes data-tutorial="menu">
     <summary aria-label="{{ rotulo }}" title="{{ rotulo }}"
              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer w-9 h-9 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm {{ tema.text_primary }} flex items-center justify-center transition hover:shadow-md">
-        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
+        <svg width="20" height="20" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
     </summary>
     <div class="absolute right-0 top-11 z-40 w-60 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl py-1.5 overflow-hidden" role="menu">
         {{ caller() }}
@@ -254,7 +254,7 @@ Chamado com {% call %} pra por o botao de excluir ao lado (so pro lider).
         {% if caller %}{{ caller() }}{% endif %}
     </div>
     <audio controls preload="none" class="w-full h-10" src="{{ url_for('escala.baixar_anexo', anexo_id=anexo.id) }}">
-        Seu navegador nao toca este audio -- use o botao Baixar.
+        Seu navegador não toca este áudio -- use o botão Baixar.
     </audio>
 </div>
 {% endmacro %}

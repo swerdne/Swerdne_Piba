@@ -1,5 +1,50 @@
 // JavaScript do projeto
 
+// Mensagens do proprio navegador (campo obrigatorio, e-mail invalido...) em
+// portugues: num celular em ingles elas apareciam como "Please fill out this
+// field". O texto volta ao normal assim que a pessoa mexe no campo.
+(function () {
+    function mensagem(campo) {
+        var v = campo.validity;
+        if (v.valueMissing) {
+            if (campo.type === "checkbox") return "Marque esta opção para continuar.";
+            if (campo.tagName === "SELECT" || campo.type === "radio") return "Escolha uma opção.";
+            if (campo.type === "file") return "Escolha um arquivo.";
+            return "Preencha este campo.";
+        }
+        if (v.typeMismatch) {
+            if (campo.type === "email") return "Digite um e-mail válido (ex.: nome@exemplo.com).";
+            if (campo.type === "url") return "Digite um endereço válido, começando com https://.";
+            return "Valor inválido.";
+        }
+        if (v.badInput) {
+            if (campo.type === "number") return "Digite só números.";
+            if (/date|time|month/.test(campo.type)) return "Digite uma data ou hora válida.";
+            return "Valor inválido.";
+        }
+        if (v.tooShort) return "Use pelo menos " + campo.minLength + " caracteres (agora são " + campo.value.length + ").";
+        if (v.tooLong) return "Use no máximo " + campo.maxLength + " caracteres.";
+        if (v.rangeUnderflow) return "O valor mínimo é " + campo.min + ".";
+        if (v.rangeOverflow) return "O valor máximo é " + campo.max + ".";
+        if (v.stepMismatch) return "Use um valor válido.";
+        if (v.patternMismatch) return campo.title || "Use o formato pedido.";
+        return "";
+    }
+    document.addEventListener("invalid", function (evento) {
+        var campo = evento.target;
+        if (!campo || !campo.setCustomValidity) return;
+        campo.setCustomValidity("");
+        var texto = mensagem(campo);
+        if (texto) campo.setCustomValidity(texto);
+    }, true);
+    function limpar(evento) {
+        var campo = evento.target;
+        if (campo && campo.setCustomValidity) campo.setCustomValidity("");
+    }
+    document.addEventListener("input", limpar, true);
+    document.addEventListener("change", limpar, true);
+})();
+
 // Confirmacao antes de enviar: <form data-confirm-excluir="Pergunta?">. Em
 // atributo (nao onsubmit="return confirm('...')") pra nome com aspas nao
 // quebrar o JS. Registrado antes da trava de duplo envio abaixo, que olha
@@ -221,7 +266,7 @@ document.querySelectorAll("form").forEach(function (form) {
 //
 // Importante: exclui um item POR VEZ via fetch sequencial nas rotas de
 // exclusao individual (ja provadas rapidas/confiaveis), em vez de mandar
-// tudo junto num POST so pra uma rota de "excluir varias". Um lote grande
+// tudo junto num POST so pra uma rota de "excluir várias". Um lote grande
 // numa unica requisicao (varias comunidades, cada uma cascateando bastante
 // coisa) podia demorar o bastante pra estourar o timeout do servidor --
 // nesse caso a conexao e derrubada no meio, sem chance nem da nossa propria
@@ -296,7 +341,7 @@ document.querySelectorAll("form").forEach(function (form) {
         itens.forEach(function (item) { if (item.checked) selecionados.push(item); });
         if (!selecionados.length) return;
 
-        var mensagem = form.dataset.selecaoConfirmar || "Excluir os itens selecionados? Essa acao nao pode ser desfeita.";
+        var mensagem = form.dataset.selecaoConfirmar || "Excluir os itens selecionados? Essa ação não pode ser desfeita.";
         if (!window.confirm(mensagem)) return;
 
         var total = selecionados.length;
@@ -308,8 +353,8 @@ document.querySelectorAll("form").forEach(function (form) {
             if (indice >= total) {
                 if (falhas > 0) {
                     window.alert(
-                        falhas + " de " + total + " nao puderam ser excluidos agora. " +
-                        "O que deu certo ja foi salvo -- confira a lista e tente de novo com o restante."
+                        falhas + " de " + total + " não puderam ser excluídos agora. " +
+                        "O que deu certo já foi salvo -- confira a lista e tente de novo com o restante."
                     );
                 }
                 window.location.reload();
@@ -400,7 +445,7 @@ document.querySelectorAll("[data-excluir-item]").forEach(function (botao) {
                 clearInterval(relogio);
                 var tipoFinal = gravador.mimeType || tipo || "audio/webm";
                 var agora = new Date();
-                var nome = "Audio gravado " + String(agora.getDate()).padStart(2, "0") + "-" +
+                var nome = "Áudio gravado " + String(agora.getDate()).padStart(2, "0") + "-" +
                     String(agora.getMonth() + 1).padStart(2, "0") + " " + String(agora.getHours()).padStart(2, "0") +
                     "h" + String(agora.getMinutes()).padStart(2, "0") + "." + extensao(tipoFinal);
                 arquivo = new File(pedacos, nome, { type: tipoFinal.split(";")[0] });
@@ -416,7 +461,7 @@ document.querySelectorAll("[data-excluir-item]").forEach(function (botao) {
             }, 500);
             estado("gravando");
         }).catch(function () {
-            mostrarErro("Nao deu pra usar o microfone. Libere o acesso ao microfone pra este site e tente de novo.");
+            mostrarErro("Não deu pra usar o microfone. Libere o acesso ao microfone pra este site e tente de novo.");
         });
     });
 
@@ -444,7 +489,7 @@ document.querySelectorAll("[data-excluir-item]").forEach(function (botao) {
             .catch(function () {
                 enviar.disabled = false;
                 enviar.innerHTML = '<i class="fa-solid fa-paper-plane mr-1"></i>Enviar audio';
-                mostrarErro("Nao foi possivel enviar o audio (confira a internet; limite de 15 MB).");
+                mostrarErro("Não foi possível enviar o áudio (confira a internet; limite de 15 MB).");
             });
     });
 })();
@@ -497,7 +542,7 @@ if ("serviceWorker" in navigator) {
 // abre o passo a passo (Compartilhar > Adicionar a Tela de Inicio). Android
 // sem o pedido (Firefox etc.): passo a passo pelo menu do navegador. Ja
 // instalado (aberto como app) ou computador sem suporte: nada aparece.
-// [data-instalar-dispensavel] some por 30 dias com "Agora nao".
+// [data-instalar-dispensavel] some por 30 dias com "Agora não".
 // [data-instalar-apk] = link pro APK (/app/TyBenson.apk), so no Android; depois
 // do toque abre o passo a passo de "instalar app de fonte desconhecida". No
 // Chrome do Android sem o pedido (PWA ja instalado) o botao "Instalar app"
@@ -652,8 +697,8 @@ if ("serviceWorker" in navigator) {
 
         var texto = document.createElement("span");
         texto.textContent = idAtual === null
-            ? "Sua sessao foi encerrada neste navegador (login/logout em outra aba). Recarregue a pagina."
-            : "A conta logada neste navegador mudou em outra aba. Recarregue a pagina para ver os dados corretos.";
+            ? "Sua sessão foi encerrada neste navegador (login/logout em outra aba). Recarregue a página."
+            : "A conta logada neste navegador mudou em outra aba. Recarregue a página para ver os dados corretos.";
 
         var botao = document.createElement("button");
         botao.type = "button";
@@ -1024,11 +1069,11 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
    normal; a mensagem final vem do servidor de qualquer jeito. */
 (function () {
     var MENSAGENS = {
-        adicionar: ['A pessoa ja tem conta e vai entrar na hora.', 'text-green-500', 'Adicionar'],
-        ja_faz_parte: ['Essa pessoa ja faz parte com esse papel.', 'text-amber-500', 'Adicionar'],
-        sem_conta: ['A pessoa ainda nao tem conta: vai um convite por e-mail, e ela so entra depois de se cadastrar e aceitar.', 'text-amber-500', 'Enviar convite'],
-        exige_aprovacao: ['Essa pessoa exige aprovacao pra entrar em grupos: vai um convite, e ela so entra depois de aceitar.', 'text-amber-500', 'Enviar convite'],
-        muda_papel: ['Essa pessoa ja faz parte com outro papel: vai um convite, e a mudanca so vale depois que ela aceitar.', 'text-amber-500', 'Enviar convite']
+        adicionar: ['A pessoa já tem conta e vai entrar na hora.', 'text-green-500', 'Adicionar'],
+        ja_faz_parte: ['Essa pessoa já faz parte com esse papel.', 'text-amber-500', 'Adicionar'],
+        sem_conta: ['A pessoa ainda não tem conta: vai um convite por e-mail, e ela só entra depois de se cadastrar e aceitar.', 'text-amber-500', 'Enviar convite'],
+        exige_aprovacao: ['Essa pessoa exige aprovação pra entrar em grupos: vai um convite, e ela só entra depois de aceitar.', 'text-amber-500', 'Enviar convite'],
+        muda_papel: ['Essa pessoa já faz parte com outro papel: vai um convite, e a mudanca só vale depois que ela aceitar.', 'text-amber-500', 'Enviar convite']
     };
 
     document.querySelectorAll('form[data-verificar-adicao-url]').forEach(function (form) {
@@ -1080,7 +1125,7 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
     });
 })();
 
-/* Formulario "pra quem enviar o repertorio" (templates/ministerio/_envio.html):
+/* Formulario "pra quem enviar o repertório" (templates/ministerio/_envio.html):
    varios ministerios e/ou funcoes marcados de uma vez. Marcar "Todo o
    ministerio" desliga as funcoes dele (ja estao incluidas). O botao de
    enviar do form so liga com algo marcado. */
@@ -1102,12 +1147,12 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
                 var marcados = (todo.checked ? 1 : 0) + bloco.querySelectorAll('[data-envio-funcao]:checked').length;
                 grupos += marcados;
                 var etiqueta = bloco.querySelector('[data-envio-marcados]');
-                etiqueta.textContent = todo.checked ? 'todo' : marcados + ' funcao' + (marcados > 1 ? 'oes' : '');
+                etiqueta.textContent = todo.checked ? 'todo' : marcados + ' função' + (marcados > 1 ? 'oes' : '');
                 etiqueta.classList.toggle('hidden', !marcados);
             });
             resumo.textContent = grupos
-                ? grupos + ' grupo(s) marcado(s) -- quem estiver em mais de um recebe uma vez so.'
-                : 'Marque pelo menos um ministerio ou funcao.';
+                ? grupos + ' grupo(s) marcado(s) -- quem estiver em mais de um recebe uma vez só.'
+                : 'Marque pelo menos um ministério ou função.';
             Array.prototype.forEach.call(botoes, function (b) { b.disabled = !grupos; });
         }
 
@@ -1156,7 +1201,7 @@ document.querySelectorAll("[data-copiar-link]").forEach(function (botao) {
 
 /* Salvar status sem recarregar (escala.atualizar_status responde JSON com
    o cabecalho X-Requested-With: fetch). So o caminho mais comum -- confirmar
-   / voltar pra "nao notificado" -- vai rapido; troca (tem motivo/sugestao)
+   / voltar pra "não notificado" -- vai rapido; troca (tem motivo/sugestao)
    e "presente" (mexe no check-in e em outras partes da tela) continuam com
    o envio normal da pagina. Qualquer falha de rede tambem cai no envio
    normal, entao nunca se perde um toque. */

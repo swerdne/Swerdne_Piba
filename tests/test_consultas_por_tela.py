@@ -70,7 +70,7 @@ def igreja(logged_in_client, app, db):
         eu = Membro(comunidade_id=comunidade.id, nome="Ana", email=usuario.email, telefone="(11) 98765-4321").save()
         pessoas = [eu] + [Membro(comunidade_id=comunidade.id, nome=f"Pessoa {i}", telefone=f"(11) 9{i:04d}-0000",
                                  email=f"p{i}@example.com").save() for i in range(39)]
-        musicas = [Musica(comunidade_id=comunidade.id, oficial=True, nome=f"Musica {i}", tom="G", tags=["amor", "fe"],
+        musicas = [Musica(comunidade_id=comunidade.id, oficial=True, nome=f"Música {i}", tom="G", tags=["amor", "fe"],
                           cifra_louvor="G D\nletra", letra_projecao="letra", palavras_chave_verificadas=True).save()
                    for i in range(300)]
         escalas = []
@@ -78,7 +78,7 @@ def igreja(logged_in_client, app, db):
             escala = Escala(ministerio_id=louvor.id, nome=f"Culto {d}", departamento="Louvor",
                             data=date.today() + timedelta(days=d + 1), horario=time(19, 0)).save()
             for ordem, membro in enumerate([eu] + random.sample(pessoas[1:], 7)):
-                Funcao(escala_id=escala.id, nome=f"Funcao {ordem}", ordem=ordem, membro_id=membro.id,
+                Funcao(escala_id=escala.id, nome=f"Função {ordem}", ordem=ordem, membro_id=membro.id,
                        status="nao_notificado").save()
             for ordem, musica in enumerate(random.sample(musicas, 5)):
                 ItemRepertorio(escala_id=escala.id, nome_musica=musica.nome, musica_id=musica.id, tom="G", ordem=ordem).save()
@@ -99,7 +99,7 @@ TELAS = [
     ("escala", lambda d: f"/escala/{d['escala'].id}", 30),
     ("ministerio", lambda d: f"/ministerio/{d['ministerio'].id}", 30),
     ("comunidade", lambda d: f"/comunidade/{d['comunidade'].id}", 30),
-    ("banco de musicas", lambda d: f"/ministerio/musicas/{d['comunidade'].id}", 30),
+    ("banco de músicas", lambda d: f"/ministerio/musicas/{d['comunidade'].id}", 30),
     ("musica", lambda d: f"/ministerio/repertorio/{d['musica'].id}", 30),
 ]
 
@@ -139,9 +139,9 @@ def test_opcoes_de_envio_carregam_sob_demanda(logged_in_client, outro_logged_in_
     """A escala e o banco nao montam mais a lista de envio (5 consultas) --
     so o lugar "Carregando..."; a lista vem desta rota quando aparece."""
     escala = logged_in_client.get(f"/escala/{igreja['escala'].id}").data.decode()
-    assert "data-envio-carregar=" in escala and "Todo o ministerio" not in escala
+    assert "data-envio-carregar=" in escala and "Todo o ministério" not in escala
     pedaco = logged_in_client.get(f"/ministerio/envio/{igreja['comunidade'].id}/opcoes?padrao={igreja['ministerio'].id}")
-    assert pedaco.status_code == 200 and "Todo o ministerio" in pedaco.data.decode() and "Louvor" in pedaco.data.decode()
+    assert pedaco.status_code == 200 and "Todo o ministério" in pedaco.data.decode() and "Louvor" in pedaco.data.decode()
     with sessao_isolada(app):
         assert outro_logged_in_client.get(f"/ministerio/envio/{igreja['comunidade'].id}/opcoes").status_code == 404
 
@@ -165,6 +165,6 @@ def test_consultas_ao_escalar_em_lote(logged_in_client, app, igreja):
     with sessao_isolada(app), contar_consultas() as agora:
         resposta = logged_in_client.post(url, data={"membro_id": igreja["pessoa"].id},
                                          headers={"X-Requested-With": "fetch"})
-    print(f"\nescalar 1 pessoa: {antes['n']} consultas com o redirect (jeito antigo), {agora['n']} so o JSON (lote)")
+    print(f"\nescalar 1 pessoa: {antes['n']} consultas com o redirect (jeito antigo), {agora['n']} só o JSON (lote)")
     assert resposta.get_json() == {"ok": True}
     assert agora["n"] <= 25 and agora["n"] < antes["n"]

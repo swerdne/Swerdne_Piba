@@ -307,8 +307,8 @@ def test_opcoes_modo_mensal_completas_bate_com_a_versao_normal_fora_do_ordinal_5
         completas = dict(opcoes_modo_mensal_completas(data_referencia))
         normais = dict(opcoes_modo_mensal(data_referencia))
         assert completas["dia_fixo"] == normais["dia_fixo"] == "Mensalmente no dia 28"
-        assert completas["enesimo_dia_semana"] == normais["enesimo_dia_semana"] == "Mensalmente na 4a terca-feira"
-        assert completas["ultimo_dia_semana"] == normais["ultimo_dia_semana"] == "Mensalmente na ultima terca-feira"
+        assert completas["enesimo_dia_semana"] == normais["enesimo_dia_semana"] == "Mensalmente na 4a terça-feira"
+        assert completas["ultimo_dia_semana"] == normais["ultimo_dia_semana"] == "Mensalmente na última terça-feira"
 
 
 # --- Formula pura do rodizio -----------------------------------------------------
@@ -932,7 +932,7 @@ def test_form_novo_turno_pre_preenche_a_partir_da_escala_de_origem(logged_in_cli
         assert response.status_code == 200
         assert "Escala Louvor" in html
         assert "Nascendo a partir de" in html
-        assert "recadastrar ninguem" in html
+        assert "recadastrar ninguém" in html
 
 
 
@@ -963,12 +963,12 @@ def test_criar_turno_a_partir_de_escala_semeia_fila_com_os_escalados(logged_in_c
         data_inicio = date.today() + timedelta(days=30)
         response = logged_in_client.post(
             f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
-            data=_payload_turno(nome="Rodizio Louvor", departamento="Louvor", data_inicio=data_inicio.isoformat()),
+            data=_payload_turno(nome="Rodízio Louvor", departamento="Louvor", data_inicio=data_inicio.isoformat()),
             follow_redirects=True,
         )
         assert response.status_code == 200
 
-        turno = TurnoPlantao.objects(nome="Rodizio Louvor", ministerio_id=ministerio.id).first()
+        turno = TurnoPlantao.objects(nome="Rodízio Louvor", ministerio_id=ministerio.id).first()
         assert turno is not None
         assert len(turno.fila) == 1  # UMA equipe, nao duas posicoes
         nomes_da_equipe = [m.membro.nome for m in turno.fila[0].integrantes]
@@ -991,13 +991,13 @@ def test_criar_turno_a_partir_de_escala_vincula_permanentemente(logged_in_client
         logged_in_client.post(
             f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
             data=_payload_turno(
-                nome="Rodizio Vinculado", departamento="Louvor",
+                nome="Rodízio Vinculado", departamento="Louvor",
                 data_inicio=(date.today() + timedelta(days=30)).isoformat(),
             ),
             follow_redirects=True,
         )
 
-        turno = TurnoPlantao.objects(nome="Rodizio Vinculado").first()
+        turno = TurnoPlantao.objects(nome="Rodízio Vinculado").first()
         escala_recarregada = Escala.objects(id=escala.id).first()
         assert escala_recarregada.turno_plantao_origem_id == turno.id
         assert turno.escala_origem.id == escala.id
@@ -1065,18 +1065,18 @@ def test_badge_de_rodizio_vinculado_aparece_na_escala_de_origem(logged_in_client
         logged_in_client.post(
             f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
             data=_payload_turno(
-                nome="Rodizio X", departamento="Louvor",
+                nome="Rodízio X", departamento="Louvor",
                 data_inicio=(date.today() + timedelta(days=30)).isoformat(),
             ),
             follow_redirects=True,
         )
-        turno = TurnoPlantao.objects(nome="Rodizio X").first()
+        turno = TurnoPlantao.objects(nome="Rodízio X").first()
 
         html_escala = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Editar rodizio vinculado" in html_escala
+        assert "Editar rodízio vinculado" in html_escala
         assert f'/plantao/{turno.id}"' in html_escala
         # o botao de criar um SEGUNDO turno a partir da mesma escala some
-        assert "Criar turno de rodizio com esta equipe" not in html_escala
+        assert "Criar turno de rodízio com esta equipe" not in html_escala
 
         html_turno = logged_in_client.get(f"/plantao/{turno.id}").data.decode("utf-8")
         assert "Ver escala de origem" in html_turno
@@ -1092,12 +1092,12 @@ def test_excluir_escala_de_origem_faz_turno_voltar_a_gerar_capa(logged_in_client
         logged_in_client.post(
             f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
             data=_payload_turno(
-                nome="Rodizio Orfao", departamento="Louvor",
+                nome="Rodízio Orfao", departamento="Louvor",
                 data_inicio=(date.today() + timedelta(days=1)).isoformat(),
             ),
             follow_redirects=True,
         )
-        turno = TurnoPlantao.objects(nome="Rodizio Orfao").first()
+        turno = TurnoPlantao.objects(nome="Rodízio Orfao").first()
         sincronizar_turno(turno, ate_data=date.today() + timedelta(days=2))
 
         logged_in_client.post(f"/escala/{escala.id}/excluir", data={}, follow_redirects=True)
@@ -1123,13 +1123,13 @@ def test_criar_turno_a_partir_de_escala_ignora_funcao_repetida_e_vazia(logged_in
         logged_in_client.post(
             f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}",
             data=_payload_turno(
-                nome="Rodizio Ana", departamento="Louvor",
+                nome="Rodízio Ana", departamento="Louvor",
                 data_inicio=(date.today() + timedelta(days=30)).isoformat(),
             ),
             follow_redirects=True,
         )
 
-        turno = TurnoPlantao.objects(nome="Rodizio Ana").first()
+        turno = TurnoPlantao.objects(nome="Rodízio Ana").first()
         assert len(turno.fila) == 1
         assert [m.membro.nome for m in turno.fila[0].integrantes] == ["Ana"]
 
@@ -1155,8 +1155,8 @@ def test_usuario_nao_consegue_usar_escala_de_outra_conta_como_origem_do_turno(
 def test_escala_de_ministerio_diferente_nao_pode_ser_origem_do_turno(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
-        ministerio_a = _criar_ministerio(logged_in_client, comunidade.id, "Ministerio A")
-        ministerio_b = _criar_ministerio(logged_in_client, comunidade.id, "Ministerio B")
+        ministerio_a = _criar_ministerio(logged_in_client, comunidade.id, "Ministério A")
+        ministerio_b = _criar_ministerio(logged_in_client, comunidade.id, "Ministério B")
         escala, _, _ = _criar_escala_com_dois_escalados(logged_in_client, ministerio_a.id)
 
         response = logged_in_client.get(f"/plantao/ministerio/{ministerio_b.id}/nova?escala_id={escala.id}")
@@ -1172,7 +1172,7 @@ def test_link_para_criar_turno_aparece_na_escala_com_gente_escalada(logged_in_cl
         response = logged_in_client.get(f"/escala/{escala.id}")
         html = response.data.decode("utf-8")
         assert f"/plantao/ministerio/{ministerio.id}/nova?escala_id={escala.id}" in html
-        assert "Criar turno de rodizio com esta equipe" in html
+        assert "Criar turno de rodízio com esta equipe" in html
 
 
 def test_link_para_criar_turno_nao_aparece_em_escala_sem_ninguem_escalado(logged_in_client, app, db):
@@ -1183,7 +1183,7 @@ def test_link_para_criar_turno_nao_aparece_em_escala_sem_ninguem_escalado(logged
 
         response = logged_in_client.get(f"/escala/{escala.id}")
         html = response.data.decode("utf-8")
-        assert "Criar turno de rodizio com esta equipe" not in html
+        assert "Criar turno de rodízio com esta equipe" not in html
 
 
 def _equipe_membro_de(turno, membro_id):
@@ -1268,7 +1268,7 @@ def test_detalhe_do_turno_mostra_ocorrencias_passadas_e_futuras(logged_in_client
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
-        turno = _criar_turno_teste(ministerio.id, nome="Turno Historico", data_inicio=date.today())
+        turno = _criar_turno_teste(ministerio.id, nome="Turno Histórico", data_inicio=date.today())
         _adicionar_a_fila(turno, [_criar_membro_teste(comunidade.id, "Ana")])
 
         # sincronizar_turno nunca gera retroativo (por design -- so materializa
@@ -1294,7 +1294,7 @@ def test_detalhe_do_turno_mostra_ocorrencias_passadas_e_futuras(logged_in_client
         assert futura is not None
         assert data_passada.strftime("%d/%m") in html
         assert futura.data.strftime("%d/%m") in html
-        assert "ja ocorreu" in html  # marcador na ocorrencia passada
+        assert "já ocorreu" in html  # marcador na ocorrencia passada
 
 
 def test_janela_de_geracao_e_de_180_dias():
@@ -1340,7 +1340,7 @@ def test_detalhe_do_turno_nao_corta_ocorrencias_futuras_alem_de_20(logged_in_cli
         comunidade = _criar_comunidade(logged_in_client)
         ministerio = _criar_ministerio(logged_in_client, comunidade.id)
         turno = _criar_turno_teste(
-            ministerio.id, nome="Turno Diario", data_inicio=date.today(), unidade_recorrencia="dia"
+            ministerio.id, nome="Turno Diário", data_inicio=date.today(), unidade_recorrencia="dia"
         )
         _adicionar_a_fila(turno, [_criar_membro_teste(comunidade.id, "Ana")])
 

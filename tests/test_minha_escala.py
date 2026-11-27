@@ -73,7 +73,7 @@ def test_arquivo_acima_de_15mb_volta_com_aviso(logged_in_client, app, db):
         )
         assert resposta.status_code == 302
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "O arquivo deve ter no maximo 15 MB." in html
+        assert "O arquivo deve ter no máximo 15 MB." in html
         assert Anexo.objects(escala_id=escala.id).count() == 0
 
 
@@ -126,7 +126,7 @@ def test_minha_escala_mostra_so_os_materiais_da_minha_funcao(logged_in_client, a
     assert "Culto de Domingo" in html
     assert ">Baixo<" in html
     assert "roteiro-geral.pdf" in html and "Toda a equipe" in html
-    assert "cifra-baixo.pdf" in html and "Pra voce &middot; Baixo" in html
+    assert "cifra-baixo.pdf" in html and "Pra você &middot; Baixo" in html
     assert "levada-bateria.pdf" not in html
 
 
@@ -148,7 +148,7 @@ def test_minha_escala_navega_entre_os_dias(logged_in_client, app, db):
 def test_minha_escala_sem_escalacao(logged_in_client, app, db):
     with app.app_context():
         html = logged_in_client.get("/minha-escala").data.decode("utf-8")
-    assert "ainda nao esta escalado" in html
+    assert "ainda não está escalado" in html
 
 
 def test_status_pela_minha_escala_volta_pra_ela(logged_in_client, app, db):

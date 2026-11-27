@@ -2,20 +2,20 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
 from wtforms import StringField, TextAreaField, SubmitField, DateField, TimeField
-from wtforms.validators import DataRequired, Length, Optional, Email
+from wtforms.validators import DataRequired, Length, Optional, Email, ValidationError
 
 from app.telefones import validar_telefone
 
 
 class ComunidadeForm(FlaskForm):
     nome = StringField("Nome da comunidade", validators=[DataRequired(), Length(max=120)])
-    descricao = TextAreaField("Descricao", validators=[Optional(), Length(max=2000)])
+    descricao = TextAreaField("Descrição", validators=[Optional(), Length(max=2000)])
     imagem = FileField(
         "Logo (opcional)",
         validators=[
             Optional(),
             FileAllowed(["jpg", "jpeg", "png"], "Envie apenas arquivos JPG ou PNG."),
-            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no maximo 2 MB."),
+            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no máximo 2 MB."),
         ],
     )
     submit = SubmitField("Salvar")
@@ -25,7 +25,7 @@ class MembroDiretorioForm(FlaskForm):
     nome = StringField("Nome", validators=[DataRequired(), Length(max=120)])
     telefone = StringField("Telefone", validators=[Optional(), Length(max=30), validar_telefone])
     email = StringField("E-mail", validators=[Optional(), Email(), Length(max=120)])
-    submit = SubmitField("Adicionar ao diretorio")
+    submit = SubmitField("Adicionar ao diretório")
 
 
 class TelefoneMembroForm(FlaskForm):
@@ -40,7 +40,7 @@ class FotoMembroForm(FlaskForm):
         validators=[
             FileRequired(message="Escolha uma imagem."),
             FileAllowed(["jpg", "jpeg", "png"], "Envie apenas arquivos JPG ou PNG."),
-            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no maximo 2 MB."),
+            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no máximo 2 MB."),
         ],
     )
 
@@ -51,7 +51,7 @@ class CicloDisponibilidadeForm(FlaskForm):
     comunidade.routes.nova_disponibilidade (indexados segmento_nome_<i> etc,
     ver o JS de adicionar/remover linha em comunidade/disponibilidade.html)."""
     nome = StringField("Nome do ciclo", validators=[DataRequired(), Length(max=80)])
-    data_inicio = DateField("Data de inicio (ancora do ciclo)", validators=[DataRequired()])
+    data_inicio = DateField("Data de início (âncora do ciclo)", validators=[DataRequired()])
     submit = SubmitField("Salvar ciclo")
 
 
@@ -62,9 +62,13 @@ class AcaoForm(FlaskForm):
 
 class EventoForm(FlaskForm):
     nome = StringField("Nome do evento", validators=[DataRequired(), Length(max=120)])
-    descricao = TextAreaField("Descricao (opcional)", validators=[Optional(), Length(max=2000)])
-    data = DateField("Data de inicio", validators=[DataRequired()])
-    data_fim = DateField("Data de termino (opcional, se for mais de 1 dia)", validators=[Optional()])
-    horario = TimeField("Horario (opcional)", validators=[Optional()])
+    descricao = TextAreaField("Descrição (opcional)", validators=[Optional(), Length(max=2000)])
+    data = DateField("Data de início", validators=[DataRequired()])
+    data_fim = DateField("Data de término (opcional, se for mais de 1 dia)", validators=[Optional()])
+    horario = TimeField("Horário (opcional)", validators=[Optional()])
     local = StringField("Local (opcional)", validators=[Optional(), Length(max=200)])
     submit = SubmitField("Criar evento")
+
+    def validate_data_fim(self, campo):
+        if campo.data and self.data.data and campo.data < self.data.data:
+            raise ValidationError("A data de término não pode ser antes da data de início.")

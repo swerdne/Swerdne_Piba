@@ -36,8 +36,8 @@ def test_lider_cadastra_no_banco_local_mas_nao_mexe_no_oficial(logged_in_client,
 
     with sessao_isolada(app):
         # Local: pode tudo.
-        outro_logged_in_client.post(f"/ministerio/{lid}/repertorio/nova", data={"nome": "Do lider"})
-        local = Musica.objects(nome="Do lider").first()
+        outro_logged_in_client.post(f"/ministerio/{lid}/repertorio/nova", data={"nome": "Do líder"})
+        local = Musica.objects(nome="Do líder").first()
         assert local.oficial is False and local.ministerio_id == lid and local.comunidade_id == cid
         assert outro_logged_in_client.get(f"/ministerio/{lid}/repertorio/importar").status_code == 200
         # Oficial: nada direto.
@@ -72,7 +72,7 @@ def test_admin_ve_sugestoes_e_aprova_pro_banco_oficial(logged_in_client, outro_l
 
     with sessao_isolada(app):
         banco = logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
-        assert "Sugestoes dos ministerios (1)" in banco and "Sugerida" in banco
+        assert "Sugestões dos ministérios (1)" in banco and "Sugerida" in banco
         # Antes de aprovar, o Kids nao usa (e local do Louvor).
         escala_kids = _criar_escala(logged_in_client, kid, "Culto Kids")
         logged_in_client.post(f"/escala/{escala_kids.id}/repertorio/banco",
@@ -82,7 +82,7 @@ def test_admin_ve_sugestoes_e_aprova_pro_banco_oficial(logged_in_client, outro_l
         logged_in_client.post(f"/ministerio/musicas/sugestao/{musica_id}/aprovar", data={})
         aprovada = Musica.objects(id=musica_id).first()
         assert aprovada.oficial is True and aprovada.ministerio_id == lid  # origem fica no historico
-        assert "Sugestoes dos ministerios" not in logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
+        assert "Sugestões dos ministérios" not in logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
         # Agora e oficial: o Kids usa.
         logged_in_client.post(f"/escala/{escala_kids.id}/repertorio/banco",
                               data={"banco-musica_id": musica_id, "banco-momento": "", "banco-tom": ""})
@@ -94,11 +94,11 @@ def test_admin_ve_sugestoes_e_aprova_pro_banco_oficial(logged_in_client, outro_l
 def test_admin_dispensa_sugestao_sem_tirar_do_banco_local(logged_in_client, app, db):
     with app.app_context():
         comunidade, louvor, _ = _igreja(logged_in_client)
-        logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/nova", data={"nome": "Nao agora"})
-        musica = Musica.objects(nome="Nao agora").first()
+        logged_in_client.post(f"/ministerio/{louvor.id}/repertorio/nova", data={"nome": "Não agora"})
+        musica = Musica.objects(nome="Não agora").first()
         logged_in_client.post(f"/ministerio/musicas/sugestao/{musica.id}/dispensar", data={})
-        assert "Sugestoes dos ministerios" not in logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
-        assert "Nao agora" in logged_in_client.get(f"/ministerio/{louvor.id}/repertorio").data.decode("utf-8")
+        assert "Sugestões dos ministérios" not in logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
+        assert "Não agora" in logged_in_client.get(f"/ministerio/{louvor.id}/repertorio").data.decode("utf-8")
         assert Musica.objects(id=musica.id).first().oficial is False
 
 
@@ -130,7 +130,7 @@ def test_banco_tem_alternancia_lista_e_pastas(logged_in_client, app, db):
         comunidade, _, _ = _igreja(logged_in_client)
         html = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
         assert 'data-modo="lista"' in html and 'data-modo="repertorios"' in html
-        assert 'data-modo-conteudo="repertorios"' in html and "Repertorios das escalas" in html
+        assert 'data-modo-conteudo="repertorios"' in html and "Repertórios das escalas" in html
 
 
 def test_cria_pasta_com_as_musicas_marcadas_na_ordem(logged_in_client, app, db):
@@ -201,7 +201,7 @@ def test_escala_compartilha_repertorio_com_um_ministerio_inteiro(logged_in_clien
         UsuarioMinisterio(usuario_id=_bruno().id, ministerio_id=kids.id, papel="membro").save()
 
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Compartilhar este repertorio" in html and "data-envio" in html
+        assert "Compartilhar este repertório" in html and "data-envio" in html
 
         resposta = _enviar(logged_in_client, f"/escala/{escala.id}/repertorio/compartilhar", kids.id)
         assert resposta.headers["Location"].endswith(f"/escala/{escala.id}#repertorio")  # nao sai da escala
@@ -210,7 +210,7 @@ def test_escala_compartilha_repertorio_com_um_ministerio_inteiro(logged_in_clien
         assert (item.musica_id, item.tom, item.momento) == (musica.id, "E", "Abertura")
         assert pasta.ministerio_id == louvor.id
         assert pasta.compartilhamento_de(_bruno().id) is not None
-        assert "Kids (todo o ministerio): 1 pessoa(s)" in pasta.envios[0]
+        assert "Kids (todo o ministério): 1 pessoa(s)" in pasta.envios[0]
 
         # Enviar de novo nao cria outra copia no banco.
         _enviar(logged_in_client, f"/escala/{escala.id}/repertorio/compartilhar", kids.id)
@@ -247,7 +247,7 @@ def test_compartilhar_so_com_quem_serve_numa_funcao(logged_in_client, outro_logg
 
     with sessao_isolada(app):
         inicio = outro_logged_in_client.get("/dashboard").data.decode("utf-8")
-        assert "Repertorios para voce" in inicio and "Noite" in inicio and "Novo" in inicio
+        assert "Repertórios para você" in inicio and "Noite" in inicio and "Novo" in inicio
         assert Notificacao.objects(usuario_id=_bruno().id, tipo="repertorio_compartilhado").count() == 2
         assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}/cifras").status_code == 200
         assert outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}/projecao").status_code == 200
@@ -320,7 +320,7 @@ def test_lider_do_ministerio_dono_edita_e_envia_lider_de_outro_so_ve(logged_in_c
         _bruno_lider(lid)  # agora tambem lidera o Louvor
     with sessao_isolada(app):
         html = outro_logged_in_client.get(f"/ministerio/pastas/{pasta_id}").data.decode("utf-8")
-        assert 'id="compartilhar"' in html and "Renomear, mudar de ministerio ou excluir" in html
+        assert 'id="compartilhar"' in html and "Renomear, mudar de ministério ou excluir" in html
         _enviar(outro_logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar", kid)
         assert PastaMusicas.objects(id=pasta_id).first().compartilhamento_de(_carla().id) is not None
 
@@ -338,7 +338,7 @@ def test_repertorios_da_manha_e_da_noite_agrupados_por_ministerio(logged_in_clie
         }
         html = logged_in_client.get(f"/ministerio/musicas/{comunidade.id}").data.decode("utf-8")
         # Quadro de envio lista os repertorios por ministerio.
-        assert "Enviar um repertorio" in html
+        assert "Enviar um repertório" in html
         assert '<optgroup label="Louvor">' in html and '<optgroup label="Kids">' in html
         assert "Kids domingo" in html[html.index('<optgroup label="Kids">'):]
 
@@ -393,7 +393,7 @@ def test_escala_usa_repertorio_pronto_somando_ou_substituindo(logged_in_client, 
 
         escala = _criar_escala(logged_in_client, louvor.id, "Culto da manha")
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Usar um repertorio pronto" in html
+        assert "Usar um repertório pronto" in html
         # Repertorios do proprio ministerio primeiro.
         assert html.index('<optgroup label="Louvor">') < html.index('<optgroup label="Kids">')
 
@@ -434,7 +434,7 @@ def test_apagar_todas_exige_a_frase_e_apaga_so_aquele_banco(logged_in_client, ap
         oceanos = Musica.objects(nome="Oceanos").first()
 
         html = logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
-        assert "Apagar todas as musicas" in html and "APAGAR TODAS" in html
+        assert "Apagar todas as músicas" in html and "APAGAR TODAS" in html
 
         # Sem a frase (ou com ela errada): nada acontece.
         for frase in ("", "apagar", "APAGAR TUDO"):
@@ -474,7 +474,7 @@ def test_so_quem_edita_o_banco_apaga_todas(logged_in_client, outro_logged_in_cli
         _bruno_lider(lid)
     with sessao_isolada(app):
         # Lider ve o banco oficial mas nao tem o botao nem consegue apagar.
-        assert "Apagar todas as musicas" not in outro_logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
+        assert "Apagar todas as músicas" not in outro_logged_in_client.get(f"/ministerio/musicas/{cid}").data.decode("utf-8")
         resposta = outro_logged_in_client.post(f"/ministerio/musicas/{cid}/apagar-todas", data={"confirmacao": "APAGAR TODAS"})
         assert resposta.status_code == 404
         assert Musica.objects(nome="Oficial").count() == 1
@@ -569,13 +569,13 @@ def test_enviar_para_varios_ministerios_e_funcoes_de_uma_vez(logged_in_client, o
         pasta = PastaMusicas.objects(id=pasta_id).first()
         assert [c.usuario_id for c in pasta.compartilhada_com] == [_bruno().id]  # uma vez so
         assert pasta.compartilhamento_de(_carla().id) is None
-        assert pasta.envios[-1].startswith("Kids (todo o ministerio), Louvor · Teclado: 1 pessoa(s)")
+        assert pasta.envios[-1].startswith("Kids (todo o ministério), Louvor · Teclado: 1 pessoa(s)")
         assert Notificacao.objects(usuario_id=_bruno().id, tipo="repertorio_compartilhado").count() == 1
 
         # Funcao de um ministerio marcado inteiro e redundante: conta uma vez so.
         _enviar_varios(logged_in_client, f"/ministerio/pastas/{pasta_id}/compartilhar",
                        [(louvor.id, ""), (louvor.id, "Teclado")])
-        assert PastaMusicas.objects(id=pasta_id).first().envios[-1].startswith("Louvor (todo o ministerio): 2 pessoa(s)")
+        assert PastaMusicas.objects(id=pasta_id).first().envios[-1].startswith("Louvor (todo o ministério): 2 pessoa(s)")
 
 
 def test_nada_marcado_nao_envia(logged_in_client, app, db):

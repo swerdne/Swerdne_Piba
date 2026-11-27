@@ -69,11 +69,11 @@ class _PaletaDoDia:
     paleta = SelectField("Paleta de cores do dia (roupa)", choices=_CHOICES_PALETA, validators=[Optional()])
     # Sem Optional(): ele encerraria a validacao antes de validate_paleta_texto
     # (Personalizada com texto vazio passava). Vazio ainda vale nos outros casos.
-    paleta_texto = StringField("Qual a combinacao?", validators=[Length(max=120)])
+    paleta_texto = StringField("Qual a combinação?", validators=[Length(max=120)])
 
     def validate_paleta_texto(self, campo):
         if self.paleta.data == PALETA_PERSONALIZADA and not (campo.data or "").strip():
-            raise ValidationError("Escreva a combinacao de roupa (ex: blusa azul royal e calca jeans escura).")
+            raise ValidationError("Escreva a combinação de roupa (ex: blusa azul royal e calca jeans escura).")
 
 
 class EscalaForm(_PaletaDoDia, FlaskForm):
@@ -84,18 +84,18 @@ class EscalaForm(_PaletaDoDia, FlaskForm):
         validators=[DataRequired()],
     )
     data = DateField("Data do ensaio/evento", validators=[Optional()])
-    horario = TimeField("Horario de inicio", validators=[Optional()])
-    horario_fim = TimeField("Horario de fim", validators=[Optional()])
-    cor = SelectField("Cor na lista e no calendario", choices=_CHOICES_COR, validators=[Optional()])
+    horario = TimeField("Horário de início", validators=[Optional()])
+    horario_fim = TimeField("Horário de fim", validators=[Optional()])
+    cor = SelectField("Cor na lista e no calendário", choices=_CHOICES_COR, validators=[Optional()])
     submit = SubmitField("Criar escala")
 
 
 class EditarEscalaForm(_PaletaDoDia, FlaskForm):
     nome = StringField("Nome da escala", validators=[DataRequired(), Length(max=80)])
     data = DateField("Data do ensaio/evento", validators=[Optional()])
-    horario = TimeField("Horario de inicio", validators=[Optional()])
-    horario_fim = TimeField("Horario de fim", validators=[Optional()])
-    cor = SelectField("Cor na lista e no calendario", choices=_CHOICES_COR, validators=[Optional()])
+    horario = TimeField("Horário de início", validators=[Optional()])
+    horario_fim = TimeField("Horário de fim", validators=[Optional()])
+    cor = SelectField("Cor na lista e no calendário", choices=_CHOICES_COR, validators=[Optional()])
     submit = SubmitField("Salvar")
 
 
@@ -114,7 +114,7 @@ class StatusForm(FlaskForm):
     status = SelectField(
         "Status",
         choices=[
-            ("nao_notificado", "Nao notificado"),
+            ("nao_notificado", "Não notificado"),
             ("confirmado", "Confirmado"),
             ("presente", "Presente"),
             ("troca_solicitada", "Troca solicitada"),
@@ -135,7 +135,7 @@ class TrocaAprovarForm(FlaskForm):
     escala.routes::aprovar_troca) -- escolhe quem assume a funcao. Vem
     pre-preenchido com a sugestao de quem pediu a troca, se houver, mas o
     lider pode trocar por qualquer outra pessoa do diretorio."""
-    membro_id = SelectField("Quem assume a funcao", coerce=int, validators=[DataRequired()])
+    membro_id = SelectField("Quem assume a função", coerce=int, validators=[DataRequired()])
     submit = SubmitField("Aprovar troca")
 
 
@@ -145,20 +145,20 @@ class AcaoForm(FlaskForm):
 
 
 class FuncaoForm(FlaskForm):
-    nome = StringField("Nome da funcao", validators=[DataRequired(), Length(max=80)])
+    nome = StringField("Nome da função", validators=[DataRequired(), Length(max=80)])
     submit = SubmitField("Salvar")
 
 
 class ItemRepertorioForm(FlaskForm):
-    nome_musica = StringField("Nome da musica", validators=[DataRequired(), Length(max=150)])
+    nome_musica = StringField("Nome da música", validators=[DataRequired(), Length(max=150)])
     tom = TomField("Tom", validators=[Optional(), Length(max=10)])
-    link = StringField("Link (cifra, video...)", validators=[Optional(), Length(max=500)])
+    link = StringField("Link (cifra, vídeo...)", validators=[Optional(), Length(max=500)])
     submit = SubmitField("Adicionar")
 
 
 class EnsaioForm(FlaskForm):
     data = DateField("Data do ensaio", validators=[DataRequired(message="Informe a data do ensaio.")])
-    horario = TimeField("Inicio", validators=[Optional()])
+    horario = TimeField("Início", validators=[Optional()])
     horario_fim = TimeField("Fim", validators=[Optional()])
     local = StringField("Local (opcional)", validators=[Optional(), Length(max=120)])
     submit = SubmitField("Adicionar ensaio")
@@ -171,7 +171,7 @@ class AnexoForm(FlaskForm):
             FileRequired(message="Escolha um arquivo."),
             FileAllowed(list(TIPOS_ANEXO), "Formatos aceitos: PDF, imagem (JPG/PNG), Word, texto ou audio "
                                             "(MP3, M4A, WAV, OGG, WEBM)."),
-            FileSize(max_size=TAMANHO_MAXIMO_ANEXO, message="O arquivo deve ter no maximo 15 MB."),
+            FileSize(max_size=TAMANHO_MAXIMO_ANEXO, message="O arquivo deve ter no máximo 15 MB."),
         ],
     )
     # Nome pra mostrar (ex: "Guia - Grande e o Senhor"); vazio = nome do arquivo.
@@ -182,17 +182,17 @@ class AnexoForm(FlaskForm):
 
 
 class MusicaForm(FlaskForm):
-    nome = StringField("Nome da musica", validators=[DataRequired(message="Informe o nome da musica."), Length(max=150)])
-    artista = StringField("Artista / ministerio", validators=[Optional(), Length(max=120)])
+    nome = StringField("Nome da música", validators=[DataRequired(message="Informe o nome da música."), Length(max=150)])
+    artista = StringField("Artista / ministério", validators=[Optional(), Length(max=120)])
     tom = TomField("Tom original", validators=[Optional(), Length(max=10)], vazio="Tom")
     tags = StringField("Tags (separadas por virgula)", validators=[Optional(), Length(max=300)])
-    link = StringField("Link de referencia (video, cifra...)", validators=[Optional(), Length(max=500)])
+    link = StringField("Link de referência (vídeo, cifra...)", validators=[Optional(), Length(max=500)])
     submit = SubmitField("Salvar")
 
 
 class LetraProjecaoForm(FlaskForm):
-    letra_projecao = TextAreaField("Letra para projecao", validators=[Optional(), Length(max=20000)])
-    submit = SubmitField("Salvar projecao")
+    letra_projecao = TextAreaField("Letra para projeção", validators=[Optional(), Length(max=20000)])
+    submit = SubmitField("Salvar projeção")
 
 
 class CifraLouvorForm(FlaskForm):
@@ -203,7 +203,7 @@ class CifraLouvorForm(FlaskForm):
 
 
 class ItemDoBancoForm(FlaskForm):
-    musica_id = SelectField("Musica", coerce=int, validators=[DataRequired(message="Escolha uma musica.")])
+    musica_id = SelectField("Música", coerce=int, validators=[DataRequired(message="Escolha uma música.")])
     momento = StringField("Momento", validators=[Optional(), Length(max=60)])
     # Vazio = usa o tom original da musica (ver escala.routes.adicionar_musica_do_banco).
     tom = TomField("Tom do dia", validators=[Optional(), Length(max=10)], vazio="Tom original")
@@ -211,8 +211,8 @@ class ItemDoBancoForm(FlaskForm):
 
 
 class ObservacoesRepertorioForm(FlaskForm):
-    observacoes_repertorio = TextAreaField("Observacoes gerais", validators=[Optional(), Length(max=2000)])
-    submit = SubmitField("Salvar observacoes")
+    observacoes_repertorio = TextAreaField("Observações gerais", validators=[Optional(), Length(max=2000)])
+    submit = SubmitField("Salvar observações")
 
 
 class _Coordenada(FloatField):

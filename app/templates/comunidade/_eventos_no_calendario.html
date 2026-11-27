@@ -1,0 +1,31 @@
+{# Eventos da comunidade num dia do calendario (comunidade/calendario,
+   ministerio/calendario e o mini-calendario de ministerio/detalhe). Estrela
+   ambar para nao confundir com as escalas (bolinhas na cor do departamento).
+   Espera: dia, tema, eventos_comunidade_por_dia, e `modo` = 'grade' | 'mini'. #}
+{% set evs = eventos_comunidade_por_dia.get(dia, []) if eventos_comunidade_por_dia is defined else [] %}
+{% if evs %}
+{% if modo == 'mini' %}
+{% for ev in evs[:2] %}
+<i class="fa-solid fa-star text-[7px] text-amber-500" title="Evento: {{ ev.nome }}"></i>
+{% endfor %}
+{% else %}
+<div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+    {% for ev in evs[:2] %}
+    <a href="{{ url_for('comunidade.evento_detalhe', comunidade_id=ev.comunidade_id, evento_id=ev.id) }}"
+       class="text-amber-500 leading-none" title="Evento: {{ ev.nome }}" aria-label="Evento: {{ ev.nome }}">
+        <i class="fa-solid fa-star text-[9px]"></i>
+    </a>
+    {% endfor %}
+</div>
+<div class="mt-1 space-y-1 hidden sm:block">
+    {% for ev in evs[:2] %}
+    <a href="{{ url_for('comunidade.evento_detalhe', comunidade_id=ev.comunidade_id, evento_id=ev.id) }}"
+       class="flex items-center gap-1 w-full text-left bg-amber-500/15 hover:bg-amber-500/25 rounded px-1 py-0.5 transition"
+       title="Evento: {{ ev.nome }}{% if ev.horario %} - {{ ev.horario.strftime('%H:%M') }}{% endif %}">
+        <i class="fa-solid fa-star text-[8px] text-amber-500 shrink-0"></i>
+        <span class="text-[10px] text-amber-700 truncate">{{ ev.nome }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endif %}

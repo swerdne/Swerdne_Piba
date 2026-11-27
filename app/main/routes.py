@@ -196,7 +196,7 @@ def _comunidades_do_usuario(usuario):
         qtd = qtd_ministerios.get(c.id, 0)
         itens.append({
             "comunidade": c,
-            "subtitulo": f"{qtd} ministerio{'s' if qtd != 1 else ''}",
+            "subtitulo": f"{qtd} ministério{'s' if qtd != 1 else ''}",
             "admin": True,
             "url": url_for("comunidade.detalhe", comunidade_id=c.id),
         })
@@ -517,7 +517,7 @@ def salvar_tema():
     form = TemaForm()
 
     if not form.validate_on_submit() or form.tema.data not in THEMES:
-        flash("Nao foi possivel salvar o tema escolhido.", "danger")
+        flash("Não foi possível salvar o tema escolhido.", "danger")
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.theme = form.tema.data
@@ -536,7 +536,7 @@ def salvar_privacidade():
     form = PrivacidadeForm()
 
     if not form.validate_on_submit():
-        flash("Nao foi possivel salvar a preferencia de privacidade.", "danger")
+        flash("Não foi possível salvar a preferência de privacidade.", "danger")
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.exige_aprovacao_grupos = bool(form.exige_aprovacao_grupos.data)
@@ -544,11 +544,11 @@ def salvar_privacidade():
     current_user.save()
 
     if current_user.exige_aprovacao_grupos:
-        flash("Pronto! A partir de agora, voce so entra em grupos depois de aceitar o convite.", "success")
+        flash("Pronto! A partir de agora, você só entra em grupos depois de aceitar o convite.", "success")
     else:
-        flash("Pronto! Admins e lideres podem adicionar voce direto aos grupos.", "success")
+        flash("Pronto! Admins e líderes podem adicionar você direto aos grupos.", "success")
     if not current_user.telefone_visivel_lider:
-        flash("Seu telefone fica escondido dos lideres de ministerio (o admin da comunidade ainda ve).", "success")
+        flash("Seu telefone fica escondido dos líderes de ministério (o admin da comunidade ainda vê).", "success")
     return redirect(url_for("main.dashboard") + "#config")
 
 
@@ -612,15 +612,15 @@ def testar_email():
     if not _administra_alguma_comunidade(current_user):
         abort(404)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("main.dashboard") + "#config")
     try:
         enviar_email(current_user.email, "Teste de e-mail", "Se voce recebeu esta mensagem, o envio de e-mails do TyBenson esta funcionando.")
     except EmailNaoEnviadoError as erro:
         current_app.logger.warning("Teste de e-mail: %s", erro)
-        flash(f"O servidor nao conseguiu enviar: {erro}", "danger")
+        flash(f"O servidor não conseguiu enviar: {erro}", "danger")
     else:
-        flash(f"Teste aceito pelo servico de envio. Confira {current_user.email} (e o spam).", "success")
+        flash(f"Teste aceito pelo serviço de envio. Confira {current_user.email} (e o spam).", "success")
     return redirect(url_for("main.dashboard") + "#config")
 
 
@@ -678,11 +678,11 @@ def baixar_dados():
 def desconectar_google():
     form = AcaoForm()
     if not form.validate_on_submit():
-        flash("Nao foi possivel desconectar sua conta do Google.", "danger")
+        flash("Não foi possível desconectar sua conta do Google.", "danger")
         return redirect(url_for("main.dashboard") + "#config")
 
     if not current_user.google_id:
-        flash("Sua conta ja nao esta conectada ao Google.", "danger")
+        flash("Sua conta já não está conectada ao Google.", "danger")
         return redirect(url_for("main.dashboard") + "#config")
 
     # Sem senha, desconectar o Google tiraria TODO acesso a conta -- nao ha
@@ -690,7 +690,7 @@ def desconectar_google():
     # mas confere de novo aqui (defesa em profundidade, POST pode ser
     # montado a mao fora da tela).
     if not current_user.password_hash:
-        flash("Defina uma senha antes de desconectar o Google, senao voce perde o acesso a conta.", "danger")
+        flash("Defina uma senha antes de desconectar o Google, senão você perde o acesso a conta.", "danger")
         return redirect(url_for("main.dashboard") + "#config")
 
     current_user.google_id = None
@@ -702,116 +702,150 @@ def desconectar_google():
 
 # --- Chatbot ---------------------------------------------------------------
 
+def _normalizar_pergunta(texto):
+    """Minusculas e sem acento: "Rodízio" e "rodizio" casam com a mesma regra."""
+    import unicodedata
+
+    sem_acento = unicodedata.normalize("NFD", texto or "")
+    sem_acento = "".join(c for c in sem_acento if unicodedata.category(c) != "Mn")
+    return " ".join(sem_acento.lower().split())
+
+
+# Regras do assistente, da MAIS especifica pra MAIS generica: vence a
+# primeira que casar. Os padroes comparam com a pergunta ja normalizada
+# (_normalizar_pergunta: minusculas, sem acento). O "como funciona" generico
+# do tutorial fica no fim -- antes ele pegava "Como funcionam escalas e
+# rodizio?" e respondia o tutorial.
 _REGRAS_CHAT = [
-    (re.compile(r"login|entrar|logar", re.I),
-     "Voce pode entrar com e-mail e senha, ou pelo botao \"Entrar com o Google\" na tela de login."),
-    (re.compile(r"senha", re.I),
-     "Da pra trocar sua senha na aba Configuracoes do Dashboard. Quem entrou so pelo Google "
-     "tambem pode definir uma senha ali, pra passar a entrar com e-mail e senha tambem. Esqueceu "
-     "a senha? Tem o link \"Esqueci minha senha\" na tela de login, que manda um link por e-mail "
-     "pra redefinir -- e voce recebe um aviso por e-mail toda vez que a senha muda, por seguranca."),
-    (re.compile(r"foto|avatar|imagem de perfil", re.I),
-     "Voce envia sua foto de perfil na aba Configuracoes do Dashboard. Aceitamos JPG e PNG de ate 2 MB."),
-    (re.compile(r"tema|cor do painel|apar[eê]ncia", re.I),
-     "Da pra trocar o tema do painel (Indigo, Escuro, Verde ou Laranja) na aba Configuracoes."),
-    (re.compile(r"cadastr|registr|criar conta", re.I),
-     "Para criar uma conta, use o formulario de Cadastro ou entre direto com sua conta do Google."),
-    (re.compile(r"google", re.I),
-     "O login com Google usa OAuth: voce autoriza o acesso e a gente cria sua conta com seu e-mail e foto automaticamente."),
+    # --- Tutorial pedido pelo nome ----------------------------------------
+    (re.compile(r"tutorial|passo a passo|primeiros passos"),
+     "O tutorial guiado aparece sozinho na primeira vez que você entra numa Comunidade, "
+     "destacando os principais botões da tela. Para rever quando quiser, toque no ícone de "
+     "interrogação (?) no topo da tela da Comunidade."),
 
-    # --- Disponibilidade (antes do tutorial, que pegaria "como funciona") -
-    (re.compile(r"disponibilidade|ciclo de (trabalho|folga)|indispon[ií]vel|turno externo", re.I),
-     "Da pra cadastrar um ciclo de disponibilidade pra cada membro (ex.: 4 dias trabalhando / 4 de folga) "
-     "na tela Pessoas da Comunidade (menu ⋯ da pessoa > Disponibilidade). E so um aviso na hora de montar a escala -- nunca bloqueia, "
-     "quem decide continua sendo voce."),
+    # --- Conta ---------------------------------------------------------------
+    (re.compile(r"senha"),
+     "Dá para trocar sua senha na aba Configurações do Perfil. Quem entrou só pelo Google "
+     "também pode definir uma senha ali, para entrar com e-mail e senha. Esqueceu "
+     "a senha? Use o link \"Esqueci minha senha\" na tela de login: ele manda um link por e-mail "
+     "para redefinir, e você recebe um aviso por e-mail toda vez que a senha muda, por segurança."),
+    (re.compile(r"login|entrar|logar"),
+     "Você pode entrar com e-mail e senha ou pelo botão \"Entrar com o Google\" na tela de login."),
+    (re.compile(r"foto|avatar|imagem de perfil"),
+     "Você envia sua foto de perfil na aba Configurações do Perfil. Aceitamos JPG e PNG de até 2 MB."),
+    (re.compile(r"\btema\b|cor do painel|aparencia"),
+     "Dá para trocar o tema do painel (Índigo, Escuro, Verde ou Laranja) na aba Configurações."),
+    (re.compile(r"cadastr|registr|criar conta"),
+     "Para criar uma conta, use o formulário de Cadastro ou entre direto com sua conta do Google."),
+    (re.compile(r"google"),
+     "O login com Google usa OAuth: você autoriza o acesso e a gente cria sua conta com seu e-mail e sua foto automaticamente."),
 
-    # --- Tutorial guiado -----------------------------------------------
-    (re.compile(r"tutorial|passo a passo|primeiros passos|como (funciona|usar|come[cç]ar)", re.I),
-     "O tutorial guiado aparece sozinho na primeira vez que voce entra numa Comunidade, "
-     "destacando os principais botoes da tela. Pra rever quando quiser, clique no icone de "
-     "interrogacao (?) no topo da tela da Comunidade."),
+    # --- Disponibilidade ------------------------------------------------------
+    (re.compile(r"disponibilidade|ciclo de (trabalho|folga)|indisponivel|turno externo"),
+     "Dá para cadastrar um ciclo de disponibilidade para cada membro (ex.: 4 dias trabalhando / 4 de folga) "
+     "na tela Pessoas da Comunidade (menu ⋯ da pessoa > Disponibilidade). É só um aviso na hora de montar a escala: nunca bloqueia, "
+     "quem decide continua sendo você."),
 
-    # --- Hierarquia de papeis (antes de "ministerio"/"convit", que pegariam
-    # "lider de ministerio"/"quem e admin" primeiro) ----------------------
-    (re.compile(r"hierarquia|super ?admin|l[ií]der de minist[eé]rio|n[ií]ve(l|is) de acesso|quem pode (editar|gerenciar|excluir)", re.I),
-     "A hierarquia vai do maior pro menor alcance: Super Admin (acesso total, so criado via terminal) > "
-     "Admin da Comunidade (gerencia ministerios, membros e convites) > Lider de Ministerio (gerencia escalas "
-     "e rodizio so do seu ministerio) > Membro (participa e visualiza, sem poder administrativo). Ha ainda o "
-     "Convidado, vinculado so a uma escala especifica, sem precisar de conta."),
+    # --- Hierarquia de papeis (antes de "ministerio"/"convit") ---------------
+    (re.compile(r"hierarquia|super ?admin|lider de ministerio|nive(l|is) de acesso|quem pode (editar|gerenciar|excluir)"),
+     "A hierarquia vai do maior para o menor alcance: Super Admin (acesso total, só criado via terminal) > "
+     "Admin da Comunidade (gerencia ministérios, membros e convites) > Líder de Ministério (gerencia escalas "
+     "e rodízio só do seu ministério) > Membro (participa e visualiza, sem poder administrativo). Há ainda o "
+     "Convidado, vinculado só a uma escala específica, sem precisar de conta."),
 
-    # --- Calendario (antes de "escala", que pegaria "ver o mes das escalas") -
-    (re.compile(r"calend[aá]rio|visao mensal|ver o mes", re.I),
-     "O Ministerio tem uma visao de Calendario com todas as escalas do mes, coloridas por departamento -- "
-     "otimo pra enxergar rodizios e escalas manuais juntos de uma vez."),
+    # --- Escalas e rodizio juntos (o atalho "Escalas e rodízio") -------------
+    (re.compile(r"escala.*(rodizio|plantao)|(rodizio|plantao).*escala"),
+     "Uma Escala é um evento com pessoas em funções específicas. Você cria pela tela do Ministério, em "
+     "\"Nova escala\". O Rodízio reveza equipes sozinho numa recorrência (semanal, mensal...): abra uma "
+     "escala com a equipe montada e use \"Criar turno de rodízio com esta equipe\"; daí em diante ele gera "
+     "as próximas escalas automaticamente."),
 
-    # --- Estrutura do sistema (mais especifico antes do generico) ------
-    (re.compile(r"rod[ií]zio|plant[aã]o|fila de equipes|turno", re.I),
-     "O Rodizio cria uma fila de equipes que se revezam automaticamente numa recorrencia "
-     "(semanal, mensal...). Uma vez configurado, ele gera as escalas sozinho pros proximos meses -- "
-     "acesse pela tela do Ministerio."),
-    (re.compile(r"escalados|quem est[aá] escalado", re.I),
-     "O relatorio \"Ver escalados\" (na tela da Comunidade) mostra todo mundo escalado em "
-     "qualquer Ministerio, com filtros por data e departamento."),
-    (re.compile(r"escala r[aá]pida|nova escala|criar (uma )?escala", re.I),
-     "Pra criar uma Escala Rapida, entre num Ministerio e clique em \"Nova escala\" -- escolha "
-     "o departamento (Louvor, Midia, Kids...) e as funcoes sugeridas ja aparecem prontas pra voce "
+    # --- Calendario (antes de "escala") --------------------------------------
+    (re.compile(r"calendario|visao mensal|ver o mes"),
+     "O Ministério tem uma visão de Calendário com todas as escalas do mês, coloridas por departamento, "
+     "além dos eventos da Comunidade. Ótimo para enxergar rodízios e escalas manuais juntos de uma vez."),
+
+    # --- Estrutura do sistema (mais especifico antes do generico) -------------
+    (re.compile(r"rodizio|plantao|fila de equipes|turno"),
+     "O Rodízio cria uma fila de equipes que se revezam automaticamente numa recorrência "
+     "(semanal, mensal...). Uma vez configurado, ele gera as escalas sozinho para os próximos meses. "
+     "Acesse pela tela do Ministério."),
+    (re.compile(r"escalados|quem esta escalado"),
+     "O relatório \"Ver escalados\" (na tela da Comunidade) mostra todo mundo escalado em "
+     "qualquer Ministério, com filtros por data e departamento."),
+    (re.compile(r"escala rapida|nova escala|criar (uma )?escala"),
+     "Para criar uma Escala Rápida, entre num Ministério e toque em \"Nova escala\". Escolha "
+     "o departamento (Louvor, Mídia, Kids...) e as funções sugeridas já aparecem prontas para você "
      "escalar as pessoas."),
-    (re.compile(r"\bescala(s)?\b", re.I),
-     "Uma Escala e um evento com pessoas atribuidas a funcoes especificas -- pode ser criada "
-     "manualmente (\"Escala Rapida\") ou gerada automaticamente por um Rodizio."),
-    (re.compile(r"membro|diret[oó]rio", re.I),
-     "A tela Pessoas (dentro da Comunidade) e a lista de todo mundo que pode ser "
-     "escalado -- nome, telefone e e-mail, sem precisar ter conta no sistema -- e tambem de quem tem acesso ao app."),
-    (re.compile(r"convit|convidar|papel de admin|quem [eé] admin", re.I),
-     "Voce convida pessoas na tela Pessoas da Comunidade (\"Adicionar pessoa\" com o e-mail, ou o link "
-     "\"Convidar por link\") -- da pra marcar se a pessoa entra como admin ou so como membro."),
-    (re.compile(r"minist[eé]rio", re.I),
-     "Um Ministerio e uma area da sua Comunidade (Louvor, Midia, Kids...) -- e dentro dele que "
-     "as escalas de verdade sao criadas e organizadas."),
-    (re.compile(r"comunidade", re.I),
-     "Uma Comunidade e a organizacao raiz do sistema (sua igreja ou grupo). Dentro dela voce "
-     "cria Ministerios, convida pessoas e monta escalas. Crie uma nova em \"Nova comunidade\"."),
-    (re.compile(r"notifica[cç][aã]o|avis[ao]|lembrete", re.I),
-     "O sistema notifica automaticamente por e-mail, SMS e sino no site 24h e 16h antes de cada "
-     "evento escalado -- nao precisa configurar nada, ja vem ligado."),
+    (re.compile(r"\bescala(s)?\b"),
+     "Uma Escala é um evento com pessoas atribuídas a funções específicas. Pode ser criada "
+     "manualmente (\"Escala Rápida\") ou gerada automaticamente por um Rodízio."),
+    (re.compile(r"\bevento"),
+     "Os Eventos da Comunidade (conferência, culto especial...) ficam na tela da Comunidade, em Eventos, "
+     "e aparecem no calendário junto das escalas. O admin cria, edita e exclui."),
+    (re.compile(r"membro|diretorio"),
+     "A tela Pessoas (dentro da Comunidade) é a lista de todo mundo que pode ser "
+     "escalado (nome, telefone e e-mail, sem precisar ter conta no sistema) e também de quem tem acesso ao app."),
+    (re.compile(r"convit|convidar|papel de admin|quem e admin"),
+     "Você convida pessoas na tela Pessoas da Comunidade (\"Adicionar pessoa\" com o e-mail, ou o link "
+     "\"Convidar por link\"). Dá para marcar se a pessoa entra como admin ou só como membro."),
+    (re.compile(r"comunidade.*ministerio|ministerio.*comunidade"),
+     "A Comunidade é a sua igreja ou grupo: é nela que ficam as pessoas, os convites e os eventos. "
+     "Dentro dela você cria os Ministérios (Louvor, Mídia, Kids...), e é em cada Ministério que as "
+     "escalas e os rodízios são montados."),
+    (re.compile(r"ministerio"),
+     "Um Ministério é uma área da sua Comunidade (Louvor, Mídia, Kids...). É dentro dele que "
+     "as escalas de verdade são criadas e organizadas."),
+    (re.compile(r"comunidade"),
+     "Uma Comunidade é a organização principal do sistema (sua igreja ou grupo). Dentro dela você "
+     "cria Ministérios, convida pessoas e monta escalas. Crie uma nova em \"Nova comunidade\"."),
+    (re.compile(r"notificac|avis[ao]|lembrete"),
+     "O sistema avisa automaticamente por e-mail, SMS e pelo sino no app 24h e 16h antes de cada "
+     "evento escalado. Não precisa configurar nada: já vem ligado."),
 
-    (re.compile(r"chat|voce e real|\bia\b|intelig[eê]ncia artificial", re.I),
+    (re.compile(r"\bchat\b|voce e real|\bia\b|inteligencia artificial"),
      "Por enquanto sou um assistente simulado (respostas por regras). Em breve vou ser conectado a uma IA de verdade."),
 
-    # --- Seguranca e privacidade dos dados -------------------------------
-    (re.compile(r"seguran[cç]a|privacidade|dados (seguros|protegidos)|vazament|criptograf", re.I),
-     "Levamos seguranca a serio: senhas nunca sao guardadas em texto puro (sao criptografadas), a conexao "
-     "e sempre HTTPS, e ha protecao contra tentativas repetidas de login. Os dados da sua Comunidade so sao "
-     "visiveis pra quem tem papel/convite ativo nela."),
+    # --- Seguranca e privacidade dos dados -------------------------------------
+    (re.compile(r"seguranca|privacidade|dados.*(segur|protegid)|vazament|criptograf"),
+     "Levamos segurança a sério: senhas nunca são guardadas em texto puro (são criptografadas), a conexão "
+     "é sempre HTTPS e há proteção contra tentativas repetidas de login. Os dados da sua Comunidade só são "
+     "visíveis para quem tem papel ou convite ativo nela."),
 
-    # --- Atalho de navegacao ----------------------------------------------
-    (re.compile(r"voltar (pro|para o) in[ií]cio|atalho|logo (clic|no topo)", re.I),
-     "O logo pequeno no cabecalho de qualquer tela leva direto pro Dashboard, de qualquer profundidade -- "
-     "complementa a seta \"Voltar\", que so sobe 1 nivel por vez."),
+    # --- Atalho de navegacao ------------------------------------------------------
+    (re.compile(r"voltar (pro|para o) inicio|atalho|logo (clic|no topo)"),
+     "O logo pequeno no cabeçalho de qualquer tela leva direto para o Início, de qualquer profundidade. "
+     "Ele complementa a seta \"Voltar\", que só sobe 1 nível por vez."),
 
-    # --- Marca ------------------------------------------------------------
-    (re.compile(r"pibachurch|swerdne|quem (fez|criou|desenvolveu)", re.I),
-     "O TyBenson e um sistema de gestao pra igrejas e comunidades -- escalas, ministerios, convites e "
-     "notificacoes automaticas, tudo num so lugar."),
+    # --- Marca ---------------------------------------------------------------------
+    (re.compile(r"pibachurch|swerdne|quem (fez|criou|desenvolveu)"),
+     "O TyBenson é um sistema de gestão para igrejas e comunidades: escalas, ministérios, convites e "
+     "notificações automáticas, tudo num só lugar."),
 
-    # --- Pequena conversa ---------------------------------------------------
-    (re.compile(r"\b(obrigad[oa]|valeu|vlw)\b", re.I),
-     "Disponha! Se precisar de mais alguma coisa e so perguntar."),
-    (re.compile(r"\bsair\b|logout|deslogar", re.I),
-     "Pra sair da conta, use o botao \"Sair\" na aba Configuracoes do Dashboard."),
-    (re.compile(r"^(oi|ol[aá]|e a[ií]|bom dia|boa tarde|boa noite)\b", re.I),
-     "Oi! Posso ajudar com login, cadastro, comunidades, ministerios, escalas, rodizio, convites, "
-     "disponibilidade, calendario ou o tutorial guiado. O que voce quer saber?"),
-    (re.compile(r"\bajuda\b|\bmenu\b|o que (voce|vc) (faz|sabe)", re.I),
-     "Posso te explicar: login e cadastro, foto de perfil, temas, comunidades, ministerios, escalas, "
-     "rodizio/plantao, convites e hierarquia de papeis, diretorio de membros, disponibilidade, calendario, "
-     "notificacoes e o tutorial guiado. E so perguntar sobre qualquer um desses assuntos."),
+    # --- Pequena conversa ------------------------------------------------------------
+    (re.compile(r"\b(obrigad[oa]|valeu|vlw)\b"),
+     "Disponha! Se precisar de mais alguma coisa, é só perguntar."),
+    (re.compile(r"\bsair\b|logout|deslogar"),
+     "Para sair da conta, use o botão \"Sair\" na aba Configurações do Perfil."),
+    (re.compile(r"^(oi|ola|e ai|bom dia|boa tarde|boa noite)\b"),
+     "Oi! Posso ajudar com login, cadastro, comunidades, ministérios, escalas, rodízio, convites, "
+     "disponibilidade, calendário ou o tutorial guiado. O que você quer saber?"),
+    (re.compile(r"\bajuda\b|\bmenu\b|o que (voce|vc) (faz|sabe)"),
+     "Posso explicar: login e cadastro, foto de perfil, temas, comunidades, ministérios, escalas, "
+     "rodízio, convites e hierarquia de papéis, diretório de membros, disponibilidade, calendário, "
+     "notificações e o tutorial guiado. É só perguntar sobre qualquer um desses assuntos."),
+
+    # --- Generico: "como funciona/usar/comecar" sem assunto conhecido ---------------
+    (re.compile(r"como (funciona|usar|comecar)"),
+     "O tutorial guiado aparece sozinho na primeira vez que você entra numa Comunidade, "
+     "destacando os principais botões da tela. Para rever quando quiser, toque no ícone de "
+     "interrogação (?) no topo da tela da Comunidade."),
 ]
 
 _RESPOSTA_PADRAO = (
     "Ainda estou aprendendo sobre isso. Tente perguntar sobre login, cadastro, comunidades, "
-    "ministerios, escalas, rodizio, convites, hierarquia de papeis, disponibilidade, calendario, "
-    "notificacoes, seguranca ou o tutorial guiado."
+    "ministérios, escalas, rodízio, convites, hierarquia de papéis, disponibilidade, calendário, "
+    "notificações, segurança ou o tutorial guiado."
 )
 
 
@@ -819,8 +853,9 @@ def _responder_mock(mensagem, historico):
     # `historico` ainda nao influencia a resposta simulada, mas ja fica na
     # assinatura porque a integracao real de IA vai precisar dele como contexto.
     del historico
+    pergunta = _normalizar_pergunta(mensagem)
     for padrao, resposta in _REGRAS_CHAT:
-        if padrao.search(mensagem):
+        if padrao.search(pergunta):
             return resposta
     return _RESPOSTA_PADRAO
 

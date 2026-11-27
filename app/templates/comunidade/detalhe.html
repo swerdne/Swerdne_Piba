@@ -75,7 +75,7 @@
                     <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
                         <i class="fa-solid fa-music text-sm"></i>
                     </div>
-                    <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Banco de musicas</span>
+                    <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Banco de músicas</span>
                     <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
                 </a>
                 <a href="{{ url_for('comunidade.calendario', comunidade_id=comunidade.id) }}" data-tutorial="calendario"
@@ -83,7 +83,7 @@
                     <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
                         <i class="fa-solid fa-calendar-days text-sm"></i>
                     </div>
-                    <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Calendario</span>
+                    <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Calendário</span>
                     <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
                 </a>
                 <a href="{{ url_for('comunidade.lideres', comunidade_id=comunidade.id) }}"
@@ -91,7 +91,7 @@
                     <div class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0">
                         <i class="fa-solid fa-user-tie text-sm"></i>
                     </div>
-                    <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Lideres</span>
+                    <span class="flex-1 text-sm font-semibold {{ tema.text_primary }}">Líderes</span>
                     <i class="fa-solid fa-chevron-right text-xs {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
                 </a>
                 <a href="{{ url_for('comunidade.eventos', comunidade_id=comunidade.id) }}"
@@ -106,7 +106,7 @@
         </div>
 
         <div>
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Administracao</h2>
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2.5">Administração</h2>
             <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} px-4">
                 <a href="{{ url_for('comunidade.local_checkin', comunidade_id=comunidade.id) }}"
                    class="flex items-center gap-3 py-3.5 group">
@@ -150,17 +150,17 @@
         </div>
 
         <div class="flex items-center justify-between">
-            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Ministerios</h2>
+            <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide">Ministérios</h2>
             <a href="{{ url_for('ministerio.nova', comunidade_id=comunidade.id) }}" data-tutorial="novo-ministerio"
                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-full transition shrink-0">
-                <i class="fa-solid fa-plus mr-1"></i>Novo Ministerio
+                <i class="fa-solid fa-plus mr-1"></i>Novo Ministério
             </a>
         </div>
 
         {% if not ministerios %}
         <div class="text-center py-16">
             <i class="fa-solid fa-sitemap text-4xl {{ tema.text_secondary }}"></i>
-            <p class="mt-4 {{ tema.text_secondary }}">Nenhum ministerio criado ainda nesta comunidade.</p>
+            <p class="mt-4 {{ tema.text_secondary }}">Nenhum ministério criado ainda nesta comunidade.</p>
         </div>
         {% endif %}
 

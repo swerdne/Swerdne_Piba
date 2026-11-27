@@ -155,6 +155,23 @@ class Evento(SequentialIdDocument):
         return f"<Evento {self.nome!r} da comunidade {self.comunidade_id}>"
 
 
+def eventos_por_dia(comunidade_id, inicio, fim):
+    """{data: [Evento]} dos eventos da comunidade entre inicio e fim (inclusive),
+    pro calendario -- evento de varios dias aparece em cada um deles. 1 consulta."""
+    from datetime import timedelta
+
+    por_dia = {}
+    for evento in Evento.objects(comunidade_id=comunidade_id, data__lte=fim).order_by("data", "horario"):
+        ultimo = evento.data_fim if evento.data_fim and evento.data_fim >= evento.data else evento.data
+        if ultimo < inicio:
+            continue
+        dia = max(evento.data, inicio)
+        while dia <= min(ultimo, fim):
+            por_dia.setdefault(dia, []).append(evento)
+            dia += timedelta(days=1)
+    return por_dia
+
+
 def criar_comunidade(usuario_id, nome, descricao=None, imagem=None):
     comunidade = Comunidade(usuario_id=usuario_id, nome=nome, descricao=descricao, imagem=imagem)
     comunidade.save()
