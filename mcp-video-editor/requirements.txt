@@ -1,0 +1,3 @@
+mcp[cli]>=1.12,<2
+# testes
+pytest>=8
