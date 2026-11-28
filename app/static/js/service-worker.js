@@ -21,6 +21,33 @@ const CACHE_NAME = "piba-swerdne-estaticos-v4";
 const PAGINA_OFFLINE = "/static/offline.html";
 const ARQUIVOS_OFFLINE = [PAGINA_OFFLINE, "/static/img/logo-mini.webp"];
 
+// Aviso no celular com o app fechado (app/push.py): mostra a notificacao e,
+// no toque, abre (ou foca) o app na pagina do aviso.
+self.addEventListener("push", function (evento) {
+    var dados = {};
+    try { dados = evento.data ? evento.data.json() : {}; } catch (e) { dados = { corpo: evento.data && evento.data.text() }; }
+    evento.waitUntil(self.registration.showNotification(dados.titulo || "TyBenson", {
+        body: dados.corpo || "",
+        icon: "/static/img/icon-192.png",
+        badge: "/static/img/favicon.png",
+        data: { url: dados.url || "/dashboard" },
+        lang: "pt-BR"
+    }));
+});
+
+self.addEventListener("notificationclick", function (evento) {
+    evento.notification.close();
+    var destino = new URL((evento.notification.data && evento.notification.data.url) || "/dashboard", self.location.origin).href;
+    evento.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (janelas) {
+        for (var i = 0; i < janelas.length; i++) {
+            if (janelas[i].url.indexOf(self.location.origin) === 0 && "focus" in janelas[i]) {
+                return janelas[i].navigate(destino).then(function (j) { return (j || janelas[i]).focus(); });
+            }
+        }
+        return clients.openWindow(destino);
+    }));
+});
+
 self.addEventListener("install", function (evento) {
     self.skipWaiting();
     evento.waitUntil(

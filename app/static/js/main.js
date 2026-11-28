@@ -1371,3 +1371,84 @@ document.addEventListener('click', function (e) {
     quadro.classList.remove('hidden');
     b.style.display = 'none';  // (classe hidden perde para inline-flex no CSS)
 });
+
+// Avisos no celular com o app fechado (Perfil, app/push.py). Mostra o
+// cartao so onde o navegador sabe fazer push; no iPhone, so no app
+// instalado na tela de inicio (iOS 16.4+).
+(function () {
+    var cartao = document.querySelector('[data-push]');
+    if (!cartao) return;
+    var texto = cartao.querySelector('[data-push-texto]');
+    var ligar = cartao.querySelector('[data-push-ligar]');
+    var testar = cartao.querySelector('[data-push-testar]');
+    var desligar = cartao.querySelector('[data-push-desligar]');
+    var csrf = document.querySelector('input[name="csrf_token"]');
+    var iphone = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    var instalado = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        if (iphone && !instalado) {
+            cartao.classList.remove('hidden');
+            texto.textContent = 'No iPhone, os avisos com o app fechado só funcionam no app instalado: toque em Compartilhar › "Adicionar à Tela de Início" e abra por lá.';
+            ligar.classList.add('hidden');
+        }
+        return;
+    }
+    cartao.classList.remove('hidden');
+
+    function chaveEmBytes(base64) {
+        var preenchida = (base64 + '===='.slice((base64.length % 4) || 4)).replace(/-/g, '+').replace(/_/g, '/');
+        var bruto = atob(preenchida), bytes = new Uint8Array(bruto.length);
+        for (var i = 0; i < bruto.length; i++) bytes[i] = bruto.charCodeAt(i);
+        return bytes;
+    }
+    function enviar(url, campos) {
+        var corpo = new FormData();
+        corpo.append('csrf_token', csrf ? csrf.value : '');
+        Object.keys(campos).forEach(function (k) { corpo.append(k, campos[k]); });
+        return fetch(url, { method: 'POST', body: corpo, credentials: 'same-origin' }).then(function (r) { return r.json(); });
+    }
+    function mostrar(ativo) {
+        ligar.classList.toggle('hidden', ativo);
+        testar.classList.toggle('hidden', !ativo);
+        desligar.classList.toggle('hidden', !ativo);
+        texto.textContent = ativo
+            ? 'Avisos ligados neste aparelho. Tudo o que chegar no sino aparece aqui, mesmo com o app fechado.'
+            : (Notification.permission === 'denied'
+                ? 'Os avisos estão bloqueados para este site. Libere nas configurações do navegador (cadeado ao lado do endereço › Notificações).'
+                : 'Receba os avisos do sino mesmo com o app fechado.');
+    }
+
+    navigator.serviceWorker.ready.then(function (reg) {
+        return reg.pushManager.getSubscription();
+    }).then(function (inscricao) { mostrar(!!inscricao); });
+
+    ligar.addEventListener('click', function () {
+        ligar.disabled = true;
+        Notification.requestPermission().then(function (permissao) {
+            if (permissao !== 'granted') { mostrar(false); return null; }
+            return navigator.serviceWorker.ready.then(function (reg) {
+                return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveEmBytes(cartao.getAttribute('data-push-chave')) });
+            }).then(function (inscricao) {
+                return enviar('/push/inscrever', { inscricao: JSON.stringify(inscricao) }).then(function (r) { mostrar(!!r.ok); });
+            });
+        }).catch(function () {
+            texto.textContent = 'Não foi possível ligar os avisos neste aparelho. Tente de novo mais tarde.';
+        }).then(function () { ligar.disabled = false; });
+    });
+
+    testar.addEventListener('click', function () {
+        enviar('/push/testar', {}).then(function (r) {
+            texto.textContent = r.ok ? 'Teste enviado. Ele deve aparecer em alguns segundos.' : 'O teste não saiu. Desative e ative de novo.';
+        });
+    });
+
+    desligar.addEventListener('click', function () {
+        navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (inscricao) {
+            if (!inscricao) { mostrar(false); return; }
+            var endpoint = inscricao.endpoint;
+            return inscricao.unsubscribe().then(function () { return enviar('/push/cancelar', { endpoint: endpoint }); })
+                .then(function () { mostrar(false); });
+        });
+    });
+})();
