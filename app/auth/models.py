@@ -79,6 +79,14 @@ class User(UserMixin, SequentialIdDocument):
     # desativada, apagada de vez 15 dias depois. O token vai no e-mail, no
     # link de cancelar (funciona sem entrar na conta).
     exclusao_pedida_em = mongoengine.DateTimeField()
+
+    # Por onde a pessoa quer os lembretes automaticos das escalas (Perfil >
+    # Lembretes; ver escala.routes.enviar_notificacoes_da_escala). O sino do
+    # app sempre recebe. O de 1 hora antes so vai por WhatsApp/SMS se a
+    # pessoa pedir (cada WhatsApp e cobrado).
+    lembrete_whatsapp = mongoengine.BooleanField(default=True)
+    lembrete_email = mongoengine.BooleanField(default=True)
+    lembrete_1h_whatsapp = mongoengine.BooleanField(default=False)
     token_cancelar_exclusao = mongoengine.StringField(unique=True, sparse=True, max_length=64)
 
     def set_password(self, password):

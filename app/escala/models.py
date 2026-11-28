@@ -395,7 +395,8 @@ class Escala(SequentialIdDocument):
     criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     notificado_24h_em = mongoengine.DateTimeField()
-    notificado_16h_em = mongoengine.DateTimeField()
+    notificado_16h_em = mongoengine.DateTimeField()  # antigo (lembrete de 16h, trocado pelo de 1h)
+    notificado_1h_em = mongoengine.DateTimeField()
     # Ultimo "Reenviar para todos" do botao Notificar (UTC) -- trava um novo
     # reenvio por REENVIO_MANUAL_INTERVALO (templates de WhatsApp sao cobrados).
     reenvio_manual_em = mongoengine.DateTimeField()

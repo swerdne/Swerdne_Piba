@@ -381,6 +381,12 @@ def dashboard():
         telefone_visivel_lider=current_user.telefone_visivel_lider is not False,
     )
     telefone_form = TelefoneForm(telefone=current_user.telefone)
+    from app.main.forms import LembretesForm
+    lembretes_form = LembretesForm(
+        lembrete_whatsapp=current_user.lembrete_whatsapp is not False,
+        lembrete_email=current_user.lembrete_email is not False,
+        lembrete_1h_whatsapp=bool(current_user.lembrete_1h_whatsapp),
+    )
     acao_form = AcaoForm()
 
     notificacoes = list(
@@ -433,6 +439,7 @@ def dashboard():
         tem_senha=bool(current_user.password_hash),
         nome_form=nome_form,
         privacidade_form=privacidade_form,
+        lembretes_form=lembretes_form,
         telefone_form=telefone_form,
         acao_form=acao_form,
         administra_comunidade=any(i.get("admin") for i in comunidades),
@@ -525,6 +532,24 @@ def salvar_tema():
     current_user.save()
 
     flash("Tema atualizado!", "success")
+    return redirect(url_for("main.dashboard") + "#config")
+
+
+@bp.route("/perfil/lembretes", methods=["POST"])
+@login_required
+def salvar_lembretes():
+    """Canais dos lembretes automaticos das escalas (User.lembrete_*). O sino
+    do app sempre recebe; avisos manuais do lider ("Enviar avisos") e de
+    mudanca na escala nao dependem disto."""
+    from app.main.forms import LembretesForm
+
+    form = LembretesForm()
+    if form.validate_on_submit():
+        current_user.lembrete_whatsapp = bool(form.lembrete_whatsapp.data)
+        current_user.lembrete_email = bool(form.lembrete_email.data)
+        current_user.lembrete_1h_whatsapp = bool(form.lembrete_1h_whatsapp.data) and current_user.lembrete_whatsapp
+        current_user.save()
+        flash("Lembretes salvos.", "success")
     return redirect(url_for("main.dashboard") + "#config")
 
 
@@ -840,8 +865,8 @@ _REGRAS_CHAT = [
      "Uma Comunidade é a organização principal do sistema (sua igreja ou grupo). Dentro dela você "
      "cria Ministérios, convida pessoas e monta escalas. Crie uma nova em \"Nova comunidade\"."),
     (re.compile(r"notificac|avis[ao]|lembrete"),
-     "O sistema avisa automaticamente por e-mail, SMS e pelo sino no app 24h e 16h antes de cada "
-     "evento escalado. Não precisa configurar nada: já vem ligado."),
+     "O sistema avisa automaticamente por WhatsApp, e-mail e pelo sino no app 1 dia e 1 hora antes de cada "
+     "escala. Já vem ligado; em Perfil › Lembretes você escolhe por onde quer receber."),
 
     (re.compile(r"\bchat\b|voce e real|\bia\b|inteligencia artificial"),
      "Por enquanto sou um assistente simulado (respostas por regras). Em breve vou ser conectado a uma IA de verdade."),

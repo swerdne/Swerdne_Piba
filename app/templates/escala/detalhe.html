@@ -225,7 +225,7 @@
         <p class="text-xs {{ tema.text_secondary }} -mt-2">
             <i class="fa-solid fa-clock mr-1"></i>
             Lembrete automático da equipe: <span class="font-semibold {{ tema.text_primary }}">{{ lembrete_texto }}</span>
-            (e de novo 16h antes do evento, só por e-mail e no app).
+            (e de novo 1 hora antes, por e-mail e no app; cada pessoa escolhe os canais no Perfil).
             <a href="{{ url_for('ministerio.lembrete', ministerio_id=escala.ministerio_id) }}" class="font-semibold {{ tema.accent_text }} hover:underline">Mudar</a>
         </p>
         {% endif %}

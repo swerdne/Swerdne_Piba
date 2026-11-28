@@ -319,6 +319,7 @@ def editar(escala_id):
             # precisam recalcular a partir da nova data (ver app/escala/agendador.py).
             escala.notificado_24h_em = None
             escala.notificado_16h_em = None
+            escala.notificado_1h_em = None
 
         if mudou_nome or mudou_data_horario:
             # Edicao manual de uma ocorrencia gerada por rodizio -- trava essa
@@ -1389,17 +1390,45 @@ def _disparar_notificacoes_em_paralelo(tarefas):
     return resultados
 
 
-def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
+def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True, lembrete=None):
     """Notifica todo mundo escalado numa escala (por e-mail/SMS/app).
 
     Reutilizada tanto pelo botao manual quanto pelo agendador automatico
-    (24h/16h antes do evento) -- ver app/escala/agendador.py. `funcoes`
-    restringe o envio a essas (ex: so quem acabou de ser escalado, ver
-    _avisar_recem_escalado). `canais_pagos=False` manda so e-mail + sino
-    (sem SMS nem template de WhatsApp) -- usado no lembrete de 16h.
+    (lembrete principal e 1h antes do evento) -- ver app/escala/agendador.py.
+    `funcoes` restringe o envio a essas (ex: so quem acabou de ser escalado,
+    ver _avisar_recem_escalado). `canais_pagos=False` manda so e-mail + sino
+    (sem SMS nem template de WhatsApp). `lembrete` ("principal"/"1h") aplica
+    as preferencias de canal de cada conta (Perfil > Lembretes).
     """
     escalados = [f for f in (escala.funcoes if funcoes is None else funcoes) if f.membro_id is not None]
     data_texto = escala.data.strftime("%d/%m/%Y") if escala.data else "data a definir"
+    # Lembrete automatico ("principal" ou "1h"): respeita a preferencia de
+    # canais de quem tem conta (User.lembrete_*). Sem conta: principal por
+    # tudo, 1h so por e-mail. Aviso manual/ao escalar (lembrete=None) nao muda.
+    contas = {}
+    if lembrete:
+        emails = [f.membro.email.strip().lower() for f in escalados if f.membro.email]
+        contas = {u.email.strip().lower(): u for u in User.objects(email__in=emails)} if emails else {}
+
+    def canais(membro):
+        conta = contas.get((membro.email or "").strip().lower())
+        quer_email = conta.lembrete_email if (lembrete and conta) else True
+        if not canais_pagos:
+            quer_pago = False
+        elif lembrete == "1h":
+            quer_pago = bool(conta and conta.lembrete_whatsapp and conta.lembrete_1h_whatsapp)
+        elif lembrete and conta:
+            quer_pago = conta.lembrete_whatsapp
+        else:
+            quer_pago = True
+        return (membro.email if quer_email else None), (membro.telefone if quer_pago else None)
+
+    def texto(funcao):
+        mensagem = mensagem_para(escala, funcao, funcao.membro)
+        if lembrete == "1h":
+            hora = escala.horario.strftime("%H:%M") if escala.horario else ""
+            mensagem = f"Lembrete: começa em 1 hora ({hora}).\n" + mensagem
+        return mensagem
     # O template aprovado na Meta tem 4 variaveis fixas (nome, funcao,
     # escala, data) -- mandar uma 5a faz a Meta recusar. A roupa do dia vai
     # junto do nome da escala, na mesma variavel (sem quebra de linha, que
@@ -1411,10 +1440,11 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
     tarefas = [
         {
             "funcao_id": funcao.id,
-            "email": funcao.membro.email,
-            "telefone": funcao.membro.telefone if canais_pagos else None,
-            "mensagem": mensagem_para(escala, funcao, funcao.membro),
-            "assunto": f"Você foi escalado(a): {funcao.nome_exibido} - {escala.nome}",
+            "email": canais(funcao.membro)[0],
+            "telefone": canais(funcao.membro)[1],
+            "mensagem": texto(funcao),
+            "assunto": (f"Começa em 1 hora: {escala.nome} ({funcao.nome_exibido})" if lembrete == "1h"
+                        else f"Você foi escalado(a): {funcao.nome_exibido} - {escala.nome}"),
             "wa_template": current_app.config.get("WHATSAPP_TEMPLATE_ESCALADO") or "pibachurch_escalado",
             "wa_parametros": [funcao.membro.nome, funcao.nome_exibido, escala_no_whatsapp, data_texto],
             # Botoes "Confirmo"/"Nao posso" do template (se cadastrado com eles):
@@ -1425,6 +1455,7 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
         for funcao in escalados
     ]
     resultados_por_funcao = _disparar_notificacoes_em_paralelo(tarefas)
+    tarefa_por_funcao = {t["funcao_id"]: t for t in tarefas}
 
     notificacoes_app = 0
     email_enviados = email_falhas = 0
@@ -1435,16 +1466,22 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
     for funcao in escalados:
         membro = funcao.membro
         resultado = resultados_por_funcao[funcao.id]
+        tarefa = tarefa_por_funcao[funcao.id]
         notificou_algum_canal = False
 
         if membro.email:
             # Se a pessoa tem conta no site, tambem aparece no sino dela ao logar --
             # isso e um EXTRA, nao substitui o e-mail.
-            usuario_vinculado = User.objects(email=membro.email).first()
+            usuario_vinculado = contas.get(membro.email.strip().lower()) if lembrete else \
+                User.objects(email=membro.email).first()
             if usuario_vinculado:
+                titulo = {
+                    "1h": f"Começa em 1 hora: {escala.nome}",
+                    "principal": f"Lembrete: você está escalado(a) em {funcao.nome_exibido}",
+                }.get(lembrete, f"Você foi escalado(a) para {funcao.nome_exibido}")
                 Notificacao(
                     usuario_id=usuario_vinculado.id,
-                    titulo=f"Você foi escalado(a) para {funcao.nome_exibido}",
+                    titulo=titulo[:120],
                     mensagem=f"{escala.nome} ({escala.departamento}) - {funcao.nome_exibido}.",
                     escala_id=escala.id,
                     tipo="escalado",
@@ -1452,13 +1489,14 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
                 notificacoes_app += 1
                 notificou_algum_canal = True
 
+        if tarefa["email"]:
             if resultado["email_ok"]:
                 email_enviados += 1
                 notificou_algum_canal = True
             else:
                 email_falhas += 1
 
-        if membro.telefone and canais_pagos:
+        if tarefa["telefone"]:
             if resultado["sms_ok"]:
                 sms_enviados += 1
                 notificou_algum_canal = True
