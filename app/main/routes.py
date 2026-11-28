@@ -664,6 +664,94 @@ def excluir_indisponibilidade(item_id):
     return redirect(url_for("main.indisponibilidade"))
 
 
+@bp.route("/perfil/agenda", methods=["GET", "POST"])
+@login_required
+def agenda():
+    """Perfil > Minhas escalas na agenda: links para assinar no Google
+    Agenda / iPhone (app/agenda.py). POST = gerar novo link (o antigo para)."""
+    import secrets
+
+    from mongoengine.queryset.visitor import Q
+
+    from app.ministerio.models import Ministerio, UsuarioMinisterio
+
+    if request.method == "POST":
+        if AcaoForm().validate_on_submit():
+            from app.auth.models import User
+
+            User.objects(id=current_user.id).update(set__token_agenda=secrets.token_urlsafe(32))
+            flash("Link novo gerado. O antigo parou de funcionar: assine de novo com o link abaixo.", "success")
+        return redirect(url_for("main.agenda"))
+    # So cria se ainda nao existe (le do banco: duas abas abertas nao geram
+    # dois links diferentes).
+    from app.auth.models import User
+
+    User.objects(id=current_user.id, token_agenda=None).update(set__token_agenda=secrets.token_urlsafe(32))
+    token = User.objects(id=current_user.id).only("token_agenda").first().token_agenda
+    from app.comunidade.models import Comunidade, UsuarioComunidade
+
+    ids = [u.ministerio_id for u in UsuarioMinisterio.objects(usuario_id=current_user.id).only("ministerio_id")]
+    # Admin da comunidade enxerga todos os ministerios dela.
+    administradas = {u.comunidade_id for u in UsuarioComunidade.objects(usuario_id=current_user.id, papel="admin").only("comunidade_id")}
+    administradas |= {c.id for c in Comunidade.objects(usuario_id=current_user.id).only("id")}
+    filtro = Q(id__in=ids) | Q(comunidade_id__in=list(administradas))
+    ministerios = list(Ministerio.objects(filtro).order_by("nome")) if (ids or administradas) else []
+    pessoal = url_for("main.agenda_pessoal_ics", token=token, _external=True)
+    por_ministerio = [
+        (m, url_for("main.agenda_ministerio_ics", token=token, ministerio_id=m.id, _external=True))
+        for m in ministerios
+    ]
+    return render_template("main/agenda.html", pessoal=pessoal, por_ministerio=por_ministerio, acao_form=AcaoForm())
+
+
+def _conta_pelo_token_agenda(token):
+    from app.auth.models import User
+
+    usuario = User.objects(token_agenda=token).first() if token and len(token) >= 20 else None
+    if usuario is None or usuario.exclusao_pedida_em:
+        abort(404)
+    return usuario
+
+
+def _resposta_ics(texto, nome):
+    resposta = make_response(texto)
+    resposta.headers["Content-Type"] = "text/calendar; charset=utf-8"
+    resposta.headers["Content-Disposition"] = f'inline; filename="{nome}.ics"'
+    resposta.headers["Cache-Control"] = "private, max-age=900"
+    return resposta
+
+
+def _urls_agenda():
+    return (lambda e: url_for("escala.detalhe", escala_id=e.id, _external=True),
+            lambda ev: url_for("comunidade.evento_detalhe", comunidade_id=ev.comunidade_id, evento_id=ev.id, _external=True))
+
+
+@bp.route("/agenda/<token>.ics")
+@limiter.limit("60 per hour")
+def agenda_pessoal_ics(token):
+    """Assinatura pessoal (sem login: quem le e o Google/iPhone)."""
+    from app.agenda import agenda_pessoal
+
+    usuario = _conta_pelo_token_agenda(token)
+    return _resposta_ics(agenda_pessoal(usuario, *_urls_agenda()), "minhas-escalas")
+
+
+@bp.route("/agenda/<token>/ministerio/<int:ministerio_id>.ics")
+@limiter.limit("60 per hour")
+def agenda_ministerio_ics(token, ministerio_id):
+    """Assinatura de um ministerio: so pra quem tem papel nele (ou e admin da comunidade)."""
+    from app.agenda import agenda_do_ministerio
+    from app.comunidade.routes import _eh_admin_da_comunidade
+    from app.ministerio.models import Ministerio, UsuarioMinisterio
+
+    usuario = _conta_pelo_token_agenda(token)
+    ministerio = Ministerio.objects(id=ministerio_id).first() or abort(404)
+    tem_papel = UsuarioMinisterio.objects(ministerio_id=ministerio.id, usuario_id=usuario.id).first() is not None
+    if not tem_papel and not _eh_admin_da_comunidade(ministerio.comunidade, usuario):
+        abort(404)
+    return _resposta_ics(agenda_do_ministerio(ministerio, *_urls_agenda()), f"escalas-{ministerio.id}")
+
+
 @bp.route("/perfil/testar-email", methods=["POST"])
 @login_required
 @limiter.limit("5 per hour", methods=["POST"])

@@ -87,6 +87,10 @@ class User(UserMixin, SequentialIdDocument):
     lembrete_whatsapp = mongoengine.BooleanField(default=True)
     lembrete_email = mongoengine.BooleanField(default=True)
     lembrete_1h_whatsapp = mongoengine.BooleanField(default=False)
+
+    # Link secreto das agendas para assinar no Google Agenda/iPhone (ver
+    # app/agenda.py). "Gerar novo link" troca o valor e o antigo para.
+    token_agenda = mongoengine.StringField(unique=True, sparse=True, max_length=64)
     token_cancelar_exclusao = mongoengine.StringField(unique=True, sparse=True, max_length=64)
 
     def set_password(self, password):
