@@ -49,7 +49,7 @@ def test_personalizada_exige_texto_e_editar_pode_trocar_ou_tirar(logged_in_clien
     with app.app_context():
         ministerio = _ministerio(logged_in_client)
         resposta, escala = _nova(logged_in_client, ministerio.id, paleta=PALETA_PERSONALIZADA, paleta_texto="  ")
-        assert escala is None and "Escreva a combinacao de roupa" in resposta.data.decode()
+        assert escala is None and "Escreva a combinação de roupa" in resposta.data.decode()
 
         _, escala = _nova(logged_in_client, ministerio.id, paleta=PALETA_PERSONALIZADA,
                           paleta_texto="Blusa azul royal e calça jeans escura")

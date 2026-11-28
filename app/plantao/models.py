@@ -31,8 +31,8 @@ TERMINOS = ["nunca", "data", "ocorrencias"]
 
 NOMES_DIA_SEMANA_ABREV = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
 NOMES_DIA_SEMANA_EXTENSO = [
-    "segunda-feira", "terca-feira", "quarta-feira", "quinta-feira",
-    "sexta-feira", "sabado", "domingo",
+    "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+    "sexta-feira", "sábado", "domingo",
 ]
 ORDINAIS = {1: "1a", 2: "2a", 3: "3a", 4: "4a", 5: "5a"}
 
@@ -109,7 +109,7 @@ def opcoes_modo_mensal(data_referencia):
     if ordinal < 5:
         rotulo_ordinal = ORDINAIS.get(ordinal, f"{ordinal}a")
         opcoes.append(("enesimo_dia_semana", f"Mensalmente na {rotulo_ordinal} {dia_semana}"))
-    opcoes.append(("ultimo_dia_semana", f"Mensalmente na ultima {dia_semana}"))
+    opcoes.append(("ultimo_dia_semana", f"Mensalmente na última {dia_semana}"))
     return opcoes
 
 
@@ -351,7 +351,7 @@ class TurnoPlantao(SequentialIdDocument):
             if self.modo_mensal == "dia_fixo":
                 base += f", no dia {self.data_inicio.day}"
             elif self.modo_mensal == "ultimo_dia_semana":
-                base += f", na ultima {NOMES_DIA_SEMANA_EXTENSO[self.data_inicio.weekday()]}"
+                base += f", na última {NOMES_DIA_SEMANA_EXTENSO[self.data_inicio.weekday()]}"
             elif self.modo_mensal == "enesimo_dia_semana":
                 ordinal = _ordinal_do_dia_semana_no_mes(self.data_inicio)
                 base += f", na {ORDINAIS.get(ordinal, str(ordinal) + 'a')} {NOMES_DIA_SEMANA_EXTENSO[self.data_inicio.weekday()]}"

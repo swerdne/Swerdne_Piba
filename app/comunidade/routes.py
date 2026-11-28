@@ -13,7 +13,7 @@ from app.comunidade.forms import (
     ComunidadeForm, MembroDiretorioForm, CicloDisponibilidadeForm, AcaoForm, EventoForm, FotoMembroForm,
     TelefoneMembroForm,
 )
-from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade, comunidade_por_id
+from app.comunidade.models import Comunidade, UsuarioComunidade, PAPEIS_COMUNIDADE, Evento, criar_comunidade, comunidade_por_id, eventos_por_dia
 from app.ministerio.models import Ministerio
 from app.auth.models import User
 from app.escala.models import (
@@ -383,7 +383,7 @@ def excluir_comunidade(comunidade_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade.id))
 
     # Comunidade, Ministerio e Membro (diretorio) agora vivem todos no Mongo
@@ -407,7 +407,7 @@ def excluir_comunidade(comunidade_id):
 
     delete_cascade(comunidade)
 
-    flash(f'Comunidade "{nome}" excluida.', "success")
+    flash(f'Comunidade "{nome}" excluída.', "success")
     return redirect(url_for("comunidade.index"))
 
 
@@ -462,17 +462,17 @@ def responder_pedido_diretorio(comunidade_id, conta_id, acao):
     conta = primeiro_ou_404(UsuarioComunidade.objects(id=conta_id, comunidade_id=comunidade.id))
     destino = url_for("comunidade.membros", comunidade_id=comunidade.id)
     if not AcaoForm().validate_on_submit() or conta.usuario is None:
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(destino)
 
     if acao == "aceitar":
         nome = _colocar_no_diretorio(comunidade, conta)
-        flash(f"{nome} entrou no diretorio -- ja pode ser escalado(a).", "success")
+        flash(f"{nome} entrou no diretório -- já pode ser escalado(a).", "success")
     else:
         conta.diretorio_recusado = True
         conta.save()
         nome = conta.usuario.name or conta.usuario.username or conta.usuario.email
-        flash(f"{nome} nao vai entrar no diretorio (continua com a conta na comunidade).", "success")
+        flash(f"{nome} não vai entrar no diretório (continua com a conta na comunidade).", "success")
     return redirect(destino)
 
 
@@ -482,12 +482,12 @@ def aceitar_todos_pedidos_diretorio(comunidade_id):
     comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
     destino = url_for("comunidade.membros", comunidade_id=comunidade.id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(destino)
     pedidos = _pedidos_diretorio(comunidade)
     for conta in pedidos:
         _colocar_no_diretorio(comunidade, conta)
-    flash(f"{len(pedidos)} pessoa(s) adicionada(s) ao diretorio.", "success")
+    flash(f"{len(pedidos)} pessoa(s) adicionada(s) ao diretório.", "success")
     return redirect(destino)
 
 
@@ -518,7 +518,7 @@ def membros(comunidade_id):
         email = (form.email.data or "").strip() or None
         existente = Membro.objects(comunidade_id=comunidade.id, email__iexact=email).first() if email else None
         if existente is not None:
-            flash(f"{existente.nome} ja esta no diretorio com esse e-mail.", "info")
+            flash(f"{existente.nome} já está no diretório com esse e-mail.", "info")
         else:
             membro = Membro(
                 comunidade_id=comunidade.id,
@@ -527,7 +527,7 @@ def membros(comunidade_id):
                 email=email,
             )
             membro.save()
-            flash(f"{membro.nome} adicionado(a) ao diretorio.", "success")
+            flash(f"{membro.nome} adicionado(a) ao diretório.", "success")
 
         # "Dar acesso ao app" (caixa da tela Pessoas): com e-mail, a conta
         # entra na comunidade na hora ou recebe convite (app/convites/adicao.py).
@@ -720,16 +720,16 @@ def excluir_membro(comunidade_id, membro_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     if Funcao.objects(membro_id=membro.id).count() > 0:
-        flash(f"Remova {membro.nome} das escalas antes de excluir do diretorio.", "danger")
+        flash(f"Remova {membro.nome} das escalas antes de excluir do diretório.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     remover_imagem(membro.foto)
     delete_cascade(membro)
-    flash(f"{membro.nome} removido(a) do diretorio.", "success")
+    flash(f"{membro.nome} removido(a) do diretório.", "success")
     return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
 
@@ -802,7 +802,7 @@ def excluir_disponibilidade(comunidade_id, ciclo_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.disponibilidade", comunidade_id=comunidade.id, membro_id=membro_id))
 
     nome = ciclo.nome
@@ -815,7 +815,7 @@ def excluir_disponibilidade(comunidade_id, ciclo_id):
 # (nao importada) pra nao criar dependencia de import entre os dois modulos,
 # ver historico de import circular entre comunidade/convites/ministerio.
 _MESES_PT = [
-    "", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
+    "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
@@ -903,6 +903,7 @@ def calendario(comunidade_id):
         mes_ano_texto=f"{_MESES_PT[mes].lower()} de {ano}",
         escalas_por_dia=escalas_por_dia,
         ensaios_por_dia=ensaios_por_dia,
+        eventos_comunidade_por_dia=eventos_por_dia(comunidade.id, semanas[0][0], semanas[-1][-1]),
         legenda=[(e, e.cor) for e in escalas_do_mes],
         ano_anterior=ano_anterior,
         mes_anterior=mes_anterior,
@@ -976,15 +977,8 @@ def eventos(comunidade_id):
             flash("Apenas administradores podem criar eventos.", "danger")
             return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
-        evento = Evento(
-            comunidade_id=comunidade.id,
-            nome=form.nome.data.strip(),
-            descricao=(form.descricao.data or "").strip() or None,
-            data=form.data.data,
-            data_fim=form.data_fim.data,
-            horario=form.horario.data,
-            local=(form.local.data or "").strip() or None,
-        )
+        evento = Evento(comunidade_id=comunidade.id)
+        _preencher_evento(evento, form)
         evento.save()
         flash(f'Evento "{evento.nome}" criado!', "success")
         return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
@@ -1005,6 +999,43 @@ def eventos(comunidade_id):
     )
 
 
+def _preencher_evento(evento, form):
+    evento.nome = form.nome.data.strip()
+    evento.descricao = (form.descricao.data or "").strip() or None
+    evento.data = form.data.data
+    evento.data_fim = form.data_fim.data
+    evento.horario = form.horario.data
+    evento.local = (form.local.data or "").strip() or None
+
+
+@bp.route("/<int:comunidade_id>/eventos/<int:evento_id>")
+@login_required
+def evento_detalhe(comunidade_id, evento_id):
+    """Pagina do evento: data, local, descricao; Editar/Excluir pro admin."""
+    comunidade, eh_dono = _comunidade_visivel_ou_404(comunidade_id)
+    evento = primeiro_ou_404(Evento.objects(id=evento_id, comunidade_id=comunidade.id))
+    return render_template(
+        "comunidade/evento_detalhe.html", comunidade=comunidade, evento=evento,
+        eh_dono=eh_dono, acao_form=AcaoForm(),
+    )
+
+
+@bp.route("/<int:comunidade_id>/eventos/<int:evento_id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_evento(comunidade_id, evento_id):
+    """Mesmo formulario da criacao, ja preenchido; so admin (quem cria)."""
+    comunidade = _comunidade_do_usuario_ou_404(comunidade_id)
+    evento = primeiro_ou_404(Evento.objects(id=evento_id, comunidade_id=comunidade.id))
+    form = EventoForm(obj=evento)
+    form.submit.label.text = "Salvar alterações"
+    if form.validate_on_submit():
+        _preencher_evento(evento, form)
+        evento.save()
+        flash(f'Evento "{evento.nome}" atualizado.', "success")
+        return redirect(url_for("comunidade.evento_detalhe", comunidade_id=comunidade.id, evento_id=evento.id))
+    return render_template("comunidade/evento_editar.html", comunidade=comunidade, evento=evento, form=form)
+
+
 @bp.route("/<int:comunidade_id>/eventos/<int:evento_id>/excluir", methods=["POST"])
 @login_required
 def excluir_evento(comunidade_id, evento_id):
@@ -1013,12 +1044,12 @@ def excluir_evento(comunidade_id, evento_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
     nome = evento.nome
     evento.delete()
-    flash(f'Evento "{nome}" excluido.', "success")
+    flash(f'Evento "{nome}" excluído.', "success")
     return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
 
@@ -1140,7 +1171,7 @@ def gerar_link_convite(comunidade_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     comunidade.gerar_novo_link_convite()
@@ -1194,7 +1225,7 @@ def remover_papel(comunidade_id, usuario_comunidade_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
@@ -1216,7 +1247,7 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
@@ -1224,15 +1255,15 @@ def alterar_papel(comunidade_id, usuario_comunidade_id):
     if papel.papel == "admin":
         total_admins = UsuarioComunidade.objects(comunidade_id=comunidade.id, papel="admin").count()
         if total_admins <= 1:
-            flash("Nao e possivel rebaixar o ultimo administrador. Promova outra pessoa antes.", "danger")
+            flash("Não é possível rebaixar o último administrador. Promova outra pessoa antes.", "danger")
             return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
         papel.papel = "membro"
         papel.save()
-        flash(f"{nome} agora e membro (nao e mais administrador).", "success")
+        flash(f"{nome} agora é membro (não é mais administrador).", "success")
     else:
         papel.papel = "admin"
         papel.save()
-        flash(f"{nome} agora e administrador(a) da comunidade.", "success")
+        flash(f"{nome} agora é administrador(a) da comunidade.", "success")
 
     return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
@@ -1247,7 +1278,7 @@ def cancelar_convite(comunidade_id, convite_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
     convite.delete()

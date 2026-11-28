@@ -10,14 +10,14 @@ from wtforms.widgets import ListWidget, CheckboxInput
 # dependencia natural entre os modulos (ministerio e mais "de baixo" que
 # plantao, que referencia ministerio_id).
 DIAS_SEMANA_CHOICES = [
-    (0, "Segunda"), (1, "Terca"), (2, "Quarta"), (3, "Quinta"),
-    (4, "Sexta"), (5, "Sabado"), (6, "Domingo"),
+    (0, "Segunda"), (1, "Terça"), (2, "Quarta"), (3, "Quinta"),
+    (4, "Sexta"), (5, "Sábado"), (6, "Domingo"),
 ]
 
 
 class MinisterioForm(FlaskForm):
-    nome = StringField("Nome do ministerio", validators=[DataRequired(), Length(max=120)])
-    descricao = TextAreaField("Descricao", validators=[Optional(), Length(max=2000)])
+    nome = StringField("Nome do ministério", validators=[DataRequired(), Length(max=120)])
+    descricao = TextAreaField("Descrição", validators=[Optional(), Length(max=2000)])
     # So um lembrete visual mostrado depois na tela de configurar o Rodizio
     # (ver Ministerio.dias_culto_efetivos) -- nunca obrigatorio.
     dias_culto = SelectMultipleField(
@@ -29,7 +29,7 @@ class MinisterioForm(FlaskForm):
         validators=[
             Optional(),
             FileAllowed(["jpg", "jpeg", "png"], "Envie apenas arquivos JPG ou PNG."),
-            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no maximo 2 MB."),
+            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no máximo 2 MB."),
         ],
     )
     submit = SubmitField("Salvar")
@@ -53,12 +53,12 @@ class AcaoForm(FlaskForm):
 
 
 class CriancaForm(FlaskForm):
-    nome = StringField("Nome da crianca", validators=[DataRequired(), Length(max=120)])
+    nome = StringField("Nome da criança", validators=[DataRequired(), Length(max=120)])
     data_nascimento = DateField("Data de nascimento (opcional)", validators=[Optional()])
-    responsavel_nome = StringField("Nome do responsavel", validators=[DataRequired(), Length(max=120)])
-    responsavel_telefone = StringField("Telefone do responsavel", validators=[Optional(), Length(max=30)])
+    responsavel_nome = StringField("Nome do responsável", validators=[DataRequired(), Length(max=120)])
+    responsavel_telefone = StringField("Telefone do responsável", validators=[Optional(), Length(max=30)])
     observacoes = TextAreaField(
-        "Observacoes (alergias, necessidades especiais...)", validators=[Optional(), Length(max=1000)]
+        "Observações (alergias, necessidades especiais...)", validators=[Optional(), Length(max=1000)]
     )
     submit = SubmitField("Cadastrar")
 
@@ -66,5 +66,5 @@ class CriancaForm(FlaskForm):
 class CheckoutForm(FlaskForm):
     """Confere o codigo de seguranca entregue ao responsavel na entrada
     antes de liberar a crianca (ver ministerio.routes.fazer_checkout)."""
-    codigo_seguranca = StringField("Codigo de seguranca", validators=[DataRequired(), Length(max=6)])
-    submit = SubmitField("Confirmar saida")
+    codigo_seguranca = StringField("Código de segurança", validators=[DataRequired(), Length(max=6)])
+    submit = SubmitField("Confirmar saída")

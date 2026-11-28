@@ -37,7 +37,7 @@ class LoginForm(FlaskForm):
 
 class EsqueciSenhaForm(FlaskForm):
     email = _campo_email()
-    submit = SubmitField("Enviar link de redefinicao")
+    submit = SubmitField("Enviar link de redefinição")
 
 
 class RedefinirSenhaForm(FlaskForm):
@@ -50,7 +50,7 @@ class RedefinirSenhaForm(FlaskForm):
 
 
 class RegisterForm(FlaskForm):
-    username = StringField("Usuario", validators=[DataRequired(), Length(min=3, max=80)])
+    username = StringField("Usuário", validators=[DataRequired(), Length(min=3, max=80)])
     email = _campo_email()
     password = PasswordField("Senha", validators=[DataRequired(), Length(min=8)])
     confirm = PasswordField(
@@ -61,17 +61,17 @@ class RegisterForm(FlaskForm):
 
     def validate_username(self, field):
         if User.objects(username=field.data).first():
-            raise ValidationError("Este nome de usuario ja esta em uso.")
+            raise ValidationError("Este nome de usuário já está em uso.")
 
     def validate_email(self, field):
         if User.objects(email__iexact=field.data).first():
             raise ValidationError(
-                "Este e-mail ja esta cadastrado. Faca login ou use 'Entrar com o Google'."
+                "Este e-mail já está cadastrado. Faça login ou use 'Entrar com o Google'."
             )
 
         if current_app.config.get("VALIDAR_DOMINIO_EMAIL", True):
             dominio = field.data.rsplit("@", 1)[-1]
             if not dominio_aceita_email(dominio):
                 raise ValidationError(
-                    "Nao conseguimos confirmar que esse dominio de e-mail existe. Confira se digitou certo."
+                    "Não conseguimos confirmar que esse domínio de e-mail existe. Confira se digitou certo."
                 )

@@ -18,26 +18,26 @@
         </div>
 
         {% if convite.status == 'aceito' %}
-            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Convite ja aceito</h1>
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Convite já aceito</h1>
             <p class="text-sm {{ tema.text_secondary }}">
-                Este convite pra "{{ convite.papel }}" em {{ convite.escopo_nome }} ja foi aceito
+                Este convite pra "{{ convite.papel }}" em {{ convite.escopo_nome }} já foi aceito
                 {% if convite.respondido_em %}em {{ convite.respondido_em.strftime('%d/%m/%Y') }}{% endif %}.
             </p>
             <a href="{{ url_for('main.dashboard') }}" class="inline-block {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">Ir para o dashboard</a>
 
         {% elif convite.status == 'recusado' %}
             <h1 class="text-lg font-semibold {{ tema.text_primary }}">Convite recusado</h1>
-            <p class="text-sm {{ tema.text_secondary }}">Este convite ja foi recusado.</p>
+            <p class="text-sm {{ tema.text_secondary }}">Este convite já foi recusado.</p>
 
         {% elif precisa_login %}
-            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Voce foi convidado(a)!</h1>
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Você foi convidado(a)!</h1>
             <p class="text-sm {{ tema.text_secondary }}">
                 Pra assumir o papel de <strong>{{ convite.papel }}</strong> em <strong>{{ convite.escopo_nome }}</strong>,
                 entre ou crie uma conta com o e-mail <strong>{{ convite.email }}</strong>.
             </p>
             <div class="flex flex-col gap-2 pt-2">
                 <a href="{{ url_for('auth.login') }}" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
-                    Ja tenho conta -- Entrar
+                    Já tenho conta -- Entrar
                 </a>
                 {% if not tem_conta %}
                 <a href="{{ url_for('auth.register') }}" class="border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-lg transition">
@@ -49,13 +49,13 @@
         {% elif not email_bate %}
             <h1 class="text-lg font-semibold {{ tema.text_primary }}">Convite pra outro e-mail</h1>
             <p class="text-sm {{ tema.text_secondary }}">
-                Este convite foi enviado pra <strong>{{ convite.email }}</strong>, mas voce esta logado(a) com outra conta.
+                Este convite foi enviado pra <strong>{{ convite.email }}</strong>, mas você está logado(a) com outra conta.
                 Saia e entre com a conta certa pra aceitar.
             </p>
             <a href="{{ url_for('auth.logout') }}" class="inline-block border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-lg transition">Sair</a>
 
         {% else %}
-            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Voce foi convidado(a)!</h1>
+            <h1 class="text-lg font-semibold {{ tema.text_primary }}">Você foi convidado(a)!</h1>
             <p class="text-sm {{ tema.text_secondary }}">
                 <strong>{{ convite.convidado_por.name or convite.convidado_por.username or convite.convidado_por.email }}</strong>
                 te convidou pra ser <strong>{{ convite.papel }}</strong> em <strong>{{ convite.escopo_nome }}</strong>.

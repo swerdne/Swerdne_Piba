@@ -38,7 +38,7 @@
                 <i class="fa-solid fa-person-circle-check mr-1"></i>Presentes agora ({{ presentes|length }})
             </h2>
             {% if not presentes %}
-            <p class="text-sm {{ tema.text_secondary }}">Nenhuma crianca com check-in em aberto.</p>
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma criança com check-in em aberto.</p>
             {% else %}
             <div class="space-y-2">
                 {% for registro in presentes %}
@@ -51,7 +51,7 @@
                             <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ registro.crianca.nome }}</p>
                             <p class="text-xs {{ tema.text_secondary }} truncate">
                                 Entrada {{ registro.hora_entrada.strftime('%H:%M') }}
-                                &middot; Responsavel: {{ registro.crianca.responsavel_nome }}
+                                &middot; Responsável: {{ registro.crianca.responsavel_nome }}
                             </p>
                         </div>
                         <span class="text-xs font-mono font-semibold {{ tema.accent_text }} shrink-0">#{{ registro.codigo_seguranca }}</span>
@@ -60,11 +60,11 @@
                           class="flex items-center gap-2 mt-2 ml-12">
                         {{ formularios_checkout[registro.id].hidden_tag() }}
                         {{ formularios_checkout[registro.id].codigo_seguranca(
-                            placeholder="Codigo informado pelo responsavel", maxlength="6",
+                            placeholder="Código informado pelo responsável", maxlength="6",
                             class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-1.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
                         ) }}
                         <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-full transition shrink-0">
-                            Confirmar saida
+                            Confirmar saída
                         </button>
                     </form>
                 </div>
@@ -76,10 +76,10 @@
         <!-- Diretorio de criancas cadastradas -->
         <section>
             <h2 class="text-sm font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-2">
-                <i class="fa-solid fa-address-book mr-1"></i>Criancas cadastradas
+                <i class="fa-solid fa-address-book mr-1"></i>Crianças cadastradas
             </h2>
             {% if not criancas %}
-            <p class="text-sm {{ tema.text_secondary }}">Nenhuma crianca cadastrada ainda.</p>
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma criança cadastrada ainda.</p>
             {% else %}
             <div class="space-y-2">
                 {% for crianca in criancas %}
@@ -90,7 +90,7 @@
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium {{ tema.text_primary }} truncate">{{ crianca.nome }}</p>
                         <p class="text-xs {{ tema.text_secondary }} truncate">
-                            Responsavel: {{ crianca.responsavel_nome }}
+                            Responsável: {{ crianca.responsavel_nome }}
                             {% if crianca.responsavel_telefone %} &middot; {{ crianca.responsavel_telefone }}{% endif %}
                         </p>
                         {% if crianca.observacoes %}
@@ -123,13 +123,13 @@
         <!-- Cadastrar nova crianca -->
         <section class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm px-4 py-4">
             <h2 class="text-sm font-semibold {{ tema.text_primary }} mb-3">
-                <i class="fa-solid fa-user-plus mr-1"></i>Cadastrar crianca
+                <i class="fa-solid fa-user-plus mr-1"></i>Cadastrar criança
             </h2>
             <form method="POST" class="space-y-3">
                 {{ form_crianca.hidden_tag() }}
                 <div>
                     {{ form_crianca.nome(
-                        placeholder="Nome da crianca",
+                        placeholder="Nome da criança",
                         class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
                     ) }}
                     {% for erro in form_crianca.nome.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}
@@ -139,13 +139,13 @@
                         class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
                     ) }}
                     {{ form_crianca.responsavel_telefone(
-                        placeholder="Telefone do responsavel",
+                        placeholder="Telefone do responsável",
                         class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
                     ) }}
                 </div>
                 <div>
                     {{ form_crianca.responsavel_nome(
-                        placeholder="Nome do responsavel",
+                        placeholder="Nome do responsável",
                         class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
                     ) }}
                     {% for erro in form_crianca.responsavel_nome.errors %}<p class="text-xs text-red-400 mt-1">{{ erro }}</p>{% endfor %}

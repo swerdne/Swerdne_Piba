@@ -6,7 +6,7 @@
    de enviar com algo marcado. #}
 {% macro campos_envio(opcoes, ministerio_padrao, tema, CAMPO) %}
 <div data-envio class="space-y-2">
-    <p class="text-xs font-semibold {{ tema.text_secondary }}">Pra quem? Marque quantos ministerios e funcoes quiser.</p>
+    <p class="text-xs font-semibold {{ tema.text_secondary }}">Pra quem? Marque quantos ministérios e funções quiser.</p>
     <div class="max-h-80 overflow-y-auto space-y-2 pr-1">
         {% for o in opcoes %}
         <details data-envio-ministerio class="border {{ tema.card_border }} rounded-xl overflow-hidden" {{ 'open' if o.id == ministerio_padrao }}>
@@ -18,7 +18,7 @@
                 <label class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }} cursor-pointer">
                     <input type="checkbox" name="alvo" value="{{ o.id }}|" data-envio-todo data-pessoas="{{ o.pessoas }}" class="w-4 h-4"
                            {{ 'disabled' if not o.pessoas }}>
-                    Todo o ministerio <span class="text-xs font-normal {{ tema.text_secondary }}">({{ o.pessoas }} pessoa{{ 's' if o.pessoas != 1 }})</span>
+                    Todo o ministério <span class="text-xs font-normal {{ tema.text_secondary }}">({{ o.pessoas }} pessoa{{ 's' if o.pessoas != 1 }})</span>
                 </label>
                 {% for f in o.funcoes %}
                 <label class="flex items-center gap-2 text-sm {{ tema.text_primary }} cursor-pointer pl-6">

@@ -85,7 +85,7 @@ def test_cadastro_recusa_dominio_sem_mx(client, app, monkeypatch):
     )
     html = response.data.decode("utf-8")
 
-    assert "nao conseguimos confirmar" in html.lower()
+    assert "não conseguimos confirmar" in html.lower()
     with app.app_context():
         assert User.objects(email="carla@dominio-que-nao-existe-de-verdade.invalido").first() is None
 
@@ -134,7 +134,7 @@ def test_esqueci_senha_gera_token_para_conta_com_senha(client, app, db):
 
     response = client.post("/auth/esqueci-senha", data={"email": "carla@example.com"}, follow_redirects=True)
     assert response.status_code == 200
-    assert "enviamos as instrucoes".encode() in response.data
+    assert "enviamos as instruções".encode() in response.data
 
     with app.app_context():
         usuario = User.objects(email="carla@example.com").first()
@@ -148,12 +148,12 @@ def test_esqueci_senha_com_email_inexistente_mostra_mesma_mensagem(client):
     response = client.post(
         "/auth/esqueci-senha", data={"email": "ninguem@example.com"}, follow_redirects=True
     )
-    assert "enviamos as instrucoes".encode() in response.data
+    assert "enviamos as instruções".encode() in response.data
 
 
 def test_esqueci_senha_conta_so_google_nao_gera_token(app, db):
     with app.app_context():
-        usuario = User(google_id="google-999", email="so-google2@example.com", name="So Google", email_confirmado=True)
+        usuario = User(google_id="google-999", email="so-google2@example.com", name="Só Google", email_confirmado=True)
         usuario.save()
 
     cliente = app.test_client()
@@ -189,7 +189,7 @@ def test_esqueci_senha_conta_so_google_recebe_explicacao(app, db, monkeypatch):
     enviados = []
     monkeypatch.setattr("app.auth.routes.enviar_email", lambda para, assunto, corpo: enviados.append((para, assunto, corpo)))
     with app.app_context():
-        User(google_id="google-777", email="so-google3@example.com", name="So Google", email_confirmado=True).save()
+        User(google_id="google-777", email="so-google3@example.com", name="Só Google", email_confirmado=True).save()
     app.test_client().post("/auth/esqueci-senha", data={"email": "so-google3@example.com"}, follow_redirects=True)
     assert len(enviados) == 1 and "Entrar com o Google" in enviados[0][2]
 
@@ -223,7 +223,7 @@ def test_redefinir_senha_com_token_valido(client, app, db):
 
 def test_redefinir_senha_com_token_invalido_redireciona(client):
     response = client.get("/auth/redefinir-senha/token-que-nao-existe", follow_redirects=True)
-    assert "invalido ou ja expirou".encode() in response.data
+    assert "inválido ou já expirou".encode() in response.data
 
 
 def test_redefinir_senha_token_nao_reutilizavel(client, app, db):
@@ -244,7 +244,7 @@ def test_redefinir_senha_token_nao_reutilizavel(client, app, db):
         data={"nova_senha": "terceiraSenha000", "confirmar_senha": "terceiraSenha000"},
         follow_redirects=True,
     )
-    assert "invalido ou ja expirou".encode() in response.data
+    assert "inválido ou já expirou".encode() in response.data
 
 
 def test_limite_de_pedidos_e_por_visitante_e_nao_do_site_inteiro(app):
@@ -267,7 +267,7 @@ def test_testar_email_so_pra_admin_e_mostra_o_motivo_da_falha(logged_in_client, 
     assert "Testar envio de e-mail" in logged_in_client.get("/dashboard").data.decode()
 
     html = logged_in_client.post("/perfil/testar-email", follow_redirects=True).data.decode()
-    assert "nao conseguiu enviar" in html and "RESEND_API_KEY" in html  # sem chave nos testes
+    assert "não conseguiu enviar" in html and "RESEND_API_KEY" in html  # sem chave nos testes
 
     enviados = []
     monkeypatch.setattr("app.emailing.enviar_email", lambda para, *_: enviados.append(para))

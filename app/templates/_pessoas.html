@@ -28,7 +28,7 @@ filtros da lista, menu ⋯ de cada pessoa, convite pendente e o cartao
 <details class="relative shrink-0" data-menu-acoes>
     <summary aria-label="Opções de {{ nome }}" title="Opções"
              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer w-8 h-8 rounded-full flex items-center justify-center {{ tema.text_secondary }} {{ tema.card_bg_hover }} transition">
-        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
+        <svg width="16" height="16" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
     </summary>
     <div class="absolute right-0 {{ 'bottom-9' if para_cima else 'top-9' }} z-40 w-60 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl py-1.5 overflow-hidden" role="menu">
         {{ caller() }}

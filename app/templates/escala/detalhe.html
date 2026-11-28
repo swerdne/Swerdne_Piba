@@ -49,14 +49,14 @@
                     <a href="{{ url_for('plantao.detalhe', turno_id=escala.plantao_turno_id) }}"
                        class="inline-flex items-center gap-1.5 text-[11px] font-semibold {{ tema.accent_text }} {{ tema.accent_soft_bg }} border {{ tema.accent_border }} rounded-full px-2.5 py-1 mt-1 transition hover:opacity-80">
                         <i class="fa-solid fa-arrows-rotate"></i>
-                        Gerada por rodizio{% if escala.plantao_fixado %} &middot; fixada{% endif %}
+                        Gerada por rodízio{% if escala.plantao_fixado %} &middot; fixada{% endif %}
                     </a>
                     {% elif escala.turno_plantao_origem_id %}
                     <a href="{{ url_for('plantao.detalhe', turno_id=escala.turno_plantao_origem_id) }}"
-                       title="Acessar e editar as configuracoes do rodizio vinculado a esta escala"
+                       title="Acessar e editar as configurações do rodízio vinculado a esta escala"
                        class="inline-flex items-center gap-1.5 text-[11px] font-semibold {{ tema.accent_text }} {{ tema.accent_soft_bg }} border {{ tema.accent_border }} rounded-full px-2.5 py-1 mt-1 transition hover:opacity-80">
                         <i class="fa-solid fa-pen-to-square"></i>
-                        Editar rodizio vinculado
+                        Editar rodízio vinculado
                     </a>
                     {% endif %}
                 </div>
@@ -109,7 +109,7 @@
             <p class="text-sm text-red-500">
                 <i class="fa-solid fa-ban mr-1.5"></i>
                 Escala cancelada{% if escala.cancelada_em %} em {{ escala.cancelada_em.strftime('%d/%m/%Y as %H:%M') }}{% endif %}.
-                Quem estava escalado ja foi avisado.
+                Quem estava escalado já foi avisado.
             </p>
             <form method="POST" action="{{ url_for('escala.reabrir_escala', escala_id=escala.id) }}" class="shrink-0">
                 {{ acao_form.hidden_tag() }}
@@ -137,7 +137,7 @@
             {% if not escala.plantao_turno_id and not escala.turno_plantao_origem_id and (funcoes | selectattr('membro_id') | list) %}
             <a href="{{ url_for('plantao.nova', ministerio_id=escala.ministerio_id, escala_id=escala.id) }}"
                class="flex-1 flex items-center justify-center {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-full transition">
-                <i class="fa-solid fa-arrows-rotate mr-2"></i>Criar turno de rodizio com esta equipe
+                <i class="fa-solid fa-arrows-rotate mr-2"></i>Criar turno de rodízio com esta equipe
             </a>
             {% endif %}
         </div>
@@ -192,7 +192,7 @@
                             {% if ensaio.cancelado %}
                             <span class="text-[10px] font-semibold uppercase tracking-wide bg-red-500/10 text-red-500 rounded-full px-2 py-0.5 shrink-0">Cancelado</span>
                             {% elif passou %}
-                            <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">ja ocorreu</span>
+                            <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">já ocorreu</span>
                             {% endif %}
                         </div>
                         {% if ensaio.local %}
@@ -290,17 +290,17 @@
             {% set arquivos = anexos | rejectattr('eh_audio') | list %}
             {% if audios %}
             <p class="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide {{ tema.text_secondary }}">
-                <i class="fa-solid fa-headphones mr-1" aria-hidden="true"></i>Audios ({{ audios|length }})
+                <i class="fa-solid fa-headphones mr-1" aria-hidden="true"></i>Áudios ({{ audios|length }})
             </p>
             <div class="divide-y {{ tema.divide }}">
                 {% for anexo in audios %}
-                {% set legenda = ('Para: ' ~ (anexo.funcao.nome if anexo.funcao else 'funcao removida')) if anexo.funcao_id else 'Toda a equipe' %}
+                {% set legenda = ('Para: ' ~ (anexo.funcao.nome if anexo.funcao else 'função removida')) if anexo.funcao_id else 'Toda a equipe' %}
                 {% if eh_dono %}
                 {% call audio_material(tema, anexo, legenda) %}
                 <form method="POST" action="{{ url_for('escala.excluir_anexo', anexo_id=anexo.id) }}"
                       data-confirm-excluir="Remover o audio {{ anexo.nome_arquivo }}?">
                     {{ acao_form.hidden_tag() }}
-                    <button type="submit" title="Remover audio" aria-label="Remover audio" class="{{ tema.text_secondary }} hover:text-red-400 transition">
+                    <button type="submit" title="Remover áudio" aria-label="Remover áudio" class="{{ tema.text_secondary }} hover:text-red-400 transition">
                         <i class="fa-solid fa-trash text-xs"></i>
                     </button>
                 </form>
@@ -328,7 +328,7 @@
                         <div class="min-w-0">
                             <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ anexo.nome_arquivo }}</p>
                             <p class="text-xs {{ tema.text_secondary }} truncate">
-                                {% if anexo.funcao_id %}Para: {{ anexo.funcao.nome if anexo.funcao else 'funcao removida' }}{% else %}Toda a equipe{% endif %}
+                                {% if anexo.funcao_id %}Para: {{ anexo.funcao.nome if anexo.funcao else 'função removida' }}{% else %}Toda a equipe{% endif %}
                                 &middot; {{ anexo.tamanho_legivel }}
                             </p>
                         </div>
@@ -348,7 +348,7 @@
             {% endif %}
             {% else %}
             <p class="px-4 py-4 text-sm {{ tema.text_secondary }}">
-                Nenhum material{% if eh_dono %}. Anexe cifras, partituras, letras, roteiros ou audios (ou grave um aqui) -- pra equipe toda ou so pra uma funcao.{% else %} pra voce nessa escala.{% endif %}
+                Nenhum material{% if eh_dono %}. Anexe cifras, partituras, letras, roteiros ou áudios (ou grave um aqui) -- pra equipe toda ou só pra uma função.{% else %} pra você nessa escala.{% endif %}
             </p>
             {% endif %}
 
@@ -363,7 +363,7 @@
                 <div data-gravador hidden class="rounded-xl border {{ tema.card_border }} px-3 py-2.5 space-y-2">
                     <button type="button" data-gravar-iniciar
                             class="w-full inline-flex items-center justify-center gap-2 text-sm font-semibold {{ tema.accent_text }} py-1">
-                        <i class="fa-solid fa-microphone" aria-hidden="true"></i>Gravar audio
+                        <i class="fa-solid fa-microphone" aria-hidden="true"></i>Gravar áudio
                     </button>
                     <div data-gravar-painel hidden class="flex items-center justify-between gap-3">
                         <span class="inline-flex items-center gap-2 text-sm font-semibold text-red-500">
@@ -378,7 +378,7 @@
                         <audio data-gravar-audio controls class="w-full h-10"></audio>
                         <div class="flex gap-2">
                             <button type="button" data-gravar-enviar class="flex-1 {{ tema.accent_bg }} text-white text-sm font-semibold rounded-full py-2">
-                                <i class="fa-solid fa-paper-plane mr-1" aria-hidden="true"></i>Enviar audio
+                                <i class="fa-solid fa-paper-plane mr-1" aria-hidden="true"></i>Enviar áudio
                             </button>
                             <button type="button" data-gravar-descartar class="text-sm font-semibold {{ tema.text_secondary }} px-3">Descartar</button>
                         </div>
@@ -393,7 +393,7 @@
                     {{ fa.funcao_id.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
                     {{ fa.funcao_id(class_="w-full " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring) }}
                 </div>
-                <p class="text-xs {{ tema.text_secondary }}">PDF, imagem, Word, texto ou audio (MP3, M4A, WAV...), ate 15 MB. Arquivo de uma funcao so aparece pra quem esta nela.</p>
+                <p class="text-xs {{ tema.text_secondary }}">PDF, imagem, Word, texto ou áudio (MP3, M4A, WAV...), até 15 MB. Arquivo de uma função só aparece pra quem está nela.</p>
                 <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
                     <i class="fa-solid fa-paperclip mr-1"></i>Anexar arquivo
                 </button>
@@ -530,13 +530,13 @@
                         {% if eh_dono %}
                         <div class="flex items-center gap-1.5 shrink-0">
                             <button type="button" data-editar-funcao="{{ funcao.id }}"
-                                    title="Renomear funcao" class="text-green-200 hover:text-white transition">
+                                    title="Renomear função" class="text-green-200 hover:text-white transition">
                                 <i class="fa-solid fa-pen text-[10px]"></i>
                             </button>
                             <form method="POST" action="{{ url_for('escala.excluir_funcao', funcao_id=funcao.id) }}"
                                   data-confirm-excluir='Remover a funcao "{{ funcao.nome }}"? Isso tambem remove quem estiver escalado nela.'>
                                 {{ acao_form.hidden_tag() }}
-                                <button type="submit" title="Excluir funcao" class="text-green-200 hover:text-red-300 transition">
+                                <button type="submit" title="Excluir função" class="text-green-200 hover:text-red-300 transition">
                                     <i class="fa-solid fa-trash text-[10px]"></i>
                                 </button>
                             </form>
@@ -569,7 +569,7 @@
                             {% endif %}
                             {% if funcao.eh_convidado %}
                             <span class="text-[10px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-1.5 py-0.5 shrink-0"
-                                  title="Participacao pontual -- nao e membro fixo da equipe">Convidado</span>
+                                  title="Participação pontual -- não é membro fixo da equipe">Convidado</span>
                             {% endif %}
                             {% if funcao.checkin_em %}
                             <span class="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-emerald-500/15 text-emerald-600 shrink-0"
@@ -589,7 +589,7 @@
                             {% if funcao.id in avisos_por_funcao %}
                             <span class="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-400 rounded px-1.5 py-0.5 shrink-0"
                                   title="Provavelmente indisponivel nesse dia ({{ avisos_por_funcao[funcao.id]|join(', ') }}) -- so um aviso, nao impede escalar">
-                                <i class="fa-solid fa-triangle-exclamation"></i> Possivel conflito
+                                <i class="fa-solid fa-triangle-exclamation"></i> Possível conflito
                             </span>
                             {% endif %}
 
@@ -612,7 +612,7 @@
                                         class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1.5 " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
                                     ) }}
                                     <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition w-full">
-                                        Confirmar solicitacao de troca
+                                        Confirmar solicitação de troca
                                     </button>
                                 </div>
                             </form>
@@ -626,7 +626,7 @@
                                 <p class="text-xs {{ tema.text_secondary }} mt-1">Motivo: {{ funcao.troca_motivo }}</p>
                                 {% endif %}
                                 {% if funcao.troca_sugestao_membro %}
-                                <p class="text-xs {{ tema.text_secondary }} mt-1">Sugestao: {{ funcao.troca_sugestao_membro.nome }}</p>
+                                <p class="text-xs {{ tema.text_secondary }} mt-1">Sugestão: {{ funcao.troca_sugestao_membro.nome }}</p>
                                 {% endif %}
                                 <div class="flex flex-wrap items-center gap-2 mt-2">
                                     <form method="POST" action="{{ url_for('escala.aprovar_troca', funcao_id=funcao.id) }}" class="flex items-center gap-1.5">
@@ -669,7 +669,7 @@
                             </form>
                             {% elif funcao.id in formularios_status %}
                             <form method="POST" action="{{ url_for('escala.atualizar_status', funcao_id=funcao.id) }}" class="ml-auto shrink-0"
-                                  title="Voce esta escalado(a) aqui -- pode marcar seu proprio status">
+                                  title="Você está escalado(a) aqui -- pode marcar seu próprio status">
                                 {{ formularios_status[funcao.id].hidden_tag() }}
                                 {{ formularios_status[funcao.id].status(
                                     class_=tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-2 " ~ tema.focus_ring,
@@ -687,7 +687,7 @@
                                         class_="w-full " ~ tema.card_bg ~ " border " ~ tema.card_border ~ " " ~ tema.text_primary ~ " text-xs rounded-lg px-2 py-1.5 " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring
                                     ) }}
                                     <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition w-full">
-                                        Confirmar solicitacao de troca
+                                        Confirmar solicitação de troca
                                     </button>
                                 </div>
                             </form>
@@ -722,27 +722,27 @@
                                            class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg pl-8 pr-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
                                 </div>
                                 <div data-combo-lista role="listbox" class="max-h-60 overflow-y-auto py-1"></div>
-                                <p data-combo-vazio class="hidden px-3 py-2.5 text-xs {{ tema.text_secondary }}">Ninguem encontrado.</p>
+                                <p data-combo-vazio class="hidden px-3 py-2.5 text-xs {{ tema.text_secondary }}">Ninguém encontrado.</p>
                                 {% else %}
-                                <p class="px-3 py-2.5 text-xs {{ tema.text_secondary }}">Diretorio da comunidade vazio.</p>
+                                <p class="px-3 py-2.5 text-xs {{ tema.text_secondary }}">Diretório da comunidade vazio.</p>
                                 {% endif %}
                                 <div class="border-t {{ tema.card_border }} py-1">
                                     <a href="{{ url_for('comunidade.membros', comunidade_id=comunidade_id, proximo=request.path) }}"
                                        class="flex items-center gap-2.5 px-3 py-2.5 text-sm {{ tema.text_primary }} {{ tema.card_bg_hover }} transition">
                                         <i class="fa-solid fa-address-book w-4 text-center {{ tema.text_secondary }}"></i>
-                                        Adicionar novo membro ao diretorio
+                                        Adicionar novo membro ao diretório
                                     </a>
                                     <button type="button" data-toggle-busca-convidado="{{ funcao.id }}"
                                             class="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left {{ tema.accent_text }} {{ tema.card_bg_hover }} transition">
                                         <i class="fa-solid fa-user-plus w-4 text-center"></i>
-                                        Convidar conta ja cadastrada
+                                        Convidar conta já cadastrada
                                     </button>
                                 </div>
                             </div>
                             <div class="hidden relative mt-2" data-busca-convidado="{{ funcao.id }}"
                                  data-busca-convidado-url="{{ url_for('escala.buscar_usuario', funcao_id=funcao.id) }}">
                                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs {{ tema.text_secondary }}"></i>
-                                <input type="text" placeholder="Nome, e-mail ou usuario da conta..." autocomplete="off"
+                                <input type="text" placeholder="Nome, e-mail ou usuário da conta..." autocomplete="off"
                                        class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-lg pl-9 pr-3 py-2 text-sm {{ tema.text_primary }} {{ tema.placeholder }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}"
                                        data-busca-convidado-input>
                                 <div class="hidden absolute z-10 w-full mt-1 rounded-lg border {{ tema.card_border }} {{ tema.card_bg }} divide-y {{ tema.divide }} overflow-hidden shadow-lg"
@@ -765,7 +765,7 @@
                         {{ formulario_nova_funcao.hidden_tag() }}
                         {{ formulario_nova_funcao.nome(
                             class_="flex-1 " ~ tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring,
-                            placeholder="Nome da nova funcao"
+                            placeholder="Nome da nova função"
                         ) }}
                         {% if areas %}
                         <select name="area_id" aria-label="Área da nova função"
@@ -776,7 +776,7 @@
                         {% endif %}
                         <button type="submit"
                                 class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
-                            <i class="fa-solid fa-plus mr-1"></i>Adicionar funcao
+                            <i class="fa-solid fa-plus mr-1"></i>Adicionar função
                         </button>
                     </form>
                     {% for erro in formulario_nova_funcao.nome.errors %}
@@ -812,11 +812,11 @@
         <div id="repertorio" data-retratil="repertorio" data-tutorial="repertorio" class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden scroll-mt-20">
             <div data-retratil-cabecalho role="button" tabindex="0" aria-expanded="false" aria-controls="repertorio-corpo" class="{{ tema.card_bg }} px-4 py-3 flex items-center justify-between gap-2 cursor-pointer select-none">
                 <span class="flex items-center gap-2 text-sm font-semibold {{ tema.text_primary }}">
-                    <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Repertorio
+                    <i class="fa-solid fa-music {{ tema.text_secondary }}"></i>Repertório
                 </span>
                 <span class="flex items-center gap-3">
                     <a href="{{ url_for('ministerio.banco_musicas', comunidade_id=comunidade_id) }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
-                        Banco de musicas <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                        Banco de músicas <i class="fa-solid fa-arrow-right text-[10px]"></i>
                     </a>
                     {% if repertorio %}<span class="text-xs {{ tema.text_secondary }}">{{ repertorio|length }}</span>{% endif %}
                     <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }}" data-retratil-seta aria-hidden="true"></i>
@@ -846,7 +846,7 @@
                     <form method="POST" action="{{ url_for('escala.excluir_item_repertorio', item_id=item.id) }}"
                           data-confirm-excluir='Remover "{{ item.nome_musica }}" do repertorio?'>
                         {{ acao_form.hidden_tag() }}
-                        <button type="submit" title="Remover musica" class="{{ tema.text_secondary }} hover:text-red-400 transition shrink-0">
+                        <button type="submit" title="Remover música" class="{{ tema.text_secondary }} hover:text-red-400 transition shrink-0">
                             <i class="fa-solid fa-trash text-xs"></i>
                         </button>
                     </form>
@@ -858,7 +858,7 @@
             <div class="border-t {{ tema.card_border }} px-4 py-3 grid grid-cols-2 gap-2">
                 <a href="{{ url_for('escala.folha_repertorio', escala_id=escala.id, tipo='projecao') }}" target="_blank" rel="noopener"
                    class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 transition">
-                    <i class="fa-solid fa-display"></i>Folha de projecao
+                    <i class="fa-solid fa-display"></i>Folha de projeção
                 </a>
                 <a href="{{ url_for('escala.folha_repertorio', escala_id=escala.id, tipo='cifras') }}" target="_blank" rel="noopener"
                    class="flex items-center justify-center gap-2 {{ tema.accent_soft_bg }} {{ tema.accent_text }} text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 transition">
@@ -868,21 +868,21 @@
                 <!-- Envia pra um ministerio inteiro ou uma funcao dele, sem sair daqui (ver escala.routes.compartilhar_repertorio) -->
                 <details class="col-span-2 group border {{ tema.card_border }} rounded-xl overflow-hidden">
                     <summary class="flex items-center justify-center gap-2 {{ tema.text_primary }} text-sm font-semibold py-2.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden hover:bg-black/5 transition">
-                        <i class="fa-solid fa-share-nodes"></i>Compartilhar este repertorio
+                        <i class="fa-solid fa-share-nodes"></i>Compartilhar este repertório
                         <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }} transition group-open:rotate-180"></i>
                     </summary>
                     <form method="POST" action="{{ url_for('escala.compartilhar_repertorio', escala_id=escala.id) }}" class="border-t {{ tema.card_border }} p-3 space-y-3">
                         {{ acao_form.hidden_tag() }}
                         {{ campos_envio_tardio(escala.ministerio.comunidade_id, escala.ministerio_id, tema) }}
                         <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed">
-                            <i class="fa-solid fa-paper-plane mr-1"></i>Enviar repertorio
+                            <i class="fa-solid fa-paper-plane mr-1"></i>Enviar repertório
                         </button>
                     </form>
                 </details>
                 {% endif %}
             </div>
             {% else %}
-            <p class="text-xs {{ tema.text_secondary }} px-4 py-3">Nenhuma musica adicionada ainda.</p>
+            <p class="text-xs {{ tema.text_secondary }} px-4 py-3">Nenhuma música adicionada ainda.</p>
             {% endif %}
             {% if eh_dono %}
             {% if repertorios_prontos %}
@@ -890,13 +890,13 @@
             <form method="POST" action="{{ url_for('escala.usar_repertorio_pronto', escala_id=escala.id) }}"
                   class="border-t {{ tema.card_border }} px-4 py-3 space-y-2">
                 {{ acao_form.hidden_tag() }}
-                <p class="text-xs font-semibold {{ tema.text_secondary }}">Usar um repertorio pronto</p>
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Usar um repertório pronto</p>
                 <div class="flex gap-2">
-                    <select name="repertorio_id" required aria-label="Repertorio pronto"
+                    <select name="repertorio_id" required aria-label="Repertório pronto"
                             class="flex-1 min-w-0 {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-3 py-2 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
                         {% for grupo, lista in repertorios_prontos %}
                         <optgroup label="{{ grupo }}">
-                            {% for r in lista %}<option value="{{ r.id }}">{{ r.nome }} ({{ r.itens|length }} musica{{ 's' if r.itens|length != 1 }})</option>{% endfor %}
+                            {% for r in lista %}<option value="{{ r.id }}">{{ r.nome }} ({{ r.itens|length }} música{{ 's' if r.itens|length != 1 }})</option>{% endfor %}
                         </optgroup>
                         {% endfor %}
                     </select>
@@ -907,7 +907,7 @@
                 {% if escala.repertorio %}
                 <label class="flex items-center gap-2 text-xs {{ tema.text_secondary }} cursor-pointer">
                     <input type="checkbox" name="substituir" value="1" class="w-4 h-4">
-                    Substituir as musicas que ja estao na escala (senao, soma no fim)
+                    Substituir as músicas que já estão na escala (senão, soma no fim)
                 </label>
                 {% endif %}
             </form>
@@ -916,7 +916,7 @@
             <form method="POST" action="{{ url_for('escala.adicionar_musica_do_banco', escala_id=escala.id) }}"
                   class="border-t {{ tema.card_border }} px-4 py-3 space-y-2">
                 {{ formulario_item_banco.hidden_tag() }}
-                <p class="text-xs font-semibold {{ tema.text_secondary }}">Adicionar do banco de musicas</p>
+                <p class="text-xs font-semibold {{ tema.text_secondary }}">Adicionar do banco de músicas</p>
                 {{ formulario_item_banco.musica_id(class_="w-full " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring)) }}
                 <div class="flex gap-2">
                     {{ formulario_item_banco.momento(class_="flex-1 min-w-0 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Momento (ex: Abertura)") }}
@@ -928,11 +928,11 @@
             </form>
             {% endif %}
             <details class="border-t {{ tema.card_border }}">
-                <summary class="px-4 py-3 text-xs font-semibold {{ tema.text_secondary }} cursor-pointer select-none">Adicionar musica avulsa (fora do banco)</summary>
+                <summary class="px-4 py-3 text-xs font-semibold {{ tema.text_secondary }} cursor-pointer select-none">Adicionar música avulsa (fora do banco)</summary>
                 <form method="POST" action="{{ url_for('escala.adicionar_item_repertorio', escala_id=escala.id) }}"
                       class="px-4 pb-3 flex flex-col sm:flex-row gap-2">
                     {{ formulario_novo_item_repertorio.hidden_tag() }}
-                    {{ formulario_novo_item_repertorio.nome_musica(class_="flex-1 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Nome da musica") }}
+                    {{ formulario_novo_item_repertorio.nome_musica(class_="flex-1 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Nome da música") }}
                     {{ formulario_novo_item_repertorio.tom(class_="w-full sm:w-36 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring)) }}
                     {{ formulario_novo_item_repertorio.link(class_="flex-1 " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Link (opcional)") }}
                     <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-medium px-4 py-2 rounded-lg transition shrink-0">
@@ -946,12 +946,12 @@
             <form method="POST" action="{{ url_for('escala.salvar_observacoes_repertorio', escala_id=escala.id) }}"
                   class="border-t {{ tema.card_border }} px-4 py-3 space-y-2">
                 {{ formulario_observacoes.hidden_tag() }}
-                <label class="block text-xs font-semibold {{ tema.text_secondary }}" for="observacoes_repertorio">Observacoes gerais (saem nas folhas)</label>
-                {{ formulario_observacoes.observacoes_repertorio(rows="2", class_="w-full " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Ex: Ministracao livre apos a musica 3") }}
-                <button type="submit" class="border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-xs font-semibold px-4 py-2 rounded-full transition">Salvar observacoes</button>
+                <label class="block text-xs font-semibold {{ tema.text_secondary }}" for="observacoes_repertorio">Observações gerais (saem nas folhas)</label>
+                {{ formulario_observacoes.observacoes_repertorio(rows="2", class_="w-full " ~ (tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-lg px-3 py-2 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring), placeholder="Ex: Ministração livre após a música 3") }}
+                <button type="submit" class="border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-xs font-semibold px-4 py-2 rounded-full transition">Salvar observações</button>
             </form>
             {% elif escala.observacoes_repertorio %}
-            <p class="border-t {{ tema.card_border }} px-4 py-3 text-xs {{ tema.text_secondary }} whitespace-pre-line"><span class="font-semibold">Observacoes:</span> {{ escala.observacoes_repertorio }}</p>
+            <p class="border-t {{ tema.card_border }} px-4 py-3 text-xs {{ tema.text_secondary }} whitespace-pre-line"><span class="font-semibold">Observações:</span> {{ escala.observacoes_repertorio }}</p>
             {% endif %}
             </div></div>
         </div>
@@ -971,12 +971,12 @@
             <div class="px-4 pb-4 pt-3 space-y-4 border-t border-red-500/20">
                 {% if ensaios_futuros %}
                 <div class="space-y-2.5">
-                    <p class="text-sm font-semibold {{ tema.text_primary }}">So um dia de ensaio</p>
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">Só um dia de ensaio</p>
                     <p class="text-xs {{ tema.text_secondary }}">
-                        A escala continua de pe. Quem esta escalado e avisado de que nesse dia nao vai ter ensaio.
+                        A escala continua de pe. Quem está escalado e avisado de que nesse dia não vai ter ensaio.
                     </p>
                     <form method="POST" action="{{ url_for('escala.cancelar_ensaio_escolhido', escala_id=escala.id) }}"
-                          data-confirm-excluir="Cancelar o ensaio escolhido? Quem esta escalado sera avisado."
+                          data-confirm-excluir="Cancelar o ensaio escolhido? Quem está escalado será avisado."
                           class="flex flex-col sm:flex-row gap-2">
                         {{ acao_form.hidden_tag() }}
                         <select name="ensaio_id" class="flex-1 {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2.5 text-sm {{ tema.text_primary }} focus:outline-none focus:ring-2 {{ tema.focus_ring }}">
@@ -999,11 +999,11 @@
                 <div class="space-y-2.5">
                     <p class="text-sm font-semibold {{ tema.text_primary }}">A escala inteira</p>
                     <p class="text-xs {{ tema.text_secondary }}">
-                        O evento nao vai mais acontecer. A escala continua no historico e no calendario, marcada
-                        como cancelada, e quem ja estiver escalado e avisado (e-mail, SMS e no app). Da pra reabrir depois.
+                        O evento não vai mais acontecer. A escala continua no histórico e no calendário, marcada
+                        como cancelada, e quem já estiver escalado e avisado (e-mail, SMS e no app). Da pra reabrir depois.
                     </p>
                     <form method="POST" action="{{ url_for('escala.cancelar_escala', escala_id=escala.id) }}"
-                          data-confirm-excluir="Cancelar a escala inteira? Quem ja estiver escalado sera avisado automaticamente (e-mail, SMS e no app).">
+                          data-confirm-excluir="Cancelar a escala inteira? Quem já estiver escalado será avisado automaticamente (e-mail, SMS e no app).">
                         {{ acao_form.hidden_tag() }}
                         <button type="submit"
                                 class="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-3 rounded-full transition">
@@ -1022,7 +1022,7 @@
             </span>
             <button type="button" id="atribuicao-confirmar"
                     class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2 rounded-full transition shrink-0">
-                <i id="atribuicao-confirmar-icone" class="fa-solid fa-check mr-1"></i><span id="atribuicao-confirmar-texto">Confirmar atribuicoes</span>
+                <i id="atribuicao-confirmar-icone" class="fa-solid fa-check mr-1"></i><span id="atribuicao-confirmar-texto">Confirmar atribuições</span>
             </button>
         </div>
         {% endif %}
@@ -1041,7 +1041,7 @@
         </div>
         <div id="chat-mensagens" class="flex-1 overflow-y-auto p-4 space-y-2 text-sm"></div>
         <form id="chat-form" class="border-t {{ tema.card_border }} p-3 flex items-center gap-2 shrink-0">
-            <input id="chat-input" type="text" placeholder="Digite sua duvida..." autocomplete="off"
+            <input id="chat-input" type="text" placeholder="Digite sua dúvida..." autocomplete="off"
                    class="flex-1 rounded-full border {{ tema.card_border }} px-4 py-2 text-sm focus:outline-none {{ tema.text_primary }}">
             <button type="submit" aria-label="Enviar"
                     class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white rounded-full px-4 py-2 text-sm font-semibold shrink-0">
@@ -1053,7 +1053,7 @@
     <!-- Botao flutuante de chat -->
     <button type="button" id="chat-fab" aria-label="Abrir chat"
             class="fixed bottom-24 lg:bottom-8 right-5 lg:right-8 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-40">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg width="20" height="20" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
@@ -1110,7 +1110,7 @@
         });
 
         function alternar(evento) {
-            // Link dentro do cabecalho (ex: "Banco de musicas") segue normal.
+            // Link dentro do cabecalho (ex: "Banco de músicas") segue normal.
             if (evento.target.closest('a, button, form, input, select')) return;
             var abrir = secao.classList.contains('fechado');
             definir(abrir);
@@ -1191,8 +1191,8 @@
                     if (indice >= total) {
                         if (falhas > 0) {
                             window.alert(
-                                falhas + ' de ' + total + ' nao puderam ser escaladas agora. ' +
-                                'O que deu certo ja foi salvo -- confira a lista e tente de novo com o restante.'
+                                falhas + ' de ' + total + ' não puderam ser escaladas agora. ' +
+                                'O que deu certo já foi salvo -- confira a lista e tente de novo com o restante.'
                             );
                         }
                         if (textoConfirmar) textoConfirmar.textContent = 'Atualizando a escala...';
@@ -1259,7 +1259,7 @@
                     var limpar = document.createElement('button');
                     limpar.type = 'button';
                     limpar.className = ITEM + ' {{ tema.text_secondary }}';
-                    limpar.textContent = 'Limpar selecao';
+                    limpar.textContent = 'Limpar seleção';
                     limpar.addEventListener('click', function () { escolher('0', ''); });
                     lista.appendChild(limpar);
                 }
@@ -1298,7 +1298,7 @@
                     }
                 });
             }
-            // "Convidar conta ja cadastrada" abre a busca de contas abaixo; fecha o dropdown.
+            // "Convidar conta já cadastrada" abre a busca de contas abaixo; fecha o dropdown.
             painel.querySelectorAll('[data-toggle-busca-convidado]').forEach(function (b) {
                 b.addEventListener('click', fechar);
             });
@@ -1423,12 +1423,12 @@
         // app/main/routes.py::_REGRAS_CHAT).
         var TOPICOS_CHAT = [
             { rotulo: 'Login e cadastro', pergunta: 'Como faco login ou cadastro?' },
-            { rotulo: 'Comunidades e ministerios', pergunta: 'O que sao comunidades e ministerios?' },
-            { rotulo: 'Escalas e rodizio', pergunta: 'Como funcionam escalas e rodizio?' },
-            { rotulo: 'Convites e papeis', pergunta: 'Como funcionam convites e a hierarquia de papeis?' },
-            { rotulo: 'Disponibilidade e calendario', pergunta: 'Como funcionam disponibilidade e calendario?' },
-            { rotulo: 'Notificacoes', pergunta: 'Como funcionam as notificacoes?' },
-            { rotulo: 'Seguranca dos dados', pergunta: 'Meus dados estao seguros?' },
+            { rotulo: 'Comunidades e ministérios', pergunta: 'O que são comunidades e ministérios?' },
+            { rotulo: 'Escalas e rodízio', pergunta: 'Como funcionam escalas e rodízio?' },
+            { rotulo: 'Convites e papéis', pergunta: 'Como funcionam convites e a hierarquia de papéis?' },
+            { rotulo: 'Disponibilidade e calendário', pergunta: 'Como funcionam disponibilidade e calendário?' },
+            { rotulo: 'Notificacoes', pergunta: 'Como funcionam as notificações?' },
+            { rotulo: 'Segurança dos dados', pergunta: 'Meus dados estão seguros?' },
             { rotulo: 'Tutorial guiado', pergunta: 'Como funciona o tutorial guiado?' }
         ];
 
@@ -1488,7 +1488,7 @@
                 .then(function (resp) { return resp.json(); })
                 .then(function (dados) {
                     removerDigitando();
-                    var resposta = dados.resposta || 'Desculpe, nao consegui responder agora.';
+                    var resposta = dados.resposta || 'Desculpe, não consegui responder agora.';
                     renderMensagem('bot', resposta);
                     historico.push({ autor: 'bot', texto: resposta });
                 })
@@ -1503,8 +1503,8 @@
                 painel.classList.toggle('hidden');
                 if (!painel.classList.contains('hidden') && mensagensEl.children.length === 0) {
                     var boasVindas = 'Oi! Sou o assistente do site. Escolha um assunto abaixo ou digite sua '
-                        + 'duvida -- posso ajudar com login, cadastro, comunidades, ministerios, escalas, '
-                        + 'rodizio, convites, disponibilidade, calendario, notificacoes, seguranca e o '
+                        + 'dúvida -- posso ajudar com login, cadastro, comunidades, ministérios, escalas, '
+                        + 'rodízio, convites, disponibilidade, calendário, notificações, segurança e o '
                         + 'tutorial guiado.';
                     renderMensagem('bot', boasVindas);
                     historico.push({ autor: 'bot', texto: boasVindas });

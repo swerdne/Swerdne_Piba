@@ -69,7 +69,7 @@
 <body>
 <div class="barra">
     <a href="{{ voltar_url }}">&larr; Voltar</a>
-    <span>{{ 'Folha de projecao' if tipo == 'projecao' else 'Cifras do louvor' }}</span>
+    <span>{{ 'Folha de projeção' if tipo == 'projecao' else 'Cifras do louvor' }}</span>
     <button type="button" onclick="window.print()">Imprimir / PDF</button>
 </div>
 
@@ -97,7 +97,7 @@
                 {% for linha in bloco.linhas %}<p class="linha">{{ linha }}</p>{% endfor %}
             </div>
             {% else %}
-            <p class="vazio">{{ 'Letra de projecao ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
+            <p class="vazio">{{ 'Letra de projeção ainda não cadastrada no banco.' if it.musica else 'Música avulsa -- fora do banco de músicas.' }}</p>
             {% endfor %}
         </div>
     </section>
@@ -123,12 +123,12 @@
         <h2>{{ loop.index }}. {{ it.nome }}{% if it.momento %} - {{ it.momento }}{% endif %}</h2>
         <p class="obs">
             {% if it.musica and it.musica.artista %}{{ it.musica.artista }} &middot; {% endif %}
-            Observacoes: {% if it.tom %}TOM {{ it.tom }}{% if it.tom_original %} (transposta do original em {{ it.tom_original }}){% endif %}{% else %}-{% endif %}
+            Observações: {% if it.tom %}TOM {{ it.tom }}{% if it.tom_original %} (transposta do original em {{ it.tom_original }}){% endif %}{% else %}-{% endif %}
         </p>
         {% if it.cifra %}
         <pre>{{ it.cifra_html }}</pre>
         {% else %}
-        <p class="vazio">{{ 'Cifra ainda nao cadastrada no banco.' if it.musica else 'Musica avulsa -- fora do banco de musicas.' }}</p>
+        <p class="vazio">{{ 'Cifra ainda não cadastrada no banco.' if it.musica else 'Música avulsa -- fora do banco de músicas.' }}</p>
         {% endif %}
     </section>
     {% endfor %}
@@ -137,7 +137,7 @@
 
     {% if observacoes %}
     <div class="gerais">
-        <h3>OBSERVACOES GERAIS</h3>
+        <h3>OBSERVAÇÕES GERAIS</h3>
         <p>{{ observacoes }}</p>
     </div>
     {% endif %}

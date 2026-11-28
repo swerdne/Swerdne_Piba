@@ -56,7 +56,7 @@ def test_ensaio_com_fim_antes_do_inicio_e_recusado(logged_in_client, app, db):
     with app.app_context():
         _, _, escala = _montar(logged_in_client)
         resposta = _adicionar_ensaio(logged_in_client, escala.id, horario="21:00", horario_fim="19:00")
-        assert "precisa ser depois do inicio" in resposta.data.decode("utf-8")
+        assert "precisa ser depois do início" in resposta.data.decode("utf-8")
         assert Ensaio.objects(escala_id=escala.id).count() == 0
 
 
@@ -158,7 +158,7 @@ def test_lista_do_ministerio_mostra_proximo_ensaio(logged_in_client, app, db):
         _, ministerio, escala = _montar(logged_in_client)
         _adicionar_ensaio(logged_in_client, escala.id, data=DAQUI_3_DIAS)
         html = logged_in_client.get(f"/ministerio/{ministerio.id}").data.decode("utf-8")
-        assert "Proximo ensaio:" in html
+        assert "Próximo ensaio:" in html
         assert DAQUI_3_DIAS.strftime("%d/%m") in html
 
 

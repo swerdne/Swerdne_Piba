@@ -17,8 +17,8 @@ from app.escala.models import DEPARTAMENTOS
 from app.plantao.models import UNIDADES_RECORRENCIA, MODOS_MENSAIS, TERMINOS
 
 DIAS_SEMANA_CHOICES = [
-    (0, "Segunda"), (1, "Terca"), (2, "Quarta"), (3, "Quinta"),
-    (4, "Sexta"), (5, "Sabado"), (6, "Domingo"),
+    (0, "Segunda"), (1, "Terça"), (2, "Quarta"), (3, "Quinta"),
+    (4, "Sexta"), (5, "Sábado"), (6, "Domingo"),
 ]
 
 
@@ -30,13 +30,13 @@ class TurnoPlantaoForm(FlaskForm):
         validators=[DataRequired()],
     )
     nome_funcao = StringField(
-        "Nome do papel gerado em cada ocorrencia",
+        "Nome do papel gerado em cada ocorrência",
         validators=[DataRequired(), Length(max=80)],
         default="Responsavel",
     )
-    data_inicio = DateField("Data de inicio do rodizio", validators=[DataRequired()])
-    horario = TimeField("Horario de inicio de cada plantao", validators=[Optional()])
-    horario_fim = TimeField("Horario de fim de cada plantao", validators=[Optional()])
+    data_inicio = DateField("Data de início do rodízio", validators=[DataRequired()])
+    horario = TimeField("Horário de início de cada plantao", validators=[Optional()])
+    horario_fim = TimeField("Horário de fim de cada plantao", validators=[Optional()])
 
     # "Repetir a cada [N] [unidade]" -- estilo Google Agenda.
     intervalo_recorrencia = IntegerField(
@@ -44,7 +44,7 @@ class TurnoPlantaoForm(FlaskForm):
     )
     unidade_recorrencia = SelectField(
         "Unidade",
-        choices=[("dia", "Dia(s)"), ("semana", "Semana(s)"), ("mes", "Mes(es)"), ("ano", "Ano(s)")],
+        choices=[("dia", "Dia(s)"), ("semana", "Semana(s)"), ("mes", "Mês(es)"), ("ano", "Ano(s)")],
         validators=[DataRequired()],
     )
     # So usado quando unidade_recorrencia == "semana". Vazio -> cai no
@@ -60,34 +60,34 @@ class TurnoPlantaoForm(FlaskForm):
 
     termino_tipo = RadioField(
         "Termina",
-        choices=[("nunca", "Nunca"), ("data", "Em uma data especifica"), ("ocorrencias", "Apos um numero de vezes")],
+        choices=[("nunca", "Nunca"), ("data", "Em uma data específica"), ("ocorrencias", "Após um número de vezes")],
         default="nunca",
         validators=[DataRequired()],
     )
-    termino_data = DateField("Data de termino", validators=[Optional()])
-    termino_ocorrencias = IntegerField("Numero de ocorrencias", validators=[Optional(), NumberRange(min=1)])
+    termino_data = DateField("Data de término", validators=[Optional()])
+    termino_ocorrencias = IntegerField("Número de ocorrências", validators=[Optional(), NumberRange(min=1)])
 
     submit = SubmitField("Salvar")
 
     def validate_unidade_recorrencia(self, field):
         if field.data not in UNIDADES_RECORRENCIA:
-            raise ValidationError("Unidade de recorrencia invalida.")
+            raise ValidationError("Unidade de recorrência inválida.")
 
     def validate_modo_mensal(self, field):
         if self.unidade_recorrencia.data == "mes" and field.data not in MODOS_MENSAIS:
-            raise ValidationError("Escolha como a recorrencia mensal se repete.")
+            raise ValidationError("Escolha como a recorrência mensal se repete.")
 
     def validate_termino_tipo(self, field):
         if field.data not in TERMINOS:
-            raise ValidationError("Opcao de termino invalida.")
+            raise ValidationError("Opção de término inválida.")
 
     def validate_termino_data(self, field):
         if self.termino_tipo.data == "data" and not field.data:
-            raise ValidationError("Escolha a data em que a recorrencia termina.")
+            raise ValidationError("Escolha a data em que a recorrência termina.")
 
     def validate_termino_ocorrencias(self, field):
         if self.termino_tipo.data == "ocorrencias" and not field.data:
-            raise ValidationError("Informe apos quantas ocorrencias a recorrencia termina.")
+            raise ValidationError("Informe após quantas ocorrências a recorrência termina.")
 
 
 class AdicionarMembroFilaForm(FlaskForm):

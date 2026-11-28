@@ -20,7 +20,7 @@ def test_comunidade_sem_login_redireciona(client):
 def test_lista_vazia_mostra_estado_vazio(logged_in_client):
     response = logged_in_client.get("/comunidade/")
     assert response.status_code == 200
-    assert "Voce ainda nao tem nenhuma comunidade" in response.data.decode("utf-8")
+    assert "Você ainda não tem nenhuma comunidade" in response.data.decode("utf-8")
 
 
 def test_criar_comunidade_aparece_na_lista(logged_in_client, app, db):
@@ -44,13 +44,13 @@ def test_editar_comunidade_atualiza_nome(logged_in_client, app, db):
         comunidade = _criar_comunidade(logged_in_client, "Nome Antigo")
         response = logged_in_client.post(
             f"/comunidade/{comunidade.id}/editar",
-            data={"nome": "Nome Novo", "descricao": "Descricao nova"},
+            data={"nome": "Nome Novo", "descricao": "Descrição nova"},
             follow_redirects=True,
         )
         assert response.status_code == 200
         atualizada = Comunidade.objects(id=comunidade.id).first()
         assert atualizada.nome == "Nome Novo"
-        assert atualizada.descricao == "Descricao nova"
+        assert atualizada.descricao == "Descrição nova"
 
 
 def test_excluir_comunidade_remove_e_redireciona_para_lista(logged_in_client, app, db):
@@ -63,7 +63,7 @@ def test_excluir_comunidade_remove_e_redireciona_para_lista(logged_in_client, ap
         )
         assert response.status_code == 200
         assert Comunidade.objects(id=comunidade_id).first() is None
-        assert "excluida" in response.data.decode("utf-8")
+        assert "excluída" in response.data.decode("utf-8")
 
 
 def test_excluir_comunidade_apaga_ministerios_e_diretorio_em_cascata(logged_in_client, app, db):
@@ -151,7 +151,7 @@ def test_lista_tem_logo_que_volta_direto_pro_inicio(logged_in_client, app, db):
     presente num modulo diferente (comunidade), nao so em escala."""
     with app.app_context():
         html = logged_in_client.get("/comunidade/").data.decode("utf-8")
-        assert 'title="Ir para o inicio"' in html
+        assert 'title="Ir para o início"' in html
         assert 'href="/dashboard"' in html
 
 
@@ -226,7 +226,7 @@ def test_excluir_membro_escalado_e_bloqueado(logged_in_client, app, db):
             f"/comunidade/{comunidade.id}/membros/{membro.id}/excluir", data={}, follow_redirects=True
         )
         assert response.status_code == 200
-        assert "antes de excluir do diretorio" in response.data.decode("utf-8")
+        assert "antes de excluir do diretório" in response.data.decode("utf-8")
         assert Membro.objects(id=membro.id).first() is not None
 
 
@@ -379,8 +379,8 @@ def test_escala_mostra_aviso_quando_pessoa_indisponivel_na_data(logged_in_client
         _escalar(logged_in_client, baixo.id, membro.id)  # 8/ago cai em "Trabalho"
 
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Possivel conflito" in html  # badge junto de quem ja esta escalado
-        assert "indisponivel: Trabalho" in html  # rotulo no <select> da funcao ainda vaga (Guitarra)
+        assert "Possível conflito" in html  # badge junto de quem ja esta escalado
+        assert "indisponível: Trabalho" in html  # rotulo no <select> da funcao ainda vaga (Guitarra)
 
 
 def test_escala_sem_data_nao_mostra_aviso(logged_in_client, app, db):
@@ -397,7 +397,7 @@ def test_escala_sem_data_nao_mostra_aviso(logged_in_client, app, db):
         _escalar(logged_in_client, baixo.id, membro.id)
 
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Possivel conflito" not in html
+        assert "Possível conflito" not in html
         assert "indisponivel:" not in html
 
 
@@ -415,7 +415,7 @@ def test_escala_nao_mostra_aviso_quando_pessoa_disponivel_na_data(logged_in_clie
         _escalar(logged_in_client, baixo.id, membro.id)  # 12/ago cai em "Folga"
 
         html = logged_in_client.get(f"/escala/{escala.id}").data.decode("utf-8")
-        assert "Possivel conflito" not in html
+        assert "Possível conflito" not in html
 
 
 # --- Tela de escalados --------------------------------------------------------
@@ -506,7 +506,7 @@ def _dados_tutorial(html):
     import re
 
     bloco = re.search(r'<script type="application/json" id="tutorial-dados">(.*?)</script>', html, re.S)
-    assert bloco, "pagina sem o bloco do tutorial"
+    assert bloco, "página sem o bloco do tutorial"
     return json.loads(bloco.group(1))
 
 
@@ -581,7 +581,7 @@ def test_calendario_da_comunidade_junta_escalas_de_ministerios_diferentes(logged
         hoje = dt.date.today()
         data_str = hoje.strftime("%Y-%m-%d")
         _criar_escala(logged_in_client, ministerio_a.id, "Ensaio Louvor", data=data_str, horario="19:00")
-        _criar_escala(logged_in_client, ministerio_b.id, "Ensaio Midia", departamento="Midia",
+        _criar_escala(logged_in_client, ministerio_b.id, "Ensaio Mídia", departamento="Midia",
                        data=data_str, horario="20:00")
 
         response = logged_in_client.get(f"/comunidade/{comunidade.id}/calendario")
@@ -589,7 +589,7 @@ def test_calendario_da_comunidade_junta_escalas_de_ministerios_diferentes(logged
 
         assert response.status_code == 200
         assert "Ensaio Louvor" in html
-        assert "Ensaio Midia" in html
+        assert "Ensaio Mídia" in html
         assert "Louvor" in html and "Midia" in html  # nome do ministerio no titulo do evento
 
 
@@ -839,7 +839,7 @@ def test_eventos_separa_proximos_de_passados(logged_in_client, app, db):
         )
 
         html = logged_in_client.get(f"/comunidade/{comunidade.id}/eventos").data.decode("utf-8")
-        idx_proximos = html.index("Proximos eventos")
+        idx_proximos = html.index("Próximos eventos")
         idx_passados = html.index("Eventos passados")
         idx_futuro = html.index("Evento Futuro")
         idx_passado = html.index("Evento Passado")
@@ -950,7 +950,7 @@ def test_upload_acima_do_limite_volta_pro_form_com_aviso(logged_in_client, app, 
         assert resposta.headers["Location"].endswith("/comunidade/nova")
 
         html = logged_in_client.get("/comunidade/nova").data.decode("utf-8")
-        assert "A imagem deve ter no maximo 2 MB." in html
+        assert "A imagem deve ter no máximo 2 MB." in html
         assert Comunidade.objects(nome="Igreja X").first() is None
 
 

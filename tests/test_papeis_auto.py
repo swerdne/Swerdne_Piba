@@ -41,7 +41,7 @@ def test_escalar_quem_tem_conta_entra_como_membro(logged_in_client, app, db):
 
         assert _papel(carla, lights) == "membro"
         assert UsuarioComunidade.objects(usuario_id=carla.id, comunidade_id=comunidade.id).first().papel == "membro"
-        assert "entrou nos Papeis do ministerio como membro" in resposta.data.decode()
+        assert "entrou nos Papéis do ministério como membro" in resposta.data.decode()
 
         # escalar de novo nao duplica
         f2 = Funcao(escala_id=escala.id, nome="Som", ordem=1).save()

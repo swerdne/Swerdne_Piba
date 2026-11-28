@@ -7,19 +7,19 @@
 {% endblock %}
 
 {% macro icone_pessoa(classe) %}
-<svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+<svg width="{{ classe|px }}" height="{{ classe|px }}" class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
     <circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"></path>
 </svg>
 {% endmacro %}
 
 {% macro icone_sino(classe) %}
-<svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+<svg width="{{ classe|px }}" height="{{ classe|px }}" class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
     <path d="M12 4a4 4 0 0 0-4 4v3.5L6 15h12l-2-3.5V8a4 4 0 0 0-4-4z"></path><path d="M10 18a2 2 0 0 0 4 0"></path>
 </svg>
 {% endmacro %}
 
 {% macro chevron(classe) %}
-<svg class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+<svg width="{{ classe|px }}" height="{{ classe|px }}" class="{{ classe }}" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
 {% endmacro %}
 
 {% from "_macros.html" import nav_inferior, nome_marca, sino_avisos with context %}
@@ -61,7 +61,7 @@
             <div data-instalar data-instalar-dispensavel hidden
                  class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center gap-3">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 {{ tema.accent_soft_bg }} {{ tema.accent_text }}">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M12 7v7m-3-3l3 3 3-3"></path></svg>
+                    <svg width="24" height="24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M12 7v7m-3-3l3 3 3-3"></path></svg>
                 </div>
                 <div class="min-w-0 flex-1">
                     <p class="text-sm font-bold {{ tema.text_primary }}">Instale o TyBenson no celular</p>
@@ -73,7 +73,7 @@
                         </button>
                         <a href="{{ url_for('main.baixar_apk') }}" data-instalar-apk hidden
                            class="inline-flex items-center gap-1 text-xs font-semibold {{ tema.accent_text }} hover:underline">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"></path><path d="M5 19h14"></path></svg>Baixar .apk
+                            <svg width="16" height="16" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"></path><path d="M5 19h14"></path></svg>Baixar .apk
                         </a>
                         <button type="button" data-instalar-dispensar class="text-xs font-semibold {{ tema.text_secondary }} hover:underline">
                             Agora não
@@ -86,13 +86,13 @@
             <!-- Proxima escala -->
             <div class="rounded-3xl p-6 text-white space-y-2.5"
                  style="background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 10px 24px -6px rgba(79,70,229,0.35);">
-                <p class="text-xs font-semibold uppercase tracking-wide text-indigo-200">Proxima escala</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-indigo-200">Próxima escala</p>
                 {% if proxima_escala %}
                 <h2 class="text-2xl font-extrabold tracking-tight">{{ proxima_escala.escala.nome }}</h2>
                 <p class="text-sm text-indigo-100">{{ proxima_escala.detalhes }}</p>
-                <p class="text-xs text-indigo-200">Sua funcao: <span class="font-semibold text-white">{{ proxima_escala.funcao }}</span></p>
+                <p class="text-xs text-indigo-200">Sua função: <span class="font-semibold text-white">{{ proxima_escala.funcao }}</span></p>
                 {% if proxima_escala.proximo_ensaio %}
-                <p class="text-xs text-indigo-200"><i class="fa-solid fa-music mr-1"></i>Proximo ensaio: <span class="font-semibold text-white">{{ proxima_escala.proximo_ensaio.descricao_data }}</span></p>
+                <p class="text-xs text-indigo-200"><i class="fa-solid fa-music mr-1"></i>Próximo ensaio: <span class="font-semibold text-white">{{ proxima_escala.proximo_ensaio.descricao_data }}</span></p>
                 {% endif %}
                 <div class="pt-1.5">
                     <a href="{{ url_for('main.minha_escala', escala=proxima_escala.escala.id) }}"
@@ -102,7 +102,7 @@
                 </div>
                 {% else %}
                 <h2 class="text-2xl font-extrabold tracking-tight">Nenhuma escala marcada</h2>
-                <p class="text-sm text-indigo-100">Quando voce for escalado, ela aparece aqui.</p>
+                <p class="text-sm text-indigo-100">Quando você for escalado, ela aparece aqui.</p>
                 <div class="pt-1.5">
                     <a href="{{ url_for('comunidade.index') }}"
                        class="inline-flex items-center gap-1.5 bg-white text-indigo-700 text-sm font-bold px-4 py-2 rounded-full transition hover:opacity-90">
@@ -149,7 +149,7 @@
             {% if repertorios_compartilhados %}
             <!-- Repertorios que alguem compartilhou com esta conta (ver ministerio.routes.compartilhar_pasta) -->
             <div>
-                <h2 class="text-base font-bold {{ tema.text_primary }} mb-2.5">Repertorios para voce</h2>
+                <h2 class="text-base font-bold {{ tema.text_primary }} mb-2.5">Repertórios para você</h2>
                 <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }} overflow-hidden">
                     {% for r in repertorios_compartilhados %}
                     <a href="{{ url_for('ministerio.pasta', pasta_id=r.pasta.id) }}" class="flex items-center gap-3 px-4 py-3.5 {{ tema.card_bg_hover }} transition">
@@ -158,7 +158,7 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-bold {{ tema.text_primary }} truncate">{{ r.pasta.nome }}</p>
-                            <p class="text-xs {{ tema.text_secondary }} truncate">De {{ r.remetente }} &middot; {{ r.pasta.itens|length }} musica(s)</p>
+                            <p class="text-xs {{ tema.text_secondary }} truncate">De {{ r.remetente }} &middot; {{ r.pasta.itens|length }} música(s)</p>
                         </div>
                         {% if r.novo %}
                         <span class="text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-600 rounded-full px-2 py-0.5 shrink-0">Novo</span>
@@ -201,7 +201,7 @@
                 </div>
                 {% else %}
                 <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-6 text-center">
-                    <p class="text-sm {{ tema.text_secondary }}">Voce ainda nao participa de nenhuma comunidade.</p>
+                    <p class="text-sm {{ tema.text_secondary }}">Você ainda não participa de nenhuma comunidade.</p>
                     <a href="{{ url_for('comunidade.nova') }}"
                        class="inline-block mt-3 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-5 py-2 rounded-full transition">
                         Criar comunidade
@@ -304,7 +304,7 @@
                         {{ primeiro_nome[0]|upper }}
                     </div>
                     <span class="absolute -bottom-0.5 -right-0.5 w-8 h-8 rounded-full {{ tema.accent_bg }} text-white flex items-center justify-center shadow-md">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 20l1-4 11-11 3 3-11 11-4 1z"></path></svg>
+                        <svg width="14" height="14" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 20l1-4 11-11 3 3-11 11-4 1z"></path></svg>
                     </span>
                 </label>
                 <p class="text-lg font-extrabold {{ tema.text_primary }}">{{ nome_completo }}</p>
@@ -318,7 +318,7 @@
                 {% for erro in foto_form.foto.errors %}
                     <p class="text-xs text-red-600">{{ erro }}</p>
                 {% endfor %}
-                <p class="text-xs {{ tema.text_secondary }}">JPG ou PNG, ate 2 MB.</p>
+                <p class="text-xs {{ tema.text_secondary }}">JPG ou PNG, até 2 MB.</p>
                 {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
             </form>
 
@@ -335,7 +335,7 @@
             <!-- Instalar o app: opcao fixa no Perfil (nunca dispensada) -->
             <button type="button" data-instalar data-instalar-botao hidden
                     class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center gap-3 text-left {{ tema.card_bg_hover }} transition">
-                <span class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 {{ tema.accent_soft_bg }} {{ tema.accent_text }}"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M12 7v7m-3-3l3 3 3-3"></path></svg></span>
+                <span class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 {{ tema.accent_soft_bg }} {{ tema.accent_text }}"><svg width="24" height="24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M12 7v7m-3-3l3 3 3-3"></path></svg></span>
                 <span class="min-w-0 flex-1">
                     <span class="block text-sm font-bold {{ tema.text_primary }}">Instalar o app no celular</span>
                     <span class="block text-xs {{ tema.text_secondary }}">Ícone na tela inicial, abre em tela cheia</span>
@@ -345,7 +345,7 @@
             <!-- APK do Android (so aparece no Android; ver "Instalar o app" em main.js) -->
             <a href="{{ url_for('main.baixar_apk') }}" data-instalar-apk hidden
                class="w-full {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 flex items-center gap-3 text-left {{ tema.card_bg_hover }} transition">
-                <span class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-emerald-500/15 text-emerald-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"></path><path d="M5 19h14"></path></svg></span>
+                <span class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-emerald-500/15 text-emerald-600"><svg width="24" height="24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4"></path><path d="M5 19h14"></path></svg></span>
                 <span class="min-w-0 flex-1">
                     <span class="block text-sm font-bold {{ tema.text_primary }}">Baixar o app para Android (.apk)</span>
                     <span class="block text-xs {{ tema.text_secondary }}">Instala direto, sem passar pelo navegador · 1,5 MB</span>
@@ -356,7 +356,7 @@
             <!-- Informacoes pessoais -->
             <div>
                 <div class="flex items-center justify-between mb-2.5">
-                    <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide">Informacoes pessoais</h2>
+                    <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide">Informações pessoais</h2>
                     <button type="button" data-toggle-alvo="form-nome"
                             class="text-xs font-bold text-white {{ tema.accent_bg }} {{ tema.accent_bg_hover }} px-3 py-1.5 rounded-full transition">
                         Editar
@@ -371,7 +371,7 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-3 py-3.5">
-                        <svg class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"></rect><path d="M4 7l8 6 8-6"></path></svg>
+                        <svg width="20" height="20" class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"></rect><path d="M4 7l8 6 8-6"></path></svg>
                         <div class="min-w-0">
                             <p class="text-[11px] {{ tema.text_secondary }}">E-mail</p>
                             <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ email }}</p>
@@ -379,7 +379,7 @@
                     </div>
                     <!-- Telefone (so a propria pessoa ve aqui; privacidade em app/telefones.py) -->
                     <div class="flex items-center gap-3 py-3.5">
-                        <svg class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"></rect><path d="M11 18h2"></path></svg>
+                        <svg width="20" height="20" class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"></rect><path d="M11 18h2"></path></svg>
                         <div class="min-w-0 flex-1">
                             <p class="text-[11px] {{ tema.text_secondary }}">Telefone (WhatsApp)</p>
                             <p class="text-sm font-semibold {{ tema.text_primary if current_user.telefone else tema.text_secondary }} truncate">{{ current_user.telefone or "Não cadastrado" }}</p>
@@ -390,7 +390,7 @@
                         </button>
                     </div>
                     <div class="flex items-center gap-3 py-3.5">
-                        <svg class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>
+                        <svg width="20" height="20" class="w-5 h-5 shrink-0 {{ tema.text_secondary }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>
                         <div class="min-w-0">
                             <p class="text-[11px] {{ tema.text_secondary }}">Tipo de conta</p>
                             <p class="text-sm font-semibold {{ tema.text_primary }}">{{ "Conta Google" if eh_conta_google else "Conta tradicional" }}</p>
@@ -424,11 +424,11 @@
             <div class="space-y-6">
             <!-- Preferencias / tema -->
             <div>
-                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Preferencias</h2>
+                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Preferências</h2>
                 <form method="POST" action="{{ url_for('main.salvar_tema') }}"
                       class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
                     {{ tema_form.hidden_tag() }}
-                    <p class="text-sm font-semibold {{ tema.text_primary }}">Aparencia</p>
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">Aparência</p>
                     <div class="grid grid-cols-2 gap-2.5">
                         {% for chave, dado in temas.items() %}
                         <label class="flex items-center gap-2 rounded-2xl px-3 py-2.5 cursor-pointer border-2 {{ tema.accent_border if chave == tema_atual else tema.card_border }}">
@@ -451,19 +451,19 @@
                     <label class="flex items-start gap-3 cursor-pointer">
                         {{ privacidade_form.exige_aprovacao_grupos(class_="mt-1 w-4 h-4 shrink-0") }}
                         <span>
-                            <span class="block text-sm font-semibold {{ tema.text_primary }}">Exigir minha aprovacao antes de ser adicionado(a) a um grupo</span>
+                            <span class="block text-sm font-semibold {{ tema.text_primary }}">Exigir minha aprovação antes de ser adicionado(a) a um grupo</span>
                             <span class="block text-xs {{ tema.text_secondary }} mt-1">
-                                Desligado: admins e lideres podem te adicionar direto a uma Comunidade ou Ministerio (voce recebe um aviso).
-                                Ligado: voce recebe um convite e decide se aceita. Vale so pra novas adicoes -- voce nao sai de nenhum grupo em que ja esta.
+                                Desligado: admins e líderes podem te adicionar direto a uma Comunidade ou Ministério (você recebe um aviso).
+                                Ligado: você recebe um convite e decide se aceita. Vale só pra novas adições -- você não sai de nenhum grupo em que já está.
                             </span>
                         </span>
                     </label>
                     <label class="flex items-start gap-3 cursor-pointer">
                         {{ privacidade_form.telefone_visivel_lider(class_="mt-1 w-4 h-4 shrink-0") }}
                         <span>
-                            <span class="block text-sm font-semibold {{ tema.text_primary }}">Lideres dos meus ministerios podem ver meu telefone</span>
+                            <span class="block text-sm font-semibold {{ tema.text_primary }}">Líderes dos meus ministérios podem ver meu telefone</span>
                             <span class="block text-xs {{ tema.text_secondary }} mt-1">
-                                Desligado: so voce e o admin da comunidade veem o numero. Os avisos de escala por WhatsApp/SMS continuam chegando normalmente.
+                                Desligado: só você e o admin da comunidade veem o número. Os avisos de escala por WhatsApp/SMS continuam chegando normalmente.
                                 Membros comuns e pessoas de outras comunidades nunca veem.
                             </span>
                         </span>
@@ -474,7 +474,7 @@
 
             <!-- Seguranca -->
             <div>
-                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Seguranca</h2>
+                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Segurança</h2>
                 <div class="space-y-3">
                     <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4">
                         <button type="button" data-toggle-alvo="form-senha" class="w-full flex items-center justify-between gap-3 text-left">
@@ -485,7 +485,7 @@
                             {{ senha_form.hidden_tag() }}
                             {% if not tem_senha %}
                             <p class="text-xs {{ tema.text_secondary }}">
-                                Sua conta entra so pelo Google. Defina uma senha pra tambem poder entrar com e-mail e senha.
+                                Sua conta entra só pelo Google. Defina uma senha pra também poder entrar com e-mail e senha.
                             </p>
                             {% endif %}
                             {% if tem_senha %}
@@ -505,7 +505,7 @@
                                 {{ senha_form.confirmar_senha.label(class_="block text-sm font-medium " ~ tema.text_primary ~ " mb-1") }}
                                 {{ senha_form.confirmar_senha(autocomplete="new-password", class_="block w-full rounded-xl border " ~ tema.card_border ~ " px-3 py-2 text-sm " ~ tema.text_primary) }}
                             </div>
-                            <p class="text-xs {{ tema.text_secondary }}">Minimo de 8 caracteres.</p>
+                            <p class="text-xs {{ tema.text_secondary }}">Mínimo de 8 caracteres.</p>
                             {{ senha_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
                         </form>
                     </div>
@@ -514,13 +514,13 @@
                         <div class="min-w-0">
                             <p class="text-sm font-semibold {{ tema.text_primary }}">Login com Google</p>
                             <p class="text-xs {{ tema.text_secondary }}">
-                                {{ "Sua conta esta conectada ao Google." if eh_conta_google else "Sua conta nao esta conectada ao Google." }}
+                                {{ "Sua conta esta conectada ao Google." if eh_conta_google else "Sua conta não está conectada ao Google." }}
                             </p>
                         </div>
                         {% if eh_conta_google %}
                         {% if tem_senha %}
                         <form method="POST" action="{{ url_for('main.desconectar_google') }}"
-                              data-confirm-excluir="Desconectar sua conta do Google? Voce ainda vai poder entrar com e-mail e senha.">
+                              data-confirm-excluir="Desconectar sua conta do Google? Você ainda vai poder entrar com e-mail e senha.">
                             {{ acao_form.hidden_tag() }}
                             <button type="submit"
                                     class="border {{ tema.card_border }} hover:bg-black/5 {{ tema.text_primary }} text-xs font-semibold px-4 py-2 rounded-full transition shrink-0">
@@ -582,7 +582,7 @@
         </div>
         <div id="chat-mensagens" class="flex-1 overflow-y-auto p-4 space-y-2 text-sm"></div>
         <form id="chat-form" class="border-t {{ tema.card_border }} p-3 flex items-center gap-2 shrink-0">
-            <input id="chat-input" type="text" placeholder="Digite sua duvida..." autocomplete="off"
+            <input id="chat-input" type="text" placeholder="Digite sua dúvida..." autocomplete="off"
                    class="flex-1 rounded-full border {{ tema.card_border }} px-4 py-2 text-sm focus:outline-none {{ tema.text_primary }}">
             <button type="submit" aria-label="Enviar"
                     class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white rounded-full px-4 py-2 text-sm font-semibold shrink-0">
@@ -593,7 +593,7 @@
 
     <button type="button" id="chat-fab" aria-label="Abrir chat"
             class="fixed bottom-24 lg:bottom-8 right-5 lg:right-8 w-12 h-12 rounded-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white shadow-lg flex items-center justify-center transition z-40">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg width="20" height="20" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
@@ -686,12 +686,12 @@
         // app/main/routes.py::_REGRAS_CHAT).
         var TOPICOS_CHAT = [
             { rotulo: 'Login e cadastro', pergunta: 'Como faco login ou cadastro?' },
-            { rotulo: 'Comunidades e ministerios', pergunta: 'O que sao comunidades e ministerios?' },
-            { rotulo: 'Escalas e rodizio', pergunta: 'Como funcionam escalas e rodizio?' },
-            { rotulo: 'Convites e papeis', pergunta: 'Como funcionam convites e a hierarquia de papeis?' },
-            { rotulo: 'Disponibilidade e calendario', pergunta: 'Como funcionam disponibilidade e calendario?' },
-            { rotulo: 'Notificacoes', pergunta: 'Como funcionam as notificacoes?' },
-            { rotulo: 'Seguranca dos dados', pergunta: 'Meus dados estao seguros?' },
+            { rotulo: 'Comunidades e ministérios', pergunta: 'O que são comunidades e ministérios?' },
+            { rotulo: 'Escalas e rodízio', pergunta: 'Como funcionam escalas e rodízio?' },
+            { rotulo: 'Convites e papéis', pergunta: 'Como funcionam convites e a hierarquia de papéis?' },
+            { rotulo: 'Disponibilidade e calendário', pergunta: 'Como funcionam disponibilidade e calendário?' },
+            { rotulo: 'Notificacoes', pergunta: 'Como funcionam as notificações?' },
+            { rotulo: 'Segurança dos dados', pergunta: 'Meus dados estão seguros?' },
             { rotulo: 'Tutorial guiado', pergunta: 'Como funciona o tutorial guiado?' }
         ];
 
@@ -751,7 +751,7 @@
                 .then(function (resp) { return resp.json(); })
                 .then(function (dados) {
                     removerDigitando();
-                    var resposta = dados.resposta || 'Desculpe, nao consegui responder agora.';
+                    var resposta = dados.resposta || 'Desculpe, não consegui responder agora.';
                     renderMensagem('bot', resposta);
                     historico.push({ autor: 'bot', texto: resposta });
                 })
@@ -766,8 +766,8 @@
                 painel.classList.toggle('hidden');
                 if (!painel.classList.contains('hidden') && mensagensEl.children.length === 0) {
                     var boasVindas = 'Oi! Sou o assistente do site. Escolha um assunto abaixo ou digite sua '
-                        + 'duvida -- posso ajudar com login, cadastro, comunidades, ministerios, escalas, '
-                        + 'rodizio, convites, disponibilidade, calendario, notificacoes, seguranca e o '
+                        + 'dúvida -- posso ajudar com login, cadastro, comunidades, ministérios, escalas, '
+                        + 'rodízio, convites, disponibilidade, calendário, notificações, segurança e o '
                         + 'tutorial guiado.';
                     renderMensagem('bot', boasVindas);
                     historico.push({ autor: 'bot', texto: boasVindas });

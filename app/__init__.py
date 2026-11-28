@@ -12,6 +12,13 @@ def create_app(config_name="default"):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
+    # Mensagens dos formularios em portugues ("Campo obrigatório." em vez de
+    # "This field is required."): as traducoes que ja vem no WTForms. O i18n
+    # do Flask-WTF (que exigiria Flask-Babel) fica desligado pra elas valerem.
+    from flask_wtf import FlaskForm
+    FlaskForm.Meta.locales = ["pt_BR", "pt"]
+    app.config.setdefault("WTF_I18N_ENABLED", False)
+
     # Sem isso o logger do Flask so mostra WARNING pra cima, e os registros
     # informativos (ex: o que o webhook do WhatsApp fez com cada mensagem,
     # app/whatsapp_recebidas.py) nunca aparecem no log do Azure.
@@ -163,6 +170,14 @@ def create_app(config_name="default"):
     app.add_template_filter(hora_local, "hora_local")
     from .whatsapp_recebidas import texto_whatsapp_em_html
     app.add_template_filter(texto_whatsapp_em_html, "whatsapp")
+
+    def px_do_tamanho(classes):
+        """"w-5 h-5" -> "20": tamanho do icone SVG em atributo, pro icone nao
+        ficar gigante quando o navegador (Android antigo) nao le o CSS."""
+        import re
+        achado = re.search(r"(?<![\w:-])w-(\d+(?:\.5)?)(?![\w/])", classes or "")
+        return "%g" % (float(achado.group(1)) * 4) if achado else "24"
+    app.add_template_filter(px_do_tamanho, "px")
 
     @app.context_processor
     def injetar_tema():

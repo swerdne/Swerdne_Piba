@@ -199,7 +199,7 @@ def test_busca_de_endereco(logged_in_client):
     falsa.json.return_value = [{"display_name": "Rua A, 10, São Paulo", "lat": "-23.5", "lon": "-46.6"}]
     falsa.raise_for_status.return_value = None
     with mock.patch("app.escala.local_checkin.requests.get", return_value=falsa) as chamada:
-        dados = logged_in_client.get("/local/buscar?q=Rua A 10 Sao Paulo").get_json()
+        dados = logged_in_client.get("/local/buscar?q=Rua A 10 São Paulo").get_json()
     assert dados["ok"] and dados["resultados"][0]["latitude"] == -23.5
     assert "TyBenson" in chamada.call_args.kwargs["headers"]["User-Agent"]
 

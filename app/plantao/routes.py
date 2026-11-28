@@ -144,7 +144,7 @@ def nova(ministerio_id):
             escala_origem.save()
 
         sincronizar_turno(turno)
-        flash(f'Turno de rodizio "{turno.nome}" criado! Agora monte a fila de rodizio.', "success")
+        flash(f'Turno de rodízio "{turno.nome}" criado! Agora monte a fila de rodízio.', "success")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
     return render_template("plantao/nova.html", form=form, ministerio=ministerio, escala_origem=escala_origem)
@@ -230,7 +230,7 @@ def editar(turno_id):
 
         sincronizar_turno(turno)
 
-        flash(f'Turno de rodizio "{turno.nome}" atualizado!', "success")
+        flash(f'Turno de rodízio "{turno.nome}" atualizado!', "success")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
     return render_template("plantao/editar.html", form=form, turno=turno)
@@ -243,7 +243,7 @@ def excluir_turno(turno_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
     # Escalas ja ocorridas ou fixadas (excecao pontual/edicao manual) viram
@@ -263,7 +263,7 @@ def excluir_turno(turno_id):
     nome = turno.nome
     delete_cascade(turno)
 
-    flash(f'Turno de rodizio "{nome}" excluido.', "success")
+    flash(f'Turno de rodízio "{nome}" excluído.', "success")
     return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio_id))
 
 
@@ -287,14 +287,14 @@ def adicionar_membro_fila(turno_id):
 
     membro = Membro.objects(id=form.membro_id.data, comunidade_id=turno.ministerio.comunidade_id).first()
     if membro is None:
-        flash("Pessoa invalida para esta comunidade.", "danger")
+        flash("Pessoa inválida para esta comunidade.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
     equipe_id = form.equipe_turno_id.data
     if equipe_id:
         equipe = EquipeTurno.objects(id=equipe_id, turno_id=turno.id).first()
         if equipe is None:
-            flash("Equipe invalida.", "danger")
+            flash("Equipe inválida.", "danger")
             return redirect(url_for("plantao.detalhe", turno_id=turno.id))
     else:
         maior_posicao = max([e.posicao for e in turno.fila], default=-1)
@@ -307,11 +307,11 @@ def adicionar_membro_fila(turno_id):
     # ministerio como membro (ver app/ministerio/papeis_auto.py).
     from app.ministerio.papeis_auto import incluir_escalado_no_ministerio
     if incluir_escalado_no_ministerio(membro, turno.ministerio):
-        flash(f"{membro.nome} tambem entrou nos Papeis do ministerio como membro.", "info")
+        flash(f"{membro.nome} também entrou nos Papéis do ministério como membro.", "info")
 
     sincronizar_turno(turno)
 
-    flash(f"{membro.nome} adicionado(a) a fila do rodizio.", "success")
+    flash(f"{membro.nome} adicionado(a) a fila do rodízio.", "success")
     return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
 
@@ -322,7 +322,7 @@ def remover_membro_fila(turno_id, equipe_membro_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("plantao.detalhe", turno_id=turno.id))
 
     item = primeiro_ou_404(EquipeMembro.objects(id=equipe_membro_id))
@@ -342,5 +342,5 @@ def remover_membro_fila(turno_id, equipe_membro_id):
 
     sincronizar_turno(turno)
 
-    flash(f"{nome} removido(a) da fila do rodizio.", "success")
+    flash(f"{nome} removido(a) da fila do rodízio.", "success")
     return redirect(url_for("plantao.detalhe", turno_id=turno.id))

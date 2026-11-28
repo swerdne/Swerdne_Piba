@@ -10,7 +10,7 @@
 
 {% from "_macros.html" import logo_inicio, nav_inferior, cartao_paleta, audio_material with context %}
 {% set DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'] %}
-{% set DIAS_LONGOS = ['Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'] %}
+{% set DIAS_LONGOS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] %}
 
 {% block content %}
 <div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
@@ -31,9 +31,9 @@
         <!-- Barra de dias em que a pessoa esta escalada -->
         <div>
             <div class="flex items-center justify-between mb-2">
-                <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">{{ "Dias anteriores" if ver_anteriores else "Seus proximos dias" }}</p>
+                <p class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">{{ "Dias anteriores" if ver_anteriores else "Seus próximos dias" }}</p>
                 {% if ver_anteriores %}
-                <a href="{{ url_for('main.minha_escala') }}" class="text-xs font-semibold {{ tema.accent_text }}">Ver proximos</a>
+                <a href="{{ url_for('main.minha_escala') }}" class="text-xs font-semibold {{ tema.accent_text }}">Ver próximos</a>
                 {% elif tem_anteriores %}
                 <a href="{{ url_for('main.minha_escala', anteriores=1) }}" class="text-xs font-semibold {{ tema.accent_text }}">Ver anteriores</a>
                 {% endif %}
@@ -67,7 +67,7 @@
             </p>
             {% if selecionada.cancelada %}
             <p class="inline-flex items-center gap-1.5 mt-2 text-xs font-bold bg-white text-red-600 rounded-full px-3 py-1">
-                <i class="fa-solid fa-ban"></i>Escala cancelada -- voce nao precisa comparecer
+                <i class="fa-solid fa-ban"></i>Escala cancelada -- você não precisa comparecer
             </p>
             {% endif %}
         </div>
@@ -115,7 +115,7 @@
         <!-- Sua funcao e status -->
         <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm divide-y {{ tema.divide }}">
             <p class="px-4 pt-3.5 pb-2.5 text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">
-                {{ "Suas funcoes" if minhas_funcoes|length > 1 else "Sua funcao" }}
+                {{ "Suas funções" if minhas_funcoes|length > 1 else "Sua função" }}
             </p>
             {% for funcao in minhas_funcoes %}
             {% set form = formularios_status[funcao.id] %}
@@ -161,7 +161,7 @@
                 {% if audios %}
                 <div class="divide-y {{ tema.divide }}">
                     {% for anexo in audios %}
-                    {{ audio_material(tema, anexo, ('Pra voce · ' ~ nomes_funcao[anexo.funcao_id]) if anexo.funcao_id else 'Toda a equipe') }}
+                    {{ audio_material(tema, anexo, ('Pra você · ' ~ nomes_funcao[anexo.funcao_id]) if anexo.funcao_id else 'Toda a equipe') }}
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -175,7 +175,7 @@
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-semibold {{ tema.text_primary }} truncate">{{ anexo.nome_arquivo }}</p>
                             <p class="text-xs {{ tema.text_secondary }} truncate">
-                                {% if anexo.funcao_id %}<span class="font-semibold {{ tema.accent_text }}">Pra voce &middot; {{ nomes_funcao[anexo.funcao_id] }}</span>{% else %}Toda a equipe{% endif %}
+                                {% if anexo.funcao_id %}<span class="font-semibold {{ tema.accent_text }}">Pra você &middot; {{ nomes_funcao[anexo.funcao_id] }}</span>{% else %}Toda a equipe{% endif %}
                                 &middot; {{ anexo.tamanho_legivel }}
                             </p>
                         </div>
@@ -205,7 +205,7 @@
                             </div>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-semibold {{ tema.text_primary }} truncate">
-                                    {% if ensaio.horario %}{{ ensaio.horario.strftime('%H:%M') }}{% if ensaio.horario_fim %} as {{ ensaio.horario_fim.strftime('%H:%M') }}{% endif %}{% else %}Horario a definir{% endif %}
+                                    {% if ensaio.horario %}{{ ensaio.horario.strftime('%H:%M') }}{% if ensaio.horario_fim %} as {{ ensaio.horario_fim.strftime('%H:%M') }}{% endif %}{% else %}Horário a definir{% endif %}
                                 </p>
                                 {% if ensaio.local %}<p class="text-xs {{ tema.text_secondary }} truncate"><i class="fa-solid fa-location-dot mr-1"></i>{{ ensaio.local }}</p>{% endif %}
                             </div>
@@ -243,7 +243,7 @@
                 <!-- Repertorio -->
                 <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm overflow-hidden">
                     <p class="flex items-center gap-2 px-4 py-3 text-sm font-semibold {{ tema.text_primary }} border-b {{ tema.card_border }}">
-                        <i class="fa-solid fa-list-ol {{ tema.text_secondary }}"></i>Repertorio
+                        <i class="fa-solid fa-list-ol {{ tema.text_secondary }}"></i>Repertório
                     </p>
                     <ol class="divide-y {{ tema.divide }}">
                         {% for item in repertorio %}
@@ -253,7 +253,7 @@
                                 <p class="text-sm {{ tema.text_primary }} truncate">{{ item.nome_musica }}{% if item.tom %} <span class="text-xs {{ tema.text_secondary }}">&middot; Tom {{ item.tom }}</span>{% endif %}</p>
                             </div>
                             {% if item.link %}
-                            <a href="{{ item.link }}" target="_blank" rel="noopener" class="text-xs {{ tema.accent_text }} shrink-0" aria-label="Abrir link da musica">
+                            <a href="{{ item.link }}" target="_blank" rel="noopener" class="text-xs {{ tema.accent_text }} shrink-0" aria-label="Abrir link da música">
                                 <i class="fa-solid fa-link"></i>
                             </a>
                             {% endif %}
@@ -265,7 +265,7 @@
                         {% for tipo in folhas_repertorio %}
                         <a href="{{ url_for('escala.folha_repertorio', escala_id=selecionada.id, tipo=tipo) }}" target="_blank" rel="noopener"
                            class="flex items-center justify-center gap-2 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-2.5 rounded-xl transition">
-                            <i class="fa-solid {{ 'fa-display' if tipo == 'projecao' else 'fa-guitar' }}"></i>{{ 'Letras pra projecao' if tipo == 'projecao' else 'Suas cifras' }}
+                            <i class="fa-solid {{ 'fa-display' if tipo == 'projecao' else 'fa-guitar' }}"></i>{{ 'Letras pra projeção' if tipo == 'projecao' else 'Suas cifras' }}
                         </a>
                         {% endfor %}
                     </div>
@@ -285,14 +285,14 @@
         {% elif not ver_anteriores and tem_anteriores %}
         <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
             <i class="fa-solid fa-calendar-check text-3xl {{ tema.text_secondary }}"></i>
-            <p class="text-sm {{ tema.text_secondary }} mt-3">Voce nao tem nenhuma escala por vir.</p>
+            <p class="text-sm {{ tema.text_secondary }} mt-3">Você não tem nenhuma escala por vir.</p>
             <a href="{{ url_for('main.minha_escala', anteriores=1) }}" class="inline-block mt-3 text-sm font-semibold {{ tema.accent_text }}">Ver dias anteriores</a>
         </div>
         {% else %}
         <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-8 text-center">
             <i class="fa-solid fa-calendar-check text-3xl {{ tema.text_secondary }}"></i>
-            <p class="text-sm {{ tema.text_secondary }} mt-3">Voce ainda nao esta escalado em nenhuma escala.</p>
-            <p class="text-xs {{ tema.text_secondary }} mt-1">Quando o lider te escalar, o dia aparece aqui com tudo o que voce precisa.</p>
+            <p class="text-sm {{ tema.text_secondary }} mt-3">Você ainda não está escalado em nenhuma escala.</p>
+            <p class="text-xs {{ tema.text_secondary }} mt-1">Quando o líder te escalar, o dia aparece aqui com tudo o que você precisa.</p>
         </div>
         {% endif %}
     </main>

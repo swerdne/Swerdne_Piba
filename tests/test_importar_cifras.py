@@ -264,15 +264,15 @@ def test_lote_grande_salvo_em_partes_avisa_uma_vez_com_o_total(logged_in_client,
     with app.app_context():
         ministerio = _ministerio(logged_in_client)
         url = f"/ministerio/{ministerio.id}/repertorio/importar/salvar"
-        parte1 = [{"nome": f"Musica {i}"} for i in range(3)]
-        parte2 = [{"nome": "Musica final"}]
+        parte1 = [{"nome": f"Música {i}"} for i in range(3)]
+        parte2 = [{"nome": "Música final"}]
         logged_in_client.post(url, data={"musicas": json.dumps(parte1), "parcial": "1"})
         logged_in_client.post(url, data={"musicas": json.dumps(parte2), "total": "4"})
 
         assert Musica.objects(comunidade_id=ministerio.comunidade_id).count() == 4
         with logged_in_client.session_transaction() as sessao:
             avisos = [mensagem for _categoria, mensagem in sessao.get("_flashes", [])]
-        assert avisos == ["4 musica(s) importada(s) para o banco do ministerio teste."]
+        assert avisos == ["4 música(s) importada(s) para o banco do ministério teste."]
 
 
 # --- Tom identificado pelos acordes (escala.models.detectar_tom) ---------------
@@ -287,7 +287,7 @@ def test_lote_grande_salvo_em_partes_avisa_uma_vez_com_o_total(logged_in_client,
     ("E7M  B  C#m7  A9\nA9 B4 B E", "E"),          # extensoes contam pela qualidade
     ("[G]Tu es [D]santo [Em]Senhor [C]Deus\n[G]fim", "G"),  # acordes no meio da letra
     ("G D", None),                                 # pouco acorde: nao chuta
-    ("so letra, nenhum acorde aqui", None),
+    ("só letra, nenhum acorde aqui", None),
 ])
 def test_detectar_tom_pelos_acordes(cifra, esperado):
     from app.escala.models import detectar_tom

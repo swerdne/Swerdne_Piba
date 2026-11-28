@@ -14,7 +14,7 @@ from app.db_utils import PureDateField, PureTimeField, SequentialIdDocument, del
 STATUS_PADRAO = "nao_notificado"
 
 STATUS_LABELS = {
-    "nao_notificado": "Nao notificado",
+    "nao_notificado": "Não notificado",
     "confirmado": "Confirmado",
     "presente": "Presente",
     "troca_solicitada": "Troca solicitada",

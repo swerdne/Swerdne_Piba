@@ -34,7 +34,7 @@ def _enviar_email_de_convite(convite):
         enviar_email(convite.email, f"Convite para {convite.escopo_nome}", corpo)
     except EmailNaoEnviadoError:
         flash(
-            f"Convite criado, mas o e-mail nao pode ser enviado agora. "
+            f"Convite criado, mas o e-mail não pode ser enviado agora. "
             f"Compartilhe o link manualmente: {link}",
             "danger",
         )
@@ -139,11 +139,11 @@ def aceitar_convite(token):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("convites.ver_convite", token=token))
 
     if convite.status != STATUS_PENDENTE:
-        flash("Este convite ja foi respondido.", "danger")
+        flash("Este convite já foi respondido.", "danger")
         return redirect(url_for("convites.ver_convite", token=token))
 
     if current_user.email.lower() != convite.email.lower():
@@ -157,7 +157,7 @@ def aceitar_convite(token):
     convite.respondido_em = datetime.now(timezone.utc)
     convite.save()
 
-    flash(f'Convite aceito! Voce agora e "{convite.papel}" em {convite.escopo_nome}.', "success")
+    flash(f'Convite aceito! Você agora é "{convite.papel}" em {convite.escopo_nome}.', "success")
     return redirect(destino)
 
 
@@ -168,11 +168,11 @@ def recusar_convite(token):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("convites.ver_convite", token=token))
 
     if convite.status != STATUS_PENDENTE:
-        flash("Este convite ja foi respondido.", "danger")
+        flash("Este convite já foi respondido.", "danger")
         return redirect(url_for("convites.ver_convite", token=token))
 
     if current_user.email.lower() != convite.email.lower():

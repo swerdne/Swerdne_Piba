@@ -10,7 +10,7 @@ from tests.test_escala import _criar_comunidade, _criar_ministerio, _criar_escal
 from tests.test_plantao import _criar_turno_teste
 
 
-def _cadastrar_crianca(cliente, ministerio_id, nome, responsavel_nome="Responsavel Teste"):
+def _cadastrar_crianca(cliente, ministerio_id, nome, responsavel_nome="Responsável Teste"):
     cliente.post(
         f"/ministerio/{ministerio_id}/checkin",
         data={"nome": nome, "responsavel_nome": responsavel_nome, "responsavel_telefone": ""},
@@ -29,11 +29,11 @@ def test_ministerio_sem_login_redireciona(client):
 def test_criar_ministerio_aparece_na_comunidade(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Ministerio de Louvor")
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Ministério de Louvor")
         assert ministerio is not None
 
         response = logged_in_client.get(f"/comunidade/{comunidade.id}")
-        assert "Ministerio de Louvor" in response.data.decode("utf-8")
+        assert "Ministério de Louvor" in response.data.decode("utf-8")
 
 
 def test_criar_ministerio_sem_nome_mostra_erro(logged_in_client, app, db):
@@ -54,13 +54,13 @@ def test_editar_ministerio_atualiza_nome(logged_in_client, app, db):
         ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Nome Antigo")
         response = logged_in_client.post(
             f"/ministerio/{ministerio.id}/editar",
-            data={"nome": "Nome Novo", "descricao": "Descricao nova"},
+            data={"nome": "Nome Novo", "descricao": "Descrição nova"},
             follow_redirects=True,
         )
         assert response.status_code == 200
         atualizado = Ministerio.objects(id=ministerio.id).first()
         assert atualizado.nome == "Nome Novo"
-        assert atualizado.descricao == "Descricao nova"
+        assert atualizado.descricao == "Descrição nova"
 
 
 def test_criar_ministerio_com_dias_de_culto_salva_csv(logged_in_client, app, db):
@@ -120,7 +120,7 @@ def test_calendario_mostra_cor_no_dia_da_escala(logged_in_client, app, db):
         response = logged_in_client.get(f"/ministerio/{ministerio.id}?ano=2026&mes=8")
         html = response.data.decode("utf-8")
         assert response.status_code == 200
-        assert "agosto de 2026" in html
+        assert "Agosto de 2026" in html
         # a escala aparece na legenda do calendario com sua data
         assert "Culto de Domingo" in html
         assert "09/08" in html
@@ -152,7 +152,7 @@ def test_escala_fora_do_mes_nao_aparece_na_legenda(logged_in_client, app, db):
 
         response = logged_in_client.get(f"/ministerio/{ministerio.id}?ano=2026&mes=8")
         html = response.data.decode("utf-8")
-        assert "Nenhuma escala com data neste mes" in html
+        assert "Nenhuma escala com data neste mês" in html
 
 
 # --- Pagina de calendario completa ---------------------------------------------
@@ -168,10 +168,10 @@ def test_calendario_completo_mostra_escala_no_dia(logged_in_client, app, db):
         response = logged_in_client.get(f"/ministerio/{ministerio.id}/calendario?ano=2026&mes=8")
         html = response.data.decode("utf-8")
         assert response.status_code == 200
-        assert "agosto de 2026" in html
+        assert "Agosto de 2026" in html
         assert "Culto de Domingo" in html
         # grade completa: linhas = semanas, colunas = dias da semana
-        assert "Dom" in html and "Seg" in html and "Sab" in html
+        assert "Dom" in html and "Seg" in html and "Sáb" in html
 
 
 def test_calendario_completo_navegacao_usa_a_propria_rota(logged_in_client, app, db):
@@ -195,7 +195,7 @@ def test_calendario_completo_sem_escalas_mostra_aviso(logged_in_client, app, db)
 
         response = logged_in_client.get(f"/ministerio/{ministerio.id}/calendario?ano=2026&mes=8")
         html = response.data.decode("utf-8")
-        assert "Nenhuma escala com data neste mes" in html
+        assert "Nenhuma escala com data neste mês" in html
 
 
 def test_widget_pequeno_linka_para_calendario_completo(logged_in_client, app, db):
@@ -292,7 +292,7 @@ def test_escalas_manuais_continuam_aparecendo_uma_a_uma(logged_in_client, app, d
 def test_excluir_ministerio_remove_e_redireciona_para_comunidade(logged_in_client, app, db):
     with app.app_context():
         comunidade = _criar_comunidade(logged_in_client)
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Ministerio a Apagar")
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Ministério a Apagar")
         ministerio_id = ministerio.id
 
         response = logged_in_client.post(
@@ -300,7 +300,7 @@ def test_excluir_ministerio_remove_e_redireciona_para_comunidade(logged_in_clien
         )
         assert response.status_code == 200
         assert Ministerio.objects(id=ministerio_id).first() is None
-        assert "excluido" in response.data.decode("utf-8")
+        assert "excluído" in response.data.decode("utf-8")
 
 
 def test_excluir_ministerio_apaga_escalas_e_turnos_de_rodizio_em_cascata(logged_in_client, app, db):
@@ -354,7 +354,7 @@ def test_usuario_nao_consegue_ver_ministerio_de_outra_conta(logged_in_client, ou
 def test_usuario_nao_consegue_editar_ministerio_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):
     with sessao_isolada(app):
         comunidade = _criar_comunidade(logged_in_client, "Comunidade Ana")
-        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Ministerio Original")
+        ministerio = _criar_ministerio(logged_in_client, comunidade.id, "Ministério Original")
         ministerio_id = ministerio.id
 
     with sessao_isolada(app):
@@ -366,7 +366,7 @@ def test_usuario_nao_consegue_editar_ministerio_de_outra_conta(logged_in_client,
         assert response.status_code == 404
 
     with sessao_isolada(app):
-        assert Ministerio.objects(id=ministerio_id).first().nome == "Ministerio Original"
+        assert Ministerio.objects(id=ministerio_id).first().nome == "Ministério Original"
 
 
 def test_usuario_nao_consegue_criar_ministerio_em_comunidade_de_outra_conta(logged_in_client, outro_logged_in_client, app, db):

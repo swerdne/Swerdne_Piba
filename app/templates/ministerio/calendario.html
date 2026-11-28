@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Calendario - {{ ministerio.nome }}{% endblock %}
+{% block title %}Calendário - {{ ministerio.nome }}{% endblock %}
 
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,7 +25,7 @@
             <a href="{{ url_for('ministerio.detalhe', ministerio_id=ministerio.id) }}" class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm group shrink-0" aria-label="Voltar">
                 <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
             </a>
-            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Calendario - {{ ministerio.nome }}</span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Calendário - {{ ministerio.nome }}</span>
         </div>
         {{ logo_inicio(tema) }}
     </header>
@@ -36,13 +36,13 @@
         <div class="flex items-center justify-center gap-4 mb-4">
             <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_anterior, mes=mes_anterior, pessoa=filtro_pessoa.id if filtro_pessoa else None) }}"
                class="w-9 h-9 flex items-center justify-center {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-xl {{ tema.text_secondary }} {{ tema.text_hover }} transition"
-               aria-label="Mes anterior">
+               aria-label="Mês anterior">
                 <i class="fa-solid fa-chevron-left text-xs"></i>
             </a>
-            <span class="text-lg font-bold {{ tema.text_primary }} capitalize w-48 text-center">{{ mes_ano_texto }}</span>
+            <span class="text-lg font-bold {{ tema.text_primary }} w-48 text-center">{{ mes_ano_texto[:1]|upper }}{{ mes_ano_texto[1:] }}</span>
             <a href="{{ url_for('ministerio.calendario', ministerio_id=ministerio.id, ano=ano_proximo, mes=mes_proximo, pessoa=filtro_pessoa.id if filtro_pessoa else None) }}"
                class="w-9 h-9 flex items-center justify-center {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm rounded-xl {{ tema.text_secondary }} {{ tema.text_hover }} transition"
-               aria-label="Proximo mes">
+               aria-label="Próximo mês">
                 <i class="fa-solid fa-chevron-right text-xs"></i>
             </a>
         </div>
@@ -51,7 +51,7 @@
 
         <!-- Grade: linhas = semanas, colunas = dias da semana -->
         <div class="grid grid-cols-7 border-l border-t {{ tema.card_border }} rounded-2xl shadow-sm overflow-hidden">
-            {% for nome_dia in ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'] %}
+            {% for nome_dia in ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] %}
             <div class="text-center text-xs font-semibold {{ tema.text_secondary }} py-2 border-r border-b {{ tema.card_border }} {{ tema.card_bg }}">
                 {{ nome_dia }}
             </div>
@@ -94,6 +94,7 @@
                         {% endif %}
                     </div>
                     {% endif %}
+                    {% set modo = 'grade' %}{% include "comunidade/_eventos_no_calendario.html" %}
                     {% set ensaios_dia = ensaios_por_dia.get(dia, []) %}
                     {% if ensaios_dia %}
                     <div class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
@@ -122,7 +123,7 @@
         {% set parte = 'resumo' %}{% include "escala/_filtro_pessoa_calendario.html" %}
 
         {% if not legenda %}
-        <p class="text-sm {{ tema.text_secondary }} mt-4 text-center">Nenhuma escala com data neste mes.</p>
+        <p class="text-sm {{ tema.text_secondary }} mt-4 text-center">Nenhuma escala com data neste mês.</p>
         {% endif %}
 
     </main>
@@ -199,7 +200,7 @@
                     if (!dados.escalados.length) {
                         var vazio = document.createElement('p');
                         vazio.className = 'text-xs {{ tema.text_secondary }}';
-                        vazio.textContent = 'Ninguem escalado ainda.';
+                        vazio.textContent = 'Ninguém escalado ainda.';
                         elEscalados.appendChild(vazio);
                     } else {
                         dados.escalados.forEach(function (item) {

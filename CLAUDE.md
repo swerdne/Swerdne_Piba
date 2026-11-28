@@ -88,8 +88,19 @@ CSS (Tailwind, só necessário se mexer em classes/estilo):
 ```powershell
 npm install
 npm run watch:css   # dev, recompila em watch
-npm run build:css   # build minificado
+npm run build:css   # build minificado + scripts/css-compat.js
 ```
+
+`build:css` roda o Tailwind v4 e depois `scripts/css-compat.js`, que deixa o
+CSS legível no Android 11 / Chrome 80-87 (tira o `@layer`, põe reservas pra
+`@property`, `:where()`, `oklch()`, `translate:` e gap em flexbox via
+`html.sem-gap-flex`, marcado no `base.html`). Sempre gere o `style.css` por
+ele, nunca só pelo `watch:css`, antes de publicar. Ícones `<svg>` levam
+`width`/`height` em atributo (filtro `|px` nas macros).
+
+Textos visíveis vão com acento. `scripts/acentuar_textos.py --checar` acusa
+palavra comum sem acento (o teste `test_nenhum_texto_conhecido_sem_acento`
+roda isso); sem `--checar` ele corrige.
 
 ### Testes
 

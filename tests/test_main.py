@@ -66,7 +66,7 @@ def test_dashboard_mostra_proxima_escala_em_que_o_usuario_esta_escalado(logged_i
         html = logged_in_client.get("/dashboard").data.decode("utf-8")
 
     assert "Culto de Domingo" in html
-    assert "Sua funcao" in html and "Baixo" in html
+    assert "Sua função" in html and "Baixo" in html
     assert "Culto Passado" not in html
     # Cancelada nao vira "Proxima escala" -- aparece so como aviso em "Ensaios e avisos".
     card_proxima, avisos = html.split("Ensaios e avisos", 1)
@@ -102,7 +102,7 @@ def test_dashboard_lista_comunidades_do_usuario(logged_in_client, app, db):
 
         html = logged_in_client.get("/dashboard").data.decode("utf-8")
 
-    assert "Igreja da Ana" in html and "2 ministerios" in html
+    assert "Igreja da Ana" in html and "2 ministérios" in html
     assert "Igreja Vizinha" in html and "Membro" in html
     assert "Igreja Alheia" not in html
 
@@ -130,7 +130,7 @@ def test_dashboard_agrupa_notificacoes_por_escala(logged_in_client, app, db):
         ana = User.objects(email="ana@example.com").first()
         comunidade = Comunidade(nome="Comunidade Teste", usuario_id=ana.id)
         comunidade.save()
-        ministerio = Ministerio(nome="Ministerio Teste", comunidade_id=comunidade.id)
+        ministerio = Ministerio(nome="Ministério Teste", comunidade_id=comunidade.id)
         ministerio.save()
         escala_a = Escala(ministerio_id=ministerio.id, nome="Culto A", departamento="Louvor")
         escala_a.save()
@@ -217,7 +217,7 @@ def test_definir_senha_em_conta_so_google_nao_exige_senha_atual(app, db):
     conferir -- o POST em /perfil/senha define a primeira senha direto."""
     with app.app_context():
         from app.auth.models import User
-        user = User(google_id="google-123", email="so-google@example.com", name="So Google", email_confirmado=True)
+        user = User(google_id="google-123", email="so-google@example.com", name="Só Google", email_confirmado=True)
         user.save()
         user_id = user.id
 
@@ -300,7 +300,7 @@ def test_desconectar_google_sem_senha_e_bloqueado(app, db):
     esse botao nesse caso)."""
     with app.app_context():
         from app.auth.models import User
-        user = User(google_id="google-so-1", email="so-google3@example.com", name="So Google", email_confirmado=True)
+        user = User(google_id="google-so-1", email="so-google3@example.com", name="Só Google", email_confirmado=True)
         user.save()
         user_id = user.id
 
@@ -370,28 +370,28 @@ def test_chat_explica_tutorial(logged_in_client):
 
 
 def test_chat_explica_comunidade_e_ministerio(logged_in_client):
-    r1 = logged_in_client.post("/chat", json={"mensagem": "o que e uma comunidade?", "historico": []})
+    r1 = logged_in_client.post("/chat", json={"mensagem": "o que é uma comunidade?", "historico": []})
     assert "Comunidade" in r1.get_json()["resposta"]
 
-    r2 = logged_in_client.post("/chat", json={"mensagem": "pra que serve um ministerio?", "historico": []})
-    assert "Ministerio" in r2.get_json()["resposta"]
+    r2 = logged_in_client.post("/chat", json={"mensagem": "pra que serve um ministério?", "historico": []})
+    assert "Ministério" in r2.get_json()["resposta"]
 
 
 def test_chat_explica_hierarquia_de_papeis(logged_in_client):
     response = logged_in_client.post(
-        "/chat", json={"mensagem": "qual a diferenca entre super admin e lider de ministerio?", "historico": []}
+        "/chat", json={"mensagem": "qual a diferenca entre super admin e líder de ministério?", "historico": []}
     )
     resposta = response.get_json()["resposta"]
     assert "Super Admin" in resposta
-    assert "Lider de Ministerio" in resposta
+    assert "Líder de Ministério" in resposta
 
 
 def test_chat_explica_disponibilidade_e_calendario(logged_in_client):
     r1 = logged_in_client.post("/chat", json={"mensagem": "como funciona a disponibilidade?", "historico": []})
     assert "disponibilidade" in r1.get_json()["resposta"].lower()
 
-    r2 = logged_in_client.post("/chat", json={"mensagem": "tem um calendario?", "historico": []})
-    assert "Calendario" in r2.get_json()["resposta"]
+    r2 = logged_in_client.post("/chat", json={"mensagem": "tem um calendário?", "historico": []})
+    assert "Calendário" in r2.get_json()["resposta"]
 
 
 def test_chat_responde_saudacao_e_agradecimento(logged_in_client):

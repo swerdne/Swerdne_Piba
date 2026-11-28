@@ -34,7 +34,7 @@
                     <p class="text-xs {{ tema.text_secondary }}">
                         {{ turno.departamento }}
                         &middot; {{ turno.descricao_recorrencia }}
-                        &middot; inicio em {{ turno.data_inicio.strftime('%d/%m/%Y') }}
+                        &middot; início em {{ turno.data_inicio.strftime('%d/%m/%Y') }}
                         {% if turno.horario %} &middot; {{ turno.horario.strftime('%H:%M') }}{% endif %}
                     </p>
                     {% if turno.escala_origem %}
@@ -67,28 +67,28 @@
 
         <p class="text-xs {{ tema.text_secondary }}">
             <i class="fa-solid fa-circle-info mr-1"></i>
-            As ocorrencias geradas por este rodizio aparecem como Escalas de verdade no
-            calendario e na lista de escalas do ministerio, com a cor de
-            <strong>{{ turno.departamento }}</strong> -- inclusive recebendo a notificacao
-            automatica 24h/16h antes do evento.
+            As ocorrências geradas por este rodízio aparecem como Escalas de verdade no
+            calendário e na lista de escalas do ministério, com a cor de
+            <strong>{{ turno.departamento }}</strong> -- inclusive recebendo a notificação
+            automática 24h/16h antes do evento.
         </p>
 
         <!-- Fila de rodizio -->
         <div>
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
-                Fila de rodizio ({{ turno.fila_ordenada|length }} equipe{{ 's' if turno.fila_ordenada|length != 1 }})
+                Fila de rodízio ({{ turno.fila_ordenada|length }} equipe{{ 's' if turno.fila_ordenada|length != 1 }})
             </h2>
             <p class="text-xs {{ tema.text_secondary }} -mt-2 mb-3">
                 <i class="fa-solid fa-circle-info mr-1"></i>
-                Cada posicao da fila e uma equipe -- quando ela e sorteada, todas as pessoas
-                dela aparecem juntas, na mesma ocorrencia. Uma equipe com 1 so pessoa se
-                comporta como um rodizio individual comum.
+                Cada posição da fila e uma equipe -- quando ela e sorteada, todas as pessoas
+                dela aparecem juntas, na mesma ocorrência. Uma equipe com 1 só pessoa se
+                comporta como um rodízio individual comum.
             </p>
 
             {% if not turno.fila_ordenada %}
             <div class="text-center py-10 {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-sm mb-3">
                 <i class="fa-solid fa-users text-3xl {{ tema.text_secondary }}"></i>
-                <p class="mt-3 {{ tema.text_secondary }}">Ninguem na fila ainda -- adicione pessoas do diretorio abaixo.</p>
+                <p class="mt-3 {{ tema.text_secondary }}">Ninguém na fila ainda -- adicione pessoas do diretório abaixo.</p>
             </div>
             {% else %}
             <div class="space-y-2 mb-3">
@@ -124,7 +124,7 @@
 
             {% if diretorio_vazio %}
             <p class="text-xs {{ tema.text_secondary }}">
-                O diretorio da comunidade ainda nao tem ninguem cadastrado.
+                O diretório da comunidade ainda não tem ninguém cadastrado.
                 <a href="{{ url_for('comunidade.membros', comunidade_id=turno.ministerio.comunidade_id) }}"
                    class="{{ tema.accent_text }} hover:underline">Cadastrar membros</a>
             </p>
@@ -140,7 +140,7 @@
             </form>
             {% else %}
             <p class="text-xs {{ tema.text_secondary }}">
-                Todo mundo do diretorio ja esta nessa fila.
+                Todo mundo do diretório já está nessa fila.
                 <a href="{{ url_for('comunidade.membros', comunidade_id=turno.ministerio.comunidade_id) }}"
                    class="{{ tema.accent_text }} hover:underline">Cadastrar mais gente</a>
             </p>
@@ -150,13 +150,13 @@
         <!-- Ocorrencias (passadas e futuras) -->
         <div>
             <h2 class="text-xs font-bold {{ tema.text_secondary }} uppercase tracking-wide mb-3">
-                Ocorrencias geradas
+                Ocorrências geradas
             </h2>
 
             {% if not turno.fila_ordenada %}
-            <p class="text-sm {{ tema.text_secondary }}">Adicione pessoas na fila pra as ocorrencias serem geradas.</p>
+            <p class="text-sm {{ tema.text_secondary }}">Adicione pessoas na fila pra as ocorrências serem geradas.</p>
             {% elif not ocorrencias %}
-            <p class="text-sm {{ tema.text_secondary }}">Nenhuma ocorrencia gerada ainda.</p>
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma ocorrência gerada ainda.</p>
             {% else %}
             <div class="rounded-2xl shadow-sm border {{ tema.card_border }} overflow-hidden divide-y {{ tema.divide }}">
                 {% set ns = namespace(divisor_mostrado=false) %}
@@ -186,12 +186,12 @@
                         {% endif %}
                     </div>
                     <span class="text-sm {{ tema.text_primary }} flex-1 min-w-0 truncate">
-                        {{ escalados | map(attribute='membro.nome') | join(', ') if escalados else "ninguem na fila" }}
+                        {{ escalados | map(attribute='membro.nome') | join(', ') if escalados else "ninguém na fila" }}
                     </span>
                     {% if ja_ocorreu %}
-                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">ja ocorreu</span>
+                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0">já ocorreu</span>
                     {% elif escala.plantao_fixado %}
-                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Remanejada por ausencia ou editada manualmente">
+                    <span class="text-[10px] uppercase tracking-wide {{ tema.text_secondary }} shrink-0" title="Remanejada por ausência ou editada manualmente">
                         <i class="fa-solid fa-thumbtack"></i> fixada
                     </span>
                     {% endif %}

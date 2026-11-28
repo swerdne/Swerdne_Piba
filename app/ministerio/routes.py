@@ -33,13 +33,13 @@ from app.convites.models import Convite
 from app.convites.adicao import adicionar_ou_convidar
 
 MESES_PT = [
-    "", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
+    "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
 DIAS_SEMANA_PT = [
-    "segunda-feira", "terca-feira", "quarta-feira", "quinta-feira",
-    "sexta-feira", "sabado", "domingo",
+    "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+    "sexta-feira", "sábado", "domingo",
 ]
 
 
@@ -169,7 +169,7 @@ def nova(comunidade_id):
             ",".join(str(d) for d in sorted(form.dias_culto.data)) if form.dias_culto.data else None
         )
         ministerio.save()
-        flash(f'Ministerio "{ministerio.nome}" criado!', "success")
+        flash(f'Ministério "{ministerio.nome}" criado!', "success")
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
     return render_template("ministerio/nova.html", form=form, comunidade=comunidade)
@@ -232,7 +232,11 @@ def _dados_calendario(ministerio, hoje):
 
     (ano_anterior, mes_anterior), (ano_proximo, mes_proximo) = _navegacao_calendario(ano, mes)
 
+    # Eventos da comunidade (conferencia, culto especial...) junto das escalas.
+    from app.comunidade.models import eventos_por_dia
+
     return {
+        "eventos_comunidade_por_dia": eventos_por_dia(ministerio.comunidade_id, semanas[0][0], semanas[-1][-1]),
         "semanas": semanas,
         "mes": mes,
         "ano": ano,
@@ -317,17 +321,24 @@ def detalhe(ministerio_id):
     # apareceria DE NOVO, agora como card independente nesta secao, dando
     # impressao de que o rodizio existe solto fora da escala. escala_origem
     # de todos os turnos em lote (1 consulta, nao 1 por turno).
+    # Mas a secao nao pode dizer "Nenhum turno de rodizio criado" com um
+    # rodizio ativo: o vinculado aparece como "Rodizio da escala X", com link
+    # pra propria escala (o ponto de entrada dele), nunca pra plantao.detalhe.
     todos_turnos = list(ministerio.turnos_plantao)
-    ids_turnos_com_origem_geral = set()
+    escala_origem_por_turno = {}
     if todos_turnos:
         from app.escala.models import Escala
-        ids_turnos_com_origem_geral = {
-            e.turno_plantao_origem_id
+        escala_origem_por_turno = {
+            e.turno_plantao_origem_id: e
             for e in Escala.objects(turno_plantao_origem_id__in=[t.id for t in todos_turnos])
         }
     turnos_plantao = sorted(
-        (t for t in todos_turnos if t.id not in ids_turnos_com_origem_geral),
+        (t for t in todos_turnos if t.id not in escala_origem_por_turno),
         key=lambda t: t.nome,
+    )
+    turnos_vinculados = sorted(
+        ((t, escala_origem_por_turno[t.id]) for t in todos_turnos if t.id in escala_origem_por_turno),
+        key=lambda par: par[0].nome,
     )
 
     dados_calendario = _dados_calendario(ministerio, hoje)
@@ -375,6 +386,7 @@ def detalhe(ministerio_id):
         qtd_ocorrencias_por_turno=qtd_ocorrencias_por_turno,
         proximo_ensaio_por_escala=proximo_ensaio_por_escala,
         turnos_plantao=turnos_plantao,
+        turnos_vinculados=turnos_vinculados,
         data_extenso=data_extenso,
         acao_form=AcaoForm(),
         **dados_calendario,
@@ -497,11 +509,45 @@ def checkin_culto(ministerio_id):
             corpo["distancia_m"] = round(distancia)
         return jsonify(corpo)
 
+    agora = datetime.now(timezone.utc)
     PresencaCulto(
-        ministerio_id=ministerio.id, data=hoje, usuario_id=current_user.id, checkin_em=datetime.now(timezone.utc),
+        ministerio_id=ministerio.id, data=hoje, usuario_id=current_user.id, checkin_em=agora,
         distancia_m=round(distancia), precisao_m=round(precisao) if precisao is not None else None,
     ).save()
-    return jsonify({"ok": True, "mensagem": "Check-in feito! Presença no culto confirmada.", "distancia_m": round(distancia)})
+    marcadas = _presente_nas_escalas_de_hoje(ministerio, hoje, agora, distancia, precisao)
+    mensagem = "Check-in feito! Presença no culto confirmada."
+    if marcadas:
+        mensagem += " Sua função na escala de hoje também ficou como Presente."
+    return jsonify({"ok": True, "mensagem": mensagem, "distancia_m": round(distancia)})
+
+
+def _presente_nas_escalas_de_hoje(ministerio, hoje, agora, distancia, precisao):
+    """Check-in no culto vale tambem pra escala do mesmo dia: quem esta
+    escalado hoje neste ministerio (e com check-in de escala ligado) passa a
+    "Presente" -- antes a presenca no culto ficava confirmada e a funcao
+    continuava "Nao notificado". Devolve as funcoes marcadas."""
+    from app.escala.checkin import checkin_ligado
+    from app.escala.models import Escala, Funcao, Membro
+
+    ids_membro = [m.id for m in Membro.da_conta((current_user.email or "").lower()).only("id")]
+    if not ids_membro:
+        return []
+    escalas = {e.id: e for e in Escala.objects(ministerio_id=ministerio.id, data=hoje, cancelada__ne=True)}
+    if not escalas:
+        return []
+    marcadas = []
+    for funcao in Funcao.objects(escala_id__in=list(escalas), membro_id__in=ids_membro):
+        if funcao.status == "presente" or not checkin_ligado(escalas[funcao.escala_id], "escala"):
+            continue
+        funcao.status = "presente"
+        funcao.troca_motivo = None
+        funcao.troca_sugestao_membro_id = None
+        funcao.checkin_em = agora
+        funcao.checkin_distancia_m = round(distancia)
+        funcao.checkin_precisao_m = round(precisao) if precisao is not None else None
+        funcao.save()
+        marcadas.append(funcao)
+    return marcadas
 
 
 def cultos_de_hoje(usuario, hoje):
@@ -579,7 +625,7 @@ def lembrete(ministerio_id):
         ministerio.lembrete_dias_antes = form.dias_antes.data if form.dias_antes.data != LEMBRETE_DIAS_PADRAO else None
         ministerio.lembrete_horario = form.horario.data
         ministerio.save()
-        flash("Lembrete automatico salvo. Vale pras escalas que ainda nao receberam o lembrete.", "success")
+        flash("Lembrete automático salvo. Vale pras escalas que ainda não receberam o lembrete.", "success")
         return redirect(url_for("ministerio.lembrete", ministerio_id=ministerio.id))
 
     return render_template("ministerio/lembrete.html", ministerio=ministerio, form=form)
@@ -624,7 +670,7 @@ def editar(ministerio_id):
             _remover_logo_antiga(logo_antiga)
 
         ministerio.save()
-        flash("Ministerio atualizado!", "success")
+        flash("Ministério atualizado!", "success")
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
     return render_template("ministerio/editar.html", form=form, ministerio=ministerio)
@@ -662,14 +708,14 @@ def excluir_ministerio(ministerio_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio.id))
 
     nome = ministerio.nome
     comunidade_id = ministerio.comunidade_id
     excluir_ministerio_em_cascata(ministerio)
 
-    flash(f'Ministerio "{nome}" excluido.', "success")
+    flash(f'Ministério "{nome}" excluído.', "success")
     return redirect(url_for("comunidade.detalhe", comunidade_id=comunidade_id))
 
 
@@ -721,7 +767,7 @@ def papeis(ministerio_id):
         # de novo aqui -- alguem poderia montar o POST na mao com um papel
         # fora da hierarquia que tem permissao de conceder.
         if form.papel.data not in papeis_permitidos:
-            flash("Voce nao tem permissao para conceder esse papel.", "danger")
+            flash("Você não tem permissão para conceder esse papel.", "danger")
             return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
         # Direto ou por convite, conforme a preferencia de privacidade da
@@ -734,7 +780,7 @@ def papeis(ministerio_id):
         # (senao teria papel mas nao apareceria pra ser escalado).
         membro, criado = garantir_no_diretorio(ministerio.comunidade_id, form.email.data)
         if criado:
-            flash(f"{membro.nome} tambem entrou no diretorio da comunidade (ja pode ser escalado).", "info")
+            flash(f"{membro.nome} também entrou no diretório da comunidade (já pode ser escalado).", "info")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     # Quem ja estava escalado antes da inclusao automatica entra uma vez so
@@ -744,7 +790,7 @@ def papeis(ministerio_id):
 
     incluidos = sincronizar_escalados_antigos(ministerio, hoje_brasilia())
     if incluidos:
-        flash(f"{incluidos} pessoa(s) que ja estavam escaladas entraram como membro.", "info")
+        flash(f"{incluidos} pessoa(s) que já estavam escaladas entraram como membro.", "info")
 
     papeis_atuais = pre_carregar_usuarios(list(
         UsuarioMinisterio.objects(ministerio_id=ministerio.id).order_by("papel")
@@ -807,7 +853,7 @@ def gerar_link_convite(ministerio_id):
     comunidade; quem entra por ele e sempre "membro"."""
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
     ministerio.gerar_novo_link_convite()
     ministerio.save()
@@ -852,19 +898,19 @@ def remover_papel(ministerio_id, usuario_ministerio_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     # Um lider (nao-admin) so pode remover papeis que ele mesmo poderia
     # conceder (membro) -- nao pode expulsar outro lider.
     papeis_permitidos = _papeis_convidaveis_no_ministerio(ministerio, current_user)
     if papel.papel not in papeis_permitidos:
-        flash("Voce nao tem permissao para remover esse papel.", "danger")
+        flash("Você não tem permissão para remover esse papel.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
     papel.delete()
-    flash(f"{nome} removido(a) do ministerio.", "success")
+    flash(f"{nome} removido(a) do ministério.", "success")
     return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
 
@@ -877,16 +923,16 @@ def alternar_lider(ministerio_id, usuario_ministerio_id):
     ministerio = _ministerio_gerenciavel_ou_404(ministerio_id)
     papel = primeiro_ou_404(UsuarioMinisterio.objects(id=usuario_ministerio_id, ministerio_id=ministerio.id))
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
     if "lider" not in _papeis_convidaveis_no_ministerio(ministerio, current_user):
-        flash("Voce nao tem permissao para mudar quem e lider.", "danger")
+        flash("Você não tem permissão para mudar quem e líder.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     papel.papel = "lider" if request.form.get("lider") == "sim" else "membro"
     papel.save()
     nome = papel.usuario.name or papel.usuario.username or papel.usuario.email
-    flash(f"{nome} agora e {'lider' if papel.papel == 'lider' else 'membro'} do ministerio.", "success")
+    flash(f"{nome} agora é {'lider' if papel.papel == 'lider' else 'membro'} do ministério.", "success")
     return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
 
@@ -900,7 +946,7 @@ def cancelar_convite(ministerio_id, convite_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
 
     convite.delete()
@@ -953,12 +999,12 @@ def fazer_checkin(ministerio_id, crianca_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
     ja_presente = CheckInCrianca.objects(crianca_id=crianca.id, hora_saida=None).first()
     if ja_presente:
-        flash(f"{crianca.nome} ja esta com check-in em aberto.", "warning")
+        flash(f"{crianca.nome} já está com check-in em aberto.", "warning")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
     codigo = "".join(random.choices(string.digits, k=4))
@@ -971,8 +1017,8 @@ def fazer_checkin(ministerio_id, crianca_id):
     registro.save()
 
     flash(
-        f"Check-in de {crianca.nome} feito. Codigo de seguranca: {codigo} -- "
-        "anote ou tire uma foto pra entregar ao responsavel.",
+        f"Check-in de {crianca.nome} feito. Código de segurança: {codigo} -- "
+        "anote ou tire uma foto pra entregar ao responsável.",
         "success",
     )
     return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
@@ -988,22 +1034,22 @@ def fazer_checkout(ministerio_id, checkin_id):
     form = CheckoutForm()
 
     if not form.validate_on_submit():
-        flash("Informe o codigo de seguranca.", "danger")
+        flash("Informe o código de segurança.", "danger")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
     if registro.hora_saida is not None:
-        flash(f"{registro.crianca.nome} ja teve saida registrada.", "danger")
+        flash(f"{registro.crianca.nome} já teve saída registrada.", "danger")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
     if form.codigo_seguranca.data.strip() != registro.codigo_seguranca:
-        flash("Codigo de seguranca nao confere.", "danger")
+        flash("Código de segurança não confere.", "danger")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
     registro.hora_saida = datetime.now(timezone.utc)
     registro.retirado_por_id = current_user.id
     registro.save()
 
-    flash(f"Saida de {registro.crianca.nome} confirmada.", "success")
+    flash(f"Saída de {registro.crianca.nome} confirmada.", "success")
     return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
 
@@ -1015,7 +1061,7 @@ def excluir_crianca(ministerio_id, crianca_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.checkin", ministerio_id=ministerio.id))
 
     nome = crianca.nome
@@ -1347,7 +1393,7 @@ def nova_musica(comunidade_id=None, ministerio_id=None):
     _palavras_chave_se_faltar(musica)
     musica.palavras_chave_verificadas = False
     musica.save()
-    flash(f'"{musica.nome}" cadastrada. Cole a cifra aqui no Louvor; na aba Projecao, '
+    flash(f'"{musica.nome}" cadastrada. Cole a cifra aqui no Louvor; na aba Projeção, '
           '"Gerar da cifra" monta a letra sem acordes.', "success")
     return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
 
@@ -1377,7 +1423,7 @@ def aprovar_musica(musica_id):
     musica, comunidade = _sugestao_do_admin_ou_404(musica_id)
     voltar = url_for("ministerio.banco_musicas", comunidade_id=comunidade.id) + "#sugestoes"
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(voltar)
 
     chave = chave_do_nome(musica.nome)
@@ -1413,7 +1459,7 @@ def dispensar_sugestao(musica_id):
     if AcaoForm().validate_on_submit():
         musica.sugestao_dispensada = True
         musica.save()
-        flash(f'"{musica.nome}" saiu das sugestoes (continua no banco do ministerio).', "success")
+        flash(f'"{musica.nome}" saiu das sugestões (continua no banco do ministério).', "success")
     return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade.id) + "#sugestoes")
 
 
@@ -1452,7 +1498,7 @@ def extrair_musica_pdf(comunidade_id=None, ministerio_id=None):
 
     banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     if not AcaoForm().validate_on_submit():
-        return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
+        return jsonify({"erro": "Sessão expirada -- recarregue a página."}), 400
     arquivo = request.files.get("arquivo")
     if arquivo is None or not arquivo.filename:
         return jsonify({"erro": "Envie um arquivo PDF ou Word (.docx)."}), 400
@@ -1492,7 +1538,7 @@ def colar_cifra(comunidade_id=None, ministerio_id=None):
 
     banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     if not AcaoForm().validate_on_submit():
-        return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
+        return jsonify({"erro": "Sessão expirada -- recarregue a página."}), 400
     try:
         musica = extrair_musica_de_texto(request.form.get("texto"))
     except ArquivoInvalidoError as erro:
@@ -1512,15 +1558,15 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
 
     banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     if not AcaoForm().validate_on_submit():
-        return jsonify({"erro": "Sessao expirada -- recarregue a pagina."}), 400
+        return jsonify({"erro": "Sessão expirada -- recarregue a página."}), 400
     try:
         itens = json.loads(request.form.get("musicas") or "[]")
     except ValueError:
-        return jsonify({"erro": "Dados invalidos."}), 400
+        return jsonify({"erro": "Dados inválidos."}), 400
     if not isinstance(itens, list) or not itens:
-        return jsonify({"erro": "Nenhuma musica selecionada."}), 400
+        return jsonify({"erro": "Nenhuma música selecionada."}), 400
     if len(itens) > _MAX_MUSICAS_POR_LOTE:
-        return jsonify({"erro": f"Importe no maximo {_MAX_MUSICAS_POR_LOTE} musicas por vez."}), 400
+        return jsonify({"erro": f"Importe no máximo {_MAX_MUSICAS_POR_LOTE} músicas por vez."}), 400
 
     novas, atualizadas = [], 0
     for item in itens:
@@ -1570,7 +1616,7 @@ def salvar_musicas_importadas(comunidade_id=None, ministerio_id=None):
     # avisa, com o total de todas -- senao viria 1 aviso por parte.
     if request.form.get("parcial") != "1":
         total = request.form.get("total", type=int) or (len(novas) + atualizadas)
-        flash(f"{total} musica(s) importada(s) para o {banco.titulo.lower()}.", "success")
+        flash(f"{total} música(s) importada(s) para o {banco.titulo.lower()}.", "success")
     return jsonify({"criadas": len(novas) + atualizadas, "destino": _url_do_banco(banco)})
 
 
@@ -1629,15 +1675,15 @@ def adicionar_da_web(comunidade_id=None, ministerio_id=None):
 
     banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(_url_do_banco(banco))
     nome = (request.form.get("titulo") or "").strip()[:150]
     if not nome:
-        flash("Resultado sem titulo.", "danger")
+        flash("Resultado sem título.", "danger")
         return redirect(_url_do_banco(banco))
     existente = banco.musicas().filter(nome__iexact=nome).first()
     if existente is not None:
-        flash(f'"{existente.nome}" ja esta neste banco -- abrimos ela.', "warning")
+        flash(f'"{existente.nome}" já está neste banco -- abrimos ela.', "warning")
         return redirect(url_for("ministerio.musica", musica_id=existente.id))
 
     musica = banco.nova_musica(
@@ -1650,7 +1696,7 @@ def adicionar_da_web(comunidade_id=None, ministerio_id=None):
     musica.palavras_chave_verificadas = False  # a cifra colada depois completa as tags
     musica.save()
     flash(f'"{musica.nome}" adicionada ao {banco.titulo.lower()}. Agora cole a cifra aqui no Louvor '
-          '(de onde voce tem direito de copiar); a Projecao sai dela.', "success")
+          '(de onde você tem direito de copiar); a Projeção sai dela.', "success")
     return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
 
 
@@ -1724,11 +1770,11 @@ def salvar_projecao_musica(musica_id):
     musica, _ = _musica_editavel_ou_404(musica_id)
     form = LetraProjecaoForm()
     if not form.validate_on_submit():
-        flash("Nao foi possivel salvar a letra de projecao.", "danger")
+        flash("Não foi possível salvar a letra de projeção.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#projecao")
     musica.letra_projecao = form.letra_projecao.data or None
     novas = _palavras_chave_se_faltar(musica)
-    return _salvar_musica(musica, "projecao", "Versao de projecao salva." + _texto_tags_novas(novas))
+    return _salvar_musica(musica, "projecao", "Versão de projeção salva." + _texto_tags_novas(novas))
 
 
 @bp.route("/repertorio/<int:musica_id>/louvor", methods=["POST"])
@@ -1738,7 +1784,7 @@ def salvar_louvor_musica(musica_id):
     musica, _ = _musica_editavel_ou_404(musica_id)
     form = CifraLouvorForm()
     if not form.validate_on_submit():
-        flash("Nao foi possivel salvar a cifra.", "danger")
+        flash("Não foi possível salvar a cifra.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
     tom = (form.tom.data or "").strip()
     if musica.eh_tom_original(tom):
@@ -1785,7 +1831,7 @@ def colar_cifra_musica(musica_id):
     musica, _ = _musica_editavel_ou_404(musica_id)
     voltar = url_for("ministerio.musica", musica_id=musica.id) + "#louvor"
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(voltar)
     try:
         lido = extrair_musica_de_texto(request.form.get("texto"))
@@ -1793,7 +1839,7 @@ def colar_cifra_musica(musica_id):
         flash(str(erro), "danger")
         return redirect(voltar)
     if not lido["cifra"].strip():
-        flash("Nao encontrei a cifra no texto colado -- confira se copiou os acordes e a letra.", "danger")
+        flash("Não encontrei a cifra no texto colado -- confira se copiou os acordes e a letra.", "danger")
         return redirect(voltar)
     session.pop("cifra_para_musica", None)
     return _salvar_musica(musica, "louvor", _aplicar_cifra_colada(musica, lido, request.form.get("link_origem")))
@@ -1923,7 +1969,7 @@ def salvar_cifra_compartilhada():
         abort(404)
     banco = _banco_editavel_ou_404(**{f"{tipo}_id": int(numero)})
     if not AcaoForm().validate_on_submit():
-        flash("Sessao expirada -- compartilhe de novo.", "danger")
+        flash("Sessão expirada -- compartilhe de novo.", "danger")
         return redirect(_url_do_banco(banco))
     try:
         lido = extrair_musica_de_texto(request.form.get("texto"))
@@ -1937,7 +1983,7 @@ def salvar_cifra_compartilhada():
     existente = banco.musicas().filter(nome__iexact=nome).first()
     if existente is not None:
         if existente.cifra_louvor:
-            flash(f'"{existente.nome}" ja tem cifra neste banco -- abrimos ela pra voce conferir.', "warning")
+            flash(f'"{existente.nome}" já tem cifra neste banco -- abrimos ela pra você conferir.', "warning")
             return redirect(url_for("ministerio.musica", musica_id=existente.id) + "#louvor")
         return _salvar_musica(existente, "louvor", _aplicar_cifra_colada(existente, lido, link))
 
@@ -1954,10 +2000,10 @@ def excluir_versao_cifra(musica_id):
     musica, _ = _musica_editavel_ou_404(musica_id)
     tom = (request.form.get("tom") or "").strip()
     if not AcaoForm().validate_on_submit() or musica.eh_tom_original(tom) or not musica.versao_no_tom(tom):
-        flash("Versao nao encontrada.", "danger")
+        flash("Versão não encontrada.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id) + "#louvor")
     musica.versoes_cifra = [v for v in musica.versoes_cifra if v is not musica.versao_no_tom(tom)]
-    return _salvar_musica(musica, "louvor", f"Versao em {tom} removida.")
+    return _salvar_musica(musica, "louvor", f"Versão em {tom} removida.")
 
 
 @bp.route("/repertorio/<int:musica_id>/rascunho-projecao", methods=["POST"])
@@ -1980,7 +2026,7 @@ def rascunho_projecao(musica_id):
 def excluir_musica(musica_id):
     musica, banco = _musica_editavel_ou_404(musica_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.musica", musica_id=musica.id))
     nome = musica.nome
     # As escalas que usavam a musica ficam com o item "avulso" (nome/tom).
@@ -2024,8 +2070,8 @@ def apagar_todas_musicas(comunidade_id=None, ministerio_id=None):
     if ids:
         _soltar_musicas_apagadas(ids, banco.comunidade.id)
         Musica.objects(id__in=ids).delete()
-    flash(f"{len(ids)} musica(s) apagada(s) do {banco.titulo.lower()}. "
-          "Escalas e repertorios que usavam alguma ficaram com ela como musica avulsa.", "success")
+    flash(f"{len(ids)} música(s) apagada(s) do {banco.titulo.lower()}. "
+          "Escalas e repertórios que usavam alguma ficaram com ela como música avulsa.", "success")
     return redirect(_url_do_banco(banco))
 
 
@@ -2038,15 +2084,15 @@ def excluir_musicas_marcadas(comunidade_id=None, ministerio_id=None):
     banco = _banco_editavel_ou_404(comunidade_id, ministerio_id)
     pedidos = {int(i) for i in request.form.getlist("musica_id") if str(i).strip().isdigit()}
     if not AcaoForm().validate_on_submit() or not pedidos:
-        flash("Nenhuma musica marcada para excluir.", "warning")
+        flash("Nenhuma música marcada para excluir.", "warning")
         return redirect(_url_do_banco(banco))
 
     ids = [m.id for m in banco.musicas().filter(id__in=list(pedidos)).only("id")]
     if ids:
         _soltar_musicas_apagadas(ids, banco.comunidade.id)
         Musica.objects(id__in=ids).delete()
-    flash(f"{len(ids)} musica(s) excluida(s) do {banco.titulo.lower()}. "
-          "Escalas e repertorios que usavam alguma ficaram com ela como musica avulsa.", "success")
+    flash(f"{len(ids)} música(s) excluída(s) do {banco.titulo.lower()}. "
+          "Escalas e repertórios que usavam alguma ficaram com ela como música avulsa.", "success")
     return redirect(_url_do_banco(banco))
 
 
@@ -2205,7 +2251,7 @@ def nova_pasta(comunidade_id):
     if not voltar.startswith("/") or voltar.startswith("//"):
         voltar = _url_do_banco(banco)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(voltar)
     nome = (request.form.get("nome") or "").strip()[:120]
     ids = [int(i) for i in request.form.getlist("musica_id") if i.isdigit()]
@@ -2213,10 +2259,10 @@ def nova_pasta(comunidade_id):
     lidera = {m.id: m for m in _ministerios_que_lidera(banco.comunidade)}
     ministerio = lidera.get(request.form.get("ministerio_id", type=int))
     if ministerio is None:
-        flash("Escolha um ministerio que voce lidera pra guardar o repertorio.", "danger")
+        flash("Escolha um ministério que você lidera pra guardar o repertório.", "danger")
         return redirect(voltar)
     if not nome or not musicas:
-        flash("De um nome pro repertorio e marque pelo menos uma musica.", "danger")
+        flash("De um nome pro repertório e marque pelo menos uma música.", "danger")
         return redirect(voltar)
     ordem = {musica_id: posicao for posicao, musica_id in enumerate(ids)}
     musicas.sort(key=lambda m: ordem[m.id])
@@ -2225,7 +2271,7 @@ def nova_pasta(comunidade_id):
         itens=[ItemPasta(musica_id=m.id, nome=m.nome, tom=m.tom) for m in musicas],
     )
     pasta.save()
-    flash(f'Repertorio "{pasta.nome}" criado no {ministerio.nome} com {len(musicas)} musica(s).', "success")
+    flash(f'Repertório "{pasta.nome}" criado no {ministerio.nome} com {len(musicas)} música(s).', "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -2285,12 +2331,12 @@ def adicionar_na_pasta(pasta_id):
     pasta = _pasta_editavel_ou_404(pasta_id)
     musica = Musica.objects(id=request.form.get("musica_id", type=int), comunidade_id=pasta.comunidade_id).first()
     if not AcaoForm().validate_on_submit() or musica is None:
-        flash("Escolha uma musica do banco.", "danger")
+        flash("Escolha uma música do banco.", "danger")
         return _voltar_pra_pasta(pasta)
     tom = (request.form.get("tom") or "").strip()[:10] or musica.tom
     pasta.itens.append(ItemPasta(musica_id=musica.id, nome=musica.nome, tom=tom))
     pasta.save()
-    flash(f'"{musica.nome}" adicionada ao repertorio.', "success")
+    flash(f'"{musica.nome}" adicionada ao repertório.', "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -2302,7 +2348,7 @@ def remover_da_pasta(pasta_id, indice):
         nome = pasta.itens[indice].nome
         del pasta.itens[indice]
         pasta.save()
-        flash(f'"{nome}" saiu do repertorio.', "success")
+        flash(f'"{nome}" saiu do repertório.', "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -2318,7 +2364,7 @@ def renomear_pasta(pasta_id):
         if novo is not None:
             pasta.ministerio_id = novo.id
         pasta.save()
-        flash("Repertorio atualizado.", "success")
+        flash("Repertório atualizado.", "success")
     return _voltar_pra_pasta(pasta)
 
 
@@ -2327,11 +2373,11 @@ def renomear_pasta(pasta_id):
 def excluir_pasta(pasta_id):
     pasta = _pasta_editavel_ou_404(pasta_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return _voltar_pra_pasta(pasta)
     comunidade_id, nome = pasta.comunidade_id, pasta.nome
     pasta.delete()
-    flash(f'Repertorio "{nome}" excluido. As musicas continuam no banco.', "success")
+    flash(f'Repertório "{nome}" excluído. As músicas continuam no banco.', "success")
     return redirect(url_for("ministerio.banco_musicas", comunidade_id=comunidade_id) + "#repertorios")
 
 
@@ -2394,7 +2440,7 @@ def compartilhar_pasta(pasta_id):
     voltar = request.form.get("voltar") or ""
     destino = redirect(voltar) if voltar.startswith("/") and not voltar.startswith("//") else _voltar_pra_pasta(pasta, "#compartilhar")
     if not AcaoForm().validate_on_submit() or not alvos:
-        flash("Marque pelo menos um ministerio ou funcao pra receber.", "danger")
+        flash("Marque pelo menos um ministério ou função pra receber.", "danger")
         return destino
     flash(*_mensagem_de_envio(pasta, alvos, enviar_repertorio(pasta, alvos)))
     return destino
@@ -2474,7 +2520,7 @@ def areas(ministerio_id):
 
     if request.method == "POST":
         if not AcaoForm().validate_on_submit():
-            flash("Acao invalida.", "danger")
+            flash("Ação inválida.", "danger")
             return redirect(destino)
         nome, cor, funcoes, erro = _dados_da_area(request.form)
         existentes = areas_do_ministerio(ministerio.id)
@@ -2517,7 +2563,7 @@ def editar_area(ministerio_id, area_id):
     area = _area_do_ministerio_ou_404(ministerio, area_id)
     destino = url_for("ministerio.areas", ministerio_id=ministerio.id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(destino)
     nome, cor, funcoes, erro = _dados_da_area(request.form)
     if not erro and any(a.id != area.id and a.nome.lower() == nome.lower() for a in areas_do_ministerio(ministerio.id)):
@@ -2540,7 +2586,7 @@ def mover_area(ministerio_id, area_id, direcao):
     area = _area_do_ministerio_ou_404(ministerio, area_id)
     destino = url_for("ministerio.areas", ministerio_id=ministerio.id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(destino)
     lista = list(areas_do_ministerio(ministerio.id))
     i = next(i for i, a in enumerate(lista) if a.id == area.id)
@@ -2562,7 +2608,7 @@ def excluir_area(ministerio_id, area_id):
     area = _area_do_ministerio_ou_404(ministerio, area_id)
     destino = url_for("ministerio.areas", ministerio_id=ministerio.id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(destino)
     nome = area.nome
     apagar(area)
@@ -2581,7 +2627,7 @@ def areas_da_pessoa(ministerio_id, usuario_ministerio_id):
     linha = primeiro_ou_404(UsuarioMinisterio.objects(id=usuario_ministerio_id, ministerio_id=ministerio.id))
     destino = url_for("ministerio.papeis", ministerio_id=ministerio.id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(destino)
     validas = {a.id for a in areas_do_ministerio(ministerio.id)}
     lider = sorted({int(x) for x in request.form.getlist("areas_lider") if x.isdigit() and int(x) in validas})
@@ -2606,7 +2652,7 @@ def minhas_areas(ministerio_id):
     linha = primeiro_ou_404(UsuarioMinisterio.objects(ministerio_id=ministerio.id, usuario_id=current_user.id))
     destino = url_for("ministerio.detalhe", ministerio_id=ministerio.id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(destino)
     validas = {a.id: a for a in areas_do_ministerio(ministerio.id)}
     escolhidas = {int(x) for x in request.form.getlist("areas") if x.isdigit() and int(x) in validas}

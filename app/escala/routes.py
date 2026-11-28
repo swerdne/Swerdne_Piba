@@ -176,7 +176,7 @@ def _avisos_conflito_horario(membro, escala_atual, funcao_atual_id=None):
         inicio_outro = outra_escala.horario or time.min
         fim_outro = outra_escala.horario_fim or inicio_outro
         if inicio_atual <= fim_outro and inicio_outro <= fim_atual:
-            avisos.append(f'{membro.nome} ja esta escalado em "{outra_escala.nome}" nesse mesmo horario.')
+            avisos.append(f'{membro.nome} já está escalado em "{outra_escala.nome}" nesse mesmo horário.')
     return avisos
 
 
@@ -334,7 +334,7 @@ def editar(escala_id):
             resultado = enviar_notificacao_de_alteracao(escala, data_antiga, horario_antigo)
             partes = []
             if resultado["notificacoes_app"]:
-                partes.append(f"{resultado['notificacoes_app']} notificacao(oes) no app")
+                partes.append(f"{resultado['notificacoes_app']} notificação(ões) no app")
             if resultado["email_enviados"]:
                 partes.append(f"{resultado['email_enviados']} e-mail(s) enviado(s)")
             if resultado["sms_enviados"]:
@@ -438,7 +438,7 @@ def detalhe(escala_id):
         avisos = avisos_por_membro.get(membro.id)
         if not avisos:
             return membro.nome
-        return f"{membro.nome} (indisponivel: {', '.join(avisos)})"
+        return f"{membro.nome} (indisponível: {', '.join(avisos)})"
 
     email_logado = (current_user.email or "").lower()
     if gerencia_alguma:
@@ -575,7 +575,7 @@ def adicionar_funcao(escala_id):
     escala = _escala_do_usuario_ou_404(escala_id)
 
     if escala.plantao_turno_id is not None:
-        flash("Escalas geradas por rodizio tem sempre uma unica funcao.", "danger")
+        flash("Escalas geradas por rodízio tem sempre uma única função.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     form = FuncaoForm()
@@ -594,7 +594,7 @@ def adicionar_funcao(escala_id):
     nova_funcao = Funcao(escala_id=escala.id, nome=form.nome.data.strip(), ordem=maior_ordem + 1, area_id=area_id)
     nova_funcao.save()
 
-    flash(f'Funcao "{nova_funcao.nome}" adicionada em {escala.nome}.', "success")
+    flash(f'Função "{nova_funcao.nome}" adicionada em {escala.nome}.', "success")
     # Quem estava vendo uma area so (?area=) volta pra ela.
     return redirect(url_for("escala.detalhe", escala_id=escala.id, area=area_id) if area_id else url_for("escala.detalhe", escala_id=escala.id))
 
@@ -605,7 +605,7 @@ def adicionar_subcabecalho(escala_id):
     escala = _escala_do_usuario_ou_404(escala_id)
 
     if escala.plantao_turno_id is not None:
-        flash("Escalas geradas por rodizio tem sempre uma unica funcao.", "danger")
+        flash("Escalas geradas por rodízio tem sempre uma única função.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     form = FuncaoForm()
@@ -652,7 +652,7 @@ def excluir_funcao(funcao_id):
     escala_id = funcao.escala_id
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     nome = funcao.nome
@@ -660,7 +660,7 @@ def excluir_funcao(funcao_id):
     Anexo.objects(funcao_id=funcao.id).delete()
     funcao.delete()
 
-    flash(f'Funcao "{nome}" removida de {escala_nome}.', "success")
+    flash(f'Função "{nome}" removida de {escala_nome}.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
 
@@ -685,7 +685,7 @@ def adicionar_item_repertorio(escala_id):
     )
     item.save()
 
-    flash(f'"{item.nome_musica}" adicionada ao repertorio.', "success")
+    flash(f'"{item.nome_musica}" adicionada ao repertório.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
 
@@ -697,13 +697,13 @@ def excluir_item_repertorio(item_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     nome = item.nome_musica
     item.delete()
 
-    flash(f'"{nome}" removida do repertorio.', "success")
+    flash(f'"{nome}" removida do repertório.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
 
@@ -802,13 +802,13 @@ def adicionar_convidado(funcao_id):
 
     form = AcaoForm()
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
     usuario_id = request.form.get("usuario_id", type=int)
     usuario = User.objects(id=usuario_id).first() if usuario_id else None
     if usuario is None:
-        flash("Selecione um usuario valido na busca.", "danger")
+        flash("Selecione um usuário valido na busca.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=funcao.escala_id))
 
     membro = Membro.da_conta(usuario.email, comunidade_id=comunidade_id).first()
@@ -845,7 +845,7 @@ def remover_membro(funcao_id):
     escala_id = funcao.escala_id
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     nome_removido = funcao.membro.nome if funcao.membro else None
@@ -869,7 +869,7 @@ def mover_membro(funcao_id):
     escala_id = origem.escala_id
 
     if origem.membro_id is None:
-        flash("Essa funcao nao tem ninguem escalado para mover.", "danger")
+        flash("Essa função não tem ninguém escalado para mover.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     outras = [f for f in origem.escala.funcoes if f.id != origem.id and not f.eh_subcabecalho]
@@ -877,7 +877,7 @@ def mover_membro(funcao_id):
     form.destino_funcao_id.choices = [(f.id, f.nome) for f in outras]
 
     if not form.validate_on_submit():
-        flash("Nao foi possivel mover o membro.", "danger")
+        flash("Não foi possível mover o membro.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     destino = _funcao_do_usuario_ou_404(form.destino_funcao_id.data)
@@ -935,7 +935,7 @@ def atualizar_status(funcao_id):
         return _destino_apos_status(escala_id)
 
     if funcao.membro_id is None:
-        return responder(False, "Essa funcao nao tem ninguem escalado.", "danger")
+        return responder(False, "Essa função não tem ninguém escalado.", "danger")
 
     form = StatusForm()
     # O diretorio inteiro so e preciso pra validar a SUGESTAO de substituto
@@ -949,7 +949,7 @@ def atualizar_status(funcao_id):
         form.troca_sugestao_membro_id.choices = [(0, "Ninguem em especial")] + ([(enviado, "")] if enviado else [])
 
     if not form.validate_on_submit():
-        return responder(False, "Status invalido.", "danger")
+        return responder(False, "Status inválido.", "danger")
 
     status_anterior = funcao.status
     status_novo = form.status.data
@@ -1027,8 +1027,19 @@ def checkin(escala_id):
     motivo = situacao_do_dia(escala, _hoje_brasilia())
     if motivo:
         return falha(motivo)
+    def status_das_funcoes():
+        # A tela troca "Não notificado"/"Confirmado" por "Presente" na hora,
+        # sem recarregar (static/js/checkin.js).
+        return [{"id": f.id, "status": f.status, "rotulo": STATUS_LABELS.get(f.status, f.status),
+                 "cor": STATUS_CORES.get(f.status, "")} for f in minhas]
+
     if all(f.checkin_em for f in minhas):
-        return jsonify({"ok": True, "mensagem": "Seu check-in já estava feito.", "ja_feito": True})
+        for funcao in minhas:  # check-in feito, mas o status ficou para tras
+            if funcao.status != "presente":
+                funcao.status = "presente"
+                funcao.save()
+        return jsonify({"ok": True, "mensagem": "Seu check-in já estava feito.", "ja_feito": True,
+                        "funcoes": status_das_funcoes()})
 
     def numero(campo):
         try:
@@ -1060,7 +1071,8 @@ def checkin(escala_id):
         escala, f"{nome} fez check-in ({funcoes_txt})",
         f"{nome} fez check-in às {hora} em {escala.nome}, a {round(distancia)} m do local.", tipo="presente",
     )
-    return jsonify({"ok": True, "mensagem": mensagem, "hora": hora, "distancia_m": round(distancia)})
+    return jsonify({"ok": True, "mensagem": mensagem, "hora": hora, "distancia_m": round(distancia),
+                    "funcoes": status_das_funcoes()})
 
 
 
@@ -1140,7 +1152,7 @@ def aprovar_troca(funcao_id):
     escala_id = funcao.escala_id
 
     if funcao.status != "troca_solicitada":
-        flash("Essa funcao nao tem uma troca pendente.", "danger")
+        flash("Essa função não tem uma troca pendente.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     comunidade_id = funcao.escala.ministerio.comunidade_id
@@ -1150,12 +1162,12 @@ def aprovar_troca(funcao_id):
     form.membro_id.choices = [(0, "Selecione quem assume")] + [(m.id, m.nome) for m in diretorio]
 
     if not form.validate_on_submit() or not form.membro_id.data:
-        flash("Selecione quem assume a funcao para aprovar a troca.", "danger")
+        flash("Selecione quem assume a função para aprovar a troca.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     novo_membro = Membro.objects(id=form.membro_id.data, comunidade_id=comunidade_id).first()
     if novo_membro is None:
-        flash("Pessoa invalida para esta comunidade.", "danger")
+        flash("Pessoa inválida para esta comunidade.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     membro_antigo_email = funcao.membro.email if funcao.membro else None
@@ -1198,12 +1210,12 @@ def recusar_troca(funcao_id):
     escala_id = funcao.escala_id
 
     if funcao.status != "troca_solicitada":
-        flash("Essa funcao nao tem uma troca pendente.", "danger")
+        flash("Essa função não tem uma troca pendente.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     form = AcaoForm()
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
     membro_email = funcao.membro.email if funcao.membro else None
@@ -1226,7 +1238,7 @@ def recusar_troca(funcao_id):
                 tipo="troca_recusada",
             ).save()
 
-    flash("Solicitacao de troca recusada.", "success")
+    flash("Solicitação de troca recusada.", "success")
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
 
@@ -1329,7 +1341,7 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
             "email": funcao.membro.email,
             "telefone": funcao.membro.telefone if canais_pagos else None,
             "mensagem": mensagem_para(escala, funcao, funcao.membro),
-            "assunto": f"Voce foi escalado(a): {funcao.nome_exibido} - {escala.nome}",
+            "assunto": f"Você foi escalado(a): {funcao.nome_exibido} - {escala.nome}",
             "wa_template": current_app.config.get("WHATSAPP_TEMPLATE_ESCALADO") or "pibachurch_escalado",
             "wa_parametros": [funcao.membro.nome, funcao.nome_exibido, escala_no_whatsapp, data_texto],
             # Botoes "Confirmo"/"Nao posso" do template (se cadastrado com eles):
@@ -1359,7 +1371,7 @@ def enviar_notificacoes_da_escala(escala, funcoes=None, canais_pagos=True):
             if usuario_vinculado:
                 Notificacao(
                     usuario_id=usuario_vinculado.id,
-                    titulo=f"Voce foi escalado(a) para {funcao.nome_exibido}",
+                    titulo=f"Você foi escalado(a) para {funcao.nome_exibido}",
                     mensagem=f"{escala.nome} ({escala.departamento}) - {funcao.nome_exibido}.",
                     escala_id=escala.id,
                     tipo="escalado",
@@ -1567,11 +1579,11 @@ def cancelar_escala(escala_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     if escala.cancelada:
-        flash(f'"{escala.nome}" ja esta cancelada.', "danger")
+        flash(f'"{escala.nome}" já está cancelada.', "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     escala.cancelada = True
@@ -1582,7 +1594,7 @@ def cancelar_escala(escala_id):
     resultado = enviar_notificacao_de_cancelamento(escala)
     partes = []
     if resultado["notificacoes_app"]:
-        partes.append(f"{resultado['notificacoes_app']} notificacao(oes) no app")
+        partes.append(f"{resultado['notificacoes_app']} notificação(ões) no app")
     if resultado["email_enviados"]:
         partes.append(f"{resultado['email_enviados']} e-mail(s) enviado(s)")
     if resultado["sms_enviados"]:
@@ -1606,7 +1618,7 @@ def reabrir_escala(escala_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     escala.cancelada = False
@@ -1624,13 +1636,13 @@ def notificar_escala(escala_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     destino = url_for("escala.detalhe", escala_id=escala.id)
     escalados = [f for f in escala.funcoes if f.membro_id is not None]
     if not escalados:
-        flash(f"Ninguem escalado em {escala.nome} para notificar.", "danger")
+        flash(f"Ninguém escalado em {escala.nome} para notificar.", "danger")
         return redirect(destino)
 
     # Protecao de custo (template de WhatsApp e cobrado): o normal avisa so
@@ -1645,8 +1657,8 @@ def notificar_escala(escala_id):
             ultimo = ultimo.replace(tzinfo=timezone.utc)
         if ultimo is not None and agora - ultimo < REENVIO_MANUAL_INTERVALO:
             liberado = hora_local(ultimo + REENVIO_MANUAL_INTERVALO)
-            flash(f"A equipe ja recebeu o aviso de novo as {hora_local(ultimo)}. "
-                  f"Outro reenvio para todos so a partir das {liberado}.", "danger")
+            flash(f"A equipe já recebeu o aviso de novo as {hora_local(ultimo)}. "
+                  f"Outro reenvio para todos só a partir das {liberado}.", "danger")
             return redirect(destino)
         escala.reenvio_manual_em = agora
         escala.save()
@@ -1654,7 +1666,7 @@ def notificar_escala(escala_id):
     else:
         alvo = [f for f in escalados if f.notificado_em is None]
         if not alvo:
-            flash("Todos os escalados ja foram avisados. Para mandar de novo, use \"Reenviar para todos\".",
+            flash("Todos os escalados já foram avisados. Para mandar de novo, use \"Reenviar para todos\".",
                   "warning")
             return redirect(destino)
 
@@ -1668,7 +1680,7 @@ def _resumo_do_envio(resultado):
     enviar_notificacoes_da_escala."""
     partes = []
     if resultado["notificacoes_app"]:
-        partes.append(f"{resultado['notificacoes_app']} notificacao(oes) no app")
+        partes.append(f"{resultado['notificacoes_app']} notificação(ões) no app")
     if resultado["email_enviados"]:
         partes.append(f"{resultado['email_enviados']} e-mail(s) enviado(s)")
     if resultado["sms_enviados"]:
@@ -1699,7 +1711,7 @@ def _incluir_nos_papeis(membro, ministerio, area_id=None):
     from app.ministerio.papeis_auto import incluir_escalado_no_ministerio
 
     if incluir_escalado_no_ministerio(membro, ministerio):
-        flash(f"{membro.nome} tambem entrou nos Papeis do ministerio como membro.", "info")
+        flash(f"{membro.nome} também entrou nos Papéis do ministério como membro.", "info")
     if area_id and membro.email:
         conta = User.objects(email__iexact=membro.email.strip()).only("id").first()
         if conta is not None:
@@ -1726,8 +1738,8 @@ def _avisar_recem_escalado(funcao):
 
     em_segundo_plano(_enviar_aviso_recem_escalado, funcao.id, current_user.id,
                      rotulo="Aviso ao escalar")
-    flash("Aviso pra pessoa sendo enviado (WhatsApp, e-mail e SMS). Se nao der certo, "
-          "voce recebe um alerta no sino.", "info")
+    flash("Aviso pra pessoa sendo enviado (WhatsApp, e-mail e SMS). Se não der certo, "
+          "você recebe um alerta no sino.", "info")
 
 
 def _enviar_aviso_recem_escalado(funcao_id, usuario_id):
@@ -1757,14 +1769,14 @@ def excluir_escala(escala_id):
     form = AcaoForm()
 
     if not form.validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
     nome = escala.nome
     ministerio_id = escala.ministerio_id
     delete_cascade(escala)
 
-    flash(f'Escala "{nome}" excluida.', "success")
+    flash(f'Escala "{nome}" excluída.', "success")
     return redirect(url_for("ministerio.detalhe", ministerio_id=ministerio_id))
 
 
@@ -1830,7 +1842,7 @@ def enviar_aviso_de_ensaio_cancelado(escala, ensaio):
 
 def _cancelar_ensaio(ensaio, escala):
     if ensaio.cancelado:
-        flash("Esse ensaio ja esta cancelado.", "danger")
+        flash("Esse ensaio já está cancelado.", "danger")
         return
     ensaio.cancelado = True
     ensaio.cancelado_em = datetime.now(timezone.utc)
@@ -1858,7 +1870,7 @@ def adicionar_ensaio(escala_id):
         flash(erros[0] if erros else "Nao foi possivel adicionar o ensaio.", "danger")
         return _voltar_pros_ensaios(escala)
     if form.horario.data and form.horario_fim.data and form.horario_fim.data <= form.horario.data:
-        flash("O horario de fim do ensaio precisa ser depois do inicio.", "danger")
+        flash("O horário de fim do ensaio precisa ser depois do início.", "danger")
         return _voltar_pros_ensaios(escala)
 
     Ensaio(
@@ -1877,7 +1889,7 @@ def adicionar_ensaio(escala_id):
 def cancelar_ensaio(ensaio_id):
     ensaio, escala = _ensaio_do_usuario_ou_404(ensaio_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return _voltar_pros_ensaios(escala)
     _cancelar_ensaio(ensaio, escala)
     return _voltar_pros_ensaios(escala)
@@ -1890,7 +1902,7 @@ def cancelar_ensaio_escolhido(escala_id):
     no fim da tela da escala (escolhe qual ensaio num <select>)."""
     escala = _escala_do_usuario_ou_404(escala_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return _voltar_pros_ensaios(escala)
     try:
         ensaio_id = int(request.form.get("ensaio_id", ""))
@@ -1909,7 +1921,7 @@ def cancelar_ensaio_escolhido(escala_id):
 def reabrir_ensaio(ensaio_id):
     ensaio, escala = _ensaio_do_usuario_ou_404(ensaio_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return _voltar_pros_ensaios(escala)
     ensaio.cancelado = False
     ensaio.cancelado_em = None
@@ -1923,7 +1935,7 @@ def reabrir_ensaio(ensaio_id):
 def excluir_ensaio(ensaio_id):
     ensaio, escala = _ensaio_do_usuario_ou_404(ensaio_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return _voltar_pros_ensaios(escala)
     descricao = ensaio.descricao_data
     PresencaEnsaio.objects(ensaio_id=ensaio.id).delete()
@@ -2032,7 +2044,7 @@ def excluir_anexo(anexo_id):
     anexo = primeiro_ou_404(Anexo.objects(id=anexo_id).exclude("conteudo"))
     escala = _escala_do_usuario_ou_404(anexo.escala_id)
     if not AcaoForm().validate_on_submit():
-        flash("Acao invalida.", "danger")
+        flash("Ação inválida.", "danger")
         return _voltar_pros_materiais(escala)
     nome = anexo.nome_arquivo
     Anexo.objects(id=anexo.id).delete()
@@ -2086,7 +2098,7 @@ def adicionar_musica_do_banco(escala_id):
         return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
     musica = _musicas_da_escala(escala).filter(id=form.musica_id.data).first()
     if musica is None:
-        flash("Musica nao encontrada no banco da comunidade nem no do ministerio.", "danger")
+        flash("Música não encontrada no banco da comunidade nem no do ministério.", "danger")
         return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
     maior_ordem = max([item.ordem for item in escala.repertorio], default=-1)
     ItemRepertorio(
@@ -2098,7 +2110,7 @@ def adicionar_musica_do_banco(escala_id):
         momento=(form.momento.data or "").strip() or None,
         ordem=maior_ordem + 1,
     ).save()
-    flash(f'"{musica.nome}" adicionada ao repertorio.', "success")
+    flash(f'"{musica.nome}" adicionada ao repertório.', "success")
     return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
 
 
@@ -2129,7 +2141,7 @@ def usar_repertorio_pronto(escala_id):
         id=request.form.get("repertorio_id", type=int), comunidade_id=escala.ministerio.comunidade_id
     ).first()
     if not AcaoForm().validate_on_submit() or pasta is None or not pasta.itens:
-        flash("Escolha um repertorio com musicas.", "danger")
+        flash("Escolha um repertório com músicas.", "danger")
         return voltar
 
     if request.form.get("substituir"):
@@ -2152,7 +2164,7 @@ def usar_repertorio_pronto(escala_id):
         ).save()
         ordem += 1
     _fixar_se_gerada_por_rodizio(escala)
-    flash(f'Repertorio "{pasta.nome}" aplicado: {len(pasta.itens)} musica(s) na escala.', "success")
+    flash(f'Repertório "{pasta.nome}" aplicado: {len(pasta.itens)} música(s) na escala.', "success")
     return voltar
 
 
@@ -2172,10 +2184,10 @@ def compartilhar_repertorio(escala_id):
     comunidade_id = escala.ministerio.comunidade_id
     alvos = _alvos_do_form(comunidade_id)
     if not AcaoForm().validate_on_submit() or not alvos:
-        flash("Marque pelo menos um ministerio ou funcao pra receber.", "danger")
+        flash("Marque pelo menos um ministério ou função pra receber.", "danger")
         return voltar
     if not itens:
-        flash("O repertorio desta escala ainda esta vazio.", "danger")
+        flash("O repertório desta escala ainda está vazio.", "danger")
         return voltar
 
     data_curta = escala.data.strftime("%d/%m") if escala.data else ""
@@ -2198,9 +2210,9 @@ def salvar_observacoes_repertorio(escala_id):
     if form.validate_on_submit():
         escala.observacoes_repertorio = (form.observacoes_repertorio.data or "").strip() or None
         escala.save()
-        flash("Observacoes do repertorio salvas.", "success")
+        flash("Observações do repertório salvas.", "success")
     else:
-        flash("Nao foi possivel salvar as observacoes.", "danger")
+        flash("Não foi possível salvar as observações.", "danger")
     return redirect(url_for("escala.detalhe", escala_id=escala.id) + "#repertorio")
 
 

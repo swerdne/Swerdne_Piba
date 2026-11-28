@@ -9,8 +9,8 @@ from app.telefones import validar_telefone
 
 
 class ItemForm(FlaskForm):
-    titulo = StringField("Titulo", validators=[DataRequired(), Length(max=120)])
-    descricao = TextAreaField("Descricao")
+    titulo = StringField("Título", validators=[DataRequired(), Length(max=120)])
+    descricao = TextAreaField("Descrição")
     submit = SubmitField("Salvar")
 
 
@@ -20,7 +20,7 @@ class FotoPerfilForm(FlaskForm):
         validators=[
             FileRequired(message="Escolha uma imagem."),
             FileAllowed(["jpg", "jpeg", "png"], "Envie apenas arquivos JPG ou PNG."),
-            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no maximo 2 MB."),
+            FileSize(max_size=2 * 1024 * 1024, message="A imagem deve ter no máximo 2 MB."),
         ],
     )
     submit = SubmitField("Salvar foto")
@@ -36,8 +36,8 @@ class TemaForm(FlaskForm):
 
 
 class PrivacidadeForm(FlaskForm):
-    exige_aprovacao_grupos = BooleanField("Exigir minha aprovacao antes de ser adicionado(a) a um grupo")
-    telefone_visivel_lider = BooleanField("Lideres dos meus ministerios podem ver meu telefone")
+    exige_aprovacao_grupos = BooleanField("Exigir minha aprovação antes de ser adicionado(a) a um grupo")
+    telefone_visivel_lider = BooleanField("Líderes dos meus ministérios podem ver meu telefone")
     submit = SubmitField("Salvar privacidade")
 
 
@@ -50,7 +50,7 @@ class TelefoneForm(FlaskForm):
 
 
 class NomeForm(FlaskForm):
-    nome = StringField("Nome de exibicao", validators=[DataRequired(), Length(max=120)])
+    nome = StringField("Nome de exibição", validators=[DataRequired(), Length(max=120)])
     submit = SubmitField("Salvar nome")
 
 

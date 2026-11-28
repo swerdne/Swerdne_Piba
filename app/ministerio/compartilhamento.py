@@ -100,7 +100,7 @@ def destinatarios(ministerio, funcao, quem_envia_id):
 
 def descricao_do_envio(ministerio, funcao):
     funcao = (funcao or "").strip()
-    return f"{ministerio.nome} · {funcao}" if funcao else f"{ministerio.nome} (todo o ministerio)"
+    return f"{ministerio.nome} · {funcao}" if funcao else f"{ministerio.nome} (todo o ministério)"
 
 
 def ler_alvos(valores, comunidade_id):

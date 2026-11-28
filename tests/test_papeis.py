@@ -121,7 +121,7 @@ def test_admin_promove_membro_a_admin(logged_in_client, app, db):
             f"/comunidade/{comunidade_id}/papeis/{papel_bruno_id}/alterar-papel", follow_redirects=True
         )
         assert response.status_code == 200
-        assert "agora e administrador".encode() in response.data
+        assert "agora é administrador".encode() in response.data
 
         atualizado = UsuarioComunidade.objects(id=papel_bruno_id).first()
         assert atualizado.papel == "admin"
@@ -140,7 +140,7 @@ def test_admin_rebaixa_outro_admin_a_membro(logged_in_client, app, db):
             f"/comunidade/{comunidade_id}/papeis/{papel_bruno_id}/alterar-papel", follow_redirects=True
         )
         assert response.status_code == 200
-        assert "agora e membro".encode() in response.data
+        assert "agora é membro".encode() in response.data
 
         atualizado = UsuarioComunidade.objects(id=papel_bruno_id).first()
         assert atualizado.papel == "membro"
@@ -159,7 +159,7 @@ def test_nao_pode_rebaixar_o_ultimo_admin(logged_in_client, app, db):
             f"/comunidade/{comunidade.id}/papeis/{papel_ana.id}/alterar-papel", follow_redirects=True
         )
         assert response.status_code == 200
-        assert "ultimo administrador".encode() in response.data
+        assert "último administrador".encode() in response.data
 
         atualizado = UsuarioComunidade.objects(id=papel_ana.id).first()
         assert atualizado.papel == "admin"
@@ -252,7 +252,7 @@ def test_aceitar_convite_ja_respondido_e_rejeitado(logged_in_client, outro_logge
         outro_logged_in_client.post(f"/convite/{token}/recusar", data={}, follow_redirects=True)
         response = outro_logged_in_client.post(f"/convite/{token}/aceitar", data={}, follow_redirects=True)
         assert response.status_code == 200
-        assert "ja foi respondido" in response.data.decode("utf-8")
+        assert "já foi respondido" in response.data.decode("utf-8")
 
     with sessao_isolada(app):
         bruno = User.objects(email="bruno@example.com").first()
