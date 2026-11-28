@@ -602,6 +602,7 @@ class Funcao(SequentialIdDocument):
     checkin_em = mongoengine.DateTimeField()
     checkin_distancia_m = mongoengine.IntField()
     checkin_precisao_m = mongoengine.IntField()
+    checkin_metodo = mongoengine.StringField(max_length=10)  # "gps" ou "qr" (app/escala/qr.py)
 
     @property
     def area(self):
@@ -622,6 +623,7 @@ class Funcao(SequentialIdDocument):
         self.checkin_em = None
         self.checkin_distancia_m = None
         self.checkin_precisao_m = None
+        self.checkin_metodo = None
 
     @property
     def escala(self):

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}QR do check-in - {{ escala.nome }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center gap-5 px-4 py-8 text-center">
+    <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}" class="self-start text-sm font-semibold text-indigo-600 hover:underline">
+        <i class="fa-solid fa-chevron-left mr-1"></i>Voltar à escala
+    </a>
+    <div>
+        <p class="text-sm text-gray-500">Check-in de</p>
+        <h1 class="text-2xl font-extrabold">{{ escala.nome }}</h1>
+    </div>
+
+    {% if motivo %}
+    <p data-qr-motivo class="max-w-sm text-base text-gray-600">{{ motivo }}</p>
+    {% else %}
+    <div data-qr-caixa class="p-4 bg-white rounded-3xl shadow-lg border border-gray-200">
+        <div id="qr-checkin" data-qr-url="{{ url_qr }}" style="width:min(80vw,360px);height:min(80vw,360px)"></div>
+    </div>
+    <p class="text-base font-semibold">Aponte a câmera do celular para o QR</p>
+    <p class="text-sm text-gray-500 max-w-sm">
+        Só vale para quem está nesta escala. O código muda a cada {{ segundos }} segundos
+        (<span data-qr-segundos>{{ segundos }}</span>s), então foto do QR não serve.
+    </p>
+    {% endif %}
+</div>
+
+{% if not motivo %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function () {
+    var caixa = document.getElementById('qr-checkin');
+    var contador = document.querySelector('[data-qr-segundos]');
+    var lado = caixa.clientWidth || 300;
+    var qr = new QRCode(caixa, { text: caixa.getAttribute('data-qr-url'), width: lado, height: lado,
+                                 correctLevel: QRCode.CorrectLevel.M });
+    var resta = {{ segundos }};
+    // Tela sempre ligada enquanto o QR estiver aberto.
+    if ('wakeLock' in navigator) { navigator.wakeLock.request('screen').catch(function () {}); }
+    function atualizar() {
+        fetch({{ url_for('escala.qr_atual', escala_id=escala.id) | tojson }}, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.motivo) { window.location.reload(); return; }
+                qr.makeCode(d.url);
+                resta = d.segundos;
+            })
+            .catch(function () { resta = 5; });  // sem rede: tenta de novo logo
+    }
+    setInterval(function () {
+        resta -= 1;
+        if (resta <= 0) { atualizar(); resta = {{ segundos }}; }
+        if (contador) contador.textContent = Math.max(resta, 0);
+    }, 1000);
+    // Sincroniza com o relogio do servidor ja na abertura.
+    atualizar();
+})();
+</script>
+{% endif %}
+{% endblock %}

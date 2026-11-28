@@ -1100,6 +1100,7 @@ def checkin(escala_id):
         funcao.checkin_em = agora
         funcao.checkin_distancia_m = round(distancia)
         funcao.checkin_precisao_m = round(precisao) if precisao is not None else None
+        funcao.checkin_metodo = "gps"
         funcao.save()
 
     nome = minhas[0].membro.nome
