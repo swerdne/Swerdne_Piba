@@ -1,10 +1,25 @@
 """Paleta de cores do dia (codigo de roupa: blusa + calca) por escala:
 escolher no criar/editar, mostrar na escala e em Minha escala, e mandar no
 aviso (WhatsApp/e-mail) so quando definida."""
+import pytest
 from datetime import date, timedelta
 
 from app.escala.models import PALETA_PERSONALIZADA, PALETAS_ROUPA, Escala
 from tests.test_escala import _criar_comunidade, _criar_membro, _criar_ministerio, _escalar, _funcao_por_nome
+
+
+@pytest.fixture(autouse=True)
+def _aviso_automatico_ao_escalar():
+    """Estes testes cobrem o envio na hora de escalar, que hoje so existe com
+    "Avisar automaticamente ao escalar" ligado no ministerio (padrao: desligado,
+    ver tests/test_fase2.py)."""
+    from app.ministerio.models import Ministerio
+
+    campo = Ministerio._fields["avisar_ao_escalar"]
+    antes = campo.default
+    campo.default = True
+    yield
+    campo.default = antes
 
 
 def _ministerio(cliente):

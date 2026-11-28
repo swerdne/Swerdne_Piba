@@ -126,14 +126,14 @@
         {% set escalados_notif = funcoes | selectattr('membro_id') | list %}
         {% set pendentes_notif = escalados_notif | rejectattr('notificado_em') | list | length %}
         <div class="flex flex-col sm:flex-row gap-3">
-            <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex-1" data-tutorial="notificar"
-                  {% if pendentes_notif %}data-confirm-excluir="Avisar {{ pendentes_notif }} pessoa(s) que ainda não foram avisadas?"{% endif %}>
-                {{ acao_form.hidden_tag() }}
-                <button type="submit"
+            {# "Enviar avisos": abre a lista de quem recebe, canal e previa; so
+               manda depois de confirmar (escala.notificar_escala). #}
+            <div class="flex-1" data-tutorial="notificar">
+                <button type="button" data-abrir-avisos
                         class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-3 rounded-full transition">
-                    <i class="fa-solid fa-paper-plane mr-2"></i>Notificar equipe{% if escalados_notif %} ({{ pendentes_notif }} sem aviso){% endif %}
+                    <i class="fa-solid fa-paper-plane mr-2"></i>Enviar avisos{% if escalados_notif %} ({{ pendentes_notif }} pendente{{ 's' if pendentes_notif != 1 }}){% endif %}
                 </button>
-            </form>
+            </div>
             {% if not escala.plantao_turno_id and not escala.turno_plantao_origem_id and (funcoes | selectattr('membro_id') | list) %}
             <a href="{{ url_for('plantao.nova', ministerio_id=escala.ministerio_id, escala_id=escala.id) }}"
                class="flex-1 flex items-center justify-center {{ tema.secondary_bg }} {{ tema.secondary_bg_hover }} {{ tema.secondary_text }} text-sm font-semibold px-4 py-3 rounded-full transition">
@@ -141,6 +141,76 @@
             </a>
             {% endif %}
         </div>
+        <div id="avisos-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-4">
+            <div class="w-full sm:max-w-md {{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl shadow-xl p-5 max-h-[85vh] overflow-y-auto" data-avisos-card>
+                <div class="flex items-start justify-between gap-3 mb-3">
+                    <h3 class="text-base font-bold {{ tema.text_primary }}">Enviar avisos</h3>
+                    <button type="button" data-avisos-fechar aria-label="Fechar" class="{{ tema.text_secondary }} {{ tema.text_hover }}"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                {% if previa_avisos %}
+                <p class="text-sm {{ tema.text_secondary }} mb-3">
+                    {{ previa_avisos|length }} pessoa{{ 's' if previa_avisos|length != 1 }} ainda sem aviso. Confira antes de mandar
+                    (cada WhatsApp é cobrado):
+                </p>
+                <ul class="space-y-3 mb-4">
+                    {% for item in previa_avisos %}
+                    <li data-aviso-item class="rounded-xl border {{ tema.card_border }} p-3 space-y-1.5">
+                        <p class="text-sm font-semibold {{ tema.text_primary }}">{{ item.nome }} <span class="font-normal {{ tema.text_secondary }}">· {{ item.funcao }}</span></p>
+                        <p class="text-xs {{ tema.text_secondary }}">
+                            {% if item.canais %}<i class="fa-solid fa-paper-plane mr-1"></i>{{ item.canais | join(', ') }}{% else %}<span class="text-amber-600"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Sem telefone nem e-mail: só aparece no app, se tiver conta</span>{% endif %}
+                        </p>
+                        <p class="text-xs whitespace-pre-line {{ tema.text_primary }} {{ tema.page_bg }} rounded-lg px-2.5 py-2">{{ item.mensagem }}</p>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="flex gap-2">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="button" data-avisos-fechar class="flex-1 border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-4 py-2.5 rounded-full">Agora não</button>
+                    <button type="submit" class="flex-1 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full">
+                        Enviar {{ previa_avisos|length }}
+                    </button>
+                </form>
+                {% else %}
+                <p class="text-sm {{ tema.text_secondary }}">Todo mundo escalado já recebeu o aviso. Para mandar de novo, use "Reenviar para todos".</p>
+                {% endif %}
+            </div>
+        </div>
+        {% if desfazer_token %}
+        <div data-desfazer-aviso class="fixed bottom-24 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-3 flex items-center justify-between gap-3">
+            <span class="text-sm">Avisos sendo enviados{% if desfazer_qtd %} ({{ desfazer_qtd }}){% endif %} · <span data-desfazer-segundos>{{ desfazer_segundos }}</span>s</span>
+            <form method="POST" action="{{ url_for('escala.desfazer_avisos', escala_id=escala.id) }}">
+                {{ acao_form.hidden_tag() }}
+                <input type="hidden" name="token" value="{{ desfazer_token }}">
+                <button type="submit" class="text-sm font-bold text-amber-300 hover:underline">Desfazer</button>
+            </form>
+        </div>
+        {% endif %}
+        <script>
+            (function () {
+                var modal = document.getElementById('avisos-modal');
+                document.querySelectorAll('[data-abrir-avisos]').forEach(function (b) {
+                    b.addEventListener('click', function () { modal.classList.remove('hidden'); });
+                });
+                modal.addEventListener('click', function (e) {
+                    if (e.target === modal || e.target.closest('[data-avisos-fechar]')) modal.classList.add('hidden');
+                });
+                var aviso = document.querySelector('[data-desfazer-aviso]');
+                if (aviso) {
+                    var cont = aviso.querySelector('[data-desfazer-segundos]');
+                    var resta = parseInt(cont.textContent, 10) || 0;
+                    var t = setInterval(function () {
+                        resta -= 1;
+                        if (resta <= 0) {
+                            clearInterval(t);
+                            aviso.innerHTML = '<span class="text-sm">Avisos enviados. O resultado chega no sino.</span>';
+                            setTimeout(function () { aviso.parentNode && aviso.parentNode.removeChild(aviso); }, 3000);
+                        } else { cont.textContent = resta; }
+                    }, 1000);
+                    // Tira o ?desfazer= do endereco (recarregar nao mostra de novo).
+                    if (window.history && history.replaceState) history.replaceState(null, '', location.pathname);
+                }
+            })();
+        </script>
         {% if escalados_notif | length > pendentes_notif %}
         <form method="POST" action="{{ url_for('escala.notificar_escala', escala_id=escala.id) }}" class="-mt-1 text-center"
               data-confirm-excluir="Mandar o aviso de novo para todos os {{ escalados_notif | length }} escalados? Cada WhatsApp enviado é cobrado.">
@@ -570,6 +640,10 @@
                             {% if funcao.eh_convidado %}
                             <span class="text-[10px] uppercase tracking-wide {{ tema.secondary_bg }} {{ tema.secondary_text }} rounded px-1.5 py-0.5 shrink-0"
                                   title="Participação pontual -- não é membro fixo da equipe">Convidado</span>
+                            {% endif %}
+                            {% if gerencia_f and not funcao.notificado_em and not escala.cancelada and (not escala.data or escala.data >= hoje) %}
+                            <span data-aviso-pendente class="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-600 rounded px-1.5 py-0.5 shrink-0"
+                                  title="Ainda não recebeu o aviso. Use Enviar avisos.">Aviso pendente</span>
                             {% endif %}
                             {% if funcao.checkin_em %}
                             <span class="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-emerald-500/15 text-emerald-600 shrink-0"

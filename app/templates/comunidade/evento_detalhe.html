@@ -38,11 +38,44 @@
             {% if evento.local %}
             <p class="text-sm {{ tema.text_primary }}">
                 <i class="fa-solid fa-location-dot mr-1.5 {{ tema.text_secondary }}"></i>{{ evento.local }}
+                <a href="{{ link_mapa }}" target="_blank" rel="noopener" class="ml-1 text-xs font-semibold {{ tema.accent_text }} hover:underline">Abrir no mapa</a>
             </p>
             {% endif %}
 
             {% if evento.descricao %}
             <p class="text-sm {{ tema.text_secondary }} whitespace-pre-line">{{ evento.descricao }}</p>
+            {% endif %}
+
+            {% if criador %}
+            <p class="text-xs {{ tema.text_secondary }}"><i class="fa-regular fa-user mr-1.5"></i>Criado por {{ criador.name or criador.username }}</p>
+            {% endif %}
+
+            <a href="{{ url_for('comunidade.evento_ics', comunidade_id=comunidade.id, evento_id=evento.id) }}"
+               class="inline-flex items-center gap-1.5 text-sm font-semibold {{ tema.accent_text }} hover:underline">
+                <i class="fa-regular fa-calendar-plus"></i>Adicionar ao calendário
+            </a>
+        </div>
+
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-3" data-quem-vai>
+            <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-people-group mr-1.5 {{ tema.text_secondary }}"></i>Quem está escalado</p>
+            {% if escalados %}
+            {% for escala, nome_ministerio, pessoas in escalados %}
+            <div class="space-y-1">
+                <a href="{{ url_for('escala.detalhe', escala_id=escala.id) }}" class="text-sm font-semibold {{ tema.text_primary }} hover:underline">
+                    {{ escala.data.strftime('%d/%m') }}{% if escala.horario %} {{ escala.horario.strftime('%H:%M') }}{% endif %} · {{ escala.nome }}
+                </a>
+                <p class="text-xs {{ tema.text_secondary }}">{{ nome_ministerio }}</p>
+                {% if pessoas %}
+                <ul class="text-sm {{ tema.text_secondary }}">
+                    {% for nome, funcao in pessoas %}<li>{{ nome }} <span class="opacity-70">· {{ funcao }}</span></li>{% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-xs {{ tema.text_secondary }}">Ninguém escalado ainda.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-sm {{ tema.text_secondary }}">Nenhuma escala dos ministérios nesse dia ainda.</p>
             {% endif %}
         </div>
 

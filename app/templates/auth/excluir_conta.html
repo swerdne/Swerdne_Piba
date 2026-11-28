@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Excluir conta{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="h-1 bg-red-600"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <a href="{{ url_for('main.dashboard') }}#config" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
+            <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+            </span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Excluir conta</span>
+        </a>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-28 max-w-2xl mx-auto space-y-4">
+
+        {% if bloqueios %}
+        <div data-exclusao-bloqueada class="rounded-3xl border border-red-500/40 bg-red-500/10 p-4 space-y-2">
+            <p class="text-sm font-bold text-red-600"><i class="fa-solid fa-lock mr-1.5"></i>Antes, passe a administração adiante</p>
+            <p class="text-sm {{ tema.text_primary }}">
+                Você é a única pessoa que administra {{ 'esta comunidade' if bloqueios|length == 1 else 'estas comunidades' }}.
+                Sem isso, ninguém mais conseguiria cuidar dela. Em Pessoas, torne outra pessoa admin (ou exclua a comunidade) e volte aqui.
+            </p>
+            <ul class="space-y-1">
+                {% for comunidade in bloqueios %}
+                <li><a href="{{ url_for('comunidade.membros', comunidade_id=comunidade.id) }}" class="text-sm font-semibold underline {{ tema.accent_text }}">{{ comunidade.nome }}: abrir Pessoas</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-3 text-sm">
+            <p class="font-bold {{ tema.text_primary }}">O que acontece</p>
+            <ul class="space-y-2 {{ tema.text_secondary }}">
+                <li><i class="fa-solid fa-power-off w-5 text-red-500"></i>A conta é <strong class="{{ tema.text_primary }}">desativada agora</strong> e você sai do app.</li>
+                <li><i class="fa-regular fa-calendar-xmark w-5 text-red-500"></i>Você sai das escalas de hoje em diante{% if escalas %} ({{ escalas|length }} {{ 'função' if escalas|length == 1 else 'funções' }}){% endif %}. Os líderes recebem um aviso.</li>
+                <li><i class="fa-solid fa-hourglass-half w-5 text-amber-500"></i>Por <strong class="{{ tema.text_primary }}">{{ prazo_dias }} dias</strong> dá para desistir: pelo link que enviamos por e-mail ou entrando de novo na conta.</li>
+                <li><i class="fa-solid fa-trash w-5 text-red-500"></i>Depois disso apagamos seu nome, e-mail, senha, foto, telefone, preferências, papéis nas comunidades e ministérios, notificações e check-ins.</li>
+                <li><i class="fa-solid fa-clock-rotate-left w-5 {{ tema.text_secondary }}"></i>Nas escalas que já passaram, seu nome vira "Pessoa removida", para o histórico da comunidade continuar certo.</li>
+            </ul>
+        </div>
+
+        {% if escalas %}
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-2 text-sm">
+            <p class="font-bold {{ tema.text_primary }}">Você vai sair destas escalas</p>
+            <ul class="space-y-1 {{ tema.text_secondary }}">
+                {% for funcao, escala in escalas[:10] %}
+                <li>{{ escala.data.strftime('%d/%m') }} · {{ escala.nome }} · {{ funcao.nome_exibido }}</li>
+                {% endfor %}
+                {% if escalas|length > 10 %}<li>e mais {{ escalas|length - 10 }}</li>{% endif %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if ministerios_sozinha %}
+        <div class="rounded-3xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm space-y-1">
+            <p class="font-bold text-amber-700"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>Ministérios sem outro líder</p>
+            <p class="{{ tema.text_primary }}">
+                Você é a única pessoa que lidera {{ ministerios_sozinha | map(attribute='nome') | join(', ') }}.
+                O admin da comunidade continua cuidando do ministério, mas o ideal é passar a liderança antes, em Pessoas do ministério.
+            </p>
+        </div>
+        {% endif %}
+
+        {% if not bloqueios %}
+        <form method="POST" class="{{ tema.card_bg }} border border-red-500/40 rounded-3xl shadow-sm p-5 space-y-3">
+            {{ form.hidden_tag() }}
+            <label for="confirmacao" class="block text-sm font-bold {{ tema.text_primary }}">Para confirmar, digite EXCLUIR</label>
+            {{ form.confirmacao(id="confirmacao", autocomplete="off", autocapitalize="characters", placeholder="EXCLUIR",
+                class_="w-full " ~ tema.page_bg ~ " border border-red-500/40 rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 focus:ring-red-500") }}
+            {% for erro in form.confirmacao.errors %}<p class="text-xs text-red-500">{{ erro }}</p>{% endfor %}
+            <button type="submit" class="w-full bg-red-600 hover:bg-red-500 text-white text-sm font-semibold px-4 py-3 rounded-full transition">
+                <i class="fa-solid fa-trash mr-1"></i>Excluir minha conta
+            </button>
+            <a href="{{ url_for('main.dashboard') }}#config" class="block text-center text-sm {{ tema.text_secondary }} hover:underline">Cancelar</a>
+        </form>
+        {% endif %}
+    </main>
+    {{ nav_inferior(tema, 'perfil') }}
+</div>
+{% endblock %}

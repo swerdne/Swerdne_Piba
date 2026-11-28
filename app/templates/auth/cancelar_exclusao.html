@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Cancelar exclusão da conta{% endblock %}
+
+{% from "_macros.html" import nome_marca %}
+{% block content %}
+<div class="relative min-h-screen flex flex-col items-center justify-center gap-8 px-4 py-10 overflow-hidden bg-gray-950">
+    <div class="relative flex items-center gap-2.5">
+        <img decoding="async" src="{{ url_for('static', filename='img/logo-icone.png') }}" alt="" width="32" height="32" class="h-8 w-8 object-contain">
+        {{ nome_marca("text-white", "text-xl") }}
+    </div>
+
+    <div class="relative w-full max-w-md bg-gray-900/95 border border-gray-800 rounded-2xl shadow-xl shadow-black/40 p-8 space-y-4">
+        <h1 class="text-2xl font-bold text-white">Cancelar a exclusão</h1>
+        <p class="text-gray-300">A conta <strong class="text-white">{{ email }}</strong> está marcada para exclusão. Quer mantê-la?</p>
+        <form method="POST">
+            {{ acao_form.hidden_tag() }}
+            <button type="submit" class="w-full bg-indigo-600 text-white rounded-lg py-2.5 font-medium transition hover:bg-indigo-500">
+                Sim, manter minha conta
+            </button>
+        </form>
+        <a href="{{ url_for('auth.login') }}" class="block text-center text-sm text-gray-400 hover:underline">Não, deixar a exclusão seguir</a>
+    </div>
+</div>
+{% endblock %}

@@ -146,10 +146,15 @@ class Evento(SequentialIdDocument):
     horario = PureTimeField()
     local = mongoengine.StringField(max_length=200)
     criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    criado_por_id = mongoengine.IntField()  # quem criou (eventos antigos: vazio)
 
     @property
     def comunidade(self):
         return relacao_em_cache(self, "comunidade", self.comunidade_id, lambda: comunidade_por_id(self.comunidade_id))
+
+    @property
+    def ultimo_dia(self):
+        return self.data_fim if self.data_fim and self.data_fim >= self.data else self.data
 
     def __repr__(self):
         return f"<Evento {self.nome!r} da comunidade {self.comunidade_id}>"

@@ -270,7 +270,11 @@
                         <div class="flex items-start gap-2.5 rounded-2xl {{ tema.accent_soft_bg ~ ' p-2.5' if not n.lida else '' }}">
                             <i class="fa-solid {{ icone_por_tipo.get(n.tipo, icone_padrao) }} {{ tema.text_secondary }} text-xs mt-1 shrink-0"></i>
                             <div class="min-w-0">
+                                {% if n.link %}
+                                <a href="{{ n.link }}" class="text-sm font-semibold {{ tema.text_primary }} hover:underline">{{ n.titulo }}</a>
+                                {% else %}
                                 <p class="text-sm font-semibold {{ tema.text_primary }}">{{ n.titulo }}</p>
+                                {% endif %}
                                 <p class="text-xs {{ tema.text_secondary }} mt-0.5">{{ n.mensagem }}</p>
                                 <p class="text-[10px] {{ tema.text_secondary }} opacity-70 mt-0.5">{{ n.criada_em.strftime('%d/%m/%Y %H:%M') }}</p>
                             </div>
@@ -560,6 +564,11 @@
             <a href="{{ url_for('auth.logout') }}"
                class="block text-center border border-red-500/40 text-red-500 hover:bg-red-500/10 text-sm font-semibold py-3 rounded-full transition">
                 Sair da conta
+            </a>
+
+            <a href="{{ url_for('auth.excluir_conta') }}" data-excluir-conta
+               class="block text-center text-xs {{ tema.text_secondary }} hover:text-red-500 hover:underline">
+                Excluir conta
             </a>
             </div>
             </div>

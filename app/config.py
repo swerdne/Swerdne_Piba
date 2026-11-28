@@ -124,6 +124,8 @@ class DevelopmentConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
+    # Sem a espera do "Desfazer" nos testes (o envio sai na hora).
+    AVISOS_DESFAZER_SEGUNDOS = 0
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
 

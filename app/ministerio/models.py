@@ -58,6 +58,10 @@ class Ministerio(SequentialIdDocument):
     # Check-in de culto: aberto a todo o ministerio (escalado ou nao) nos
     # dias de `dias_culto`; o horario e a referencia de atraso.
     checkin_culto = mongoengine.BooleanField()
+    # Ligado: quem e escalado recebe o aviso (WhatsApp/SMS/e-mail) na hora,
+    # como antes. Desligado (padrao): fica "aviso pendente" ate o lider
+    # tocar em "Enviar avisos" e confirmar (ver escala.routes).
+    avisar_ao_escalar = mongoengine.BooleanField(default=False)
     culto_horario = PureTimeField()
 
     # Lembrete automatico principal (o unico com WhatsApp, ver

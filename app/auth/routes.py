@@ -7,7 +7,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from authlib.integrations.base_client.errors import OAuthError
 from app.extensions import oauth, limiter
 from app.auth import bp
-from app.auth.forms import LoginForm, RegisterForm, EsqueciSenhaForm, RedefinirSenhaForm
+from app.auth.forms import LoginForm, RegisterForm, EsqueciSenhaForm, RedefinirSenhaForm, ExcluirContaForm
 from app.auth.models import User
 from app.emailing import enviar_email, EmailNaoEnviadoError
 
@@ -184,6 +184,98 @@ def redefinir_senha(token):
 def logout():
     logout_user()
     return redirect(url_for("main.index"))
+
+
+# --- Excluir conta (LGPD, ver app/auth/exclusao.py) ----------------------------
+
+# Com a exclusao pedida, a conta so ve a tela de cancelar (e pode sair).
+_LIVRES_DURANTE_EXCLUSAO = {
+    "auth.conta_em_exclusao", "auth.cancelar_exclusao_logado", "auth.cancelar_exclusao", "auth.logout",
+    "auth.sessao_atual", "static", "main.service_worker", "main.healthz", "main.exclusao_de_dados",
+}
+
+
+@bp.before_app_request
+def _bloquear_conta_em_exclusao():
+    if (current_user.is_authenticated and getattr(current_user, "exclusao_pedida_em", None)
+            and request.endpoint not in _LIVRES_DURANTE_EXCLUSAO):
+        return redirect(url_for("auth.conta_em_exclusao"))
+    return None
+
+
+@bp.route("/conta/excluir", methods=["GET", "POST"])
+@login_required
+@limiter.limit("10 per hour", methods=["POST"])
+def excluir_conta():
+    from app.auth.exclusao import (
+        PRAZO_DIAS, comunidades_sem_outro_admin, escalas_futuras, ministerios_sem_outro_lider, pedir_exclusao,
+    )
+
+    bloqueios = comunidades_sem_outro_admin(current_user)
+    form = ExcluirContaForm()
+    if form.validate_on_submit():
+        if bloqueios:
+            flash("Antes de excluir a conta, passe a administração das comunidades listadas para outra pessoa.", "danger")
+        else:
+            email_saiu = pedir_exclusao(current_user)
+            logout_user()
+            flash(
+                f"Conta desativada. Ela será apagada em {PRAZO_DIAS} dias. "
+                + ("Enviamos um e-mail com o link para cancelar, se mudar de ideia."
+                   if email_saiu else
+                   "Não conseguimos enviar o e-mail agora: para cancelar, entre de novo na sua conta nesse prazo."),
+                "success",
+            )
+            return redirect(url_for("auth.login"))
+    return render_template(
+        "auth/excluir_conta.html", form=form, prazo_dias=PRAZO_DIAS, bloqueios=bloqueios,
+        ministerios_sozinha=ministerios_sem_outro_lider(current_user),
+        escalas=escalas_futuras(current_user),
+    )
+
+
+@bp.route("/conta/em-exclusao")
+@login_required
+def conta_em_exclusao():
+    from app.auth.exclusao import data_da_exclusao
+    from app.main.forms import AcaoForm
+
+    if not current_user.exclusao_pedida_em:
+        return redirect(url_for("main.dashboard"))
+    quando = data_da_exclusao(current_user) - timedelta(hours=3)
+    return render_template("auth/conta_em_exclusao.html", quando=quando, acao_form=AcaoForm())
+
+
+@bp.route("/conta/cancelar-exclusao", methods=["POST"])
+@login_required
+def cancelar_exclusao_logado():
+    from app.auth.exclusao import cancelar_exclusao
+    from app.main.forms import AcaoForm
+
+    if AcaoForm().validate_on_submit() and current_user.exclusao_pedida_em:
+        cancelar_exclusao(current_user)
+        flash("Exclusão cancelada. Sua conta voltou a funcionar normalmente.", "success")
+    return redirect(url_for("main.dashboard"))
+
+
+@bp.route("/conta/cancelar-exclusao/<token>", methods=["GET", "POST"])
+@limiter.limit("20 per hour")
+def cancelar_exclusao(token):
+    """Link do e-mail: GET so mostra o botao (leitor de e-mail que abre
+    links sozinho nao cancela nada); POST cancela."""
+    from app.auth.exclusao import cancelar_exclusao as cancelar
+    from app.main.forms import AcaoForm
+
+    usuario = User.objects(token_cancelar_exclusao=token).first() if token else None
+    if usuario is None or not usuario.exclusao_pedida_em:
+        flash("Esse link não vale mais: a exclusão já foi cancelada ou concluída.", "danger")
+        return redirect(url_for("auth.login"))
+    form = AcaoForm()
+    if form.validate_on_submit():
+        cancelar(usuario)
+        flash("Exclusão cancelada. Você já pode entrar normalmente.", "success")
+        return redirect(url_for("auth.login"))
+    return render_template("auth/cancelar_exclusao.html", acao_form=form, email=usuario.email)
 
 
 @bp.route("/sessao-atual")

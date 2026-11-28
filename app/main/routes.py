@@ -24,6 +24,7 @@ from app.escala.checkin import checkin_ligado, hora_local, local_do_checkin, sit
 # Icone por tipo de notificacao no sino do Dashboard -- fallback pra
 # notificacoes antigas (tipo=None, de antes desse campo existir).
 _ICONE_POR_TIPO = {
+    "evento": "fa-star",
     "escalado": "fa-user-plus",
     "alteracao": "fa-clock-rotate-left",
     "confirmado": "fa-circle-check",
