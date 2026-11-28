@@ -206,7 +206,7 @@ convites, link). Lista montada por app/comunidade/pessoas.py.
         </div>
         {% endif %}
 
-        {{ cartao_link(tema, link_convite, url_for('comunidade.gerar_link_convite', comunidade_id=comunidade.id), acao_form, comunidade.nome, 'admin') }}
+        {{ cartao_link(tema, link_convite, url_for('comunidade.gerar_link_convite', comunidade_id=comunidade.id), acao_form, comunidade.nome, 'admin', regras_link) }}
 
     </main>
     {{ nav_inferior(tema, 'comunidades') }}

@@ -53,19 +53,25 @@ filtros da lista, menu ⋯ de cada pessoa, convite pendente e o cartao
 {% endmacro %}
 
 {# Link generico de entrada (qualquer um com o link entra como membro). #}
-{% macro cartao_link(tema, link_convite, url_gerar, acao_form, nome_escopo, papel_maior) %}
+{% macro cartao_link(tema, link_convite, url_gerar, acao_form, nome_escopo, papel_maior, regras_link=None, com_papel=False) %}
+{# Link de convite (app/convites/link_publico.py): validade, limite de
+   entradas, papel (so no ministerio: membro ou lider) e QR pra telao. #}
 <details class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm" data-cartao-link>
     <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3.5">
         <span class="w-9 h-9 rounded-xl {{ tema.accent_soft_bg }} flex items-center justify-center {{ tema.accent_text }} shrink-0"><i class="fa-solid fa-link text-sm"></i></span>
         <span class="flex-1 min-w-0">
-            <span class="block text-sm font-semibold {{ tema.text_primary }}">Convidar por link</span>
-            <span class="block text-xs {{ tema.text_secondary }} truncate">Pra grupo de WhatsApp: quem abrir entra como membro</span>
+            <span class="block text-sm font-semibold {{ tema.text_primary }}">Convidar por link ou QR</span>
+            <span class="block text-xs {{ tema.text_secondary }} truncate">{{ regras_link or 'Pra grupo de WhatsApp ou telão: quem abrir entra direto' }}</span>
         </span>
         <i class="fa-solid fa-chevron-down text-xs {{ tema.text_secondary }}"></i>
     </summary>
     <div class="px-4 pb-4 space-y-3">
-        <p class="text-xs {{ tema.text_secondary }}">Quem abrir entra direto como <strong>membro</strong>, sem aceite (quem não tem conta se cadastra antes). Pra dar papel de {{ papel_maior }}, use "Adicionar pessoa".</p>
+        <p class="text-xs {{ tema.text_secondary }}">
+            Quem abrir entra direto{% if not com_papel %} como <strong>membro</strong>{% endif %}, sem aceite (quem não tem conta se cadastra antes).
+            {% if com_papel %}Você escolhe abaixo se entra como membro ou líder.{% else %}Pra dar papel de {{ papel_maior }}, use "Adicionar pessoa" (convite por e-mail): um link que dá {{ papel_maior }} seria perigoso se vazasse.{% endif %}
+        </p>
         {% if link_convite %}
+        {% if regras_link %}<p data-regras-link class="text-xs font-semibold {{ tema.text_primary }}"><i class="fa-regular fa-clock mr-1"></i>{{ regras_link }}</p>{% endif %}
         <div class="flex flex-col sm:flex-row gap-2">
             <input type="text" readonly value="{{ link_convite }}" id="input-link-convite" aria-label="Link de convite"
                    class="flex-1 min-w-0 {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2 text-xs {{ tema.text_secondary }} truncate">
@@ -78,16 +84,57 @@ filtros da lista, menu ⋯ de cada pessoa, convite pendente e o cartao
                    class="flex-1 text-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-full transition">
                     <i class="fa-brands fa-whatsapp mr-1"></i>WhatsApp
                 </a>
+                <button type="button" data-qr-convite="{{ link_convite }}"
+                        class="flex-1 border {{ tema.card_border }} {{ tema.text_primary }} text-xs font-semibold px-3 py-2 rounded-full transition hover:bg-black/5">
+                    <i class="fa-solid fa-qrcode mr-1"></i>QR
+                </button>
             </div>
         </div>
+        <div data-qr-convite-caixa class="hidden flex flex-col items-center gap-2 py-2">
+            <div class="p-3 bg-white rounded-2xl border border-gray-200"><div data-qr-convite-alvo></div></div>
+            <p class="text-xs {{ tema.text_secondary }} text-center">Projete no telão ou tire um print para mandar. Quem ler com a câmera entra em {{ nome_escopo }}.</p>
+        </div>
         {% endif %}
-        <form method="POST" action="{{ url_gerar }}"
+        <form method="POST" action="{{ url_gerar }}" class="space-y-2" data-form-gerar-link
               {% if link_convite %}data-confirm-excluir="Gerar um novo link? O link atual vai parar de funcionar."{% endif %}>
             {{ acao_form.hidden_tag() }}
+            <div class="grid {{ 'grid-cols-3' if com_papel else 'grid-cols-2' }} gap-2">
+                <label class="text-[11px] {{ tema.text_secondary }}">Vale por
+                    <select name="validade" class="mt-1 w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-xs {{ tema.text_primary }}">
+                        <option value="7">7 dias</option><option value="1">1 dia</option><option value="30">30 dias</option><option value="0">Sem prazo</option>
+                    </select>
+                </label>
+                <label class="text-[11px] {{ tema.text_secondary }}">Até
+                    <select name="limite" class="mt-1 w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-xs {{ tema.text_primary }}">
+                        <option value="0">Sem limite</option><option value="5">5 pessoas</option><option value="10">10 pessoas</option><option value="25">25 pessoas</option><option value="50">50 pessoas</option>
+                    </select>
+                </label>
+                {% if com_papel %}
+                <label class="text-[11px] {{ tema.text_secondary }}">Entra como
+                    <select name="papel_link" class="mt-1 w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-lg px-2 py-1.5 text-xs {{ tema.text_primary }}">
+                        <option value="membro">Membro</option><option value="lider">Líder</option>
+                    </select>
+                </label>
+                {% endif %}
+            </div>
             <button type="submit" class="text-xs font-semibold {{ tema.accent_text }} hover:underline">
                 {{ "Gerar novo link (o atual para de funcionar)" if link_convite else "Gerar link de convite" }}
             </button>
         </form>
     </div>
 </details>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script>
+document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-qr-convite]');
+    if (!b) return;
+    var cartao = b.closest('[data-cartao-link]');
+    var caixa = cartao.querySelector('[data-qr-convite-caixa]');
+    var alvo = cartao.querySelector('[data-qr-convite-alvo]');
+    caixa.classList.toggle('hidden');
+    if (!alvo.firstChild && window.QRCode) {
+        new QRCode(alvo, { text: b.getAttribute('data-qr-convite'), width: 220, height: 220 });
+    }
+});
+</script>
 {% endmacro %}

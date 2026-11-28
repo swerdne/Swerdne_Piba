@@ -189,7 +189,7 @@ Mesmas pecas da tela Pessoas da comunidade (_pessoas.html).
         {% endif %}
 
         {% if pode_convidar %}
-        {{ cartao_link(tema, link_convite, url_for('ministerio.gerar_link_convite', ministerio_id=ministerio.id), acao_form, ministerio.nome, 'líder') }}
+        {{ cartao_link(tema, link_convite, url_for('ministerio.gerar_link_convite', ministerio_id=ministerio.id), acao_form, ministerio.nome, 'líder', regras_link, pode_dar_lider) }}
         {% endif %}
 
     </main>

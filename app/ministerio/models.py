@@ -36,6 +36,16 @@ class Ministerio(SequentialIdDocument):
     # quem abre entra como "membro". Regenerar invalida o anterior.
     token_convite_publico = mongoengine.StringField(unique=True, sparse=True, max_length=64)
 
+    # Regras do link (app/convites/link_publico.py::configurar_link): ate
+    # quando vale (vazio = sem prazo), quantas entradas aceita (vazio = sem
+    # limite) e quantas ja usou. Gerar outro link zera tudo.
+    convite_expira_em = mongoengine.DateTimeField()
+    convite_limite_usos = mongoengine.IntField()
+    convite_usos = mongoengine.IntField(default=0)
+    # Papel de quem entra pelo link do ministerio: "membro" ou "lider"
+    # (escolhido por quem gera). Na comunidade o link so da "membro".
+    convite_papel = mongoengine.StringField(max_length=10)
+
     # Local proprio do check-in por localizacao (ver app/escala/checkin.py) --
     # vazio = vale o da Comunidade. Endereco so pra exibir; o que conta e
     # latitude/longitude + o raio aceito.

@@ -555,9 +555,13 @@ def membros(comunidade_id):
         url_for("comunidade.entrar_via_link", token=comunidade.token_convite_publico, _external=True)
         if comunidade.token_convite_publico else None
     )
+    from app.convites.link_publico import descricao_link
+
+    regras_link = descricao_link(comunidade) if link_convite else None
     return render_template(
         "comunidade/membros.html",
         comunidade=comunidade,
+        regras_link=regras_link,
         pessoas=pessoas,
         contagens=contar_categorias(pessoas),
         total_admins=sum(1 for c in contas if c.papel == "admin"),
@@ -1238,7 +1242,11 @@ def gerar_link_convite(comunidade_id):
         flash("Ação inválida.", "danger")
         return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
 
-    comunidade.gerar_novo_link_convite()
+    from app.convites.link_publico import LIMITES, VALIDADES, configurar_link
+
+    dias = request.form.get("validade", type=int)
+    limite = request.form.get("limite", type=int)
+    configurar_link(comunidade, dias if dias in VALIDADES else 0, limite if limite in LIMITES else 0)
     comunidade.save()
     flash("Novo link de convite gerado! O link anterior (se existia) parou de funcionar.", "success")
     return redirect(url_for("comunidade.membros", comunidade_id=comunidade.id))
@@ -1259,10 +1267,18 @@ def entrar_via_link(token):
     com CSRF (AcaoForm), senao um GET simples (preview de link no
     WhatsApp/Telegram, prefetch do navegador, ou um <img src="..."> num
     site malicioso) poderia inscrever alguem autenticado sem intencao."""
-    from app.convites.link_publico import entrar_na_comunidade, eh_navegacao_direta, guardar_entrada_pendente
+    from app.convites.link_publico import (
+        LinkIndisponivel, entrar_na_comunidade, eh_navegacao_direta, guardar_entrada_pendente, motivo_link_indisponivel,
+    )
 
     comunidade = primeiro_ou_404(Comunidade.objects(token_convite_publico=token))
     tela = dict(nome_escopo=comunidade.nome, tipo_escopo="comunidade", imagem_escopo=comunidade.imagem)
+    ja_dentro = current_user.is_authenticated and (
+        _eh_admin_da_comunidade(comunidade, current_user)
+        or UsuarioComunidade.objects(usuario_id=current_user.id, comunidade_id=comunidade.id).first())
+    motivo = motivo_link_indisponivel(comunidade)
+    if motivo and not ja_dentro:
+        return render_template("comunidade/entrar.html", erro_link=motivo, **tela)
 
     if not current_user.is_authenticated:
         guardar_entrada_pendente("comunidade", token, url_for("comunidade.entrar_via_link", token=token))
@@ -1274,7 +1290,10 @@ def entrar_via_link(token):
     if (request.method == "POST" and form.validate_on_submit()) or (
         request.method == "GET" and eh_navegacao_direta(request)
     ) or UsuarioComunidade.objects(usuario_id=current_user.id, comunidade_id=comunidade.id).first():
-        destino, mensagem = entrar_na_comunidade(current_user, comunidade)
+        try:
+            destino, mensagem = entrar_na_comunidade(current_user, comunidade)
+        except LinkIndisponivel as erro:
+            return render_template("comunidade/entrar.html", erro_link=str(erro), **tela)
         flash(mensagem, "success")
         return redirect(destino)
 
