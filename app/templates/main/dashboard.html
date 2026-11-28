@@ -481,6 +481,33 @@
                 </form>
             </div>
 
+            <!-- Lembretes das escalas (User.lembrete_*, ver escala.agendador) -->
+            <div>
+                <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Lembretes das escalas</h2>
+                <form method="POST" action="{{ url_for('main.salvar_lembretes') }}" data-form-lembretes
+                      class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+                    {{ lembretes_form.hidden_tag() }}
+                    <p class="text-xs {{ tema.text_secondary }}">
+                        Você recebe um lembrete 1 dia antes (ou quando o ministério escolheu) e outro 1 hora antes de cada escala.
+                        No sino do app eles sempre aparecem. Escolha por onde mais:
+                    </p>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        {{ lembretes_form.lembrete_whatsapp(class_="w-4 h-4 shrink-0") }}
+                        <span class="text-sm font-semibold {{ tema.text_primary }}">WhatsApp e SMS</span>
+                    </label>
+                    <label class="flex items-start gap-3 cursor-pointer pl-7">
+                        {{ lembretes_form.lembrete_1h_whatsapp(class_="mt-0.5 w-4 h-4 shrink-0") }}
+                        <span class="text-sm {{ tema.text_primary }}">Também no de 1 hora antes
+                            <span class="block text-xs {{ tema.text_secondary }}">Desligado: o de 1 hora vai só por e-mail e no app.</span></span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        {{ lembretes_form.lembrete_email(class_="w-4 h-4 shrink-0") }}
+                        <span class="text-sm font-semibold {{ tema.text_primary }}">E-mail</span>
+                    </label>
+                    {{ lembretes_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
+                </form>
+            </div>
+
             <!-- Seguranca -->
             <div>
                 <h2 class="text-xs font-bold {{ tema.text_primary }} uppercase tracking-wide mb-2.5">Segurança</h2>

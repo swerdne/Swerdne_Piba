@@ -83,3 +83,11 @@ class IndisponibilidadeForm(FlaskForm):
     def validate_data_fim(self, campo):
         if campo.data and self.data_inicio.data and campo.data < self.data_inicio.data:
             raise ValidationError("A data final não pode ser antes da inicial.")
+
+
+class LembretesForm(FlaskForm):
+    """Perfil > Lembretes: por onde chegam os lembretes automaticos das escalas."""
+    lembrete_whatsapp = BooleanField("WhatsApp e SMS")
+    lembrete_email = BooleanField("E-mail")
+    lembrete_1h_whatsapp = BooleanField("Também no lembrete de 1 hora antes")
+    submit = SubmitField("Salvar lembretes")

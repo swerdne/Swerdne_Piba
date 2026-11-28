@@ -1,4 +1,4 @@
-"""Agendador de notificacoes automaticas da Escala (24h/16h antes).
+"""Agendador de notificacoes automaticas da Escala (lembrete principal e 1h antes).
 
 Roda em background DENTRO do processo do Flask (nao existe worker/cron
 separado neste projeto ainda) -- so dispara enquanto o servidor estiver
@@ -71,17 +71,19 @@ def _verificar_e_notificar(app):
                     logger.info("Lembrete automatico principal: escala %s", escala.id)
                     escala.notificado_24h_em = agora
                     escala.save()
-                    enviar_notificacoes_da_escala(escala)
+                    enviar_notificacoes_da_escala(escala, lembrete="principal")
 
-                # 2o lembrete, sempre 16h antes, so pelos canais gratuitos
-                # (e-mail + sino): o WhatsApp (template cobrado) e o SMS vao
-                # uma vez so, no principal -- ver app/escala/CLAUDE.md,
-                # "Lembretes automaticos".
-                if escala.notificado_16h_em is None and abs(faltam - timedelta(hours=16)) <= _JANELA:
-                    logger.info("Notificacao automatica (16h antes, so canais gratuitos): escala %s", escala.id)
-                    escala.notificado_16h_em = agora
+                # 2o lembrete, 1 hora antes (era 16h antes). Por e-mail e no
+                # sino; WhatsApp/SMS (cobrados) so pra quem pediu no Perfil
+                # (User.lembrete_1h_whatsapp) -- ver enviar_notificacoes_da_escala.
+                # So pra escala com horario, e so se o principal nao saiu
+                # agora ha pouco (escala criada em cima da hora).
+                if (escala.notificado_1h_em is None and escala.horario is not None
+                        and abs(faltam - timedelta(hours=1)) <= _JANELA and faltam > timedelta(0)):
+                    logger.info("Lembrete automatico de 1 hora antes: escala %s", escala.id)
+                    escala.notificado_1h_em = agora
                     escala.save()
-                    enviar_notificacoes_da_escala(escala, canais_pagos=False)
+                    enviar_notificacoes_da_escala(escala, lembrete="1h")
         except Exception:
             logger.exception("Tick do agendador falhou -- sync/notificacoes deste ciclo foram pulados.")
 

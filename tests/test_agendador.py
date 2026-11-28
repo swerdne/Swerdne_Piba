@@ -79,20 +79,20 @@ def test_nao_notifica_duas_vezes_para_a_mesma_janela(logged_in_client, app, db):
 
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    daqui_16h = agora_brasilia() + timedelta(hours=16)
+    daqui_1h = agora_brasilia() + timedelta(hours=1)
 
     escala = criar_escala_com_funcoes_padrao(
-        ministerio_id=ministerio.id, nome="Culto Teste 16h", departamento="Louvor",
-        data=daqui_16h.date(), horario=daqui_16h.time(),
+        ministerio_id=ministerio.id, nome="Culto Teste 1h", departamento="Louvor",
+        data=daqui_1h.date(), horario=daqui_1h.time(),
     )
     _escalar_membro(escala, "Baixo")
 
     _verificar_e_notificar(app)
-    primeira_marcacao = Escala.objects(id=escala.id).first().notificado_16h_em
+    primeira_marcacao = Escala.objects(id=escala.id).first().notificado_1h_em
     assert primeira_marcacao is not None
 
     _verificar_e_notificar(app)
-    segunda_marcacao = Escala.objects(id=escala.id).first().notificado_16h_em
+    segunda_marcacao = Escala.objects(id=escala.id).first().notificado_1h_em
     assert segunda_marcacao == primeira_marcacao
 
 
@@ -139,11 +139,11 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
     # ver comentario equivalente acima (microsegundos zerados de proposito)
-    daqui_16h = (agora_brasilia() + timedelta(hours=16)).replace(microsecond=0)
+    daqui_1h = (agora_brasilia() + timedelta(hours=1)).replace(microsecond=0)
 
     turno = TurnoPlantao(
         ministerio_id=ministerio.id, nome="Plantao Recepcao", departamento="Louvor",
-        nome_funcao="Responsavel", data_inicio=daqui_16h.date(), horario=daqui_16h.time(),
+        nome_funcao="Responsavel", data_inicio=daqui_1h.date(), horario=daqui_1h.time(),
         unidade_recorrencia="dia", intervalo_recorrencia=1, termino_tipo="nunca",
     )
     turno.save()
@@ -154,17 +154,17 @@ def test_agendador_nao_notifica_turno_de_rodizio_duas_vezes(logged_in_client, ap
     EquipeMembro(equipe_turno_id=equipe.id, membro_id=membro.id).save()
 
     _verificar_e_notificar(app)
-    primeira = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em
+    primeira = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_1h_em
     assert primeira is not None
 
     _verificar_e_notificar(app)
-    segunda = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_16h_em
+    segunda = Escala.objects(plantao_turno_id=turno.id, plantao_periodo=0).first().notificado_1h_em
     assert segunda == primeira
 
 
-def test_lembrete_de_24h_manda_whatsapp_e_o_de_16h_so_canais_gratuitos(logged_in_client, app, db, monkeypatch):
+def test_lembrete_de_24h_manda_whatsapp_e_o_de_1h_so_canais_gratuitos(logged_in_client, app, db, monkeypatch):
     """O template de WhatsApp (cobrado) vai uma vez so, no lembrete de 24h;
-    o de 16h manda so e-mail + sino."""
+    o de 1 hora antes manda so e-mail + sino (pessoa sem conta / sem pedir WhatsApp)."""
     from app.auth.models import User
 
     templates = []
@@ -172,7 +172,7 @@ def test_lembrete_de_24h_manda_whatsapp_e_o_de_16h_so_canais_gratuitos(logged_in
                         lambda destinatario, nome_template, parametros: templates.append(nome_template))
     usuario = User.objects(username="ana").first()
     ministerio = _criar_ministerio_teste(usuario.id)
-    for horas, nome in ((24, "Culto 24h"), (16, "Culto 16h")):
+    for horas, nome in ((24, "Culto 24h"), (1, "Culto 1h")):
         quando = agora_brasilia() + timedelta(hours=horas, minutes=2)
         escala = criar_escala_com_funcoes_padrao(
             ministerio_id=ministerio.id, nome=nome, departamento="Louvor",
@@ -184,7 +184,7 @@ def test_lembrete_de_24h_manda_whatsapp_e_o_de_16h_so_canais_gratuitos(logged_in
     _verificar_e_notificar(app)
 
     assert templates == ["pibachurch_escalado"]  # so a de 24h
-    assert Escala.objects(nome="Culto 16h").first().notificado_16h_em is not None
+    assert Escala.objects(nome="Culto 1h").first().notificado_1h_em is not None
 
 
 def test_agendador_usa_hora_de_brasilia_e_nao_a_do_servidor(logged_in_client, app, db):

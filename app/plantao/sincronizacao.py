@@ -208,6 +208,7 @@ def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None, avis
     if mudou_data_horario or mudou_equipe:
         escala.notificado_24h_em = None
         escala.notificado_16h_em = None
+        escala.notificado_1h_em = None
 
     escala.save()
 
