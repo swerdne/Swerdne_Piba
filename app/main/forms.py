@@ -1,8 +1,8 @@
 """Formularios Flask-WTF do modulo main."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileRequired, FileSize
-from wtforms import BooleanField, StringField, TextAreaField, SubmitField, RadioField, PasswordField
-from wtforms.validators import DataRequired, Length, EqualTo, Optional
+from wtforms import BooleanField, StringField, TextAreaField, SubmitField, RadioField, PasswordField, DateField
+from wtforms.validators import DataRequired, Length, EqualTo, Optional, ValidationError
 
 from app.main.themes import THEMES
 from app.telefones import validar_telefone
@@ -72,3 +72,14 @@ class AcaoForm(FlaskForm):
     """Form vazio (so CSRF) -- mesmo padrao usado em outros blueprints pra
     acoes simples de POST (ver comunidade/ministerio/escala/plantao)."""
     pass
+
+
+class IndisponibilidadeForm(FlaskForm):
+    """Perfil > Datas indisponiveis (escala.models.Indisponibilidade)."""
+    data_inicio = DateField("De", validators=[DataRequired(message="Escolha a data.")])
+    data_fim = DateField("Até (opcional)", validators=[Optional()])
+    motivo = StringField("Motivo (opcional)", validators=[Optional(), Length(max=120)])
+
+    def validate_data_fim(self, campo):
+        if campo.data and self.data_inicio.data and campo.data < self.data_inicio.data:
+            raise ValidationError("A data final não pode ser antes da inicial.")

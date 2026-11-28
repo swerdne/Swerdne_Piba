@@ -600,6 +600,45 @@ def salvar_senha():
     return redirect(url_for("main.dashboard") + "#config")
 
 
+@bp.route("/perfil/indisponibilidade", methods=["GET", "POST"])
+@login_required
+def indisponibilidade():
+    """Datas em que a propria pessoa nao pode servir (vale em todas as
+    comunidades, pelo e-mail da conta). A escala mostra o aviso ao escolher
+    a pessoa; o rodizio deixa a funcao vaga e avisa o lider."""
+    from app.escala.models import Indisponibilidade
+    from app.fuso import hoje_brasilia
+    from app.main.forms import IndisponibilidadeForm
+
+    email = (current_user.email or "").strip().lower()
+    form = IndisponibilidadeForm()
+    if form.validate_on_submit():
+        inicio = form.data_inicio.data
+        fim = form.data_fim.data or inicio
+        if fim < hoje_brasilia():
+            flash("Essa data já passou.", "danger")
+        elif Indisponibilidade.objects(email=email, data_fim__gte=hoje_brasilia()).count() >= 60:
+            flash("Você já tem muitas datas marcadas. Apague algumas antes de marcar outras.", "danger")
+        else:
+            Indisponibilidade(email=email, data_inicio=inicio, data_fim=fim,
+                              motivo=(form.motivo.data or "").strip() or None).save()
+            flash("Data marcada. Os líderes vão ver o aviso ao montar a escala.", "success")
+            return redirect(url_for("main.indisponibilidade"))
+    datas = list(Indisponibilidade.objects(email=email, data_fim__gte=hoje_brasilia()).order_by("data_inicio"))
+    return render_template("main/indisponibilidade.html", form=form, datas=datas, acao_form=AcaoForm())
+
+
+@bp.route("/perfil/indisponibilidade/<int:item_id>/excluir", methods=["POST"])
+@login_required
+def excluir_indisponibilidade(item_id):
+    from app.escala.models import Indisponibilidade
+
+    if AcaoForm().validate_on_submit():
+        Indisponibilidade.objects(id=item_id, email=(current_user.email or "").strip().lower()).delete()
+        flash("Data removida.", "success")
+    return redirect(url_for("main.indisponibilidade"))
+
+
 @bp.route("/perfil/testar-email", methods=["POST"])
 @login_required
 @limiter.limit("5 per hour", methods=["POST"])

@@ -326,6 +326,11 @@
                 {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
             </form>
 
+            <a href="{{ url_for('main.indisponibilidade') }}" data-link-indisponibilidade
+               class="block text-center w-full border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
+                <i class="fa-regular fa-calendar-xmark mr-1.5"></i>Datas em que não posso servir
+            </a>
+
             {% if administra_comunidade %}
             <!-- Diagnostico: manda um e-mail pra propria conta e mostra o erro -->
             <form method="POST" action="{{ url_for('main.testar_email') }}">

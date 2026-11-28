@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Datas em que não posso servir{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% set CAMPO = tema.page_bg ~ " w-full border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <a href="{{ url_for('main.dashboard') }}#config" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
+            <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+            </span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Datas indisponíveis</span>
+        </a>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-28 max-w-xl mx-auto space-y-4">
+        <p class="text-sm {{ tema.text_secondary }}">
+            Marque os dias em que você não pode servir (viagem, trabalho, prova...). Vale em todas as suas comunidades:
+            os líderes veem o aviso ao montar a escala, e o rodízio não coloca você nesses dias.
+        </p>
+
+        <form method="POST" class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-5 space-y-3">
+            {{ form.hidden_tag() }}
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    {{ form.data_inicio.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                    {{ form.data_inicio(class_=CAMPO) }}
+                    {% for erro in form.data_inicio.errors %}<p class="text-xs text-red-500 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+                <div>
+                    {{ form.data_fim.label(class_="block text-xs " ~ tema.text_secondary ~ " mb-1") }}
+                    {{ form.data_fim(class_=CAMPO) }}
+                    {% for erro in form.data_fim.errors %}<p class="text-xs text-red-500 mt-1">{{ erro }}</p>{% endfor %}
+                </div>
+            </div>
+            {{ form.motivo(class_=CAMPO, placeholder="Motivo (opcional, os líderes veem)") }}
+            <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
+                <i class="fa-solid fa-plus mr-1"></i>Marcar
+            </button>
+        </form>
+
+        <div class="space-y-2">
+            <h2 class="text-xs font-bold uppercase tracking-wide {{ tema.text_secondary }}">Próximas datas ({{ datas|length }})</h2>
+            {% for item in datas %}
+            <div data-indisponibilidade class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-sm font-semibold {{ tema.text_primary }}">
+                        {{ item.data_inicio.strftime('%d/%m/%Y') }}{% if item.data_fim != item.data_inicio %} a {{ item.data_fim.strftime('%d/%m/%Y') }}{% endif %}
+                    </p>
+                    {% if item.motivo %}<p class="text-xs {{ tema.text_secondary }} truncate">{{ item.motivo }}</p>{% endif %}
+                </div>
+                <form method="POST" action="{{ url_for('main.excluir_indisponibilidade', item_id=item.id) }}">
+                    {{ acao_form.hidden_tag() }}
+                    <button type="submit" aria-label="Remover data" title="Remover data" class="{{ tema.text_secondary }} hover:text-red-500 transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <p class="text-sm {{ tema.text_secondary }} text-center py-6">Nenhuma data marcada.</p>
+            {% endfor %}
+        </div>
+    </main>
+    {{ nav_inferior(tema, 'perfil') }}
+</div>
+{% endblock %}

@@ -48,6 +48,34 @@ class _MemoriaDoTurno:
             self._membros[equipe.id] = equipe.membros_ordenados
         return self._membros[equipe.id]
 
+    def separar_indisponiveis(self, membros, data):
+        """(quem pode servir em `data`, [(membro, motivo)] de quem marcou a
+        data como indisponivel no Perfil). As datas de todos os integrantes
+        do turno sao lidas 1 vez por sincronizacao."""
+        from app.escala.models import indisponibilidades_por_email, motivo_indisponivel
+        from app.fuso import hoje_brasilia
+
+        if not membros or data is None:
+            return list(membros), []
+        if not hasattr(self, "_indisponiveis"):
+            emails = set()
+            for equipe in (self._equipes if self._equipes is not None else self.turno.fila_ordenada):
+                if equipe.id not in self._membros:
+                    self._membros[equipe.id] = equipe.membros_ordenados
+                emails |= {m.email for m in self._membros[equipe.id] if m.email}
+            hoje = hoje_brasilia()
+            self._indisponiveis = indisponibilidades_por_email(emails, hoje, hoje + timedelta(days=730))
+        if not self._indisponiveis:
+            return list(membros), []
+        livres, fora = [], []
+        for membro in membros:
+            motivo = motivo_indisponivel(self._indisponiveis, membro.email, data)
+            if motivo:
+                fora.append((membro, motivo))
+            else:
+                livres.append(membro)
+        return livres, fora
+
     def precarregar_funcoes(self, ids_escalas):
         self._ids_precarregados = set(ids_escalas)
         self.funcoes_por_escala = {}
@@ -72,7 +100,8 @@ def _materializar_periodo(turno, periodo, data_periodo, memoria=None):
     data_do_periodo aqui) -- sincronizar_turno ja percorre os periodos via
     data_do_periodo pra decidir ate onde materializar; recalcular de novo
     aqui dentro do loop viraria O(n^2) pra recorrencias sem formula fechada."""
-    membros = (memoria or _MemoriaDoTurno(turno)).membros_do_periodo(periodo)
+    memoria = memoria or _MemoriaDoTurno(turno)
+    membros, fora = memoria.separar_indisponiveis(memoria.membros_do_periodo(periodo), data_periodo)
 
     escala = Escala(
         ministerio_id=turno.ministerio_id,
@@ -86,15 +115,40 @@ def _materializar_periodo(turno, periodo, data_periodo, memoria=None):
     )
     escala.save()  # garante escala.id antes de criar as funcoes
 
-    if membros:
-        for ordem, membro in enumerate(membros):
-            Funcao(
-                escala_id=escala.id, nome=turno.nome_funcao, ordem=ordem,
-                membro_id=membro.id, status=STATUS_PADRAO,
-            ).save()
-    else:
-        Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0).save()
+    _criar_funcoes(escala, turno, membros, fora)
     return escala
+
+
+def _criar_funcoes(escala, turno, membros, fora):
+    """Uma funcao por integrante disponivel; quem marcou a data como
+    indisponivel deixa a funcao dele vaga, e o lider e avisado."""
+    ordem = 0
+    for ordem, membro in enumerate(membros):
+        Funcao(
+            escala_id=escala.id, nome=turno.nome_funcao, ordem=ordem,
+            membro_id=membro.id, status=STATUS_PADRAO,
+        ).save()
+    vagas = len(fora) if membros else max(len(fora), 1)
+    for i in range(vagas):
+        Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=(ordem + 1 + i) if membros else i).save()
+    if fora:
+        _avisar_lider_indisponiveis(escala, fora, sobrou_alguem=bool(membros))
+
+
+def _avisar_lider_indisponiveis(escala, fora, sobrou_alguem):
+    """Sino dos lideres, uma vez por escala e pessoa (o sync roda a cada 15 min)."""
+    from app.escala.routes import _notificar_lideres_do_ministerio
+    from app.notificacoes import Notificacao
+
+    data = escala.data.strftime("%d/%m") if escala.data else ""
+    for membro, motivo in fora:
+        titulo = f"{membro.nome} indisponível em {data}: vaga no rodízio"[:120]
+        if Notificacao.objects(escala_id=escala.id, titulo=titulo).first():
+            continue
+        mensagem = (f"{membro.nome} marcou {data} como indisponível ({motivo}). A função dele(a) em "
+                    f"{escala.nome} ficou vaga. "
+                    + ("Escolha alguém para cobrir." if sobrou_alguem else "Ninguém da equipe está disponível nesse dia."))
+        _notificar_lideres_do_ministerio(escala, titulo, mensagem, tipo="alteracao")
 
 
 def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None, avisar_alteracao=True):
@@ -115,7 +169,7 @@ def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None, avis
 
     memoria = memoria or _MemoriaDoTurno(turno)
     periodo = escala.plantao_periodo
-    membros_novos = memoria.membros_do_periodo(periodo)
+    membros_novos, fora = memoria.separar_indisponiveis(memoria.membros_do_periodo(periodo), data_periodo)
     ids_novos = [m.id for m in membros_novos]
 
     funcoes_atuais = memoria.funcoes_da_escala(escala)
@@ -145,14 +199,7 @@ def _atualizar_periodo_existente(turno, escala, data_periodo, memoria=None, avis
     if mudou_equipe:
         for funcao in funcoes_atuais:
             funcao.delete()
-        if membros_novos:
-            for ordem, membro in enumerate(membros_novos):
-                Funcao(
-                    escala_id=escala.id, nome=turno.nome_funcao, ordem=ordem,
-                    membro_id=membro.id, status=STATUS_PADRAO,
-                ).save()
-        else:
-            Funcao(escala_id=escala.id, nome=turno.nome_funcao, ordem=0).save()
+        _criar_funcoes(escala, turno, membros_novos, fora)
     elif mudou_nome_funcao:
         for funcao in funcoes_atuais:
             funcao.nome = turno.nome_funcao
