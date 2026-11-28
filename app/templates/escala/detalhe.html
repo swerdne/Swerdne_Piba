@@ -496,6 +496,13 @@
             </div>
             <noscript><button type="submit" class="text-sm font-semibold {{ tema.accent_text }}">Salvar</button></noscript>
         </form>
+        {% if eh_dono and checkin_escala_ligado and escala.data == hoje and not escala.cancelada %}
+        {# Check-in por QR (app/escala/qr.py): quando o GPS falha dentro da igreja #}
+        <a href="{{ url_for('escala.qr_checkin', escala_id=escala.id) }}" data-link-qr-checkin
+           class="flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white text-sm font-semibold px-4 py-3 rounded-full transition">
+            <i class="fa-solid fa-qrcode"></i>Mostrar QR do check-in
+        </a>
+        {% endif %}
         {% if (checkin_escala_ligado or checkin_ensaio_ligado) and not local_checkin %}
         <div class="flex items-start gap-3 rounded-2xl px-4 py-3 bg-amber-500/10 border border-amber-500/30">
             <i class="fa-solid fa-location-dot text-amber-500 mt-0.5"></i>
@@ -649,7 +656,7 @@
                             {% if funcao.checkin_em %}
                             <span class="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-emerald-500/15 text-emerald-600 shrink-0"
                                   title="Check-in pela localização{% if funcao.checkin_precisao_m %} (margem do GPS: {{ funcao.checkin_precisao_m }} m){% endif %}">
-                                <i class="fa-solid fa-location-dot"></i>Check-in {{ funcao.checkin_em | hora_local }}{% if funcao.checkin_distancia_m is not none %} · {{ funcao.checkin_distancia_m }} m{% endif %}
+                                <i class="fa-solid {{ 'fa-qrcode' if funcao.checkin_metodo == 'qr' else 'fa-location-dot' }}"></i>Check-in {{ funcao.checkin_em | hora_local }}{% if funcao.checkin_metodo == 'qr' %} · QR{% elif funcao.checkin_distancia_m is not none %} · {{ funcao.checkin_distancia_m }} m{% endif %}
                             </span>
                             {% elif funcao.status == "presente" %}
                             <span class="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 {{ tema.secondary_bg }} {{ tema.text_secondary }} shrink-0"
