@@ -9,6 +9,7 @@
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior, cartao_paleta, audio_material with context %}
+{% from "ministerio/_player.html" import player %}
 {% set DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'] %}
 {% set DIAS_LONGOS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'] %}
 
@@ -251,6 +252,7 @@
                             <span class="text-xs font-bold {{ tema.text_secondary }} w-4 text-right shrink-0">{{ loop.index }}</span>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm {{ tema.text_primary }} truncate">{{ item.nome_musica }}{% if item.tom %} <span class="text-xs {{ tema.text_secondary }}">&middot; Tom {{ item.tom }}</span>{% endif %}</p>
+                                {% if item.link %}{{ player(item.link, tema, True) }}{% endif %}
                             </div>
                             {% if item.link %}
                             <a href="{{ item.link }}" target="_blank" rel="noopener" class="text-xs {{ tema.accent_text }} shrink-0" aria-label="Abrir link da música">

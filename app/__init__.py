@@ -179,6 +179,9 @@ def create_app(config_name="default"):
         return "%g" % (float(achado.group(1)) * 4) if achado else "24"
     app.add_template_filter(px_do_tamanho, "px")
 
+    from .ministerio.midia import midia_do_link
+    app.add_template_global(midia_do_link, "midia_do_link")
+
     @app.context_processor
     def injetar_tema():
         from flask_login import current_user

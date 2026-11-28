@@ -70,7 +70,10 @@
 <div class="barra">
     <a href="{{ voltar_url }}">&larr; Voltar</a>
     <span>{{ 'Folha de projeção' if tipo == 'projecao' else 'Cifras do louvor' }}</span>
-    <button type="button" onclick="window.print()">Imprimir / PDF</button>
+    <span>
+        {% if itens %}<button type="button" data-modo-palco=".folha" style="background:#111827;border:1px solid #6b7280">Modo palco</button>{% endif %}
+        <button type="button" onclick="window.print()">Imprimir / PDF</button>
+    </span>
 </div>
 
 <div class="folha">
@@ -142,5 +145,6 @@
     </div>
     {% endif %}
 </div>
+<script src="{{ url_for('static', filename='js/palco.js') }}"></script>
 </body>
 </html>

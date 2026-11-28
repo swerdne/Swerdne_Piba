@@ -8,6 +8,7 @@
 {% endblock %}
 
 {% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% from "ministerio/_player.html" import player %}
 {% set CAMPO = tema.page_bg ~ " border " ~ tema.card_border ~ " rounded-xl px-3 py-2.5 text-sm " ~ tema.text_primary ~ " " ~ tema.placeholder ~ " focus:outline-none focus:ring-2 " ~ tema.focus_ring %}
 
 {% block content %}
@@ -59,6 +60,11 @@
             </p>
             {% endif %}
         </div>
+
+        {% if musica.link and midia_do_link(musica.link) %}
+        <!-- Ouvir junto da cifra (ministerio/midia.py) -->
+        <div data-player-musica>{{ player(musica.link, tema) }}</div>
+        {% endif %}
 
         <!-- Abas -->
         <div class="grid {{ 'grid-cols-3' if pode_gerenciar else 'grid-cols-2' }} gap-1 p-1 rounded-2xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm" role="tablist">
@@ -250,6 +256,10 @@
                             class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">+&frac12;</button>
                     <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Desfazer</button>
                 </div>
+                <button type="button" data-modo-palco="#cifra_louvor"
+                        class="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
+                    <i class="fa-solid fa-display"></i>Modo palco
+                </button>
                 {% if not musica.tom %}
                 <p class="text-xs {{ tema.text_secondary }}"><i class="fa-solid fa-circle-info mr-1"></i>Defina o tom original na aba Dados pra poder salvar versões em outros tons.</p>
                 {% endif %}
@@ -295,6 +305,10 @@
                         class="w-9 h-9 rounded-xl border {{ tema.card_border }} {{ tema.text_primary }} hover:bg-black/5 text-sm font-bold transition">+&frac12;</button>
                 <button type="button" data-transpor-original class="hidden ml-auto text-xs font-semibold {{ tema.accent_text }} hover:underline">Desfazer</button>
             </div>
+            <button type="button" data-modo-palco="#cifra_leitura"
+                    class="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">
+                <i class="fa-solid fa-display"></i>Modo palco
+            </button>
             <pre id="cifra_leitura" data-colorir-acordes class="mu-mono {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 text-base leading-relaxed {{ tema.text_primary }} overflow-x-auto">{{ form_louvor.cifra_louvor.data }}</pre>
             {% else %}
             <p class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl p-6 text-center text-sm {{ tema.text_secondary }}">A cifra ainda não foi preenchida.</p>
@@ -525,4 +539,5 @@
 </script>
 <script src="{{ url_for('static', filename='js/rascunho.js') }}"></script>
 <script src="{{ url_for('static', filename='js/transpor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/palco.js') }}"></script>
 {% endblock %}
