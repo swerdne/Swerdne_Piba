@@ -700,7 +700,20 @@
                                 <p class="text-xs {{ tema.text_secondary }} mt-1">Motivo: {{ funcao.troca_motivo }}</p>
                                 {% endif %}
                                 {% if funcao.troca_sugestao_membro %}
-                                <p class="text-xs {{ tema.text_secondary }} mt-1">Sugestão: {{ funcao.troca_sugestao_membro.nome }}</p>
+                                <p class="text-xs {{ tema.text_secondary }} mt-1" data-troca-aceite="{{ funcao.troca_aceite or '' }}">
+                                    Sugestão: {{ funcao.troca_sugestao_membro.nome }}
+                                    {% if funcao.troca_aceite == 'pendente' %}<span class="font-semibold text-amber-600">· aguardando aceitar</span>
+                                    {% elif funcao.troca_aceite == 'aceita' %}<span class="font-semibold text-emerald-600">· aceitou</span>
+                                    {% elif funcao.troca_aceite == 'recusada' %}<span class="font-semibold text-red-500">· recusou</span>{% endif %}
+                                </p>
+                                {% endif %}
+                                {% if registros_troca.get(funcao.id) %}
+                                <details class="mt-1">
+                                    <summary class="text-[11px] {{ tema.text_secondary }} cursor-pointer">Histórico do pedido</summary>
+                                    <ul class="mt-1 space-y-0.5">
+                                        {% for etapa in registros_troca[funcao.id].etapas %}<li class="text-[11px] {{ tema.text_secondary }}">{{ etapa }}</li>{% endfor %}
+                                    </ul>
+                                </details>
                                 {% endif %}
                                 <div class="flex flex-wrap items-center gap-2 mt-2">
                                     <form method="POST" action="{{ url_for('escala.aprovar_troca', funcao_id=funcao.id) }}" class="flex items-center gap-1.5">

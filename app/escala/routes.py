@@ -57,7 +57,7 @@ from app.escala.models import (
     marcar_notificado,
     mensagem_para,
     trocar_atribuicao,
-    avisos_disponibilidade_em_lote,
+    avisos_indisponibilidade_em_lote,
     itens_para_folha,
     PastaMusicas,
     ItemPasta,
@@ -432,7 +432,7 @@ def detalhe(escala_id):
     # indisponivel na data da escala, segundo os ciclos que ela tiver
     # cadastrados (ver CicloDisponibilidade) -- sem data definida na escala
     # nao ha o que comparar, entao fica vazio de proposito.
-    avisos_por_membro = avisos_disponibilidade_em_lote(diretorio_geral, escala.data)
+    avisos_por_membro = avisos_indisponibilidade_em_lote(diretorio_geral, escala.data)
 
     def _rotulo_com_aviso(membro):
         avisos = avisos_por_membro.get(membro.id)
@@ -567,10 +567,21 @@ def detalhe(escala_id):
         local_checkin=local_do_checkin(escala.ministerio),
         lembrete_texto=descrever_lembrete(momento_do_lembrete(escala, escala.ministerio)),
         previa_avisos=_previa_dos_avisos(escala, funcoes) if eh_dono else [],
+        registros_troca=_registros_de_troca(funcoes),
         desfazer_token=request.args.get("desfazer") if escala.avisos_agendados_token == request.args.get("desfazer") else None,
         desfazer_qtd=request.args.get("qtd", type=int) or 0,
         desfazer_segundos=current_app.config.get("AVISOS_DESFAZER_SEGUNDOS", 8),
     )
+
+
+def _registros_de_troca(funcoes):
+    """Historico (RegistroTroca) das trocas abertas na escala. 1 consulta,
+    so quando ha alguma troca pedida."""
+    ids = [f.troca_registro_id for f in funcoes if f.troca_registro_id and f.status == "troca_solicitada"]
+    if not ids:
+        return {}
+    por_id = {r.id: r for r in RegistroTroca.objects(id__in=ids)}
+    return {f.id: por_id[f.troca_registro_id] for f in funcoes if f.troca_registro_id in por_id}
 
 
 def _previa_dos_avisos(escala, funcoes):
@@ -985,20 +996,24 @@ def atualizar_status(funcao_id):
     if status_novo != "presente":
         funcao.limpar_checkin()
 
+    from app.escala import troca
+
     if status_novo == "troca_solicitada":
         funcao.troca_motivo = (form.troca_motivo.data or "").strip() or None
         funcao.troca_sugestao_membro_id = form.troca_sugestao_membro_id.data or None
     else:
+        if status_anterior == "troca_solicitada" and funcao.troca_registro_id:
+            troca.cancelar(funcao)
         funcao.troca_motivo = None
         funcao.troca_sugestao_membro_id = None
+        funcao.troca_aceite = None
 
     funcao.save()
 
+    # Pedido novo do proprio escalado: historico + aceite do colega sugerido
+    # (app/escala/troca.py).
     if eh_proprio_escalado and status_novo == "troca_solicitada" and status_anterior != status_novo:
-        RegistroTroca(
-            ministerio_id=funcao.escala.ministerio_id, escala_id=escala_id,
-            membro_id=funcao.membro_id, funcao_nome=funcao.nome,
-        ).save()
+        troca.iniciar_pedido(funcao)
 
     # So notifica lider/admin quando quem mudou foi o PROPRIO escalado (ver
     # _notificar_lideres_do_ministerio) -- se um lider mudou o status de
@@ -1195,6 +1210,9 @@ def aprovar_troca(funcao_id):
     membro_antigo_email = funcao.membro.email if funcao.membro else None
     nome_funcao, nome_escala, escala_id_notif = funcao.nome, funcao.escala.nome, funcao.escala_id
 
+    from app.escala import troca
+
+    troca.concluir(funcao, True, novo_membro)
     funcao.membro_id = novo_membro.id
     funcao.status = STATUS_PADRAO
     funcao.notificado_em = None
@@ -1225,6 +1243,36 @@ def aprovar_troca(funcao_id):
     return redirect(url_for("escala.detalhe", escala_id=escala_id))
 
 
+@bp.route("/troca/<int:funcao_id>", methods=["GET", "POST"])
+@login_required
+def responder_troca(funcao_id):
+    """Tela do colega sugerido numa troca (link do aviso no sino): aceitar ou
+    recusar assumir a funcao. So a conta do colega (por e-mail) entra."""
+    from app.escala import troca
+
+    funcao = primeiro_ou_404(Funcao.objects(id=funcao_id))
+    sugerido = funcao.troca_sugestao_membro
+    email = (current_user.email or "").strip().lower()
+    if sugerido is None or (sugerido.email or "").strip().lower() != email:
+        abort(404)
+    escala = funcao.escala
+    pendente = funcao.status == "troca_solicitada" and funcao.troca_aceite == "pendente"
+    form = AcaoForm()
+    if request.method == "POST":
+        if not pendente:
+            flash("Esse pedido de troca já foi respondido ou encerrado.", "warning")
+        elif form.validate_on_submit():
+            aceitou = request.form.get("resposta") == "aceitar"
+            troca.responder(funcao, aceitou)
+            flash("Você aceitou. Agora falta o líder aprovar." if aceitou else "Você recusou o pedido de troca.",
+                  "success")
+            return redirect(url_for("main.dashboard"))
+    return render_template(
+        "escala/responder_troca.html", funcao=funcao, escala=escala, sugerido=sugerido,
+        pendente=pendente, acao_form=form, registro=troca.registro_da_funcao(funcao),
+    )
+
+
 @bp.route("/funcao/<int:funcao_id>/troca/recusar", methods=["POST"])
 @login_required
 def recusar_troca(funcao_id):
@@ -1243,6 +1291,9 @@ def recusar_troca(funcao_id):
     membro_email = funcao.membro.email if funcao.membro else None
     nome_funcao, nome_escala, escala_id_notif = funcao.nome, funcao.escala.nome, funcao.escala_id
 
+    from app.escala import troca
+
+    troca.concluir(funcao, False)
     funcao.status = STATUS_PADRAO
     funcao.troca_motivo = None
     funcao.troca_sugestao_membro_id = None

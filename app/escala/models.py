@@ -361,6 +361,21 @@ def avisos_disponibilidade_em_lote(membros, data):
     return avisos_por_membro
 
 
+def avisos_indisponibilidade_em_lote(membros, data):
+    """Os avisos dos ciclos (acima) mais as datas que a propria pessoa marcou
+    como indisponiveis no Perfil (Indisponibilidade). {membro_id: [avisos]}."""
+    avisos = avisos_disponibilidade_em_lote(membros, data)
+    if data is None or not membros:
+        return avisos
+    por_email = indisponibilidades_por_email([m.email for m in membros], data, data)
+    if por_email:
+        for membro in membros:
+            motivo = motivo_indisponivel(por_email, membro.email, data)
+            if motivo:
+                avisos.setdefault(membro.id, []).append(motivo)
+    return avisos
+
+
 class Escala(SequentialIdDocument):
     """Um evento de escala (ensaio/culto): nome, departamento, data e horario."""
 
@@ -572,6 +587,11 @@ class Funcao(SequentialIdDocument):
     # Membro do diretorio, nao precisa ja estar escalado nesta escala.
     troca_motivo = mongoengine.StringField()
     troca_sugestao_membro_id = mongoengine.IntField()
+    # Aceite de quem foi sugerido para assumir (ver app/escala/troca.py):
+    # "pendente" -> o colega ainda nao respondeu; "aceita"/"recusada".
+    # Vazio = sem sugestao (ou colega sem conta): o lider decide direto.
+    troca_aceite = mongoengine.StringField(max_length=10)
+    troca_registro_id = mongoengine.IntField()  # RegistroTroca do pedido atual
 
     # Check-in por localizacao (ver app/escala/checkin.py): quando a pessoa
     # confirmou presenca estando no local -- hora (UTC), distancia ate o
@@ -646,6 +666,50 @@ class RegistroTroca(SequentialIdDocument):
     membro_id = mongoengine.IntField(required=True)
     funcao_nome = mongoengine.StringField(max_length=80)
     criado_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+    # Historico do pedido (app/escala/troca.py): quem foi sugerido, em que pe
+    # esta e cada passo com data ("27/11 19:30 · Bruno aceitou assumir").
+    substituto_id = mongoengine.IntField()
+    situacao = mongoengine.StringField(max_length=20, default="pedida")
+    etapas = mongoengine.ListField(mongoengine.StringField(max_length=300))
+
+
+class Indisponibilidade(SequentialIdDocument):
+    """Datas em que a propria pessoa avisou que nao pode servir (Perfil >
+    Datas indisponiveis). Pela conta (e-mail), entao vale em toda comunidade
+    em que ela esta no diretorio. A escala manual mostra o aviso na hora de
+    escolher a pessoa; o rodizio deixa a funcao vaga e avisa o lider."""
+
+    meta = {"collection": "indisponibilidades", "indexes": ["email", "data_fim"]}
+    _nome_sequencia = "indisponibilidades"
+
+    email = mongoengine.StringField(required=True, max_length=120)
+    data_inicio = PureDateField(required=True)
+    data_fim = PureDateField(required=True)
+    motivo = mongoengine.StringField(max_length=120)
+    criada_em = mongoengine.DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def rotulo(self):
+        return self.motivo or "Indisponível"
+
+
+def indisponibilidades_por_email(emails, inicio, fim):
+    """{email: [Indisponibilidade]} que cruzam [inicio, fim]. 1 consulta."""
+    emails = {(e or "").strip().lower() for e in emails if e}
+    if not emails:
+        return {}
+    por_email = {}
+    for item in Indisponibilidade.objects(email__in=list(emails), data_inicio__lte=fim, data_fim__gte=inicio):
+        por_email.setdefault(item.email, []).append(item)
+    return por_email
+
+
+def motivo_indisponivel(por_email, email, data):
+    """Rotulo da indisponibilidade de `email` em `data` (ou None)."""
+    for item in por_email.get((email or "").strip().lower(), []):
+        if item.data_inicio <= data <= item.data_fim:
+            return item.rotulo
+    return None
 
 
 class AlertaFaltas(SequentialIdDocument):
