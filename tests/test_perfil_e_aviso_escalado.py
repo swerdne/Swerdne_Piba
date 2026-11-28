@@ -11,6 +11,20 @@ from tests.conftest import sessao_isolada
 from tests.test_escala import _criar_comunidade, _criar_ministerio
 
 
+@pytest.fixture(autouse=True)
+def _aviso_automatico_ao_escalar():
+    """Estes testes cobrem o envio na hora de escalar, que hoje so existe com
+    "Avisar automaticamente ao escalar" ligado no ministerio (padrao: desligado,
+    ver tests/test_fase2.py)."""
+    from app.ministerio.models import Ministerio
+
+    campo = Ministerio._fields["avisar_ao_escalar"]
+    antes = campo.default
+    campo.default = True
+    yield
+    campo.default = antes
+
+
 @pytest.fixture
 def whatsapps(monkeypatch):
     """Troca o envio real do aviso (template) por uma lista."""

@@ -6,10 +6,14 @@
 <h2>Como pedir</h2>
 <ul>
     <li>
+        Pelo app: <strong>Perfil › Configurações › Excluir conta</strong>. A conta é desativada na hora e apagada
+        depois de 15 dias; até lá dá para desistir pelo link que enviamos por e-mail ou entrando de novo na conta.
+    </li>
+    <li>Ou 
         {% if config.EMAIL_CONTATO %}
-        Envie um e-mail para <a href="mailto:{{ config.EMAIL_CONTATO }}?subject=Exclus%C3%A3o%20de%20dados">{{ config.EMAIL_CONTATO }}</a>
+        envie um e-mail para <a href="mailto:{{ config.EMAIL_CONTATO }}?subject=Exclus%C3%A3o%20de%20dados">{{ config.EMAIL_CONTATO }}</a>
         {% else %}
-        Envie um pedido pelo contato no fim desta página
+        envie um pedido pelo contato no fim desta página
         {% endif %}
         com o assunto “Exclusão de dados”, a partir do e-mail da sua conta (ou informando o telefone que recebe os avisos).
     </li>

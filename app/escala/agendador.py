@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 INTERVALO_VERIFICACAO_MINUTOS = 15
 _JANELA = timedelta(minutes=15)
 _dia_alertas_faltas = None
+_dia_exclusoes = None
 
 
 def _verificar_e_notificar(app):
@@ -91,6 +92,17 @@ def _verificar_e_notificar(app):
                 _dia_alertas_faltas = hoje_brasilia()
             except Exception:
                 logger.exception("Alerta de faltas seguidas falhou -- tenta de novo no proximo tick.")
+
+        # Contas com "Excluir conta" pedido ha mais de 15 dias (app/auth/exclusao.py).
+        global _dia_exclusoes
+        if _dia_exclusoes != hoje_brasilia():
+            try:
+                from app.auth.exclusao import concluir_exclusoes_vencidas
+
+                concluir_exclusoes_vencidas()
+                _dia_exclusoes = hoje_brasilia()
+            except Exception:
+                logger.exception("Exclusao de contas vencidas falhou -- tenta de novo no proximo tick.")
 
 
 def iniciar_agendador(app):

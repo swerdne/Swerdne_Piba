@@ -977,9 +977,10 @@ def eventos(comunidade_id):
             flash("Apenas administradores podem criar eventos.", "danger")
             return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
-        evento = Evento(comunidade_id=comunidade.id)
+        evento = Evento(comunidade_id=comunidade.id, criado_por_id=current_user.id)
         _preencher_evento(evento, form)
         evento.save()
+        _avisar_evento_novo(comunidade, evento)
         flash(f'Evento "{evento.nome}" criado!', "success")
         return redirect(url_for("comunidade.eventos", comunidade_id=comunidade.id))
 
@@ -1008,16 +1009,97 @@ def _preencher_evento(evento, form):
     evento.local = (form.local.data or "").strip() or None
 
 
+def _avisar_evento_novo(comunidade, evento):
+    """Aviso no sino de quem tem conta na comunidade (menos quem criou),
+    abrindo a pagina do evento."""
+    from app.notificacoes import Notificacao
+
+    link = url_for("comunidade.evento_detalhe", comunidade_id=comunidade.id, evento_id=evento.id)
+    quando = evento.data.strftime("%d/%m")
+    if evento.horario:
+        quando += f" às {evento.horario.strftime('%H:%M')}"
+    ids = {u.usuario_id for u in UsuarioComunidade.objects(comunidade_id=comunidade.id).only("usuario_id")}
+    ids.add(comunidade.usuario_id)
+    ids.discard(current_user.id)
+    for usuario_id in ids:
+        Notificacao(
+            usuario_id=usuario_id, titulo=f"Novo evento: {evento.nome}"[:120],
+            mensagem=f"{comunidade.nome}, {quando}" + (f" · {evento.local}" if evento.local else "") + ".",
+            tipo="evento", link=link,
+        ).save()
+
+
 @bp.route("/<int:comunidade_id>/eventos/<int:evento_id>")
 @login_required
 def evento_detalhe(comunidade_id, evento_id):
-    """Pagina do evento: data, local, descricao; Editar/Excluir pro admin."""
+    """Pagina do evento: data, local (com link pro mapa), descricao, quem
+    criou e quem esta escalado nos ministerios nesse(s) dia(s);
+    Editar/Excluir pro admin e "Adicionar ao calendario" (.ics)."""
+    from urllib.parse import quote
+
+    from app.auth.models import User
+
     comunidade, eh_dono = _comunidade_visivel_ou_404(comunidade_id)
     evento = primeiro_ou_404(Evento.objects(id=evento_id, comunidade_id=comunidade.id))
+    criador = User.objects(id=evento.criado_por_id).only("name", "username").first() if evento.criado_por_id else None
+
+    # Escalas dos ministerios da comunidade no periodo do evento, com quem vai.
+    ministerios = {m.id: m for m in Ministerio.objects(comunidade_id=comunidade.id).only("id", "nome")}
+    escalas = list(Escala.objects(ministerio_id__in=list(ministerios), data__gte=evento.data,
+                                  data__lte=evento.ultimo_dia, cancelada__ne=True).order_by("data", "horario"))
+    escalados = []
+    if escalas:
+        funcoes = list(Funcao.objects(escala_id__in=[e.id for e in escalas], membro_id__ne=None))
+        membros = {m.id: m for m in Membro.objects(id__in=list({f.membro_id for f in funcoes})).only("id", "nome")}
+        for escala in escalas:
+            pessoas = [(membros[f.membro_id].nome, f.nome) for f in funcoes
+                       if f.escala_id == escala.id and f.membro_id in membros]
+            escalados.append((escala, ministerios[escala.ministerio_id].nome, pessoas))
+
+    mapa = f"https://www.google.com/maps/search/?api=1&query={quote(evento.local)}" if evento.local else None
     return render_template(
         "comunidade/evento_detalhe.html", comunidade=comunidade, evento=evento,
-        eh_dono=eh_dono, acao_form=AcaoForm(),
+        eh_dono=eh_dono, acao_form=AcaoForm(), criador=criador, escalados=escalados, link_mapa=mapa,
     )
+
+
+@bp.route("/<int:comunidade_id>/eventos/<int:evento_id>/calendario.ics")
+@login_required
+def evento_ics(comunidade_id, evento_id):
+    """"Adicionar ao calendario": arquivo .ics que o celular abre direto no
+    app de agenda (Google Agenda, Calendario do iPhone...)."""
+    from datetime import datetime as dt, timedelta as td
+
+    from flask import Response
+
+    comunidade, _ = _comunidade_visivel_ou_404(comunidade_id)
+    evento = primeiro_ou_404(Evento.objects(id=evento_id, comunidade_id=comunidade.id))
+
+    def esc(texto):
+        return (texto or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+    if evento.horario:
+        inicio = dt.combine(evento.data, evento.horario)
+        fim = dt.combine(evento.ultimo_dia, evento.horario) + td(hours=2)
+        datas = [f"DTSTART;TZID=America/Sao_Paulo:{inicio:%Y%m%dT%H%M%S}",
+                 f"DTEND;TZID=America/Sao_Paulo:{fim:%Y%m%dT%H%M%S}"]
+    else:  # dia inteiro (o fim e exclusivo no formato)
+        datas = [f"DTSTART;VALUE=DATE:{evento.data:%Y%m%d}",
+                 f"DTEND;VALUE=DATE:{evento.ultimo_dia + td(days=1):%Y%m%d}"]
+    link = url_for("comunidade.evento_detalhe", comunidade_id=comunidade.id, evento_id=evento.id, _external=True)
+    linhas = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TyBenson//Eventos//PT-BR", "CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT", f"UID:evento-{evento.id}@tybenson",
+        f"DTSTAMP:{dt.utcnow():%Y%m%dT%H%M%SZ}", *datas,
+        f"SUMMARY:{esc(evento.nome)}",
+        f"DESCRIPTION:{esc((evento.descricao or '') + chr(10) + link)}",
+    ]
+    if evento.local:
+        linhas.append(f"LOCATION:{esc(evento.local)}")
+    linhas += [f"URL:{link}", "END:VEVENT", "END:VCALENDAR"]
+    resposta = Response("\r\n".join(linhas) + "\r\n", mimetype="text/calendar")
+    resposta.headers["Content-Disposition"] = f'attachment; filename="evento-{evento.id}.ics"'
+    return resposta
 
 
 @bp.route("/<int:comunidade_id>/eventos/<int:evento_id>/editar", methods=["GET", "POST"])

@@ -566,7 +566,29 @@ def detalhe(escala_id):
         status_cores=STATUS_CORES,
         local_checkin=local_do_checkin(escala.ministerio),
         lembrete_texto=descrever_lembrete(momento_do_lembrete(escala, escala.ministerio)),
+        previa_avisos=_previa_dos_avisos(escala, funcoes) if eh_dono else [],
+        desfazer_token=request.args.get("desfazer") if escala.avisos_agendados_token == request.args.get("desfazer") else None,
+        desfazer_qtd=request.args.get("qtd", type=int) or 0,
+        desfazer_segundos=current_app.config.get("AVISOS_DESFAZER_SEGUNDOS", 8),
     )
+
+
+def _previa_dos_avisos(escala, funcoes):
+    """Quem recebe o aviso no "Enviar avisos" (so quem ainda nao foi avisado),
+    por quais canais e com que texto -- conferido antes de mandar."""
+    previa = []
+    for funcao in funcoes:
+        if funcao.eh_subcabecalho or not funcao.membro_id or funcao.notificado_em:
+            continue
+        membro = funcao.membro
+        canais = []
+        if membro.telefone:
+            canais += ["WhatsApp", "SMS"]
+        if membro.email:
+            canais.append("e-mail")
+        previa.append({"nome": membro.nome, "funcao": funcao.nome_exibido, "canais": canais,
+                       "mensagem": mensagem_para(escala, funcao, membro)})
+    return previa
 
 
 @bp.route("/<int:escala_id>/funcao/adicionar", methods=["POST"])
@@ -1670,9 +1692,59 @@ def notificar_escala(escala_id):
                   "warning")
             return redirect(destino)
 
+    # Confirmado no modal: espera alguns segundos (botao "Desfazer") e so
+    # manda se ninguem desfez. Com espera 0 (testes) manda na hora.
+    espera = current_app.config.get("AVISOS_DESFAZER_SEGUNDOS", 8)
+    if espera <= 0:
+        texto, houve_sucesso = _resumo_do_envio(enviar_notificacoes_da_escala(escala, funcoes=alvo))
+        flash(texto, "success" if houve_sucesso else "danger")
+        return redirect(destino)
+
+    import secrets
+    from app.segundo_plano import em_segundo_plano
+
+    token = secrets.token_urlsafe(12)
+    escala.avisos_agendados_token = token
+    escala.save()
+    em_segundo_plano(_enviar_avisos_agendados, escala.id, token, [f.id for f in alvo], current_user.id, espera,
+                     rotulo="Avisos confirmados")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id, desfazer=token, qtd=len(alvo)))
+
+
+def _enviar_avisos_agendados(escala_id, token, ids_funcoes, usuario_id, espera):
+    """Segundo plano: espera o tempo do "Desfazer" e manda, se o token ainda
+    for o mesmo. O resultado vai pro sino de quem confirmou."""
+    import time as relogio
+
+    relogio.sleep(espera)
+    escala = Escala.objects(id=escala_id).first()
+    if escala is None or escala.avisos_agendados_token != token:
+        return  # desfeito (ou outro envio tomou o lugar)
+    Escala.objects(id=escala_id, avisos_agendados_token=token).update(unset__avisos_agendados_token=True)
+    alvo = list(Funcao.objects(id__in=ids_funcoes, membro_id__ne=None))
+    if not alvo:
+        return
     texto, houve_sucesso = _resumo_do_envio(enviar_notificacoes_da_escala(escala, funcoes=alvo))
-    flash(texto, "success" if houve_sucesso else "danger")
-    return redirect(destino)
+    Notificacao(
+        usuario_id=usuario_id,
+        titulo="Avisos enviados" if houve_sucesso else "Avisos não enviados",
+        mensagem=f"{escala.nome}: {texto}",
+        escala_id=escala.id,
+        tipo="confirmado" if houve_sucesso else "nao_notificado",
+    ).save()
+
+
+@bp.route("/<int:escala_id>/notificar/desfazer", methods=["POST"])
+@login_required
+def desfazer_avisos(escala_id):
+    escala = _escala_do_usuario_ou_404(escala_id)
+    token = request.form.get("token") or ""
+    if AcaoForm().validate_on_submit() and token and Escala.objects(
+            id=escala.id, avisos_agendados_token=token).update(unset__avisos_agendados_token=True):
+        flash("Envio cancelado. Ninguém foi avisado.", "success")
+    else:
+        flash("Não deu para desfazer: os avisos já tinham saído.", "warning")
+    return redirect(url_for("escala.detalhe", escala_id=escala.id))
 
 
 def _resumo_do_envio(resultado):
@@ -1728,6 +1800,13 @@ def _avisar_recem_escalado(funcao):
     escala = funcao.escala
     hoje = (datetime.now(timezone.utc) - timedelta(hours=3)).date()
     if escala.cancelada or (escala.data and escala.data < hoje):
+        return
+    # Padrao: nada sai sozinho. A pessoa fica "aviso pendente" e o lider
+    # confere e confirma em "Enviar avisos". So com "Avisar automaticamente
+    # ao escalar" ligado no ministerio o aviso sai na hora, como antes.
+    if not escala.ministerio.avisar_ao_escalar:
+        flash("Aviso pendente: quando terminar de montar a escala, toque em \"Enviar avisos\" para "
+              "conferir e mandar.", "info")
         return
     # Envio em segundo plano: WhatsApp/e-mail/SMS levavam ~1-2 s por pessoa
     # esperando cada servico responder, e escalar varias pessoas em lote

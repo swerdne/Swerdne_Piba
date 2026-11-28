@@ -1,7 +1,7 @@
 """Formularios Flask-WTF do modulo ministerio."""
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileSize
-from wtforms import StringField, TextAreaField, SubmitField, SelectField, SelectMultipleField, DateField, TimeField
+from wtforms import StringField, TextAreaField, SubmitField, SelectField, SelectMultipleField, DateField, TimeField, BooleanField
 from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import ListWidget, CheckboxInput
 
@@ -44,6 +44,7 @@ class LembreteForm(FlaskForm):
         coerce=int, default=1,
     )
     horario = TimeField("Horário do envio", validators=[Optional()])
+    avisar_ao_escalar = BooleanField("Avisar automaticamente ao escalar")
     submit = SubmitField("Salvar lembrete")
 
 

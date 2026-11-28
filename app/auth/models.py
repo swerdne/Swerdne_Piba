@@ -75,6 +75,12 @@ class User(UserMixin, SequentialIdDocument):
     token_redefinicao_senha = mongoengine.StringField(unique=True, sparse=True, max_length=64)
     token_redefinicao_expira_em = mongoengine.DateTimeField()
 
+    # "Excluir conta" (ver app/auth/exclusao.py): preenchido = conta
+    # desativada, apagada de vez 15 dias depois. O token vai no e-mail, no
+    # link de cancelar (funciona sem entrar na conta).
+    exclusao_pedida_em = mongoengine.DateTimeField()
+    token_cancelar_exclusao = mongoengine.StringField(unique=True, sparse=True, max_length=64)
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 

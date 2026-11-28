@@ -1,6 +1,7 @@
 """Areas do ministerio (Criativo -> Projecao, Midia, Live): cadastro, escala
 unica agrupada por area, lider de area (so as funcoes da area dele), areas na
 tela Pessoas e a area nos avisos -- ver app/ministerio/areas.py."""
+import pytest
 from datetime import date, timedelta
 
 from app.auth.models import User
@@ -9,6 +10,20 @@ from app.ministerio.models import AreaMinisterio, UsuarioMinisterio
 from app.notificacoes import Notificacao
 from tests.conftest import sessao_isolada
 from tests.test_escala import _criar_comunidade, _criar_ministerio
+
+
+@pytest.fixture(autouse=True)
+def _aviso_automatico_ao_escalar():
+    """Estes testes cobrem o envio na hora de escalar, que hoje so existe com
+    "Avisar automaticamente ao escalar" ligado no ministerio (padrao: desligado,
+    ver tests/test_fase2.py)."""
+    from app.ministerio.models import Ministerio
+
+    campo = Ministerio._fields["avisar_ao_escalar"]
+    antes = campo.default
+    campo.default = True
+    yield
+    campo.default = antes
 
 
 def _criativo(cliente):

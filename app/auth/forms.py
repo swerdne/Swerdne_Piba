@@ -75,3 +75,12 @@ class RegisterForm(FlaskForm):
                 raise ValidationError(
                     "Não conseguimos confirmar que esse domínio de e-mail existe. Confira se digitou certo."
                 )
+
+
+class ExcluirContaForm(FlaskForm):
+    """Confirmacao forte de "Excluir conta": digitar EXCLUIR."""
+    confirmacao = StringField("Digite EXCLUIR para confirmar", validators=[DataRequired(message="Digite EXCLUIR para confirmar.")])
+
+    def validate_confirmacao(self, campo):
+        if (campo.data or "").strip().upper() != "EXCLUIR":
+            raise ValidationError("Digite EXCLUIR (com todas as letras) para confirmar.")

@@ -619,11 +619,13 @@ def lembrete(ministerio_id):
     if request.method == "GET":
         form.dias_antes.data = ministerio.lembrete_dias_antes or LEMBRETE_DIAS_PADRAO
         form.horario.data = ministerio.lembrete_horario
+        form.avisar_ao_escalar.data = bool(ministerio.avisar_ao_escalar)
 
     if form.validate_on_submit():
         # Padrao (1 dia, horario do evento) fica gravado como vazio.
         ministerio.lembrete_dias_antes = form.dias_antes.data if form.dias_antes.data != LEMBRETE_DIAS_PADRAO else None
         ministerio.lembrete_horario = form.horario.data
+        ministerio.avisar_ao_escalar = bool(form.avisar_ao_escalar.data)
         ministerio.save()
         flash("Lembrete automático salvo. Vale pras escalas que ainda não receberam o lembrete.", "success")
         return redirect(url_for("ministerio.lembrete", ministerio_id=ministerio.id))

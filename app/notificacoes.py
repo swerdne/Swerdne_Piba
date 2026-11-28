@@ -32,6 +32,8 @@ class Notificacao(SequentialIdDocument):
     # campo cru em si nao fica limpo).
     escala_id = mongoengine.IntField()
     tipo = mongoengine.StringField(max_length=30)
+    # Pagina que o aviso abre ao tocar (ex.: a pagina de um evento). Opcional.
+    link = mongoengine.StringField(max_length=300)
 
     @property
     def usuario(self):

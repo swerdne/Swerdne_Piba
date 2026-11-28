@@ -59,8 +59,19 @@
                 <p class="text-xs leading-relaxed {{ tema.text_primary }}" data-exemplo></p>
             </div>
 
+            <label class="flex items-start gap-3 rounded-2xl px-4 py-3 {{ tema.page_bg }} border {{ tema.card_border }} cursor-pointer">
+                {{ form.avisar_ao_escalar(class_="mt-1 w-4 h-4 rounded") }}
+                <span>
+                    <span class="block text-sm font-semibold {{ tema.text_primary }}">Avisar automaticamente ao escalar</span>
+                    <span class="block text-xs {{ tema.text_secondary }}">
+                        Desligado (padrão): quem você escala fica com "aviso pendente" e nada sai até você tocar em
+                        "Enviar avisos" na escala e confirmar. Ligado: o WhatsApp, o SMS e o e-mail saem na hora em que a pessoa é escalada.
+                    </span>
+                </span>
+            </label>
+
             <button type="submit" class="w-full {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold py-3 rounded-full transition">
-                Salvar lembrete
+                Salvar
             </button>
         </form>
 

@@ -9,6 +9,20 @@ from app.escala.models import Escala, Funcao
 from tests.test_whatsapp_recebidas import _escala, _igreja, _payload, _postar, enviados  # noqa: F401
 
 
+@pytest.fixture(autouse=True)
+def _aviso_automatico_ao_escalar():
+    """Estes testes cobrem o envio na hora de escalar, que hoje so existe com
+    "Avisar automaticamente ao escalar" ligado no ministerio (padrao: desligado,
+    ver tests/test_fase2.py)."""
+    from app.ministerio.models import Ministerio
+
+    campo = Ministerio._fields["avisar_ao_escalar"]
+    antes = campo.default
+    campo.default = True
+    yield
+    campo.default = antes
+
+
 @pytest.fixture
 def interativos(monkeypatch):
     """Troca o envio de mensagem com botoes/lista por uma lista."""

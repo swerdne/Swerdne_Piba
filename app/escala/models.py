@@ -107,24 +107,24 @@ DEPARTAMENTOS = {
 # sao preenchidos na hora do envio. "_padrao" cobre departamentos futuros.
 MENSAGENS_POR_DEPARTAMENTO = {
     "Louvor": (
-        "Ola {membro}, voce foi escalado(a) para {funcao} em {escala} ({data}). "
-        "Prepare-se espiritualmente e confirme sua disponibilidade com a lideranca."
+        "Olá {membro}, você foi escalado(a) para {funcao} em {escala} ({data}). "
+        "Prepare-se espiritualmente e confirme sua disponibilidade com a liderança."
     ),
     "Midia": (
-        "Ola {membro}, voce foi escalado(a) para {funcao} em {escala} ({data}). "
-        "Chegue com antecedencia para testar os equipamentos e confirme sua disponibilidade."
+        "Olá {membro}, você foi escalado(a) para {funcao} em {escala} ({data}). "
+        "Chegue com antecedência para testar os equipamentos e confirme sua disponibilidade."
     ),
     "Kids": (
-        "Ola {membro}, voce foi escalado(a) para {funcao} em {escala} ({data}). "
-        "Lembre-se de chegar cedo para acolher as criancas e confirme sua disponibilidade."
+        "Olá {membro}, você foi escalado(a) para {funcao} em {escala} ({data}). "
+        "Lembre-se de chegar cedo para acolher as crianças e confirme sua disponibilidade."
     ),
     "Coreografia": (
-        "Ola {membro}, voce foi escalado(a) para {funcao} em {escala} ({data}). "
-        "Chegue com antecedencia para o aquecimento e confirme sua disponibilidade com a lideranca."
+        "Olá {membro}, você foi escalado(a) para {funcao} em {escala} ({data}). "
+        "Chegue com antecedência para o aquecimento e confirme sua disponibilidade com a liderança."
     ),
     "_padrao": (
-        "Ola {membro}, voce foi escalado(a) para {funcao} em {escala} ({data}). "
-        "Confirme sua disponibilidade com a lideranca."
+        "Olá {membro}, você foi escalado(a) para {funcao} em {escala} ({data}). "
+        "Confirme sua disponibilidade com a liderança."
     ),
 }
 
@@ -384,6 +384,10 @@ class Escala(SequentialIdDocument):
     # Ultimo "Reenviar para todos" do botao Notificar (UTC) -- trava um novo
     # reenvio por REENVIO_MANUAL_INTERVALO (templates de WhatsApp sao cobrados).
     reenvio_manual_em = mongoengine.DateTimeField()
+    # "Enviar avisos" confirmado: o envio espera alguns segundos (botao
+    # Desfazer) e so sai se este token ainda estiver aqui -- ver
+    # escala.routes.notificar_escala/desfazer_avisos.
+    avisos_agendados_token = mongoengine.StringField(max_length=40)
 
     # Cancelamento (ver escala.routes::cancelar_escala/reabrir_escala) --
     # diferente de excluir: o evento continua existindo (historico, calendario),
