@@ -1,0 +1,17 @@
+{# Player junto da cifra (app/ministerio/midia.py). YouTube so carrega o
+   iframe no toque; audio usa o player do navegador. Outros links: nada aqui
+   (continuam como link onde ja apareciam). #}
+{% macro player(link, tema, compacto=False) %}
+{% set m = midia_do_link(link) %}
+{% if m and m.tipo == 'youtube' %}
+<div data-player-youtube class="{{ 'mt-1' if compacto else '' }}">
+    <button type="button" data-player-abrir="{{ m.embed }}"
+            class="inline-flex items-center gap-1.5 {{ 'text-xs' if compacto else 'text-sm' }} font-semibold rounded-full px-3 py-1.5 bg-red-500/10 text-red-600 hover:bg-red-500/20 transition">
+        <i class="fa-brands fa-youtube"></i>Ouvir aqui
+    </button>
+    <div data-player-quadro class="hidden mt-2 relative w-full overflow-hidden rounded-2xl bg-black" style="padding-top:56.25%"></div>
+</div>
+{% elif m and m.tipo == 'audio' %}
+<audio controls preload="none" src="{{ m.url }}" class="w-full {{ 'mt-1 h-9' if compacto else 'h-11' }}"></audio>
+{% endif %}
+{% endmacro %}

@@ -1353,3 +1353,21 @@ window.salvarStatus = function (select) {
         if (campo.value) filtrar();
     });
 })();
+
+// Player do YouTube junto da cifra (ministerio/_player.html): o iframe so
+// e criado no toque.
+document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-player-abrir]');
+    if (!b) return;
+    var quadro = b.parentNode.querySelector('[data-player-quadro]');
+    if (!quadro || quadro.firstChild) return;
+    var f = document.createElement('iframe');
+    f.src = b.getAttribute('data-player-abrir');
+    f.title = 'Vídeo da música';
+    f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    f.setAttribute('allowfullscreen', '');
+    f.className = 'absolute inset-0 w-full h-full';
+    quadro.appendChild(f);
+    quadro.classList.remove('hidden');
+    b.style.display = 'none';  // (classe hidden perde para inline-flex no CSS)
+});
