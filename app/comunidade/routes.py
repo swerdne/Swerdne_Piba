@@ -1067,37 +1067,19 @@ def evento_detalhe(comunidade_id, evento_id):
 @login_required
 def evento_ics(comunidade_id, evento_id):
     """"Adicionar ao calendario": arquivo .ics que o celular abre direto no
-    app de agenda (Google Agenda, Calendario do iPhone...)."""
-    from datetime import datetime as dt, timedelta as td
-
+    app de agenda (Google Agenda, Calendario do iPhone...). Ver app/agenda.py."""
     from flask import Response
+
+    from app.agenda import calendario, evento_ics as vevento
 
     comunidade, _ = _comunidade_visivel_ou_404(comunidade_id)
     evento = primeiro_ou_404(Evento.objects(id=evento_id, comunidade_id=comunidade.id))
-
-    def esc(texto):
-        return (texto or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
-
-    if evento.horario:
-        inicio = dt.combine(evento.data, evento.horario)
-        fim = dt.combine(evento.ultimo_dia, evento.horario) + td(hours=2)
-        datas = [f"DTSTART;TZID=America/Sao_Paulo:{inicio:%Y%m%dT%H%M%S}",
-                 f"DTEND;TZID=America/Sao_Paulo:{fim:%Y%m%dT%H%M%S}"]
-    else:  # dia inteiro (o fim e exclusivo no formato)
-        datas = [f"DTSTART;VALUE=DATE:{evento.data:%Y%m%d}",
-                 f"DTEND;VALUE=DATE:{evento.ultimo_dia + td(days=1):%Y%m%d}"]
     link = url_for("comunidade.evento_detalhe", comunidade_id=comunidade.id, evento_id=evento.id, _external=True)
-    linhas = [
-        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TyBenson//Eventos//PT-BR", "CALSCALE:GREGORIAN",
-        "BEGIN:VEVENT", f"UID:evento-{evento.id}@tybenson",
-        f"DTSTAMP:{dt.utcnow():%Y%m%dT%H%M%SZ}", *datas,
-        f"SUMMARY:{esc(evento.nome)}",
-        f"DESCRIPTION:{esc((evento.descricao or '') + chr(10) + link)}",
-    ]
-    if evento.local:
-        linhas.append(f"LOCATION:{esc(evento.local)}")
-    linhas += [f"URL:{link}", "END:VEVENT", "END:VCALENDAR"]
-    resposta = Response("\r\n".join(linhas) + "\r\n", mimetype="text/calendar")
+    texto = calendario(evento.nome, [vevento(
+        f"evento-{evento.id}@tybenson", evento.data, evento.horario, None, evento.nome,
+        ((evento.descricao or "") + "\n" + link).strip(), evento.local, link, ultimo_dia=evento.ultimo_dia,
+    )])
+    resposta = Response(texto, mimetype="text/calendar")
     resposta.headers["Content-Disposition"] = f'attachment; filename="evento-{evento.id}.ics"'
     return resposta
 

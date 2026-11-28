@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Minhas escalas na agenda{% endblock %}
+
+{% from "_macros.html" import logo_inicio, nav_inferior with context %}
+{% macro linha_link(titulo, url, subtitulo) %}
+<div data-agenda-link class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-3">
+    <div>
+        <p class="text-sm font-bold {{ tema.text_primary }}">{{ titulo }}</p>
+        <p class="text-xs {{ tema.text_secondary }}">{{ subtitulo }}</p>
+    </div>
+    <input type="text" readonly value="{{ url }}" data-agenda-url aria-label="Link da agenda: {{ titulo }}"
+           class="w-full {{ tema.page_bg }} border {{ tema.card_border }} rounded-xl px-3 py-2 text-xs {{ tema.text_secondary }}">
+    <div class="grid grid-cols-2 gap-2">
+        <button type="button" data-agenda-copiar
+                class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-3 py-2.5 rounded-full transition">
+            <i class="fa-regular fa-copy mr-1"></i>Copiar link
+        </button>
+        <a href="{{ url | replace('https://', 'webcal://') | replace('http://', 'webcal://') }}"
+           class="text-center border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-3 py-2.5 rounded-full transition">
+            <i class="fa-brands fa-apple mr-1"></i>Abrir no iPhone
+        </a>
+    </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="relative min-h-screen {{ tema.page_bg }} {{ tema.text_primary }} overflow-hidden">
+    <div class="h-1 {{ tema.accent_bg }}"></div>
+
+    <header class="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <a href="{{ url_for('main.dashboard') }}#config" class="flex items-center gap-3 min-w-0 group" aria-label="Voltar">
+            <span class="flex items-center justify-center w-9 h-9 rounded-xl {{ tema.card_bg }} border {{ tema.card_border }} shadow-sm shrink-0">
+                <i class="fa-solid fa-chevron-left text-sm {{ tema.text_secondary }} {{ tema.icon_hover }} transition"></i>
+            </span>
+            <span class="font-extrabold text-lg {{ tema.text_primary }} truncate">Escalas na agenda</span>
+        </a>
+        {{ logo_inicio(tema) }}
+    </header>
+
+    <main class="px-4 sm:px-6 py-6 pb-28 max-w-xl mx-auto space-y-4">
+        <p class="text-sm {{ tema.text_secondary }}">
+            Assine uma vez e suas escalas aparecem no Google Agenda ou no calendário do iPhone, atualizando sozinhas.
+            O Google busca as mudanças de tempos em tempos (pode levar algumas horas).
+        </p>
+
+        {{ linha_link("Minhas escalas", pessoal, "Só as escalas em que você está, com a sua função, e os eventos das suas comunidades.") }}
+
+        {% for ministerio, url in por_ministerio %}
+        {{ linha_link("Ministério " ~ ministerio.nome, url, "Todas as escalas do ministério, com quem está em cada função.") }}
+        {% endfor %}
+
+        <div class="{{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2 text-sm {{ tema.text_secondary }}">
+            <p class="font-bold {{ tema.text_primary }}"><i class="fa-brands fa-google mr-1.5"></i>No Google Agenda</p>
+            <p>Copie o link. No computador, abra calendar.google.com › "Outras agendas" › <strong>+</strong> › "Do URL", cole e toque em "Adicionar agenda". Depois ela aparece também no celular.</p>
+            <p class="font-bold {{ tema.text_primary }} pt-2"><i class="fa-brands fa-apple mr-1.5"></i>No iPhone</p>
+            <p>Toque em "Abrir no iPhone" e confirme "Assinar".</p>
+        </div>
+
+        <form method="POST" class="text-center" data-confirm-excluir="Gerar um link novo? O link antigo para de funcionar e você precisa assinar de novo.">
+            {{ acao_form.hidden_tag() }}
+            <button type="submit" class="text-xs font-semibold {{ tema.text_secondary }} hover:underline">
+                <i class="fa-solid fa-rotate mr-1"></i>Gerar novo link (se o atual foi compartilhado sem querer)
+            </button>
+        </form>
+        <p class="text-[11px] text-center {{ tema.text_secondary }}">Esses links são pessoais: quem tiver o link vê as escalas. Não compartilhe.</p>
+    </main>
+    {{ nav_inferior(tema, 'perfil') }}
+</div>
+<script>
+    document.querySelectorAll('[data-agenda-link]').forEach(function (caixa) {
+        var campo = caixa.querySelector('[data-agenda-url]');
+        var botao = caixa.querySelector('[data-agenda-copiar]');
+        botao.addEventListener('click', function () {
+            function ok() { botao.innerHTML = '<i class="fa-solid fa-check mr-1"></i>Copiado'; setTimeout(function () { botao.innerHTML = '<i class="fa-regular fa-copy mr-1"></i>Copiar link'; }, 2000); }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(campo.value).then(ok, function () { campo.select(); document.execCommand('copy'); ok(); });
+            } else { campo.select(); document.execCommand('copy'); ok(); }
+        });
+        campo.addEventListener('focus', function () { campo.select(); });
+    });
+</script>
+{% endblock %}
