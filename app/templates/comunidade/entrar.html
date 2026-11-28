@@ -26,10 +26,13 @@
         {% endif %}
         {% set rotulo = ('o ministério' if tipo_escopo == 'ministerio' else 'a comunidade') %}
 
-        {% if precisa_confirmar %}
+        {% if erro_link %}
+        <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Link indisponível</h1>
+        <p data-erro-link class="text-sm {{ tema.text_secondary }}">{{ erro_link }}</p>
+        {% elif precisa_confirmar %}
         <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Entrar em {{ nome_escopo }}?</h1>
         <p class="text-sm {{ tema.text_secondary }}">
-            Você vai entrar como membro n{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %}.
+            Você vai entrar como {{ papel_entrada or 'membro' }} n{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %}.
         </p>
         <form method="POST" class="pt-2">
             {{ acao_form.hidden_tag() }}
@@ -40,7 +43,7 @@
         {% else %}
         <h1 class="text-xl font-extrabold {{ tema.text_primary }}">Você foi convidado(a)!</h1>
         <p class="text-sm {{ tema.text_secondary }}">
-            Entre ou crie sua conta pra fazer parte d{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %} como membro.
+            Entre ou crie sua conta pra fazer parte d{{ rotulo }} <strong>{{ nome_escopo }}</strong>{% if comunidade_escopo %} ({{ comunidade_escopo }}){% endif %} como {{ papel_entrada or 'membro' }}.
             Assim que terminar, você já entra automaticamente.
         </p>
         <div class="flex flex-col gap-2 pt-2">

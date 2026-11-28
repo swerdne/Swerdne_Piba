@@ -49,6 +49,13 @@ class Comunidade(SequentialIdDocument):
     # sobrescrito), protege contra o link vazado continuar funcionando.
     token_convite_publico = mongoengine.StringField(unique=True, sparse=True, max_length=64)
 
+    # Regras do link (app/convites/link_publico.py::configurar_link): ate
+    # quando vale (vazio = sem prazo), quantas entradas aceita (vazio = sem
+    # limite) e quantas ja usou. Gerar outro link zera tudo.
+    convite_expira_em = mongoengine.DateTimeField()
+    convite_limite_usos = mongoengine.IntField()
+    convite_usos = mongoengine.IntField(default=0)
+
     # Local do check-in por localizacao (ver app/escala/checkin.py): endereco
     # so pra exibir; o que vale e latitude/longitude + o raio aceito.
     endereco = mongoengine.StringField(max_length=300)

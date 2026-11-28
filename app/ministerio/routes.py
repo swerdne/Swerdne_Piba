@@ -829,12 +829,16 @@ def papeis(ministerio_id):
         url_for("ministerio.entrar_via_link", token=ministerio.token_convite_publico, _external=True)
         if ministerio.token_convite_publico else None
     )
+    from app.convites.link_publico import descricao_link
+
+    regras_link = descricao_link(ministerio) if link_convite else None
 
     return render_template(
         "ministerio/papeis.html",
         ministerio=ministerio,
         form=form,
         link_convite=link_convite,
+        regras_link=regras_link,
         pode_convidar=bool(papeis_permitidos),
         pode_dar_lider="lider" in papeis_permitidos,
         papeis_atuais=papeis_atuais,
@@ -857,7 +861,12 @@ def gerar_link_convite(ministerio_id):
     if not AcaoForm().validate_on_submit():
         flash("Ação inválida.", "danger")
         return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
-    ministerio.gerar_novo_link_convite()
+    from app.convites.link_publico import LIMITES, PAPEIS_MINISTERIO, VALIDADES, configurar_link
+
+    dias = request.form.get("validade", type=int)
+    limite = request.form.get("limite", type=int)
+    papel = request.form.get("papel_link") if request.form.get("papel_link") in PAPEIS_MINISTERIO else "membro"
+    configurar_link(ministerio, dias if dias in VALIDADES else 0, limite if limite in LIMITES else 0, papel)
     ministerio.save()
     flash("Novo link de acesso gerado! O link anterior (se existia) parou de funcionar.", "success")
     return redirect(url_for("ministerio.papeis", ministerio_id=ministerio.id))
@@ -869,13 +878,23 @@ def entrar_via_link(token):
     """Publica (sem @login_required): quem nao tem conta ve a tela pra entrar
     ou se cadastrar, e a entrada se conclui sozinha depois. Mesmo fluxo de
     comunidade.routes.entrar_via_link."""
-    from app.convites.link_publico import entrar_no_ministerio, eh_navegacao_direta, guardar_entrada_pendente
+    from app.convites.link_publico import (
+        PAPEIS_MINISTERIO, LinkIndisponivel, entrar_no_ministerio, eh_navegacao_direta, guardar_entrada_pendente,
+        motivo_link_indisponivel,
+    )
 
     ministerio = primeiro_ou_404(Ministerio.objects(token_convite_publico=token))
     tela = dict(
         nome_escopo=ministerio.nome, tipo_escopo="ministerio", imagem_escopo=ministerio.imagem,
         comunidade_escopo=ministerio.comunidade.nome if ministerio.comunidade else None,
+        papel_entrada=PAPEIS_MINISTERIO.get(ministerio.convite_papel or "membro", "membro"),
     )
+    ja_dentro = current_user.is_authenticated and (
+        _eh_lider_do_ministerio(ministerio, current_user)
+        or UsuarioMinisterio.objects(usuario_id=current_user.id, ministerio_id=ministerio.id).first())
+    motivo = motivo_link_indisponivel(ministerio)
+    if motivo and not ja_dentro:
+        return render_template("comunidade/entrar.html", erro_link=motivo, **tela)
 
     if not current_user.is_authenticated:
         guardar_entrada_pendente("ministerio", token, url_for("ministerio.entrar_via_link", token=token))
@@ -885,7 +904,10 @@ def entrar_via_link(token):
     if (request.method == "POST" and form.validate_on_submit()) or (
         request.method == "GET" and eh_navegacao_direta(request)
     ) or UsuarioMinisterio.objects(usuario_id=current_user.id, ministerio_id=ministerio.id).first():
-        destino, mensagem = entrar_no_ministerio(current_user, ministerio)
+        try:
+            destino, mensagem = entrar_no_ministerio(current_user, ministerio)
+        except LinkIndisponivel as erro:
+            return render_template("comunidade/entrar.html", erro_link=str(erro), **tela)
         flash(mensagem, "success")
         return redirect(destino)
 

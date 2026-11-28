@@ -89,14 +89,15 @@ def test_ministerio_adiciona_do_diretorio_e_por_email_entra_no_diretorio(logged_
         Membro(comunidade_id=comunidade.id, nome="Sem Email").save()
 
         html = logged_in_client.get(url).data.decode()
-        assert "Pessoas do ministério" in html and f'value="{bruno_membro.id}"' in html
+        opcao_bruno = f'value="{bruno_membro.id}" data-email="bruno@example.com"'  # opcao do diretorio
+        assert "Pessoas do ministério" in html and opcao_bruno in html
         assert ">Sem Email<" not in html  # sem e-mail nao da pra dar papel
 
         # escolhendo do diretorio (sem digitar e-mail)
         logged_in_client.post(url, data={"membro_id": str(bruno_membro.id), "email": ""})
         bruno = User.objects(email="bruno@example.com").first()
         assert UsuarioMinisterio.objects(usuario_id=bruno.id, ministerio_id=louvor.id).count() == 1
-        assert f'value="{bruno_membro.id}"' not in logged_in_client.get(url).data.decode()  # ja esta no ministerio
+        assert opcao_bruno not in logged_in_client.get(url).data.decode()  # ja esta no ministerio
 
         # por e-mail de quem nao esta no diretorio -> entra no diretorio tambem
         logged_in_client.post(url, data={"email": "nova@example.com"})
