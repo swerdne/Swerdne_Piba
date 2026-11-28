@@ -261,12 +261,16 @@ def _sequencia_de_faltas(registros_da_pessoa):
     return seguidas, inicio
 
 
-def montar(ministerios, periodo, tipo="escalas"):
+def montar(ministerios, periodo, tipo="escalas", inicio=None, fim=None):
     """Tudo o que a tela mostra, ja calculado. tipo: "escalas" ou "ensaios"
-    (separados de proposito -- trocas e alerta de faltas so valem pra escalas)."""
-    dias = PERIODOS[periodo][1]
-    fim = hoje_brasilia() - timedelta(days=1)
-    inicio = fim - timedelta(days=dias - 1)
+    (separados de proposito -- trocas e alerta de faltas so valem pra escalas).
+    `inicio`/`fim` (filtro de datas livre) substituem o periodo pronto."""
+    if inicio is None or fim is None:
+        dias = PERIODOS[periodo][1]
+        fim = hoje_brasilia() - timedelta(days=1)
+        inicio = fim - timedelta(days=dias - 1)
+    else:
+        dias = (fim - inicio).days + 1
     coletor = {"ensaios": coletar_ensaios, "cultos": coletar_cultos}.get(tipo, coletar)
     registros, sem_registro, ids_escalas, nomes = coletor(ministerios, inicio, fim)
 
@@ -357,6 +361,68 @@ def montar(ministerios, periodo, tipo="escalas"):
     }
 
 
+# --- Equilibrio de escalas -------------------------------------------------------
+# Quantas vezes cada pessoa foi escalada no periodo (passado e futuro, com ou
+# sem check-in), comparado com a media do grupo: quem passa de MUITO acima da
+# media esta servindo demais; quem fica abaixo de MUITO abaixo, de menos.
+EQUILIBRIO_ACIMA = 1.5
+EQUILIBRIO_ABAIXO = 0.5
+EQUILIBRIO_MINIMO_PESSOAS = 3
+
+
+def equilibrio(ministerios, inicio, fim):
+    """[{nome, vezes, situacao}] + media. Entram quem foi escalado no periodo e
+    quem tem papel no(s) ministerio(s) (com cadastro no diretorio), mesmo com
+    zero escalas. Escalas canceladas nao contam; convidado pontual sim."""
+    from app.auth.models import User
+    from app.escala.models import TIPO_FUNCAO
+    from app.ministerio.models import UsuarioMinisterio
+
+    ids_min = [m.id for m in ministerios]
+    escalas = list(Escala.objects(ministerio_id__in=ids_min, data__gte=inicio, data__lte=fim,
+                                  cancelada__ne=True).only("id"))
+    vezes = defaultdict(int)
+    if escalas:
+        for f in Funcao.objects(escala_id__in=[e.id for e in escalas], membro_id__ne=None, tipo=TIPO_FUNCAO).only("membro_id"):
+            vezes[f.membro_id] += 1
+
+    # Quem tem papel no ministerio, achado no diretorio da comunidade pelo e-mail.
+    comunidade_por_ministerio = {m.id: m.comunidade_id for m in ministerios}
+    contas = defaultdict(set)  # comunidade_id -> e-mails
+    papeis = list(UsuarioMinisterio.objects(ministerio_id__in=ids_min).only("usuario_id", "ministerio_id"))
+    emails = {u.id: (u.email or "").strip().lower()
+              for u in User.objects(id__in=list({p.usuario_id for p in papeis})).only("email")} if papeis else {}
+    for p in papeis:
+        if emails.get(p.usuario_id):
+            contas[comunidade_por_ministerio[p.ministerio_id]].add(emails[p.usuario_id])
+    for comunidade_id, emails_da in contas.items():
+        for membro in Membro.objects(comunidade_id=comunidade_id, email__in=list(emails_da)).only("id"):
+            vezes.setdefault(membro.id, 0)
+
+    nomes = {m.id: m.nome for m in Membro.objects(id__in=list(vezes)).only("nome")} if vezes else {}
+    pessoas = [{"nome": nomes.get(i, "Pessoa removida"), "vezes": n} for i, n in vezes.items()]
+    media = sum(p["vezes"] for p in pessoas) / len(pessoas) if pessoas else 0
+    for p in pessoas:
+        p["situacao"] = None
+        if len(pessoas) >= EQUILIBRIO_MINIMO_PESSOAS and media > 0:
+            if p["vezes"] > media * EQUILIBRIO_ACIMA:
+                p["situacao"] = "demais"
+            elif p["vezes"] < media * EQUILIBRIO_ABAIXO:
+                p["situacao"] = "de menos"
+        p["percentual"] = round(p["vezes"] / max(max((x["vezes"] for x in pessoas), default=1), 1) * 100)
+    pessoas.sort(key=lambda p: (-p["vezes"], p["nome"]))
+    return {"pessoas": pessoas, "media": round(media, 1), "inicio": inicio, "fim": fim,
+            "demais": sum(p["situacao"] == "demais" for p in pessoas),
+            "de_menos": sum(p["situacao"] == "de menos" for p in pessoas)}
+
+
+def _data_do_filtro(texto):
+    try:
+        return date.fromisoformat(texto) if texto else None
+    except ValueError:
+        return None
+
+
 def verificar_faltas_seguidas():
     """Avisa (sino) os lideres quando alguem chega a N faltas seguidas no
     ministerio -- uma vez por sequencia. Chamado pelo agendador; so olha
@@ -400,6 +466,20 @@ def tela_estatisticas(ministerios, titulo, voltar_url, url_tela, url_ajustes=Non
     periodo = request.args.get("periodo")
     if periodo not in PERIODOS:
         periodo = PERIODO_PADRAO
+    # Filtro de datas livre (?de=&ate=): vale no lugar do periodo pronto. O
+    # comparecimento so conta dias encerrados; o equilibrio inclui o futuro.
+    de, ate = _data_do_filtro(request.args.get("de")), _data_do_filtro(request.args.get("ate"))
+    ontem = hoje_brasilia() - timedelta(days=1)
+    if de and ate and de <= ate and (ate - de).days <= 3 * 366:
+        periodo = "personalizado"
+        inicio_eq, fim_eq = de, ate
+        datas_presenca = (de, min(ate, ontem)) if de <= ontem else None
+    else:
+        de = ate = None
+        fim_presenca = ontem
+        inicio_presenca = fim_presenca - timedelta(days=PERIODOS[periodo][1] - 1)
+        datas_presenca = (inicio_presenca, fim_presenca)
+        inicio_eq, fim_eq = inicio_presenca, hoje_brasilia() + timedelta(days=30)
     selecionado = None
     if len(ministerios) > 1:
         selecionado = next((m for m in ministerios if str(m.id) == request.args.get("ministerio")), None)
@@ -415,7 +495,11 @@ def tela_estatisticas(ministerios, titulo, voltar_url, url_tela, url_ajustes=Non
         voltar_url=voltar_url,
         url_tela=url_tela,
         url_ajustes=url_ajustes,
-        dados=montar(alvo, periodo, tipo) if alvo else None,
+        dados=montar(alvo, periodo, tipo, *datas_presenca) if alvo and datas_presenca else None,
+        equilibrio=equilibrio(alvo, inicio_eq, fim_eq) if alvo else None,
+        de=de,
+        ate=ate,
+        so_futuro=bool(alvo) and not datas_presenca,
         periodo=periodo,
         tipo=tipo,
         tipos={chave: TIPOS[chave] for chave in visiveis},

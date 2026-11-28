@@ -66,10 +66,11 @@
             {% endif %}
             <input type="hidden" name="periodo" value="{{ periodo }}">
             <input type="hidden" name="tipo" value="{{ tipo }}">
+            {% if de %}<input type="hidden" name="de" value="{{ de.isoformat() }}"><input type="hidden" name="ate" value="{{ ate.isoformat() }}">{% endif %}
             {% if tipos | length > 1 %}
             <nav class="flex p-1 rounded-full border {{ tema.card_border }} {{ tema.card_bg }} shrink-0 self-start" aria-label="Tipo de check-in">
                 {% for chave, rotulo in tipos.items() %}
-                <a href="{{ url_tela(periodo=periodo, tipo=chave, ministerio=selecionado.id if selecionado else None) }}"
+                <a href="{{ url_tela(periodo=periodo, tipo=chave, ministerio=selecionado.id if selecionado else None, de=de.isoformat() if de else None, ate=ate.isoformat() if ate else None) }}"
                    {% if chave == tipo %}aria-current="page"{% endif %}
                    class="text-xs font-semibold px-3.5 py-1.5 rounded-full transition {{ (tema.accent_bg ~ ' text-white') if chave == tipo else tema.text_secondary }}">{{ rotulo }}</a>
                 {% endfor %}
@@ -87,8 +88,26 @@
             </nav>
         </form>
 
+        {# Datas livres (?de=&ate=) no lugar do periodo pronto #}
+        <form method="GET" data-filtro-datas class="flex flex-wrap items-end gap-2">
+            {% if selecionado %}<input type="hidden" name="ministerio" value="{{ selecionado.id }}">{% endif %}
+            <input type="hidden" name="tipo" value="{{ tipo }}">
+            <label class="text-xs {{ tema.text_secondary }}">De
+                <input type="date" name="de" value="{{ de.isoformat() if de else '' }}" required class="{{ CAMPO }} block mt-1">
+            </label>
+            <label class="text-xs {{ tema.text_secondary }}">Até
+                <input type="date" name="ate" value="{{ ate.isoformat() if ate else '' }}" required class="{{ CAMPO }} block mt-1">
+            </label>
+            <button type="submit" class="{{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-xs font-semibold px-4 py-2.5 rounded-full transition">Ver datas</button>
+            {% if de %}<a href="{{ url_tela(tipo=tipo, ministerio=selecionado.id if selecionado else None) }}" class="text-xs font-semibold {{ tema.accent_text }} hover:underline py-2.5">Limpar datas</a>{% endif %}
+        </form>
+
         {% if not dados %}
+        {% if so_futuro %}
+        <div class="{{ CARD }} p-6 text-center text-sm {{ tema.text_secondary }}">O comparecimento só conta dias já encerrados. Veja abaixo o equilíbrio de escalas dessas datas.</div>
+        {% else %}
         <div class="{{ CARD }} p-6 text-center text-sm {{ tema.text_secondary }}">Esta comunidade ainda não tem ministérios.</div>
+        {% endif %}
         {% else %}
         {% set k = dados.kpis %}
         <p class="text-xs {{ tema.text_secondary }}">
@@ -132,7 +151,7 @@
         {# ---- Evolucao ---- #}
         <section class="{{ CARD }} p-5">
             <h2 class="font-bold">Comparecimento ao longo do tempo</h2>
-            <p class="text-xs {{ tema.text_secondary }} mb-3">{{ R[2] | capitalize }} x presentes x check-ins, por {{ 'mês' if periodo in ['6m', '1a'] else 'semana' }}.</p>
+            <p class="text-xs {{ tema.text_secondary }} mb-3">{{ R[2] | capitalize }} x presentes x check-ins, por {{ 'mês' if (dados.fim - dados.inicio).days > 91 else 'semana' }}.</p>
             <div class="estat-grafico"><canvas id="grafico-evolucao" aria-label="Gráfico de comparecimento ao longo do tempo" role="img"></canvas></div>
         </section>
 
@@ -263,6 +282,48 @@
         </section>
         {% endif %}
 
+        {% endif %}
+
+        {% if equilibrio %}
+        {# ---- Equilibrio de escalas (escala/estatisticas.py::equilibrio) ---- #}
+        <section class="{{ CARD }} p-4 space-y-3" data-equilibrio>
+            <div>
+                <h2 class="font-bold">Equilíbrio de escalas</h2>
+                <p class="text-xs {{ tema.text_secondary }}">
+                    Quantas vezes cada pessoa foi escalada de {{ equilibrio.inicio.strftime('%d/%m/%Y') }} a {{ equilibrio.fim.strftime('%d/%m/%Y') }},
+                    incluindo escalas futuras e sem check-in. Média: {{ equilibrio.media | string | replace('.', ',') }} por pessoa.
+                    "Demais" = mais de 50% acima da média; "de menos" = menos da metade.
+                </p>
+                {% if equilibrio.demais or equilibrio.de_menos %}
+                <p class="text-xs font-semibold mt-1">
+                    {% if equilibrio.demais %}<span class="text-red-500">{{ equilibrio.demais }} servindo demais</span>{% endif %}
+                    {% if equilibrio.demais and equilibrio.de_menos %} · {% endif %}
+                    {% if equilibrio.de_menos %}<span class="text-amber-600">{{ equilibrio.de_menos }} servindo de menos</span>{% endif %}
+                </p>
+                {% endif %}
+            </div>
+            {% if equilibrio.pessoas %}
+            <ul class="space-y-2">
+                {% for p in equilibrio.pessoas %}
+                <li data-equilibrio-pessoa="{{ p.situacao or '' }}" class="grid grid-cols-12 items-center gap-2">
+                    <span class="col-span-5 sm:col-span-3 text-sm truncate">{{ p.nome }}</span>
+                    <div class="col-span-4 sm:col-span-6 h-2 rounded-full {{ tema.secondary_bg }} overflow-hidden">
+                        <div class="h-full rounded-full {{ 'bg-red-500' if p.situacao == 'demais' else ('bg-amber-500' if p.situacao == 'de menos' else tema.accent_bg) }}" style="width: {{ p.percentual }}%"></div>
+                    </div>
+                    <span class="col-span-3 sm:col-span-3 text-xs text-right">
+                        <strong>{{ p.vezes }}</strong>x
+                        {% if p.situacao == 'demais' %}<span class="text-red-500 font-semibold">· demais</span>
+                        {% elif p.situacao == 'de menos' %}<span class="text-amber-600 font-semibold">· de menos</span>{% endif %}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-sm {{ tema.text_secondary }}">Ninguém escalado nesse período.</p>
+            {% endif %}
+        </section>
+        {% endif %}
+        {% if dados %}
 
         <details class="text-xs {{ tema.text_secondary }} px-1">
             <summary class="cursor-pointer font-semibold">Como os números são calculados</summary>
