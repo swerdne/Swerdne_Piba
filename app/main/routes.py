@@ -440,6 +440,7 @@ def dashboard():
         nome_form=nome_form,
         privacidade_form=privacidade_form,
         lembretes_form=lembretes_form,
+        push_chave=current_app.config.get("VAPID_PUBLIC_KEY") if current_app.config.get("VAPID_PRIVATE_KEY") else None,
         telefone_form=telefone_form,
         acao_form=acao_form,
         administra_comunidade=any(i.get("admin") for i in comunidades),
@@ -750,6 +751,48 @@ def agenda_ministerio_ics(token, ministerio_id):
     if not tem_papel and not _eh_admin_da_comunidade(ministerio.comunidade, usuario):
         abort(404)
     return _resposta_ics(agenda_do_ministerio(ministerio, *_urls_agenda()), f"escalas-{ministerio.id}")
+
+
+@bp.route("/push/inscrever", methods=["POST"])
+@login_required
+@limiter.limit("30 per hour")
+def push_inscrever():
+    """Guarda o aparelho que aceitou os avisos (app/push.py). JSON."""
+    import json as _json
+
+    from app import push
+
+    if not push.ativo(current_app) or not AcaoForm().validate_on_submit():
+        return jsonify({"ok": False}), 400
+    try:
+        dados = _json.loads(request.form.get("inscricao") or "")
+    except ValueError:
+        return jsonify({"ok": False}), 400
+    return jsonify({"ok": push.inscrever(current_user.id, dados)})
+
+
+@bp.route("/push/cancelar", methods=["POST"])
+@login_required
+def push_cancelar():
+    from app import push
+
+    if AcaoForm().validate_on_submit():
+        push.cancelar(current_user.id, request.form.get("endpoint") or "")
+    return jsonify({"ok": True})
+
+
+@bp.route("/push/testar", methods=["POST"])
+@login_required
+@limiter.limit("5 per hour")
+def push_testar():
+    """Manda um aviso de teste pros aparelhos desta conta."""
+    from app import push
+
+    if not AcaoForm().validate_on_submit():
+        return jsonify({"ok": False}), 400
+    enviados = push.enviar_para_usuario(current_app._get_current_object(), current_user.id,
+                                        "Avisos ligados!", "É assim que os avisos do TyBenson vão chegar.", "/dashboard")
+    return jsonify({"ok": bool(enviados), "aparelhos": enviados})
 
 
 @bp.route("/perfil/testar-email", methods=["POST"])

@@ -56,6 +56,12 @@ class Config:
     # de dados (main.privacidade etc., exigidas pela Meta pro app do WhatsApp).
     EMAIL_CONTATO = os.environ.get("EMAIL_CONTATO")
 
+    # Aviso no celular com o app fechado (Web Push, app/push.py). Sem as
+    # duas chaves o recurso fica desligado.
+    VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
+    VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
+    VAPID_EMAIL = os.environ.get("VAPID_EMAIL")
+
     # Envio de SMS via Twilio (notificacoes da Escala Rapida, ver app/sms.py).
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
     TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")

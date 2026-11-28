@@ -166,6 +166,9 @@ def create_app(config_name="default"):
     from .imagens import registrar_limpeza_de_legado
     registrar_limpeza_de_legado()
 
+    from .push import registrar as registrar_push
+    registrar_push()
+
     from .escala.checkin import hora_local
     app.add_template_filter(hora_local, "hora_local")
     from .whatsapp_recebidas import texto_whatsapp_em_html

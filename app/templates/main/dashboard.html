@@ -326,6 +326,19 @@
                 {{ foto_form.submit(class_=tema.accent_bg ~ " " ~ tema.accent_bg_hover ~ " w-full text-white text-sm font-semibold px-5 py-2.5 rounded-full transition") }}
             </form>
 
+            {% if push_chave %}
+            <!-- Aviso no celular com o app fechado (app/push.py) -->
+            <div data-push data-push-chave="{{ push_chave }}" class="hidden {{ tema.card_bg }} border {{ tema.card_border }} rounded-3xl shadow-sm p-4 space-y-2">
+                <p class="text-sm font-bold {{ tema.text_primary }}"><i class="fa-solid fa-bell mr-1.5 {{ tema.accent_text }}"></i>Avisos no celular</p>
+                <p data-push-texto class="text-xs {{ tema.text_secondary }}">Receba os avisos do sino mesmo com o app fechado.</p>
+                <div class="flex gap-2">
+                    <button type="button" data-push-ligar class="flex-1 {{ tema.accent_bg }} {{ tema.accent_bg_hover }} text-white text-sm font-semibold px-4 py-2.5 rounded-full transition">Ativar avisos neste aparelho</button>
+                    <button type="button" data-push-testar class="hidden flex-1 border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-4 py-2.5 rounded-full transition">Mandar um teste</button>
+                    <button type="button" data-push-desligar class="hidden border {{ tema.card_border }} {{ tema.text_secondary }} text-sm font-semibold px-4 py-2.5 rounded-full transition">Desativar</button>
+                </div>
+            </div>
+            {% endif %}
+
             <a href="{{ url_for('main.agenda') }}" data-link-agenda
                class="block text-center w-full border {{ tema.card_border }} {{ tema.text_primary }} text-sm font-semibold px-5 py-2.5 rounded-full transition">
                 <i class="fa-regular fa-calendar-plus mr-1.5"></i>Minhas escalas na agenda (Google/iPhone)
